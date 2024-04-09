@@ -1,0 +1,228 @@
+{
+  "irVersion": "8",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "max_iterations",
+          "loop_cond_inp",
+          "X"
+        ],
+        "output": [
+          "X_result"
+        ],
+        "opType": "Loop",
+        "attribute": [
+          {
+            "name": "body",
+            "g": {
+              "node": [
+                {
+                  "input": [
+                    "X_in",
+                    "Y"
+                  ],
+                  "output": [
+                    "X_out"
+                  ],
+                  "opType": "Add"
+                },
+                {
+                  "input": [
+                    "X_out",
+                    "Z"
+                  ],
+                  "output": [
+                    "loop_cond"
+                  ],
+                  "opType": "Less"
+                }
+              ],
+              "name": "body",
+              "input": [
+                {
+                  "name": "loop_cond_inp",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": "1"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "iteration_num",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 6,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": "1"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "X_in",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 6,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": "1"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "X_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 6,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": "1"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "loop_cond",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": "1"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "type": "GRAPH"
+          }
+        ]
+      }
+    ],
+    "name": "outer",
+    "input": [
+      {
+        "name": "max_iterations",
+        "type": {
+          "tensorType": {
+            "elemType": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "loop_cond_inp",
+        "type": {
+          "tensorType": {
+            "elemType": 9,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "X",
+        "type": {
+          "tensorType": {
+            "elemType": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Y",
+        "type": {
+          "tensorType": {
+            "elemType": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Z",
+        "type": {
+          "tensorType": {
+            "elemType": 9,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "X_result",
+        "type": {
+          "tensorType": {
+            "elemType": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opsetImport": [
+    {
+      "version": "18"
+    }
+  ]
+}

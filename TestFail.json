@@ -1,0 +1,137 @@
+{
+    "irVersion": "8",
+    "graph": {
+      "node": [
+        {
+          "input": [
+            "D",
+            "ABC"
+          ],
+          "output": [
+            "ABCD"
+          ],
+          "opType": "Add"
+        },
+        {
+          "input": [
+            "A",
+            "BC"
+          ],
+          "output": [
+            "ABC"
+          ],
+          "opType": "MatMul"
+        },
+        {
+          "input": [
+            "B",
+            "C"
+          ],
+          "output": [
+            "BC"
+          ],
+          "opType": "Add"
+        }
+      ],
+      "name": "lr",
+      "input": [
+        {
+          "name": "A",
+          "type": {
+            "tensorType": {
+              "elemType": 6,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "2"
+                  },
+                  {
+                    "dimValue": "3"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "name": "B",
+          "type": {
+            "tensorType": {
+              "elemType": 6,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "3"
+                  },
+                  {
+                    "dimValue": "2"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "name": "C",
+          "type": {
+            "tensorType": {
+              "elemType": 6,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "3"
+                  },
+                  {
+                    "dimValue": "2"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+            "name": "D",
+            "type": {
+              "tensorType": {
+                "elemType": 6,
+                "shape": {
+                  "dim": [
+                    {
+                      "dimValue": "2"
+                    },
+                    {
+                      "dimValue": "2"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+      ],
+      "output": [
+        {
+          "name": "ABCD",
+          "type": {
+            "tensorType": {
+              "elemType": 6,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "2"
+                  },
+                  {
+                    "dimValue": "2"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "opsetImport": [
+      {
+        "version": "18"
+      }
+    ]
+  }
