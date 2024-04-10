@@ -11,16 +11,8 @@ Promise.all([
     })
 ])
 .then(function(dataArray) {
-  let inputs = []
-  let outputs = []
-  let intermediateVariables = []
-  let nodes = []
-  let inputEdgesWithKnownDims = []
-  let outputEdgesWithKnownDims = []
-  let inputEdgesWithUnknownDims = []
-  let outputEdgesWithUnknownDims = []
-  const cy = createGraph(dataArray, nodes, inputs, outputs, intermediateVariables, 
-    inputEdgesWithKnownDims, outputEdgesWithKnownDims, inputEdgesWithUnknownDims, outputEdgesWithUnknownDims)
+    const cy = createGraph(dataArray)
 });
 
 
+//create the graph first, then add the nodes and edges
