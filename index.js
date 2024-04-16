@@ -13,6 +13,3 @@ Promise.all([
 .then(function(dataArray) {
     const cy = createGraph(dataArray)
 });
-
-
-//create the graph first, then add the nodes and edges
