@@ -1,6 +1,7 @@
-function addInput(data, cy) {
+function addInputNodes(data, cy) {
     data.graph.input.forEach(input => {
         cy.add({
+            group: 'nodes',
             data: {
                 id: input.name,
                 label: input.name,
@@ -12,37 +13,25 @@ function addInput(data, cy) {
     })
 }
 
-function addInputNodes(data, nodes) {
-    data.graph.input.forEach(input => {
-      nodes.push({
-        data: {
-            id: input.name,
-            label: input.name,
-            elemType: input.type.tensorType.elemType,
-            dimensions: input.type.tensorType.shape.dim
-        },
-        classes: 'input'
-      })
-    })
-}
-
-function addOutputNodes(data, nodes) {
+function addOutputNodes(data, cy) {
     data.graph.output.forEach(output => {
-      nodes.push({
-        data: {
-            id: output.name,
-            label: output.name,
-            elemType: output.type.tensorType.elemType,
-            dimensions: output.type.tensorType.shape.dim
-        },
-        classes: 'output'
-      })
+        cy.add({
+            group: 'nodes',
+            data: {
+                id: output.name,
+                label: output.name,
+                elemType: output.type.tensorType.elemType,
+                dimensions: output.type.tensorType.shape.dim
+            },
+            classes: 'output'
+        })
     })
 }
 
-function addNodes(data, nodes, mapNodeAndOutput) {
+function addNodes(data, cy, mapNodeAndOutput) {
     data.graph.node.forEach((node, index) => {
-        nodes.push({
+        cy.add({
+            group: 'nodes',
             data: {
                 id: index.toString(),
                 label: node.opType,
@@ -58,81 +47,71 @@ function addNodes(data, nodes, mapNodeAndOutput) {
     })
 }
 
-function addEdges(nodes, mapNodeAndOutput, edges) {
-    nodes.forEach(node => {
-        if (node.classes === 'operation') {
-            node.data.inputs.forEach(input => {
-                const inputFound = nodes.find(inp => inp.data.id === input)
-                if (inputFound) {
-                    edges.push({
-                        data: {
-                            source: input,
-                            target: node.data.id,
-                            dims: inputFound.data.dimensions, 
-                            elemType: inputFound.data.elemType
-                        }
-                    })
-                }
-                else {
-                    const nodeWithCorrespondingOutput = mapNodeAndOutput.find(elem => elem.output === input)
-                    if (nodeWithCorrespondingOutput) {
-                        edges.push({
-                            data: {
-                                source: nodeWithCorrespondingOutput.nodeId,
-                                target: node.data.id,
-                                dims: 'None', 
-                                elemType: 'None'
-                            }
-                        })
+function addEdges(cy, mapNodeAndOutput) {
+    cy.nodes('.operation').forEach(node => {
+        node.data('inputs').forEach(input => {
+            const inputFound = cy.$('#' + input)
+            if (inputFound.data()) {
+                cy.add({
+                    group: 'edges',
+                    data: {
+                        source: input,
+                        target: node.data('id'),
+                        dims: inputFound.data('dimensions'),
+                        elemType: inputFound.data('elemType')
                     }
-                }
-            })
-            node.data.outputs.forEach(output => {
-                const outputFound = nodes.find(out => out.data.id === output)
-                if (outputFound) {
-                    edges.push({
+                })
+            }
+            else {
+                const nodeWithCorrespondingOutput = mapNodeAndOutput.find(elem => elem.output === input)
+                if (nodeWithCorrespondingOutput) {
+                    cy.add({
+                        group: 'edges',
                         data: {
-                            source: node.data.id,
-                            target: output,
-                            dims: 'None', 
+                            source: nodeWithCorrespondingOutput.nodeId,
+                            target: node.data('id'),
+                            dims: 'None',
                             elemType: 'None'
                         }
                     })
                 }
-            })
-        }
+            }
 
+        })
+        node.data('outputs').forEach(output => {
+            const outputFound = cy.$('#' + output)
+            if (outputFound.data()) {
+                cy.add({
+                    group: 'edges',
+                    data: {
+                        source: node.data('id'),
+                        target: output,
+                        dims: 'None',
+                        elemType: 'None'
+                    }
+                })
+            }
+        })
     })
 }
 
 
 
 function initializeCytoscapeGraph (nodes, edges, sty) {
-    const cy = cytoscape({
+    return cytoscape({
         container: document.getElementById('cy'),
-        elements: {
-            nodes: nodes,
-            edges:edges
-        },
-        style: sty,
-        layout: {
-            name: 'breadthfirst',
-            directed: true,
-            roots: '.input',
-            padding: 10
-        }
-        
+        elements: [],
+        style:[],
+        layout: []
     })
-    return cy;
 }
 
-function betterRecursion(outputNodes, cy) {
+function findDims(outputNodes, cy) {
     outputNodes.forEach(node => {
         let incomingEdges = node.incomers('edge')
         incomingEdges.forEach(edge => {
             if (edge.data('dims') === 'None') {
-                betterRecursion(cy.$('#' + edge.data('source')), cy)
-
+                findDims(cy.$('#' + edge.data('source')), cy)
             }
         })
 
@@ -163,60 +142,28 @@ function betterRecursion(outputNodes, cy) {
         }
     })
 }
-/*
-function recursion(node, cy) {
-    let incomingEdges = node.incomers('edge')
-    incomingEdges.forEach(edge => {
-        if (edge.data('dims') === 'None') {
-            recursion(cy.$('#' + edge.data('source')), cy)
-            
-        }
-    })
 
-    let outgoingEdges = node.outgoers('edge')
-    let firstEdgeDims = incomingEdges[0].data('dims')
-    let firstEdgeElemType = incomingEdges[0].data('elemType')
-
-    if (node.data('opType') === 'MatMul') {
-        let secondEdgeDims = incomingEdges[1].data('dims')
-        if (firstEdgeDims[1].dimValue === secondEdgeDims[0].dimValue) {
-            outgoingEdges.forEach(edge => {
-                edge.data('dims', [{dimValue: firstEdgeDims[0].dimValue}, {dimValue: secondEdgeDims[1].dimValue}])
-                edge.data('elemType', firstEdgeElemType)
-            })
-        }
-        else {
-            outgoingEdges.forEach(edge => {
-                edge.data('dims', [{dimValue: firstEdgeDims[1].dimValue}, {dimValue: secondEdgeDims[0].dimValue}])
-                edge.data('elemType', firstEdgeElemType)
-            })
-        }
-    }
-    else {
-        outgoingEdges.forEach(edge => {
-            edge.data('dims', firstEdgeDims)
-            edge.data('elemType', firstEdgeElemType)
-        })
-    }
-}*/
+function styleCytoscape(cy, sty){
+    cy.style(sty)
+    cy.layout({
+        name: 'breadthfirst',
+        directed: true,
+        roots: '.input',
+        padding: 10
+    }).run()
+    return cy
+}
 
 
 export function createGraph(data) {
-    let nodes = [];
-    addInputNodes(data[0], nodes)
-    addOutputNodes(data[0], nodes)
-    let edges = []
+    let cy =  initializeCytoscapeGraph(data[1])
+    addInputNodes(data[0], cy)
+    addOutputNodes(data[0], cy)
     let mapNodeAndOutput = []
-    addNodes(data[0], nodes, mapNodeAndOutput)
-    addEdges(nodes, mapNodeAndOutput, edges)
-    let cy =  initializeCytoscapeGraph(nodes, edges, data[1])
-    betterRecursion(cy.nodes('.output'),cy)
+    addNodes(data[0], cy, mapNodeAndOutput)
+    addEdges(cy, mapNodeAndOutput)
+    findDims(cy.nodes('.output'),cy)
+    styleCytoscape(cy, data[1])
     cy.edges().forEach(edge => {console.log(edge.data())})
-
     return cy
-} 
-
-
-//separar addNodes (não misturar coisas diferentes) e talvez usar selectors nos métodos anteriores
-//começar dos inputs na bfs 
-//ou fazer recursivamente
+}
