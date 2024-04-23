@@ -4,11 +4,11 @@
       "node": [
         {
           "input": [
-            "D",
-            "ABC"
+            "B",
+            "C"
           ],
           "output": [
-            "ABCD"
+            "BC"
           ],
           "opType": "Add"
         },
@@ -24,35 +24,17 @@
         },
         {
           "input": [
-            "B",
-            "C"
+            "D",
+            "ABC"
           ],
           "output": [
-            "BC"
+            "ABCD"
           ],
           "opType": "Add"
         }
       ],
       "name": "lr",
       "input": [
-        {
-          "name": "A",
-          "type": {
-            "tensorType": {
-              "elemType": 6,
-              "shape": {
-                "dim": [
-                  {
-                    "dimValue": "2"
-                  },
-                  {
-                    "dimValue": "3"
-                  }
-                ]
-              }
-            }
-          }
-        },
         {
           "name": "B",
           "type": {
@@ -83,6 +65,24 @@
                   },
                   {
                     "dimValue": "2"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "name": "A",
+          "type": {
+            "tensorType": {
+              "elemType": 6,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "2"
+                  },
+                  {
+                    "dimValue": "3"
                   }
                 ]
               }

@@ -1,4 +1,5 @@
 import {createGraph } from './initGraph.js'
+//import {transformOpps } from './transformOpps.js'
 
 Promise.all([
   fetch('TestFail.json')
@@ -11,5 +12,7 @@ Promise.all([
     })
 ])
 .then(function(dataArray) {
-    const cy = createGraph(dataArray)
+    let cy = createGraph(dataArray)
+    
+    //transformOpps(cy)
 });
