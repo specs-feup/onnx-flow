@@ -19,14 +19,11 @@
           "name": "X",
           "type": {
             "tensorType": {
-              "elemType": 1,
+              "elemType": 6,
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
-                  },
-                  {
-                    "dimValue": "3"
+                    "dimValue": "2"
                   }
                 ]
               }
@@ -37,14 +34,11 @@
           "name": "A",
           "type": {
             "tensorType": {
-              "elemType": 1,
+              "elemType": 6,
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
-                  },
-                  {
-                    "dimValue": "3"
+                    "dimValue": "2"
                   }
                 ]
               }
@@ -57,14 +51,11 @@
           "name": "Y",
           "type": {
             "tensorType": {
-              "elemType": 1,
+              "elemType": 6,
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
-                  },
-                  {
-                    "dimValue": "3"
+                    "dimValue": "2"
                   }
                 ]
               }

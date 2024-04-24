@@ -143,7 +143,7 @@ function findDims(outputNodes, cy) {
     })
 }
 
-function styleCytoscape(cy, sty){
+export function styleCytoscape(cy, sty){
     cy.style(sty)
     cy.layout({
         name: 'breadthfirst',
@@ -164,6 +164,9 @@ export function createGraph(data) {
     addEdges(cy, mapNodeAndOutput)
     findDims(cy.nodes('.output'),cy)
     styleCytoscape(cy, data[1])
-    cy.edges().forEach(edge => {console.log(edge.data())})
     return cy
 }
+
+
+//there is a dependency between the order in which the inputs are introduced in MatMul and its resulting dimensions
+//this can affect the final dimensions in the case of dimensions like (3,2) and (2,3)

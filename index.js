@@ -1,5 +1,6 @@
 import {createGraph } from './initGraph.js'
-//import {transformOpps } from './transformOpps.js'
+import {transformOpps } from './transformOpps.js'
+import {styleCytoscape } from './initGraph.js'
 
 Promise.all([
   fetch('TestFail.json')
@@ -13,6 +14,7 @@ Promise.all([
 ])
 .then(function(dataArray) {
     let cy = createGraph(dataArray)
-    
-    //transformOpps(cy)
+    cy.edges().forEach(edge => {console.log(edge.data())})
+    transformOpps(cy)
+    styleCytoscape(cy,dataArray[1])
 });
