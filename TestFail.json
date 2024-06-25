@@ -14,8 +14,8 @@
         },
         {
           "input": [
-            "A",
-            "BC"
+            "BC",
+            "A"
           ],
           "output": [
             "ABC"
@@ -24,8 +24,8 @@
         },
         {
           "input": [
-            "D",
-            "ABC"
+            "ABC",
+            "D"
           ],
           "output": [
             "ABCD"
@@ -97,10 +97,10 @@
                 "shape": {
                   "dim": [
                     {
-                      "dimValue": "2"
+                      "dimValue": "3"
                     },
                     {
-                      "dimValue": "2"
+                      "dimValue": "3"
                     }
                   ]
                 }
@@ -117,10 +117,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   }
                 ]
               }

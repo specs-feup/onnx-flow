@@ -1,9 +1,9 @@
 import {createGraph } from './initGraph.js'
-import {transformOpps } from './transformOpps.js'
-import {styleCytoscape } from './initGraph.js'
+import {transformOpps} from './transformOpps.js'
+import {layoutAndStyling } from './layoutAndStyling.js'
 
 Promise.all([
-  fetch('TestFail.json')
+  fetch('MatMul.json')
     .then(function(res) {
       return res.json();
     }),
@@ -13,8 +13,7 @@ Promise.all([
     })
 ])
 .then(function(dataArray) {
-    let cy = createGraph(dataArray)
-    cy.edges().forEach(edge => {console.log(edge.data())})
+    let cy = createGraph(dataArray[0])
     transformOpps(cy)
-    styleCytoscape(cy,dataArray[1])
+    layoutAndStyling(cy,dataArray[1])
 });

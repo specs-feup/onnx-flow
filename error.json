@@ -1,0 +1,167 @@
+{
+    "irVersion": "8",
+    "graph": {
+      "node": [
+        {
+            "input": [
+              "X",
+              "A"
+            ],
+            "output": [
+              "XA"
+            ],
+            "opType": "MatMul"
+        },
+        {
+            "input": [
+                "K",
+                "H"
+              ],
+              "output": [
+                "KH"
+              ],
+              "opType": "MatMul"
+        },
+        {
+            "input": [
+              "B",
+              "KH"
+            ],
+            "output": [
+              "BKH"
+            ],
+            "opType": "MatMul"
+        },
+        {
+            "input": [
+              "XA",
+              "BKH"
+            ],
+            "output": [
+              "Z"
+            ],
+            "opType": "MatMul"
+        }
+      ],
+      "name": "Add",
+      "input": [
+        {
+            "name": "H",
+            "type": {
+              "tensorType": {
+                "elemType": 1,
+                "shape": {
+                  "dim": [
+                    {
+                      "dimValue": "3"
+                    },
+                    {
+                      "dimValue": "3"
+                    }
+                  ]
+                }
+              }
+            }
+        },
+        {
+            "name": "K",
+            "type": {
+              "tensorType": {
+                "elemType": 1,
+                "shape": {
+                  "dim": [
+                    {
+                      "dimValue": "3"
+                    },
+                    {
+                      "dimValue": "3"
+                    }
+                  ]
+                }
+              }
+            }
+        },
+        
+        {
+          "name": "A",
+          "type": {
+            "tensorType": {
+              "elemType": 1,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "2"
+                  },
+                  {
+                    "dimValue": "3"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "name": "B",
+          "type": {
+            "tensorType": {
+              "elemType": 1,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "3"
+                  },
+                  {
+                    "dimValue": "3"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+            "name": "X",
+            "type": {
+              "tensorType": {
+                "elemType": 1,
+                "shape": {
+                  "dim": [
+                    {
+                      "dimValue": "3"
+                    },
+                    {
+                      "dimValue": "2"
+                    }
+                  ]
+                }
+              }
+            }
+        }
+      ],
+      "output": [
+        {
+          "name": "Z",
+          "type": {
+            "tensorType": {
+              "elemType": 1,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "3"
+                  },
+                  {
+                    "dimValue": "3"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "opsetImport": [
+      {
+        "version": "17"
+      }
+    ]
+  }
+  
