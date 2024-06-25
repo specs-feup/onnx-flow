@@ -1,9 +1,10 @@
 import {createGraph } from './initGraph.js'
 import {transformOpps} from './transformOpps.js'
+import {generateCode} from './codeGeneration.js'
 import {layoutAndStyling } from './layoutAndStyling.js'
 
 Promise.all([
-  fetch('MatMul.json')
+  fetch('Add.json')
     .then(function(res) {
       return res.json();
     }),
@@ -15,5 +16,6 @@ Promise.all([
 .then(function(dataArray) {
     let cy = createGraph(dataArray[0])
     transformOpps(cy)
+    generateCode(cy, dataArray[0])
     layoutAndStyling(cy,dataArray[1])
 });

@@ -38,24 +38,26 @@ function transformAdd(node, cy) {
     // (Just like adding 2 integers, for example)
     if (dimensions[0].dimValue === '1' && dimensions.length === 1) {
         cy.add([
-            {group: 'nodes', data: {id: node.data('id') + ' Addition', label: '+', opType: 'Addition'}, classes: 'operation'},
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + ' Addition', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + ' Addition', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType')}}
+            {group: 'nodes', data: {id: node.data('id') + 'Addition', label: '+', opType: 'Addition'}, classes: 'operation'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + 'Addition', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + 'Addition', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType')}}
         ])
         outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: node.data('id') + ' Addition', target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
+            cy.add({group: 'edges', data: {source: node.data('id') + 'Addition', target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
         })
     }
     // The other case is a loop where the inputs of the onnx graph are iterated over and their values summed.
     // (Just like adding the values of a vector or matrix )
     else {
         let numberOfIterations = dimensions.reduce((total, dim) => total + parseInt(dim.dimValue), 0)
+        let order = 0
         const nodeId = node.data('id')
+        let displacementInMemory = typeSizeMap[type]
         cy.add([
-            {group: 'nodes', data: {id: nodeId + 'LoopIterations', label: '# of loop iterations', value: numberOfIterations.toString()}, classes: 'input'},
+            {group: 'nodes', data: {id: nodeId + 'LoopIterations', label: '# of loop iterations', value: numberOfIterations}, classes: 'constant'},
             {group: 'nodes', data: {id: nodeId + 'Add', label: 'Add', opType: 'Add'}},
-            {group: 'nodes', data: {id: nodeId + 'index', parent: nodeId +'Add', label: 'index'}, classes: 'input'},
-            {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'Add', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+            {group: 'nodes', data: {id: nodeId + 'index', parent: nodeId + 'Add', label: 'index'}, classes: 'input'},
+            {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'Add', label: 'displacement In Memory', value: displacementInMemory}, classes: 'input'},
             {group: 'nodes', data: {id: nodeId + incomingEdges[0].data('source'), label: '&' + incomingEdges[0].data('source'), parent: nodeId + 'Add'}, classes: 'input'},
             {group: 'nodes', data: {id: nodeId + incomingEdges[1].data('source'), label: '&' + incomingEdges[1].data('source'), parent: nodeId + 'Add'}, classes: 'input'},
             {group: 'nodes', data: {id: nodeId + 'res', label: '&Result', parent: nodeId + 'Add'}, classes: 'output'},
@@ -66,27 +68,28 @@ function transformAdd(node, cy) {
             {group: 'nodes', data: {id: nodeId + 'Addition1', parent: nodeId + 'Add', label: '+', opType: 'Addition'}, classes: 'operation'},
             {group: 'nodes', data: {id: nodeId + 'Store', parent: nodeId + 'Add', label: 'Store', opType: 'Store'}, classes: 'operation'},
             {group: 'nodes', data: {id: nodeId + '1', parent: nodeId + 'Add', label: '1'}, classes: 'constant'},
+
             //edges for the loop inputs
             {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
             {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType')}},
             {group: 'edges', data: {source: nodeId + 'LoopIterations', target: nodeId + 'Add'}},
 
             //edges for the loop environment
-            {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Multiplication'}},
-            {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Multiplication'}},
-            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Load0'}},
-            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Load1'}},
-            {group: 'edges', data: {source: nodeId + incomingEdges[0].data('source'), target: nodeId + 'Load0'}},
-            {group: 'edges', data: {source: nodeId + incomingEdges[1].data('source'), target: nodeId + 'Load1'}},
-            {group: 'edges', data: {source: nodeId + 'Load0', target: nodeId + 'Addition'}},
-            {group: 'edges', data: {source: nodeId + 'Load1', target: nodeId + 'Addition'}},
-            {group: 'edges', data: {source: nodeId + 'Addition', target: nodeId + 'Store'}},
-            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Store'}},
-            {group: 'edges', data: {source: nodeId + 'Store', target: nodeId + 'res'}},
+            {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Multiplication', parent: nodeId + 'Add', order: order++}, classes: 'index'},
+            {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Multiplication', parent: nodeId + 'Add', order: order++, value: displacementInMemory }, classes: 'constant'},
+            {group: 'edges', data: {source: nodeId + incomingEdges[0].data('source'), target: nodeId + 'Load0', parent: nodeId + 'Add', order: order++}, classes: 'input'},
+            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Load0', parent: nodeId + 'Add', order: order++, opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: nodeId + incomingEdges[1].data('source'), target: nodeId + 'Load1', parent: nodeId + 'Add', order: order++}, classes: 'input'},
+            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Load1', parent: nodeId + 'Add', order: order++}, classes: 'operation'},
+            {group: 'edges', data: {source: nodeId + 'Load0', target: nodeId + 'Addition', parent: nodeId + 'Add', order: order++, opType: 'Load'}, classes: 'operation'},
+            {group: 'edges', data: {source: nodeId + 'Load1', target: nodeId + 'Addition', parent: nodeId + 'Add', order: order++, opType: 'Load'}, classes: 'operation'},
+            {group: 'edges', data: {source: nodeId + 'Addition', target: nodeId + 'Store', parent: nodeId + 'Add', order: order++, opType: 'Addition'}, classes: 'operation'},
+            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Store', parent: nodeId + 'Add', order: order++, opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: nodeId + 'Store', target: nodeId + 'res', parent: nodeId + 'Add', order: order++, opType: 'Store'}, classes: 'operation variable'},
 
-            {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Addition1'}},
-            {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition1'}},
-            {group: 'edges', data: {source: nodeId + 'Addition1', target: nodeId + 'index'}},
+            {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Addition1', parent: nodeId + 'Add', order: order++}, classes: 'index'},
+            {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition1', parent: nodeId + 'Add', order: order++, value: 1}, classes: 'constant'},
+            {group: 'edges', data: {source: nodeId + 'Addition1', target: nodeId + 'index', parent: nodeId + 'Add', order: order++, opType: 'Addition'}, classes: 'operation variable'},
 
         ])
         //edges for the loop outputs
@@ -126,7 +129,7 @@ function transformMatMul(node, cy) {
     }
 
     cy.add([
-        {group: 'nodes', data: {id: nodeId + 'LoopIterations', label: '# of loop iterations', value: numberOfIterations.toString()}, classes: 'input'},
+        {group: 'nodes', data: {id: nodeId + 'LoopIterations', label: '# of loop iterations', value: numberOfIterations.toString()}, classes: 'constant'},
         {group: 'nodes', data: {id: nodeId + 'MatMul', label: 'MatMul', opType: 'MatMul'}},
 
         {group: 'edges', data: {source: incomingEdges[0].data('source'), target: nodeId + 'MatMul', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},

@@ -4,55 +4,44 @@
       "node": [
         {
             "input": [
-              "XA",
-              "BC"
+              "B",
+              "C"
             ],
             "output": [
-              "Z"
+              "BC"
             ],
             "opType": "Add"
         },
         {
           "input": [
             "X",
-            "A"
-          ],
-          "output": [
-            "XA"
-          ],
-          "opType": "Add"
-        },
-        {
-          "input": [
-            "B",
-            "C"
-          ],
-          "output": [
             "BC"
+          ],
+          "output": [
+            "Z"
           ],
           "opType": "Add"
         }
       ],
       "name": "Add",
       "input": [
-        
         {
-          "name": "A",
-          "type": {
-            "tensorType": {
-              "elemType": 1,
-              "shape": {
-                "dim": [
-                  {
-                    "dimValue": "3"
-                  },
-                  {
-                    "dimValue": "3"
-                  }
-                ]
+            "name": "X",
+            "type": {
+              "tensorType": {
+                "elemType": 1,
+                "shape": {
+                  "dim": [
+                    {
+                      "dimValue": "3"
+                    },
+                    {
+                      "dimValue": "3"
+                    }
+                  ]
+                }
               }
             }
-          }
         },
         {
           "name": "B",
@@ -89,24 +78,6 @@
               }
             }
           }
-        },
-        {
-            "name": "X",
-            "type": {
-              "tensorType": {
-                "elemType": 1,
-                "shape": {
-                  "dim": [
-                    {
-                      "dimValue": "3"
-                    },
-                    {
-                      "dimValue": "3"
-                    }
-                  ]
-                }
-              }
-            }
         }
       ],
       "output": [

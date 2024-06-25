@@ -4,13 +4,23 @@
       "node": [
         {
             "input": [
-              "X",
+              "XA",
               "BC"
             ],
             "output": [
               "Z"
             ],
             "opType": "Add"
+        },
+        {
+          "input": [
+            "X",
+            "A"
+          ],
+          "output": [
+            "XA"
+          ],
+          "opType": "Add"
         },
         {
           "input": [
@@ -25,23 +35,24 @@
       ],
       "name": "Add",
       "input": [
+        
         {
-            "name": "X",
-            "type": {
-              "tensorType": {
-                "elemType": 1,
-                "shape": {
-                  "dim": [
-                    {
-                      "dimValue": "3"
-                    },
-                    {
-                      "dimValue": "3"
-                    }
-                  ]
-                }
+          "name": "A",
+          "type": {
+            "tensorType": {
+              "elemType": 1,
+              "shape": {
+                "dim": [
+                  {
+                    "dimValue": "1"
+                  },
+                  {
+                    "dimValue": "1"
+                  }
+                ]
               }
             }
+          }
         },
         {
           "name": "B",
@@ -51,10 +62,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   }
                 ]
               }
@@ -69,15 +80,33 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   }
                 ]
               }
             }
           }
+        },
+        {
+            "name": "X",
+            "type": {
+              "tensorType": {
+                "elemType": 1,
+                "shape": {
+                  "dim": [
+                    {
+                      "dimValue": "1"
+                    },
+                    {
+                      "dimValue": "1"
+                    }
+                  ]
+                }
+              }
+            }
         }
       ],
       "output": [
@@ -89,10 +118,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   }
                 ]
               }
