@@ -85,7 +85,7 @@ function transformAdd(node, cy) {
             {group: 'edges', data: {source: nodeId + 'Load1', target: nodeId + 'Addition', parent: nodeId + 'Add', order: order++, opType: 'Load'}, classes: 'operation'},
             {group: 'edges', data: {source: nodeId + 'Addition', target: nodeId + 'Store', parent: nodeId + 'Add', order: order++, opType: 'Addition'}, classes: 'operation'},
             {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Store', parent: nodeId + 'Add', order: order++, opType: 'Multiplication'}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + 'Store', target: nodeId + 'res', parent: nodeId + 'Add', order: order++, opType: 'Store'}, classes: 'operation variable'},
+            {group: 'edges', data: {source: nodeId + 'Store', target: nodeId + 'res', parent: nodeId + 'Add', order: order++, opType: 'Store'}, classes: 'operation'},
 
             {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Addition1', parent: nodeId + 'Add', order: order++}, classes: 'index'},
             {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition1', parent: nodeId + 'Add', order: order++, value: 1}, classes: 'constant'},

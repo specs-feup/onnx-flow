@@ -18,23 +18,10 @@ function handleEdge() {
 
 
 export function generateCode(cy, data) {
-    let code = ""
-    /*let code = `
-    function ${data.name}(A, B) {
-    let result = [];
-    for (let i = 0; i < A.length; i++) {
-    result[i] = [];
-        for (let j = 0; j < B[0].length; j++) {
-            let sum = 0;
-            for (let k = 0; k < A[0].length; k++) {
-                sum += A[i][k] * B[k][j];
-            }
-            result[i][j] = sum;
-        }
-    }
-    return result;
-}\\n\`;
-    }`*/
+    let code = `function ${data.graph.name}(`
+    data.graph.input.forEach(input => {code += `${input.name}, `})
+    code = code.slice(0, -2) +')\n'
+
     let compoundNodes = []
     cy.nodes().forEach(node => {
         if (node.isParent()) compoundNodes.push(node)
@@ -56,11 +43,9 @@ export function generateCode(cy, data) {
         let loopCode = ``
 
         let operations = {}
-        let variables= []
+        let variables= {}
 
         edgesInsideCompound.forEach(edge => {
-            //identificar que variável é o target, enquanto isso vou coisando
-            //console.log(edge.data())
 
 
             const edgeClass = edge.classes()[0]
@@ -72,68 +57,65 @@ export function generateCode(cy, data) {
                 case 'operation':
                     switch (edge.data('opType')) {
                         case 'Addition':
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   const ${source} = ${operations[source][0]} + ${operations[source][1]}\n`
+                            if (!variables[source]) {
+                                variables[source] = `${variables[operations[source][0]]} + ${variables[operations[source][1]]}`
                             }
                             break
                         case 'Subtraction':
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   const ${source} = ${operations[source][0]} - ${operations[source][1]}\n`
+                            if (!variables[source]) {
+                                variables[source] = `${variables[operations[source][0]]} - ${variables[operations[source][1]]}`
                             }
                             break
                         case 'Load':
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   const ${source} = ${operations[source][0]}[${operations[source][1]}]\n`
+                            if (!variables[source]) {
+                                variables[source] = `${variables[operations[source][0]]}[${variables[operations[source][1]]}]`
                             }
                             break
                         case 'Multiplication':
-                            console.log(source)
-                            console.log(variables)
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   const ${source} = ${operations[source][0]} * ${operations[source][1]}\n`
+                            if (!variables[source]) {
+                                variables[source] = `${variables[operations[source][0]]} * ${variables[operations[source][1]]}`
                             }
                             break
                         case 'Store':
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   ${target}[${[operations[source][1]]}] = ${operations[source][0]}\n`
+                            if (!variables[source]) {
+                                variables[source] = `${target}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}`
+                                loopCode += `       ${target}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}\n`
                             }
                             break
                         case 'Equality':
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   const ${source} = ${operations[source][0]} === ${operations[source][1]}\n`
+                            if (!variables[source]) {
+                                variables[source] = `${variables[operations[source][0]]} === ${variables[operations[source][1]]}`
+                            }
+                            if (edge.classes()[1]) {
+                                loopCode += `   ${target} = ${variables[source]}\n`
                             }
                             break
                         case 'Not':
-                            if (!variables.includes(source)) {
-                                variables.push(source)
-                                loopCode += `   const ${source} = !${operations[source][0]}\n`
+                            if (!variables[source]) {
+                                variables[source] = `!${variables[operations[source][0]]}`
                             }
                             break
 
+                    }
+                    if (edge.classes()[1]) {
+                        loopCode += `       ${target} = ${variables[source]}\n`
                     }
                     break
                 case 'index':
                     if (indexId === "") {
                         indexId = source
-                        variables.push(indexId)
-                        declareBeforeLoop += `let ${indexId} = 0\n`
+                        variables[source] = indexId
+                        declareBeforeLoop += `  let ${indexId} = 0\n`
                     }
 
                     break
                 case 'constant':
-                    if (!variables.includes(source)) {
-                        declareBeforeLoop += `const ${source} = ${edge.data('value')}\n`;
-                        variables.push(source);
+                    if (!variables[source]) {
+                        variables[source] = `${edge.data('value')}`;
                     }
                     break
                 case 'input':
-                    source = source.substring(1)
+                    variables[source] = source.substring(1)
                     break
             }
 
@@ -145,11 +127,11 @@ export function generateCode(cy, data) {
 
         })
 
-
         //initiate the loop
         code += declareBeforeLoop
-        code += `while (${indexId} < ${loopIterations.data('value')}) {\n`
+        code += `   while (${indexId} < ${loopIterations.data('value')}) {\n`
         code+= loopCode
+        code += '   }\n'
         code += '}'
         console.log(code)
 
@@ -160,9 +142,6 @@ export function generateCode(cy, data) {
         // declarar variavel resultado antes de cada loop (ainda tenho de guardar a informação das variaveis nos edges maybe)
         //
         //
-        edgesInsideCompound.forEach(edge => {
-
-        })
     })
 
 }
