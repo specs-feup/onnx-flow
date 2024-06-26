@@ -28,7 +28,7 @@ const typeSizeMap = {
 
 //Method that expands the Add operation node into simple arithmetic nodes
 
-function transformAdd(node, cy) {
+function transformAdd(node, cy, edgeOrder) {
     const incomingEdges = node.incomers('edge')
     const outgoingEdges = node.outgoers('edge')
     const dimensions = incomingEdges[0].data('dims')
@@ -39,11 +39,11 @@ function transformAdd(node, cy) {
     if (dimensions[0].dimValue === '1' && dimensions.length === 1) {
         cy.add([
             {group: 'nodes', data: {id: node.data('id') + 'Addition', label: '+', opType: 'Addition'}, classes: 'operation'},
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + 'Addition', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + 'Addition', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType')}}
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[0].data('label') , dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[1].data('label'), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}}
         ])
         outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: node.data('id') + 'Addition', target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
+            cy.add({group: 'edges', data: {source: node.data('id') + 'Addition', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
         })
     }
     // The other case is a loop where the inputs of the onnx graph are iterated over and their values summed.
@@ -70,8 +70,8 @@ function transformAdd(node, cy) {
             {group: 'nodes', data: {id: nodeId + '1', parent: nodeId + 'Add', label: '1'}, classes: 'constant'},
 
             //edges for the loop inputs
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType')}},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: 'input'},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: 'input'},
             {group: 'edges', data: {source: nodeId + 'LoopIterations', target: nodeId + 'Add'}},
 
             //edges for the loop environment
@@ -94,13 +94,13 @@ function transformAdd(node, cy) {
         ])
         //edges for the loop outputs
         outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: nodeId + 'Add', target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
+            cy.add({group: 'edges', data: {source: nodeId + 'Add', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}})
         })
     }
     cy.remove(node)
 }
 
-function transformMatMul(node, cy) {
+function transformMatMul(node, cy, edgeOrder) {
     const incomingEdges = node.incomers('edge')
     const outgoingEdges = node.outgoers('edge')
     const dimensions0 = incomingEdges[0].data('dims')
@@ -517,12 +517,13 @@ function transformMatMul(node, cy) {
 }
 
 export function transformOpps(cy) {
+    let edgeOrder = {value : 0}
     cy.nodes('.operation').forEach(node => {
         if (node.data('opType') === 'Add'){
-            transformAdd(node, cy)
+            transformAdd(node, cy, edgeOrder)
         }
         else if (node.data('opType') === 'MatMul') {
-            transformMatMul(node, cy)
+            transformMatMul(node, cy, edgeOrder)
         }
     })
 }
