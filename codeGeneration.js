@@ -122,19 +122,17 @@ function handleCompoundNode(compoundNode, cy, code) {
     })
 
 
-    loopCode.content += '   }\n}'
+    loopCode.content += '   }\n\n'
     code.content += loopCode.content
 
 }
 
-//if the variable isn't declared, then I should declare it
-//that only happens for intermediate variables
 export function generateCode(cy, data) {
     let declaredVariables = []
     let code = {content: `function ${data.graph.name}(`}
     data.graph.input.forEach(input => {code.content += `${input.name}, `})
     data.graph.output.forEach(output => declaredVariables.push(output.name))
-    code.content = code.content.slice(0, -2) +') {\n'
+    code.content = code.content.slice(0, -2) +') {\n\n'
 
     let graphOperations = {}
 
@@ -151,5 +149,16 @@ export function generateCode(cy, data) {
     compoundNodes.forEach(compoundNode => {
         handleCompoundNode(compoundNode, cy, code)
     })
+    code.content += '   return \n'
+    code.content += '\n}'
     console.log(code.content)
 }
+
+/*
+    PORTANTO, TENHO DE COLOCAR AS CLASSES DE MANEIRA CORRETA NO PANORAMA GERAL
+    UMA DAS DIFICULDADES SERIA A CLASSE EXTRA VARIABLE: MAYBE DECLARAR SEMPRE NA OUTER LAYER APÓS CONCLUÍDA A OPERAÇÃO
+    FUNCIONA SEM DECLARAR, SE NÃO HOUVEREM COMPOUND NODES, MAS SE HOUVEREM, TENHO DE A DECLARAR
+    DE QUALQUER MODO, A VARIAVEL PODERIA REPETIR-SE E AÍ ESTAMOS SEMPRE A FAZER A MESMA CONTA (OU SEJA MELHOR É METER CLASSE VARIABLE EM TUDO)
+
+    DE RESTO É METER INPUTS, OPPERATIONS E COMPOUNDS
+ */
