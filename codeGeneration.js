@@ -126,7 +126,7 @@ function handleCompoundNode(compoundNode, cy, code) {
     code.content += loopCode.content
 
 }
-
+//deveria conseguir gerar código sem ser necessário ir à data
 export function generateCode(cy, data) {
     let declaredVariables = []
     let code = {content: `function ${data.graph.name}(`}
@@ -149,7 +149,13 @@ export function generateCode(cy, data) {
     compoundNodes.forEach(compoundNode => {
         handleCompoundNode(compoundNode, cy, code)
     })
-    code.content += '   return \n'
+    let outputs = []
+    data.graph.output.forEach(output => outputs.push(output.name))
+    if (outputs.length === 1) code.content += `   return ${outputs[0]}`
+
+    else {
+
+    }
     code.content += '\n}'
     console.log(code.content)
 }
@@ -161,4 +167,5 @@ export function generateCode(cy, data) {
     DE QUALQUER MODO, A VARIAVEL PODERIA REPETIR-SE E AÍ ESTAMOS SEMPRE A FAZER A MESMA CONTA (OU SEJA MELHOR É METER CLASSE VARIABLE EM TUDO)
 
     DE RESTO É METER INPUTS, OPPERATIONS E COMPOUNDS
+
  */
