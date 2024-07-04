@@ -67,7 +67,6 @@ function addEdges(cy, mapNodeAndOutput) {
     cy.nodes('.operation').forEach(node => {
         node.data('inputs').forEach(input => {
             const inputFound = cy.$('#' + input)
-
             if (inputFound.data()) {
                 const dimensions = inputFound.data('dimensions').map(dim => dim.dimValue).join(',')
                 cy.add({
@@ -78,7 +77,8 @@ function addEdges(cy, mapNodeAndOutput) {
                         label: dimensions,
                         dims: inputFound.data('dimensions'),
                         elemType: inputFound.data('elemType')
-                    }
+                    },
+                    classes: 'input'
                 })
             }
             else {
@@ -91,7 +91,8 @@ function addEdges(cy, mapNodeAndOutput) {
                             target: node.data('id'),
                             dims: 'None',
                             elemType: 'None'
-                        }
+                        },
+                        classes: 'compound variable'
                     })
                 }
             }
@@ -107,7 +108,8 @@ function addEdges(cy, mapNodeAndOutput) {
                         target: output,
                         dims: 'None',
                         elemType: 'None'
-                    }
+                    },
+                    classes: 'compound variable'
                 })
             }
         })

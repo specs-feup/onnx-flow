@@ -37,13 +37,14 @@ function transformAdd(node, cy, edgeOrder) {
     // Optimization the case that the dimensions of the Add's inputs have 1 dimension, with value 1.
     // (Just like adding 2 integers, for example)
     if (dimensions[0].dimValue === '1' && dimensions.length === 1) {
+        //IF THE EDGE HAS THE CLASS COMPOUND, DON'T MESS WITH ITS CLASSES
         cy.add([
             {group: 'nodes', data: {id: node.data('id') + 'Addition', label: '+', opType: 'Addition'}, classes: 'operation'},
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[0].data('label') , dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[1].data('label'), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}}
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[0].data('label') , dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[1].data('label'), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()}
         ])
         outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: node.data('id') + 'Addition', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
+            cy.add({group: 'edges', data: {source: node.data('id') + 'Addition', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++ , opType: 'Addition'}, classes: 'operation variable'})
         })
     }
     // The other case is a loop where the inputs of the onnx graph are iterated over and their values summed.
@@ -70,9 +71,9 @@ function transformAdd(node, cy, edgeOrder) {
             {group: 'nodes', data: {id: nodeId + '1', parent: nodeId + 'Add', label: '1'}, classes: 'constant'},
 
             //edges for the loop inputs
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: 'input'},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: 'input'},
-            {group: 'edges', data: {source: nodeId + 'LoopIterations', target: nodeId + 'Add'}},
+            {group: 'edges', data: {source: nodeId + 'LoopIterations', target: nodeId + 'Add', value: numberOfIterations, order: edgeOrder.value++}, classes: 'input'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()},
 
             //edges for the loop environment
             {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Multiplication', parent: nodeId + 'Add', order: order++}, classes: 'index'},
@@ -94,7 +95,7 @@ function transformAdd(node, cy, edgeOrder) {
         ])
         //edges for the loop outputs
         outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: nodeId + 'Add', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}})
+            cy.add({group: 'edges', data: {source: nodeId + 'Add', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}, classes: 'compound variable'})
         })
     }
     cy.remove(node)

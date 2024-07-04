@@ -1,5 +1,4 @@
 function sortByOrder(edge1, edge2) {
-
     let order1 = edge1.data('order');
     let order2 = edge2.data('order');
 
@@ -11,6 +10,8 @@ function sortByOrder(edge1, edge2) {
         return 0
     }
 }
+
+
 
 function handleOpperation(edge, variables, operations, code) {
 
@@ -61,7 +62,7 @@ function handleOpperation(edge, variables, operations, code) {
     }
 }
 
-function handleEdge(edge, variables, operations, code, index) {
+function handleEdge(cy, edge, variables, operations, code, index) {
     const edgeClass = edge.classes()[0]
     let source = edge.data('source');
     let target = edge.data('target');
@@ -77,9 +78,8 @@ function handleEdge(edge, variables, operations, code, index) {
             if (index.id === "") {
                 index.id = source
                 variables[source] = index.id
-                code.content = `  let ${index.id} = 0\n` + code.content
+                code.content = `   let ${index.id} = 0\n` + code.content
             }
-
             break
         case 'constant':
             if (!variables[source]) {
@@ -87,10 +87,16 @@ function handleEdge(edge, variables, operations, code, index) {
             }
             break
         case 'input':
-            variables[source] = source.substring(1)
+            variables[source] = source.substring(0)
+            break
+        case 'compound':
+            const compoundNode = cy.$('#' + source)
+            if (edge.classes()[1]) {
+                code.content += `   let ${target} = {}\n`
+            }
+            handleCompoundNode(compoundNode, cy, code)
             break
     }
-
     if (operations[target]) {
         operations[target].push(edge.data('source'));
     } else {
@@ -118,7 +124,7 @@ function handleCompoundNode(compoundNode, cy, code) {
     let variables= {}
 
     edgesInsideCompound.forEach(edge => {
-        handleEdge(edge, variables, operations, loopCode, index)
+        handleEdge(cy, edge, variables, operations, loopCode, index)
     })
 
 
@@ -135,20 +141,15 @@ export function generateCode(cy, data) {
     code.content = code.content.slice(0, -2) +') {\n\n'
 
     let graphOperations = {}
+    let variables = {}
+    let operations = {}
+    let index = {id : ""}
 
     let edges = cy.edges().filter(edge => !edge.data('parent')).sort(sortByOrder)
     edges.forEach(edge => {
-        let source = edge.data('source');
-        let target = edge.data('target');
+        handleEdge(cy, edge, variables, operations, code, index)
     })
 
-    let compoundNodes = []
-    cy.nodes().forEach(node => {
-        if (node.isParent()) compoundNodes.push(node)
-    })
-    compoundNodes.forEach(compoundNode => {
-        handleCompoundNode(compoundNode, cy, code)
-    })
     let outputs = []
     data.graph.output.forEach(output => outputs.push(output.name))
     if (outputs.length === 1) code.content += `   return ${outputs[0]}`
@@ -158,9 +159,14 @@ export function generateCode(cy, data) {
     }
     code.content += '\n}'
     console.log(code.content)
+
 }
 
 /*
+    OS COMPOUND ESTÃO A SER MUDADOS DE VOLTA PARA INPUT
+
+    AS CLASSES TEM DE SER ADICIONADAS MAL O COISO É CRIADO NÉ, DPS MANTENHO-AS SIMPLESMENTE
+
     PORTANTO, TENHO DE COLOCAR AS CLASSES DE MANEIRA CORRETA NO PANORAMA GERAL
     UMA DAS DIFICULDADES SERIA A CLASSE EXTRA VARIABLE: MAYBE DECLARAR SEMPRE NA OUTER LAYER APÓS CONCLUÍDA A OPERAÇÃO
     FUNCIONA SEM DECLARAR, SE NÃO HOUVEREM COMPOUND NODES, MAS SE HOUVEREM, TENHO DE A DECLARAR
