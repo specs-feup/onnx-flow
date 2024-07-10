@@ -25,81 +25,77 @@ const typeSizeMap = {
     "22": "1"                              // onnx.TensorProto.INT4
 }
 
-
-//Method that expands the Add operation node into simple arithmetic nodes
-
-function transformAdd(node, cy, edgeOrder) {
-    const incomingEdges = node.incomers('edge')
-    const outgoingEdges = node.outgoers('edge')
-    const dimensions = incomingEdges[0].data('dims')
-    const type = incomingEdges[0].data('elemType')
-
-    // Optimization the case that the dimensions of the Add's inputs have 1 dimension, with value 1.
-    // (Just like adding 2 integers, for example)
-    if (dimensions[0].dimValue === '1' && dimensions.length === 1) {
-        //IF THE EDGE HAS THE CLASS COMPOUND, DON'T MESS WITH ITS CLASSES
-        cy.add([
-            {group: 'nodes', data: {id: node.data('id') + 'Addition', label: '+', opType: 'Addition'}, classes: 'operation'},
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[0].data('label') , dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + 'Addition', label: incomingEdges[1].data('label'), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()}
-        ])
-        outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: node.data('id') + 'Addition', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++ , opType: 'Addition'}, classes: 'operation variable'})
-        })
-    }
-    // The other case is a loop where the inputs of the onnx graph are iterated over and their values summed.
-    // (Just like adding the values of a vector or matrix )
-    else {
-        let numberOfIterations = dimensions.reduce((total, dim) => total + parseInt(dim.dimValue), 0)
-        let order = 0
-        const nodeId = node.data('id')
-        let displacementInMemory = typeSizeMap[type]
-        cy.add([
-            {group: 'nodes', data: {id: nodeId + 'LoopIterations', label: '# of loop iterations', value: numberOfIterations}, classes: 'constant'},
-            {group: 'nodes', data: {id: nodeId + 'Add', label: 'Add', opType: 'Add'}},
-            {group: 'nodes', data: {id: nodeId + 'index', parent: nodeId + 'Add', label: 'index'}, classes: 'input'},
-            {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'Add', label: 'displacement In Memory', value: displacementInMemory}, classes: 'input'},
-            {group: 'nodes', data: {id: nodeId + incomingEdges[0].data('source'), label: '&' + incomingEdges[0].data('source'), parent: nodeId + 'Add'}, classes: 'input'},
-            {group: 'nodes', data: {id: nodeId + incomingEdges[1].data('source'), label: '&' + incomingEdges[1].data('source'), parent: nodeId + 'Add'}, classes: 'input'},
-            {group: 'nodes', data: {id: nodeId + 'res', label: '&Result', parent: nodeId + 'Add'}, classes: 'output'},
-            {group: 'nodes', data: {id: nodeId + 'Multiplication', parent: nodeId + 'Add', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-            {group: 'nodes', data: {id: nodeId + 'Load0', parent: nodeId + 'Add', label: 'Load', opType: 'Load'}, classes: 'operation'},
-            {group: 'nodes', data: {id: nodeId + 'Load1', parent: nodeId + 'Add', label: 'Load', opType: 'Load'}, classes: 'operation'},
-            {group: 'nodes', data: {id: nodeId + 'Addition', parent: nodeId + 'Add', label: '+', opType: 'Addition'}, classes: 'operation'},
-            {group: 'nodes', data: {id: nodeId + 'Addition1', parent: nodeId + 'Add', label: '+', opType: 'Addition'}, classes: 'operation'},
-            {group: 'nodes', data: {id: nodeId + 'Store', parent: nodeId + 'Add', label: 'Store', opType: 'Store'}, classes: 'operation'},
-            {group: 'nodes', data: {id: nodeId + '1', parent: nodeId + 'Add', label: '1'}, classes: 'constant'},
-
-            //edges for the loop inputs
-            {group: 'edges', data: {source: nodeId + 'LoopIterations', target: nodeId + 'Add', value: numberOfIterations, order: edgeOrder.value++}, classes: 'input'},
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges.data('label'), target: nodeId + 'Add', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()},
-
-            //edges for the loop environment
-            {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Multiplication', parent: nodeId + 'Add', order: order++}, classes: 'index'},
-            {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Multiplication', parent: nodeId + 'Add', order: order++, value: displacementInMemory }, classes: 'constant'},
-            {group: 'edges', data: {source: nodeId + incomingEdges[0].data('source'), target: nodeId + 'Load0', parent: nodeId + 'Add', order: order++}, classes: 'input'},
-            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Load0', parent: nodeId + 'Add', order: order++, opType: 'Multiplication'}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + incomingEdges[1].data('source'), target: nodeId + 'Load1', parent: nodeId + 'Add', order: order++}, classes: 'input'},
-            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Load1', parent: nodeId + 'Add', order: order++}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + 'Load0', target: nodeId + 'Addition', parent: nodeId + 'Add', order: order++, opType: 'Load'}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + 'Load1', target: nodeId + 'Addition', parent: nodeId + 'Add', order: order++, opType: 'Load'}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + 'Addition', target: nodeId + 'Store', parent: nodeId + 'Add', order: order++, opType: 'Addition'}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + 'Multiplication', target: nodeId + 'Store', parent: nodeId + 'Add', order: order++, opType: 'Multiplication'}, classes: 'operation'},
-            {group: 'edges', data: {source: nodeId + 'Store', target: nodeId + 'res', parent: nodeId + 'Add', order: order++, opType: 'Store'}, classes: 'operation'},
-
-            {group: 'edges', data: {source: nodeId + 'index', target: nodeId + 'Addition1', parent: nodeId + 'Add', order: order++}, classes: 'index'},
-            {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition1', parent: nodeId + 'Add', order: order++, value: 1}, classes: 'constant'},
-            {group: 'edges', data: {source: nodeId + 'Addition1', target: nodeId + 'index', parent: nodeId + 'Add', order: order++, opType: 'Addition'}, classes: 'operation variable'},
-
-        ])
-        //edges for the loop outputs
-        outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: nodeId + 'Add', target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}, classes: 'compound variable'})
-        })
-    }
-    cy.remove(node)
+function formatId(name, nodeId) {
+    return `${name}_${nodeId}`;
 }
+
+// Method that expands the Add operation node into simple arithmetic nodes
+function transformAdd(node, cy, edgeOrder) {
+    const incomingEdges = node.incomers('edge');
+    const outgoingEdges = node.outgoers('edge');
+    const dimensions = incomingEdges[0].data('dims');
+    const type = incomingEdges[0].data('elemType');
+
+    const nodeId = node.data('id');
+
+    if (dimensions[0].dimValue === '1' && dimensions.length === 1) {
+        cy.add([
+            {group: 'nodes', data: {id: formatId('Addition', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: formatId('Addition', nodeId), label: incomingEdges[0].data('label'), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: formatId('Addition', nodeId), label: incomingEdges[1].data('label'), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()}
+        ]);
+        outgoingEdges.forEach(edge => {
+            cy.add({group: 'edges', data: {source: formatId('Addition', nodeId), target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++, opType: 'Addition'}, classes: 'operation variable'});
+        });
+    } else {
+        let numberOfIterations = dimensions.reduce((total, dim) => total + parseInt(dim.dimValue), 0);
+        let order = 0;
+        let displacementInMemory = typeSizeMap[type];
+
+        cy.add([
+            {group: 'nodes', data: {id: formatId('LoopIterations', nodeId), label: '# of loop iterations', value: numberOfIterations}, classes: 'constant'},
+            {group: 'nodes', data: {id: formatId('Add', nodeId), label: 'Add', opType: 'Add'}},
+            {group: 'nodes', data: {id: formatId('index', nodeId), parent: formatId('Add', nodeId), label: 'index'}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('Add', nodeId), label: 'displacement In Memory', value: displacementInMemory}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId(incomingEdges[0].data('source'), nodeId), label: '&' + incomingEdges[0].data('source'), parent: formatId('Add', nodeId)}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId(incomingEdges[1].data('source'), nodeId), label: '&' + incomingEdges[1].data('source'), parent: formatId('Add', nodeId)}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId(`Add_${nodeId}`, nodeId), label: '&Result', parent: formatId('Add', nodeId)}, classes: 'output'},
+            {group: 'nodes', data: {id: formatId('Multiplication', nodeId), parent: formatId('Add', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Load0', nodeId), parent: formatId('Add', nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Load1', nodeId), parent: formatId('Add', nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Addition', nodeId), parent: formatId('Add', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Addition1', nodeId), parent: formatId('Add', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Store', nodeId), parent: formatId('Add', nodeId), label: 'Store', opType: 'Store'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('1', nodeId), parent: formatId('Add', nodeId), label: '1'}, classes: 'constant'},
+
+            {group: 'edges', data: {source: formatId('LoopIterations', nodeId), target: formatId('Add', nodeId), value: numberOfIterations, order: edgeOrder.value++}, classes: 'constant'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges[0].data('label'), target: formatId('Add', nodeId), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges[1].data('label'), target: formatId('Add', nodeId), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()},
+
+            {group: 'edges', data: {source: formatId('index', nodeId), target: formatId('Multiplication', nodeId), parent: formatId('Add', nodeId), order: order++}, classes: 'declareBefore index'},
+            {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Multiplication', nodeId), parent: formatId('Add', nodeId), order: order++, value: displacementInMemory}, classes: 'constant'},
+            {group: 'edges', data: {source: formatId(incomingEdges[0].data('source'), nodeId), target: formatId('Load0', nodeId), parent: formatId('Add', nodeId), order: order++}, classes: 'input'},
+            {group: 'edges', data: {source: formatId('Multiplication', nodeId), target: formatId('Load0', nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId(incomingEdges[1].data('source'), nodeId), target: formatId('Load1', nodeId), parent: formatId('Add', nodeId), order: order++}, classes: 'input'},
+            {group: 'edges', data: {source: formatId('Multiplication', nodeId), target: formatId('Load1', nodeId), parent: formatId('Add', nodeId), order: order++}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Load0', nodeId), target: formatId('Addition', nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Load1', nodeId), target: formatId('Addition', nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Addition', nodeId), target: formatId('Store', nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Multiplication', nodeId), target: formatId('Store', nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Store', nodeId), target: formatId(`Add_${nodeId}`, nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Store'}, classes: 'operation result'},
+
+            {group: 'edges', data: {source: formatId('index', nodeId), target: formatId('Addition1', nodeId), parent: formatId('Add', nodeId), order: order++}, classes: 'declareBefore'},
+            {group: 'edges', data: {source: formatId('1', nodeId), target: formatId('Addition1', nodeId), parent: formatId('Add', nodeId), order: order++, value: 1}, classes: 'constant'},
+            {group: 'edges', data: {source: formatId('Addition1', nodeId), target: formatId('index', nodeId), parent: formatId('Add', nodeId), order: order++, opType: 'Addition'}, classes: 'operation variable'}
+        ]);
+
+        outgoingEdges.forEach(edge => {
+            cy.add({group: 'edges', data: {source: formatId('Add', nodeId), target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}, classes: 'compound variable'});
+        });
+    }
+    cy.remove(node);
+}
+
 
 function transformMatMul(node, cy, edgeOrder) {
     const incomingEdges = node.incomers('edge')
@@ -118,391 +114,411 @@ function transformMatMul(node, cy, edgeOrder) {
 
     if (pattern === '111') {
         cy.add([
-            {group: 'nodes', data: {id: node.data('id') + ' Multiplication', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: node.data('id') + ' Multiplication', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
-            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: node.data('id') + ' Multiplication', dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType')}}
+            {group: 'nodes', data: {id: formatId('Multiplication', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: formatId('Multiplication', nodeId), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: formatId('Multiplication', nodeId), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++},  classes: incomingEdges[1].classes()}
         ])
         outgoingEdges.forEach(edge => {
-            cy.add({group: 'edges', data: {source: node.data('id') + ' Multiplication', target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
+            cy.add({group: 'edges', data: {source: formatId('Multiplication', nodeId), target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++, opType: 'Multiplication'}, classes: 'operation variable'})
         })
         cy.remove(node)
         return
     }
 
-    cy.add([
-        {group: 'nodes', data: {id: nodeId + 'LoopIterations', label: '# of loop iterations', value: numberOfIterations.toString()}, classes: 'constant'},
-        {group: 'nodes', data: {id: nodeId + 'MatMul', label: 'MatMul', opType: 'MatMul'}},
 
-        {group: 'edges', data: {source: incomingEdges[0].data('source'), target: nodeId + 'MatMul', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
-        {group: 'edges', data: {source: incomingEdges[1].data('source'), target: nodeId + 'MatMul', dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType')}},
-        {group: 'edges', data: {source: nodeId + 'LoopIterations', target: nodeId + 'MatMul'}},
+    cy.add([
+        {group: 'nodes', data: {id: formatId('LoopIterations', nodeId), label: '# of loop iterations', value: numberOfIterations}, classes: 'constant'},
+        {group: 'nodes', data: {id: formatId('MatMul', nodeId), label: 'MatMul', opType: 'MatMul'}},
+
+        {group: 'edges', data: {source: formatId('LoopIterations', nodeId), target: formatId('MatMul', nodeId), order: edgeOrder.value++, value: numberOfIterations}, classes: 'constant'},
+        {group: 'edges', data: {source: incomingEdges[0].data('source'), target: formatId('MatMul', nodeId), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+        {group: 'edges', data: {source: incomingEdges[1].data('source'), target: formatId('MatMul', nodeId), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()},
+
     ])
+
+    let order = 0;
 
     switch (pattern) {
         case '000':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'i', parent: nodeId +'MatMul', label: 'i'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'j', parent: nodeId +'MatMul', label: 'j'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#columns1', parent: nodeId +'MatMul', label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#rows1', parent: nodeId +'MatMul', label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition0', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition1', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('i', nodeId), parent: formatId('MatMul', nodeId), label: 'i'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('j', nodeId), parent: formatId('MatMul', nodeId), label: 'j'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#columns1', nodeId), parent: formatId('MatMul', nodeId), label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#rows1', nodeId), parent: formatId('MatMul', nodeId), label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Multiplication0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition0', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition1', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
 
                 //Multiplication0 = i * number of rows of matrix B
-                {group: 'edges', data: {source: nodeId + 'i', target: nodeId + 'Multiplication0'}},
-                {group: 'edges', data: {source: nodeId + '#rows1', target: nodeId + 'Multiplication0'}},
+                {group: 'edges', data: {source: formatId('i', nodeId), target: formatId('Multiplication0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#rows1', nodeId), target: formatId('Multiplication0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[0].dimValue}, classes: 'constant'},
 
                 //Multiplication1 = k * number of columns of matrix B
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Multiplication1'}},
-                {group: 'edges', data: {source: nodeId + '#columns1', target: nodeId + 'Multiplication1'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Multiplication1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#columns1', nodeId), target: formatId('Multiplication1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[1].dimValue}, classes: 'constant'},
 
                 //Addition0 = Multiplication0 + k
-                {group: 'edges', data: {source: nodeId + 'Multiplication0', target: nodeId + 'Addition0'}},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Addition0'}},
+                {group: 'edges', data: {source: formatId('Multiplication0', nodeId), target: formatId('Addition0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Addition0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
                 //Addition1 = Multiplication1 + j
-                {group: 'edges', data: {source: nodeId + 'Multiplication1', target: nodeId + 'Addition1'}},
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Addition1'}},
+                {group: 'edges', data: {source: formatId('Multiplication1', nodeId), target: formatId('Addition1', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Addition1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
                 //Index0 (the memory position for matrix A) = Addition0 * the displacement in memory
-                {group: 'edges', data: {source: nodeId + 'Addition0', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
+                {group: 'edges', data: {source: formatId('Addition0', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //Index1 (the memory position for matrix B) = Addition1 * the displacement in memory
-                {group: 'edges', data: {source: nodeId + 'Addition1', target: nodeId + 'Index1'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('Addition1', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //store's index
-                {group: 'nodes', data: {id: nodeId + 'Multiplication5', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition3', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication5', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition3', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
 
                 //Multiplication5 = i * number of columns of matrix B
-                {group: 'edges', data: {source: nodeId + 'i', target: nodeId + 'Multiplication5'}},
-                {group: 'edges', data: {source: nodeId + '#columns1', target: nodeId + 'Multiplication5'}},
+                {group: 'edges', data: {source: formatId('i', nodeId), target: formatId('Multiplication5', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#columns1', nodeId), target: formatId('Multiplication5', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[1].dimValue}, classes: 'constant'},
 
                 //Addition3 = j * Multiplication 5
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Addition3'}},
-                {group: 'edges', data: {source: nodeId + 'Multiplication5', target: nodeId + 'Addition3'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Addition3', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('Multiplication5', nodeId), target: formatId('Addition3', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
                 //IndexRes (the memory position for the result matrix) = Addition3 * the displacement in memory
-                {group: 'edges', data: {source: nodeId + 'Addition3', target: nodeId + 'IndexRes'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'IndexRes'}}
+                {group: 'edges', data: {source: formatId('Addition3', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'}
+
 
             ])
             break
         case '100':
+
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'j', parent: nodeId +'MatMul', label: 'j'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#rows1', parent: nodeId +'MatMul', label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#columns1', parent: nodeId +'MatMul', label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition1', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('j', nodeId), parent: formatId('MatMul', nodeId), label: 'j'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#rows1', nodeId), parent: formatId('MatMul', nodeId), label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#columns1', nodeId), parent: formatId('MatMul', nodeId), label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Multiplication1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition1', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
 
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Multiplication1'}},
-                {group: 'edges', data: {source: nodeId + '#columns1', target: nodeId + 'Multiplication1'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Multiplication1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#columns1', nodeId), target: formatId('Multiplication1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[1].dimValue}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Addition1'}},
-                {group: 'edges', data: {source: nodeId + 'Multiplication1', target: nodeId + 'Addition1'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Addition1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('Multiplication1', nodeId), target: formatId('Addition1', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Addition1', target: nodeId + 'Index1'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('Addition1', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //store's index
 
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'IndexRes'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'IndexRes'}}
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'}
+
 
             ])
             break
         case '001':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'j', parent: nodeId +'MatMul', label: 'j'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#columns1', parent: nodeId +'MatMul', label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#rows1', parent: nodeId +'MatMul', label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition0', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('j', nodeId), parent: formatId('MatMul', nodeId), label: 'j'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#columns1', nodeId), parent: formatId('MatMul', nodeId), label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#rows1', nodeId), parent: formatId('MatMul', nodeId), label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Multiplication0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition0', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Multiplication0'}},
-                {group: 'edges', data: {source: nodeId + '#rows1', target: nodeId + 'Multiplication0'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Multiplication0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#rows1', nodeId), target: formatId('Multiplication0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[0].dimValue}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication0', target: nodeId + 'Addition0'}},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Addition0'}},
+                {group: 'edges', data: {source: formatId('Multiplication0', nodeId), target: formatId('Addition0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Addition0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Addition0', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
+                {group: 'edges', data: {source: formatId('Addition0', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //store's index
 
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'IndexRes'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'IndexRes'}}
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'}
+
 
             ])
             break
         case '101':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index1'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
+
                 //store's index
 
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                //aqui é necessário fazer uma ligação direta ao store
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'IndexRes'}}
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'}
 
             ])
             break
         case '010':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'j', parent: nodeId +'MatMul', label: 'j'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#columns1', parent: nodeId +'MatMul', label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#rows1', parent: nodeId +'MatMul', label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('j', nodeId), parent: formatId('MatMul', nodeId), label: 'j'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#columns1', nodeId), parent: formatId('MatMul', nodeId), label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#rows1', nodeId), parent: formatId('MatMul', nodeId), label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index1'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //store's index
 
-                {group: 'nodes', data: {id: nodeId + 'Multiplication5', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition3', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication5', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition3', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Multiplication5'}},
-                {group: 'edges', data: {source: nodeId + '#columns1', target: nodeId + 'Multiplication5'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Multiplication5', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#columns1', nodeId), target: formatId('Multiplication5', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[1].dimValue }, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Addition3'}},
-                {group: 'edges', data: {source: nodeId + 'Multiplication5', target: nodeId + 'Addition3'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Addition3', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('Multiplication5', nodeId), target: formatId('Addition3', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Addition3', target: nodeId + 'IndexRes'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'IndexRes'}}
+                {group: 'edges', data: {source: formatId('Addition3', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'}
+
             ])
             break
         case '110':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'j', parent: nodeId +'MatMul', label: '1'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#columns1', parent: nodeId +'MatMul', label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#rows1', parent: nodeId +'MatMul', label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('j', nodeId), parent: formatId('MatMul', nodeId), label: '1'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#columns1', nodeId), parent: formatId('MatMul', nodeId), label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#rows1', nodeId), parent: formatId('MatMul', nodeId), label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index1'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //store's index
 
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'IndexRes'}},
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'}
+
             ])
             break
         case '011':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + 'j', parent: nodeId +'MatMul', label: '1'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'k', parent: nodeId +'MatMul', label: 'k'}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#columns1', parent: nodeId +'MatMul', label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + '#rows1', parent: nodeId +'MatMul', label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'displacementInMemory', parent: nodeId + 'MatMul', label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
-                {group: 'nodes', data: {id: nodeId + 'Index0', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Index1', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('j', nodeId), parent: formatId('MatMul', nodeId), label: '1'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('k', nodeId), parent: formatId('MatMul', nodeId), label: 'k'}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#columns1', nodeId), parent: formatId('MatMul', nodeId), label: '# of columns of ' + incomingEdges[1].data('source'), value: dimensions1[1].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('#rows1', nodeId), parent: formatId('MatMul', nodeId), label: '# of rows of ' + incomingEdges[1].data('source'), value: dimensions1[0].dimValue}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId('MatMul', nodeId), label: 'displacement In Memory', value: typeSizeMap[type]}, classes: 'input'},
+                {group: 'nodes', data: {id: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Index0'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index0'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Index1'}},
-                {group: 'edges', data: {source: nodeId + 'displacementInMemory', target: nodeId + 'Index1'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Index1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: typeSizeMap[type]}, classes: 'constant'},
 
                 //store's index
 
-                {group: 'nodes', data: {id: nodeId + 'IndexRes', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'IndexRes'}},
+                {group: 'nodes', data: {id: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('IndexRes', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'}
+
             ])
             break
     }
 
     //multiplication of the loaded values and storing them in the result matrix (equal for any optimization)
     cy.add([
-
-        {group: 'nodes', data: {id: nodeId + incomingEdges[0].data('source'), label: '&' + incomingEdges[0].data('source'), parent: nodeId + 'MatMul'}, classes: 'input'},
-        {group: 'nodes', data: {id: nodeId + incomingEdges[1].data('source'), label: '&' + incomingEdges[1].data('source'), parent: nodeId + 'MatMul'}, classes: 'input'},
-        {group: 'nodes', data: {id: nodeId + 'res', label: '&Result', parent: nodeId + 'MatMul'}, classes: 'output'},
-
-
-        {group: 'nodes', data: {id: nodeId + 'Multiplication4', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-        {group: 'nodes', data: {id: nodeId + 'Addition2', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-        {group: 'nodes', data: {id: nodeId + 'Load0', parent: nodeId + 'MatMul', label: 'Load', opType: 'Load'}, classes: 'operation'},
-        {group: 'nodes', data: {id: nodeId + 'Load1', parent: nodeId + 'MatMul', label: 'Load', opType: 'Load'}, classes: 'operation'},
-        {group: 'nodes', data: {id: nodeId + 'Store', parent: nodeId + 'MatMul', label: 'Store', opType: 'Store'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('1', nodeId), parent: formatId('MatMul', nodeId), label: '1'}, classes: 'constant'},
+        {group: 'nodes', data: {id: formatId('index', nodeId), parent: formatId('MatMul', nodeId), label: 'index'}, classes: 'input'},
+        {group: 'nodes', data: {id: formatId(incomingEdges[0].data('source'), nodeId), label: '&' + incomingEdges[0].data('source'), parent: formatId('MatMul', nodeId)}, classes: 'input'},
+        {group: 'nodes', data: {id: formatId(incomingEdges[1].data('source'), nodeId), label: '&' + incomingEdges[1].data('source'), parent: formatId('MatMul', nodeId)}, classes: 'input'},
+        {group: 'nodes', data: {id: formatId(`MatMul_${nodeId}`, nodeId), label: '&Result', parent: formatId('MatMul', nodeId)}, classes: 'output'},
 
 
+        {group: 'nodes', data: {id: formatId('Multiplication4', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('Addition2', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('Addition8', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('Load0', nodeId), parent: formatId('MatMul', nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('Load1', nodeId), parent: formatId('MatMul', nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('Load2', nodeId), parent: formatId('MatMul', nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+        {group: 'nodes', data: {id: formatId('Store', nodeId), parent: formatId('MatMul', nodeId), label: 'Store', opType: 'Store'}, classes: 'operation'},
 
-        {group: 'edges', data: {source: nodeId + 'Index0', target: nodeId + 'Load0'}},
-        {group: 'edges', data: {source: nodeId + incomingEdges[0].data('source'), target: nodeId + 'Load0'}},
 
-        {group: 'edges', data: {source: nodeId + 'Index1', target: nodeId + 'Load1'}},
-        {group: 'edges', data: {source: nodeId + incomingEdges[1].data('source'), target: nodeId + 'Load1'}},
+        {group: 'edges', data: {source: formatId(incomingEdges[0].data('source'), nodeId), target: formatId('Load0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'input'},
+        {group: 'edges', data: {source: formatId('Index0', nodeId), target: formatId('Load0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-        {group: 'edges', data: {source: nodeId + 'Load0', target: nodeId + 'Multiplication4'}},
-        {group: 'edges', data: {source: nodeId + 'Load1', target: nodeId + 'Multiplication4'}},
+        {group: 'edges', data: {source: formatId(incomingEdges[1].data('source'), nodeId), target: formatId('Load1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'input'},
+        {group: 'edges', data: {source: formatId('Index1', nodeId), target: formatId('Load1', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-        {group: 'edges', data: {source: nodeId + 'Multiplication4', target: nodeId + 'Addition2'}},
-        {group: 'edges', data: {source: nodeId + 'res', target: nodeId + 'Addition2'}},
 
-        {group: 'edges', data: {source: nodeId + 'Addition2', target: nodeId + 'Store'}},
+        {group: 'edges', data: {source: formatId('Load0', nodeId), target: formatId('Multiplication4', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
+        {group: 'edges', data: {source: formatId('Load1', nodeId), target: formatId('Multiplication4', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
 
-        {group: 'edges', data: {source: nodeId + 'IndexRes', target: nodeId + 'Store'}},
+        {group: 'edges', data: {source: formatId(`MatMul_${nodeId}`, nodeId), target: formatId('Load2', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'input'},
+        {group: 'edges', data: {source: formatId('IndexRes', nodeId), target: formatId('Load2', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+        {group: 'edges', data: {source: formatId('Load2', nodeId), target: formatId('Addition2', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
 
-        {group: 'edges', data: {source: nodeId + 'Store', target: nodeId + 'res'}},
+        {group: 'edges', data: {source: formatId('Multiplication4', nodeId), target: formatId('Addition2', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+
+        {group: 'edges', data: {source: formatId('Addition2', nodeId), target: formatId('Store', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
+
+        {group: 'edges', data: {source: formatId('IndexRes', nodeId), target: formatId('Store', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+
+        {group: 'edges', data: {source: formatId('Store', nodeId), target: formatId(`MatMul_${nodeId}`, nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Store'}, classes: 'operation result'},
+
+        {group: 'edges', data: {source: formatId('index', nodeId), target: formatId('Addition8', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore index'},
+        {group: 'edges', data: {source: formatId('1', nodeId), target: formatId('Addition8', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: 1}, classes: 'constant'},
+        {group: 'edges', data: {source: formatId('Addition8', nodeId), target: formatId('index', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation variable'},
+
 
     ])
 
     switch (pattern) {
         case '000':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + '1', parent: nodeId + 'MatMul', label: '1'}, classes: 'constant'},
-
-                {group: 'nodes', data: {id: nodeId + 'Addition4', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition5', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition6', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition7', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication7', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication8', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication9', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication10', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication11', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication12', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Equality0', parent: nodeId + 'MatMul', label: '==', opType: 'Equality'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Equality1', parent: nodeId + 'MatMul', label: '==', opType: 'Equality'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Not0', parent: nodeId + 'MatMul', label: '!', opType: 'Not'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Not1', parent: nodeId + 'MatMul', label: '!', opType: 'Not'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition4', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition5', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition6', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition7', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication7', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication8', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication9', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication10', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication11', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication12', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Equality0', nodeId), parent: formatId('MatMul', nodeId), label: '==', opType: 'Equality'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Equality1', nodeId), parent: formatId('MatMul', nodeId), label: '==', opType: 'Equality'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Not0', nodeId), parent: formatId('MatMul', nodeId), label: '!', opType: 'Not'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Not1', nodeId), parent: formatId('MatMul', nodeId), label: '!', opType: 'Not'}, classes: 'operation'},
 
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Equality0'}},
-                {group: 'edges', data: {source: nodeId + '#rows1', target: nodeId + 'Equality0'}},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Equality0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#rows1', nodeId), target: formatId('Equality0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[0].dimValue}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition4'}},
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Addition4'}},
+                {group: 'edges', data: {source: formatId('1', nodeId), target: formatId('Addition4', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: 1}, classes: 'constant'},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Addition4', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Equality0', target: nodeId + 'Multiplication7'}},
-                {group: 'edges', data: {source: nodeId + 'Addition4', target: nodeId + 'Multiplication7'}},
+                {group: 'edges', data: {source: formatId('Equality0', nodeId), target: formatId('Multiplication7', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Equality'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('Addition4', nodeId), target: formatId('Multiplication7', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Equality0', target: nodeId + 'Not0'}},
+                {group: 'edges', data: {source: formatId('Equality0', nodeId), target: formatId('Not0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Equality'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Not0', target: nodeId + 'Multiplication8'}},
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Multiplication8'}},
+                {group: 'edges', data: {source: formatId('Not0', nodeId), target: formatId('Multiplication8', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Not'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Multiplication8', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication7', target: nodeId + 'Addition5'}},
-                {group: 'edges', data: {source: nodeId + 'Multiplication8', target: nodeId + 'Addition5'}},
+                {group: 'edges', data: {source: formatId('Multiplication7', nodeId), target: formatId('Addition5', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('Multiplication8', nodeId), target: formatId('Addition5', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Addition5', target: nodeId + 'j'}},
-                {group: 'edges', data: {source: nodeId + 'Not0', target: nodeId + 'Multiplication9'}},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Multiplication9'}},
+                {group: 'edges', data: {source: formatId('Addition5', nodeId), target: formatId('j', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation variable'},
+                {group: 'edges', data: {source: formatId('Not0', nodeId), target: formatId('Multiplication9', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Not'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Multiplication9', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication9', target: nodeId + 'k'}},
+                {group: 'edges', data: {source: formatId('Multiplication9', nodeId), target: formatId('k', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation variable'},
 
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Equality1'}},
-                {group: 'edges', data: {source: nodeId + '#columns1', target: nodeId + 'Equality1'}},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Equality1', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#columns1', nodeId), target: formatId('Equality1', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[1].dimValue}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition6'}},
-                {group: 'edges', data: {source: nodeId + 'i', target: nodeId + 'Addition6'}},
+                {group: 'edges', data: {source: formatId('1', nodeId), target: formatId('Addition6', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: 1}, classes: 'constant'},
+                {group: 'edges', data: {source: formatId('i', nodeId), target: formatId('Addition6', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Equality1', target: nodeId + 'Multiplication10'}},
-                {group: 'edges', data: {source: nodeId + 'Addition6', target: nodeId + 'Multiplication10'}},
+                {group: 'edges', data: {source: formatId('Equality1', nodeId), target: formatId('Multiplication10', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Equality'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('Addition6', nodeId), target: formatId('Multiplication10', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Equality1', target: nodeId + 'Not1'}},
+                {group: 'edges', data: {source: formatId('Equality1', nodeId), target: formatId('Not1', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Equality'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Not1', target: nodeId + 'Multiplication11'}},
-                {group: 'edges', data: {source: nodeId + 'i', target: nodeId + 'Multiplication11'}},
+                {group: 'edges', data: {source: formatId('Not1', nodeId), target: formatId('Multiplication11', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Not'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('i', nodeId), target: formatId('Multiplication11', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication10', target: nodeId + 'Addition7'}},
-                {group: 'edges', data: {source: nodeId + 'Multiplication11', target: nodeId + 'Addition7'}},
+                {group: 'edges', data: {source: formatId('Multiplication10', nodeId), target: formatId('Addition7', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('Multiplication11', nodeId), target: formatId('Addition7', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Addition7', target: nodeId + 'i'}},
+                {group: 'edges', data: {source: formatId('Addition7', nodeId), target: formatId('i', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation variable'},
 
-                {group: 'edges', data: {source: nodeId + 'Not1', target: nodeId + 'Multiplication12'}},
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Multiplication12'}},
+                {group: 'edges', data: {source: formatId('Not1', nodeId), target: formatId('Multiplication12', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Not'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Multiplication12', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication12', target: nodeId + 'j'}}
+                {group: 'edges', data: {source: formatId('Multiplication12', nodeId), target: formatId('j', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation variable'}
             ])
             break
         case '100':
         case '001':
         case '010':
             cy.add([
-                {group: 'nodes', data: {id: nodeId + '1', parent: nodeId + 'MatMul', label: '1'}, classes: 'constant'},
-                {group: 'nodes', data: {id: nodeId + 'Addition4', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Addition5', parent: nodeId + 'MatMul', label: '+', opType: 'Addition'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication7', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication8', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Multiplication9', parent: nodeId + 'MatMul', label: '*', opType: 'Multiplication'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Equality0', parent: nodeId + 'MatMul', label: '==', opType: 'Equality'}, classes: 'operation'},
-                {group: 'nodes', data: {id: nodeId + 'Not0', parent: nodeId + 'MatMul', label: '!', opType: 'Not'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition4', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Addition5', nodeId), parent: formatId('MatMul', nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication7', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication8', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Multiplication9', nodeId), parent: formatId('MatMul', nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Equality0', nodeId), parent: formatId('MatMul', nodeId), label: '==', opType: 'Equality'}, classes: 'operation'},
+                {group: 'nodes', data: {id: formatId('Not0', nodeId), parent: formatId('MatMul', nodeId), label: '!', opType: 'Not'}, classes: 'operation'},
 
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Equality0', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
+                {group: 'edges', data: {source: formatId('#rows1', nodeId), target: formatId('Equality0', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: dimensions1[0].dimValue}, classes: 'constant'},
 
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Equality0'}},
-                {group: 'edges', data: {source: nodeId + '#rows1', target: nodeId + 'Equality0'}},
+                {group: 'edges', data: {source: formatId('1', nodeId), target: formatId('Addition4', nodeId), parent: formatId('MatMul', nodeId), order: order++, value: 1}, classes: 'constant'},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Addition4', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + '1', target: nodeId + 'Addition4'}},
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Addition4'}},
+                {group: 'edges', data: {source: formatId('Equality0', nodeId), target: formatId('Multiplication7', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Equality'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('Addition4', nodeId), target: formatId('Multiplication7', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Equality0', target: nodeId + 'Multiplication7'}},
-                {group: 'edges', data: {source: nodeId + 'Addition4', target: nodeId + 'Multiplication7'}},
+                {group: 'edges', data: {source: formatId('Equality0', nodeId), target: formatId('Not0', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Equality'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Equality0', target: nodeId + 'Not0'}},
+                {group: 'edges', data: {source: formatId('Not0', nodeId), target: formatId('Multiplication8', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Not'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('j', nodeId), target: formatId('Multiplication8', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Not0', target: nodeId + 'Multiplication8'}},
-                {group: 'edges', data: {source: nodeId + 'j', target: nodeId + 'Multiplication8'}},
+                {group: 'edges', data: {source: formatId('Multiplication7', nodeId), target: formatId('Addition5', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('Multiplication8', nodeId), target: formatId('Addition5', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication7', target: nodeId + 'Addition5'}},
-                {group: 'edges', data: {source: nodeId + 'Multiplication8', target: nodeId + 'Addition5'}},
+                {group: 'edges', data: {source: formatId('Addition5', nodeId), target: formatId('j', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Addition'}, classes: 'operation variable'},
+                {group: 'edges', data: {source: formatId('Not0', nodeId), target: formatId('Multiplication9', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Not'}, classes: 'operation'},
+                {group: 'edges', data: {source: formatId('k', nodeId), target: formatId('Multiplication9', nodeId), parent: formatId('MatMul', nodeId), order: order++}, classes: 'declareBefore'},
 
-                {group: 'edges', data: {source: nodeId + 'Addition5', target: nodeId + 'j'}},
-                {group: 'edges', data: {source: nodeId + 'Not0', target: nodeId + 'Multiplication9'}},
-                {group: 'edges', data: {source: nodeId + 'k', target: nodeId + 'Multiplication9'}},
+                {group: 'edges', data: {source: formatId('Multiplication9', nodeId), target: formatId('k', nodeId), parent: formatId('MatMul', nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation variable'}
 
-                {group: 'edges', data: {source: nodeId + 'Multiplication9', target: nodeId + 'k'}}
             ])
             break
     }
@@ -510,7 +526,7 @@ function transformMatMul(node, cy, edgeOrder) {
 
 
     outgoingEdges.forEach(edge => {
-        cy.add({group: 'edges', data: {source: nodeId + 'MatMul', target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType')}})
+        cy.add({group: 'edges', data: {source: formatId('MatMul', nodeId) , target: edge.data('target'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}, classes: 'compound variable'})
     })
 
 

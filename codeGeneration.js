@@ -11,22 +11,32 @@ function sortByOrder(edge1, edge2) {
     }
 }
 
+function getSubstringBeforeLastUnderscore(str) {
+    let lastUnderscoreIndex = str.lastIndexOf('_');
+
+    if (lastUnderscoreIndex !== -1) {
+        return str.substring(0, lastUnderscoreIndex);
+    }
+
+    return str;
+}
 
 
-function handleOpperation(edge, variables, operations, code) {
+function handleOperation(edge, variables, operations, code) {
 
     const source = edge.data('source')
     const target = edge.data('target')
 
+
     switch (edge.data('opType')) {
         case 'Addition':
             if (!variables[source]) {
-                variables[source] = `${variables[operations[source][0]]} + ${variables[operations[source][1]]}`
+                variables[source] = `(${variables[operations[source][0]]} + ${variables[operations[source][1]]})`
             }
             break
         case 'Subtraction':
             if (!variables[source]) {
-                variables[source] = `${variables[operations[source][0]]} - ${variables[operations[source][1]]}`
+                variables[source] = `(${variables[operations[source][0]]} - ${variables[operations[source][1]]})`
             }
             break
         case 'Load':
@@ -36,18 +46,23 @@ function handleOpperation(edge, variables, operations, code) {
             break
         case 'Multiplication':
             if (!variables[source]) {
-                variables[source] = `${variables[operations[source][0]]} * ${variables[operations[source][1]]}`
+                variables[source] = `(${variables[operations[source][0]]} * ${variables[operations[source][1]]})`
             }
             break
         case 'Store':
             if (!variables[source]) {
-                variables[source] = `${target}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}`
-                code.content += `       ${target}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}\n`
+                if (edge.hasClass('result')) {
+                    variables[source] = `${getSubstringBeforeLastUnderscore(target)}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}`
+                    code.content += `       ${getSubstringBeforeLastUnderscore(target)}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}\n`
+                } else {
+                    variables[source] = `${target}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}`
+                    code.content += `       ${target}[${variables[operations[source][1]]}] = ${variables[operations[source][0]]}\n`
+                }
             }
             break
         case 'Equality':
             if (!variables[source]) {
-                variables[source] = `${variables[operations[source][0]]} === ${variables[operations[source][1]]}`
+                variables[source] = `(${variables[operations[source][0]]} === ${variables[operations[source][1]]})`
             }
             if (edge.hasClass('variable')) {
                 code.content += `   ${target} = ${variables[source]}\n`
@@ -61,108 +76,109 @@ function handleOpperation(edge, variables, operations, code) {
 
     }
 }
+function handleEdge(cy, edge, variables, operations, code, outputs) {
 
-function handleEdge(cy, edge, variables, operations, code, index) {
-    const edgeClass = edge.classes()[0]
+    const edgeClass = edge.classes()[0];
     let source = edge.data('source');
     let target = edge.data('target');
 
+    const output = cy.$('#' + target);
+    if (!output.outgoers('edge').length && !edge.data('parent')) {
+        if (edge.hasClass('compound')) outputs.push(source)
+        else outputs.push(target)
+    }
+
     switch (edgeClass) {
         case 'operation':
-            handleOpperation(edge, variables, operations, code)
-            if (edge.classes()[1]) {
-                code.content += `       ${target} = ${variables[source]}\n`
+            handleOperation(edge, variables, operations, code);
+            if (edge.hasClass('variable')) {
+                code.content += `       ${target} = ${variables[source]}\n`;
             }
-            break
-        case 'index':
-            if (index.id === "") {
-                index.id = source
-                variables[source] = index.id
-                code.content = `   let ${index.id} = 0\n` + code.content
-            }
-            break
+            break;
         case 'constant':
             if (!variables[source]) {
                 variables[source] = `${edge.data('value')}`;
             }
-            break
+            break;
+        case 'declareBefore':
+            variables[source] = source;
+            break;
         case 'input':
-            variables[source] = source.substring(0)
-            break
+            variables[source] = getSubstringBeforeLastUnderscore(source);
+            break;
         case 'compound':
-            const compoundNode = cy.$('#' + source)
-            if (edge.classes()[1]) {
-                code.content += `   let ${target} = {}\n`
+            if (edge.hasClass('variable')) {
+                code.content += `   let ${source} = {}\n`;
             }
-            handleCompoundNode(compoundNode, cy, code)
-            break
+
+            let edgesInsideCompound = cy.edges().filter(edge => edge.data('parent') === source).sort(sortByOrder);
+
+            let declareBeforeLoop = new Set (edgesInsideCompound.filter(e => e.hasClass('declareBefore')).map(e => e.data('source')));
+            let indexEdge = edgesInsideCompound.filter(e => e.hasClass('index')).map(e => e.data('source'))
+
+            if (declareBeforeLoop) {
+                let loopCode = {content: ''}
+                declareBeforeLoop.forEach(source => {
+                    loopCode.content +=    `   let ${source} = 0\n`
+                })
+                let compoundOperations = {};
+                let compoundVariables = {};
+                loopCode.content += `   while (${indexEdge} < ${variables[operations[source][0]]}) {\n`;
+                edgesInsideCompound.forEach(edge => {
+                    handleEdge(cy, edge, compoundVariables, compoundOperations, loopCode, outputs);
+                });
+                loopCode.content += '   }\n\n';
+                code.content += loopCode.content;
+            }
+            break;
     }
+
     if (operations[target]) {
         operations[target].push(edge.data('source'));
     } else {
         operations[target] = [edge.data('source')];
     }
-
 }
 
-function handleCompoundNode(compoundNode, cy, code) {
-    //variables used in the loop
-    let inputs = compoundNode.incomers('node')
-
-    //the number of loop iterations
-    let loopIterations = inputs.filter(node => node.data('label') === '# of loop iterations');
-
-    //edges inside the loop
-    let edgesInsideCompound = cy.edges().filter(edge => edge.data('parent') === compoundNode.data('id')).sort(sortByOrder)
-
-    //index variable's name
-    let index = {id : ""}
-
-    let loopCode = {content : `   while (${index.id} < ${loopIterations.data('value')}) {\n`}
-
-    let operations = {}
-    let variables= {}
-
-    edgesInsideCompound.forEach(edge => {
-        handleEdge(cy, edge, variables, operations, loopCode, index)
-    })
-
-
-    loopCode.content += '   }\n\n'
-    code.content += loopCode.content
-
-}
-//deveria conseguir gerar código sem ser necessário ir à data
 export function generateCode(cy, data) {
-    let declaredVariables = []
-    let code = {content: `function ${data.graph.name}(`}
-    data.graph.input.forEach(input => {code.content += `${input.name}, `})
-    data.graph.output.forEach(output => declaredVariables.push(output.name))
-    code.content = code.content.slice(0, -2) +') {\n\n'
+    let declaredVariables = [];
+    let code = { content: `function ${data.graph.name}(` };
+    data.graph.input.forEach(input => { code.content += `${input.name}, ` });
+    data.graph.output.forEach(output => declaredVariables.push(output.name));
+    code.content = code.content.slice(0, -2) + ') {\n\n';
 
-    let graphOperations = {}
-    let variables = {}
-    let operations = {}
-    let index = {id : ""}
+    let graphOperations = {};
+    let variables = {};
+    let operations = {};
+    let outputs = [];
+    let index = { id: "" };
 
-    let edges = cy.edges().filter(edge => !edge.data('parent')).sort(sortByOrder)
+    let edges = cy.edges().filter(edge => !edge.data('parent')).sort(sortByOrder);
     edges.forEach(edge => {
-        handleEdge(cy, edge, variables, operations, code, index)
-    })
+        handleEdge(cy, edge, variables, operations, code, outputs);
+    });
 
-    let outputs = []
-    data.graph.output.forEach(output => outputs.push(output.name))
-    if (outputs.length === 1) code.content += `   return ${outputs[0]}`
-
-    else {
-
+    if (outputs.length === 1) {
+        code.content += `   return ${outputs[0]}`;
+    } else {
+        code.content += `   return {`
+        outputs.forEach(out => {
+            code.content += `${out}`
+        })
+        code.content += `}\n`
     }
-    code.content += '\n}'
+    code.content += '\n}';
     console.log(code.content)
-
 }
+
 
 /*
+
+    CORRIGIR ADD RESULT + ADICIONAR DECLAREBEFORE +
+
+    maybe adicionar qualquer coisa que diga se os compounds ou algum edge é output
+
+
     OS COMPOUND ESTÃO A SER MUDADOS DE VOLTA PARA INPUT
 
     AS CLASSES TEM DE SER ADICIONADAS MAL O COISO É CRIADO NÉ, DPS MANTENHO-AS SIMPLESMENTE
