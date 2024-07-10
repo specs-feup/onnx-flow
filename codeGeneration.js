@@ -147,11 +147,9 @@ export function generateCode(cy, data) {
     data.graph.output.forEach(output => declaredVariables.push(output.name));
     code.content = code.content.slice(0, -2) + ') {\n\n';
 
-    let graphOperations = {};
     let variables = {};
     let operations = {};
     let outputs = [];
-    let index = { id: "" };
 
     let edges = cy.edges().filter(edge => !edge.data('parent')).sort(sortByOrder);
     edges.forEach(edge => {
@@ -170,24 +168,3 @@ export function generateCode(cy, data) {
     code.content += '\n}';
     console.log(code.content)
 }
-
-
-/*
-
-    CORRIGIR ADD RESULT + ADICIONAR DECLAREBEFORE +
-
-    maybe adicionar qualquer coisa que diga se os compounds ou algum edge é output
-
-
-    OS COMPOUND ESTÃO A SER MUDADOS DE VOLTA PARA INPUT
-
-    AS CLASSES TEM DE SER ADICIONADAS MAL O COISO É CRIADO NÉ, DPS MANTENHO-AS SIMPLESMENTE
-
-    PORTANTO, TENHO DE COLOCAR AS CLASSES DE MANEIRA CORRETA NO PANORAMA GERAL
-    UMA DAS DIFICULDADES SERIA A CLASSE EXTRA VARIABLE: MAYBE DECLARAR SEMPRE NA OUTER LAYER APÓS CONCLUÍDA A OPERAÇÃO
-    FUNCIONA SEM DECLARAR, SE NÃO HOUVEREM COMPOUND NODES, MAS SE HOUVEREM, TENHO DE A DECLARAR
-    DE QUALQUER MODO, A VARIAVEL PODERIA REPETIR-SE E AÍ ESTAMOS SEMPRE A FAZER A MESMA CONTA (OU SEJA MELHOR É METER CLASSE VARIABLE EM TUDO)
-
-    DE RESTO É METER INPUTS, OPPERATIONS E COMPOUNDS
-
- */

@@ -4,7 +4,7 @@ import {generateCode} from './codeGeneration.js'
 import {layoutAndStyling } from './layoutAndStyling.js'
 
 Promise.all([
-  fetch('TestFail.json')
+  fetch('Add.json')
     .then(function(res) {
       return res.json();
     }),

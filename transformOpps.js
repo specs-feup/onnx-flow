@@ -29,8 +29,101 @@ function formatId(name, nodeId) {
     return `${name}_${nodeId}`;
 }
 
+
+
+function transformSimpleLoopOperations(node, cy, edgeOrder) {
+
+    let opLabel
+    let opType
+
+    switch (node.data('opType')) {
+        case 'Add':
+            opLabel = '+'
+            opType = 'Addition'
+            break
+        case 'Sub':
+            opLabel = '-'
+            opType = 'Subtraction'
+            break
+        case 'Mul':
+            opLabel = '*'
+            opType = 'Multiplication'
+            break
+        case 'Div':
+            opLabel = '/'
+            opType = 'Division'
+            break
+        default:
+            return
+    }
+
+    const incomingEdges = node.incomers('edge');
+    const outgoingEdges = node.outgoers('edge');
+    const dimensions = incomingEdges[0].data('dims');
+    const type = incomingEdges[0].data('elemType');
+
+    const nodeId = node.data('id');
+
+    if (dimensions[0].dimValue === '1' && dimensions.length === 1) {
+        cy.add([
+            {group: 'nodes', data: {id: formatId(opType, nodeId), label: opLabel, opType: opType}, classes: 'operation'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), target: formatId('Addition', nodeId), label: incomingEdges[0].data('label'), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), target: formatId('Addition', nodeId), label: incomingEdges[1].data('label'), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()}
+        ]);
+        outgoingEdges.forEach(edge => {
+            cy.add({group: 'edges', data: {source: formatId(opType, nodeId), target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++, opType: opType}, classes: 'operation variable'});
+        });
+    } else {
+        let numberOfIterations = dimensions.reduce((total, dim) => total + parseInt(dim.dimValue), 0);
+        let order = 0;
+        let displacementInMemory = typeSizeMap[type];
+        cy.add([
+            {group: 'nodes', data: {id: formatId('LoopIterations', nodeId), label: '# of loop iterations', value: numberOfIterations}, classes: 'constant'},
+            {group: 'nodes', data: {id: formatId(node.data('opType'), nodeId), label: node.data('opType'), opType: node.data('opType')}},
+            {group: 'nodes', data: {id: formatId('index', nodeId), parent: formatId(node.data('opType'), nodeId), label: 'index'}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId('displacementInMemory', nodeId), parent: formatId(node.data('opType'), nodeId), label: 'displacement In Memory', value: displacementInMemory}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId(incomingEdges[0].data('source'), nodeId), label: '&' + incomingEdges[0].data('source'), parent: formatId(node.data('opType'), nodeId)}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId(incomingEdges[1].data('source'), nodeId), label: '&' + incomingEdges[1].data('source'), parent: formatId(node.data('opType'), nodeId)}, classes: 'input'},
+            {group: 'nodes', data: {id: formatId(`${node.data('opType')}_${nodeId}`, nodeId), label: '&Result', parent: formatId(node.data('opType'), nodeId)}, classes: 'output'},
+            {group: 'nodes', data: {id: formatId('Multiplication', nodeId), parent: formatId(node.data('opType'), nodeId), label: '*', opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Load0', nodeId), parent: formatId(node.data('opType'), nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Load1', nodeId), parent: formatId(node.data('opType'), nodeId), label: 'Load', opType: 'Load'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId(opType, nodeId), parent: formatId(node.data('opType'), nodeId), label: '+', opType: opType}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Addition1', nodeId), parent: formatId(node.data('opType'), nodeId), label: '+', opType: 'Addition'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('Store', nodeId), parent: formatId(node.data('opType'), nodeId), label: 'Store', opType: 'Store'}, classes: 'operation'},
+            {group: 'nodes', data: {id: formatId('1', nodeId), parent: formatId(node.data('opType'), nodeId), label: '1'}, classes: 'constant'},
+
+            {group: 'edges', data: {source: formatId('LoopIterations', nodeId), target: formatId(node.data('opType'), nodeId), value: numberOfIterations, order: edgeOrder.value++}, classes: 'constant'},
+            {group: 'edges', data: {source: incomingEdges[0].data('source'), label: incomingEdges[0].data('label'), target: formatId(node.data('opType'), nodeId), dims: incomingEdges[0].data('dims'), elemType: incomingEdges[0].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[0].classes()},
+            {group: 'edges', data: {source: incomingEdges[1].data('source'), label: incomingEdges[1].data('label'), target: formatId(node.data('opType'), nodeId), dims: incomingEdges[1].data('dims'), elemType: incomingEdges[1].data('elemType'), order: edgeOrder.value++}, classes: incomingEdges[1].classes()},
+
+            {group: 'edges', data: {source: formatId('index', nodeId), target: formatId('Multiplication', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++}, classes: 'declareBefore index'},
+            {group: 'edges', data: {source: formatId('displacementInMemory', nodeId), target: formatId('Multiplication', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, value: displacementInMemory}, classes: 'constant'},
+            {group: 'edges', data: {source: formatId(incomingEdges[0].data('source'), nodeId), target: formatId('Load0', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++}, classes: 'input'},
+            {group: 'edges', data: {source: formatId('Multiplication', nodeId), target: formatId('Load0', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId(incomingEdges[1].data('source'), nodeId), target: formatId('Load1', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++}, classes: 'input'},
+            {group: 'edges', data: {source: formatId('Multiplication', nodeId), target: formatId('Load1', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Load0', nodeId), target: formatId(opType, nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Load1', nodeId), target: formatId(opType, nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: 'Load'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId(opType, nodeId), target: formatId('Store', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: opType}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Multiplication', nodeId), target: formatId('Store', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: 'Multiplication'}, classes: 'operation'},
+            {group: 'edges', data: {source: formatId('Store', nodeId), target: formatId(`${node.data('opType')}_${nodeId}`, nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: 'Store'}, classes: 'operation result'},
+
+            {group: 'edges', data: {source: formatId('index', nodeId), target: formatId('Addition1', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++}, classes: 'declareBefore'},
+            {group: 'edges', data: {source: formatId('1', nodeId), target: formatId('Addition1', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, value: 1}, classes: 'constant'},
+            {group: 'edges', data: {source: formatId('Addition1', nodeId), target: formatId('index', nodeId), parent: formatId(node.data('opType'), nodeId), order: order++, opType: 'Addition'}, classes: 'operation variable'}
+        ]);
+
+        outgoingEdges.forEach(edge => {
+            cy.add({group: 'edges', data: {source: formatId(node.data('opType'), nodeId), target: edge.data('target'), label: edge.data('label'), dims: edge.data('dims'), elemType: edge.data('elemType'), order: edgeOrder.value++}, classes: 'compound variable'});
+        });
+    }
+    cy.remove(node);
+}
+
 // Method that expands the Add operation node into simple arithmetic nodes
 function transformAdd(node, cy, edgeOrder) {
+
     const incomingEdges = node.incomers('edge');
     const outgoingEdges = node.outgoers('edge');
     const dimensions = incomingEdges[0].data('dims');
@@ -536,11 +629,11 @@ function transformMatMul(node, cy, edgeOrder) {
 export function transformOpps(cy) {
     let edgeOrder = {value : 0}
     cy.nodes('.operation').forEach(node => {
-        if (node.data('opType') === 'Add'){
-            transformAdd(node, cy, edgeOrder)
-        }
-        else if (node.data('opType') === 'MatMul') {
+        if (node.data('opType') === 'MatMul') {
             transformMatMul(node, cy, edgeOrder)
+        }
+        else {
+            transformSimpleLoopOperations(node, cy, edgeOrder)
         }
     })
 }
