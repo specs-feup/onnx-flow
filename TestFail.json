@@ -14,8 +14,8 @@
         },
         {
           "input": [
-            "BC",
-            "A"
+            "A",
+            "BC"
           ],
           "output": [
             "ABC"
@@ -43,10 +43,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   }
                 ]
               }
@@ -61,10 +61,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   }
                 ]
               }
@@ -79,10 +79,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   },
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   }
                 ]
               }
@@ -97,7 +97,7 @@
                 "shape": {
                   "dim": [
                     {
-                      "dimValue": "3"
+                      "dimValue": "1"
                     },
                     {
                       "dimValue": "3"
@@ -117,7 +117,7 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "3"
+                    "dimValue": "1"
                   },
                   {
                     "dimValue": "3"

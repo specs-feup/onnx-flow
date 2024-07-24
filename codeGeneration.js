@@ -27,12 +27,12 @@ function handleOperation(edge, variables, operations, code) {
     const source = edge.data('source')
     const target = edge.data('target')
 
-
     switch (edge.data('opType')) {
         case 'Addition':
             if (!variables[source]) {
                 variables[source] = `(${variables[operations[source][0]]} + ${variables[operations[source][1]]})`
             }
+
             break
         case 'Subtraction':
             if (!variables[source]) {
@@ -92,7 +92,8 @@ function handleEdge(cy, edge, variables, operations, code, outputs) {
         case 'operation':
             handleOperation(edge, variables, operations, code);
             if (edge.hasClass('variable')) {
-                code.content += `       ${target} = ${variables[source]}\n`;
+                if (edge.hasClass('outer'))  code.content += `   let ${source} = ${variables[source]}\n`;
+                else code.content += `       ${target} = ${variables[source]}\n`;
             }
             break;
         case 'constant':
@@ -110,7 +111,6 @@ function handleEdge(cy, edge, variables, operations, code, outputs) {
             if (edge.hasClass('variable')) {
                 code.content += `   let ${source} = {}\n`;
             }
-
             let edgesInsideCompound = cy.edges().filter(edge => edge.data('parent') === source).sort(sortByOrder);
 
             let declareBeforeLoop = new Set (edgesInsideCompound.filter(e => e.hasClass('declareBefore')).map(e => e.data('source')));
@@ -121,11 +121,9 @@ function handleEdge(cy, edge, variables, operations, code, outputs) {
                 declareBeforeLoop.forEach(source => {
                     loopCode.content +=    `   let ${source} = 0\n`
                 })
-                let compoundOperations = {};
-                let compoundVariables = {};
                 loopCode.content += `   while (${indexEdge} < ${variables[operations[source][0]]}) {\n`;
                 edgesInsideCompound.forEach(edge => {
-                    handleEdge(cy, edge, compoundVariables, compoundOperations, loopCode, outputs);
+                    handleEdge(cy, edge, variables, operations, loopCode, outputs);
                 });
                 loopCode.content += '   }\n\n';
                 code.content += loopCode.content;
