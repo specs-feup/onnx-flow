@@ -62,7 +62,7 @@ function transformSimpleLoopOperations(node, cy, edgeOrder) {
     const dimensions = incomingEdges[0].data('dims');
     const type = incomingEdges[0].data('elemType');
 
-    const nodeId = node.data('id');TestFail
+    const nodeId = node.data('id');
 
     if (dimensions[0].dimValue === '1' && dimensions[1].dimValue === '1') {
         cy.add([
@@ -547,6 +547,7 @@ export function transformOpps(cy) {
     let edgeOrder = {value : 0}
     cy.nodes('.operation').forEach(node => {
         if (node.data('opType') === 'MatMul') {
+            //é necessário tornar a operação compatível para n dimensões
             transformMatMul(node, cy, edgeOrder)
         }
         else {
@@ -554,3 +555,5 @@ export function transformOpps(cy) {
         }
     })
 }
+
+
