@@ -1,24 +1,28 @@
-import {createGraph } from './initGraph.js'
+import {createGraph} from './initGraph.js'
 import {transformOpps, optimizeForDimensions} from './transformOpps.js'
 import {generateCode} from './codeGeneration.js'
-import {layoutAndStyling } from './layoutAndStyling.js'
+import {onnx2json} from './onnx2json.js'
+
+const onnxFilePath = process.argv[2];
+
+if (!onnxFilePath) {
+    console.error('Please provide a path to the ONNX file.');
+    process.exit(1);
+}
+
+const onnxObject = await onnx2json(onnxFilePath);
+console.log("Input ONNX Graph: " + JSON.stringify(onnxObject, null, 2));
 
 Promise.all([
-  fetch('MatMul.json')
-    .then(function(res) {
-      return res.json();
-    }),
-  fetch('cyStyling.json')
-    .then(function(res) {
-      return res.json();
-    })
+  onnxObject
 ])
 .then(function(dataArray) {
-    let cy = createGraph(dataArray[0])
-    transformOpps(cy)
-    optimizeForDimensions(cy)
-    //generateCode(cy, dataArray[0])
-    layoutAndStyling(cy,dataArray[1])
+    let cy = createGraph(dataArray[0]);
+    console.log("Generated Cytoscape Graph: " + JSON.stringify(cy.json(), null, 2));
+    transformOpps(cy);
+    optimizeForDimensions(cy);
+    console.log("Result Code: " + generateCode(cy, dataArray[0]));
+    console.log("Result Cytoscape Graph: " + JSON.stringify(cy.json(), null, 2));
 });
 
 //select the operation nodes with no parent and check if there are optimizations to be made
