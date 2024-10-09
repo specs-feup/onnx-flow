@@ -164,5 +164,5 @@ export function generateCode(cy, data) {
         code.content += `}\n`
     }
     code.content += '\n}';
-    console.log(code.content)
+    return code.content;
 }
