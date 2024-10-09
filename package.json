@@ -11,7 +11,9 @@
   "dependencies": {
     "cytoscape": "~3.26.0",
     "cytoscape-fcose": "^2.2.0",
-    "protobufjs": "^7.4.0"
+    "express": "^4.21.1",
+    "protobufjs": "^7.4.0",
+    "ws": "^8.18.0"
   },
   "type": "module"
 }
