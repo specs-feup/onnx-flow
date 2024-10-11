@@ -1,3 +1,7 @@
+import cytoscape from "cytoscape";
+import fcose from 'cytoscape-fcose';
+
+cytoscape.use(fcose);
 
 /*
 Method that takes the onnx graph in json and adds its inputs to the cytoscape graph as input nodes
@@ -116,8 +120,6 @@ function addEdges(cy, mapNodeAndOutput) {
     })
 }
 
-
-
 /*
 Method that initializes the cytoscape graph. Its structure will include
 input nodes and output nodes (which are variables) and the operation nodes.
@@ -125,7 +127,8 @@ The operation nodes connect to each other if a node's output is the input to ano
  */
 function initializeCytoscapeGraph () {
     return cytoscape({
-        container: document.getElementById('cy'),
+        container: null,
+        headless: true,
         elements: [],
         style:[],
         layout: []

@@ -1,5 +1,5 @@
 {
-  "name": "test",
+  "name": "onnx2cytoscope",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -9,7 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cytoscape": "~3.26.0"
+    "cytoscape": "~3.26.0",
+    "cytoscape-fcose": "^2.2.0",
+    "express": "^4.21.1",
+    "protobufjs": "^7.4.0",
+    "ws": "^8.18.0"
   },
   "type": "module"
 }
