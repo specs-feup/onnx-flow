@@ -37,6 +37,12 @@
                     elements: graph.elements,
                     style: style, // Apply the custom style
                 });
+                cy.layout({
+                    name: 'breadthfirst',
+                    directed: true,
+                    roots: '.input',
+                    padding: 10
+                }).run();
             }).catch(error => {
                 console.error('Error loading Cytoscape styling:', error);
             });
