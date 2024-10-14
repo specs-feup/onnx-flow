@@ -48,13 +48,3 @@ if (!onnxFilePath) {
       console.error('Error:', error);
   }
 })();
-
-//select the operation nodes with no parent and check if there are optimizations to be made
-
-//FAZER SLIDES
-//colocar otimizações de lado por enquanto
-//adicionar suporte para n dimensões e utilizar a ferramenta onnx2json
-//gerar os testes -> testes de integração são
-//tornar a coisa funcional, ou seja, dividir em passos
-
-// MAIS TARDE LER LITERATURA SOBRE OTIMIZAÇÃO DE OPERAÇÕES
