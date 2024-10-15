@@ -1,7 +1,14 @@
 {
-  "name": "onnx2cytoscope",
+  "name": "@specs-feup/onnx2cytoscape",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "description": "Tool to convert an ONNX graph into a Cytoscape graph, using Cytoscape.js and decompose its high-level operations into low-level operations.",
+  "bin": {
+    "onnx2cytoscape": "./index.js"
+  },
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,7 +20,8 @@
     "cytoscape-fcose": "^2.2.0",
     "express": "^4.21.1",
     "protobufjs": "^7.4.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "yargs": "^17.7.2"
   },
   "type": "module"
 }
