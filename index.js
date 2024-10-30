@@ -8,11 +8,15 @@ import { transformOpps, optimizeForDimensions } from './transformOpps.js';
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const argv = yargs(hideBin(process.argv))
-  .usage('Usage: $0 <input_file> [options]')
+  .usage('Usage: onnx2cytoscape <input_file> [options]')
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
   .option('output', {
     alias: 'o',
@@ -88,7 +92,7 @@ const outputFilePath = argv.output;
       const wss = new WebSocketServer({ server });
 
       // Serve static HTML and frontend code for Cytoscape.js
-      app.use(express.static('public'));
+      app.use(express.static(path.join(__dirname, 'public')));
 
       // Handle WebSocket connections to send the graph
       wss.on('connection', function connection(ws) {
