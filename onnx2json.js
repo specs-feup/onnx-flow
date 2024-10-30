@@ -1,11 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import protobuf from 'protobufjs';
+import { fileURLToPath } from 'url';
 
 export function onnx2json(onnxFilePath) {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const protoPath = path.join(__dirname, 'public', 'onnx.proto');
+
     return new Promise((resolve, reject) => {
         // Load the ONNX protobuf definition
-        protobuf.load('onnx.proto', (err, root) => {
+        protobuf.load(protoPath, (err, root) => {
             if (err) {
                 return reject('Error loading ONNX protobuf definition: ' + err);
             }
