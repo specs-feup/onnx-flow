@@ -1,0 +1,9 @@
+digraph G {
+"X" [opcode="input"];
+"A" [opcode="input"];
+"Y" [opcode="output"];
+"Addition_Add_0" [opcode="Addition"];
+"X" -> "Addition_Add_0 [dims="1,1"];
+"A" -> "Addition_Add_0 [dims="1,1"];
+"Addition_Add_0" -> "Y [dims="1,1"];
+}
