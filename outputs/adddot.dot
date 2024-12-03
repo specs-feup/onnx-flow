@@ -1,9 +1,9 @@
 digraph G {
-"X" [opcode="input"];
-"A" [opcode="input"];
-"Y" [opcode="output"];
+"X" [opcode="input"][label="input_X"];
+"A" [opcode="input"][label="input_A"];
+"Y" [opcode="output"][label="output_Y"];
 "Addition_Add_0" [opcode="Addition"];
-"X" -> "Addition_Add_0 [dims="1,1"];
-"A" -> "Addition_Add_0 [dims="1,1"];
-"Addition_Add_0" -> "Y [dims="1,1"];
+"X" -> "Addition_Add_0" [label="1,1"] [dims="1,1"];
+"A" -> "Addition_Add_0" [label="1,1"] [dims="1,1"];
+"Addition_Add_0" -> "Y" [label="1,1"] [dims="1,1"];
 }

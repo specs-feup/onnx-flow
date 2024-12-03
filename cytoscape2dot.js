@@ -19,8 +19,9 @@ function cytoscapeToDot(cyGraph) {
         const opcodeString = opcode=="" ? "" : ` [opcode="${opcode}"]`;
         const constValue = opcode=="constant" ? (node.data.value ? node.data.value : (node.data.label ? node.data.label : "")) : "";
         const valueString = constValue=="" ? "" : `[value="${constValue}"]`;
+        const labelString = (opcode=="input" || opcode=="output") ? `[label="${opcode +"_"+ id}"]` : "";
 
-        dotString += `"${id}"${opcodeString}${valueString};\n`;
+        dotString += `"${id}"${opcodeString}${valueString}${labelString};\n`;
     });
 
     // Add edges
@@ -29,7 +30,9 @@ function cytoscapeToDot(cyGraph) {
         const target = edge.data.target;
         const dims = edge.data.label ? edge.data.label : ((edge.data.dims && Array.isArray(edge.data.dims)) ? edge.data.dims.map(dim => dim.dimValue).join(",") : "");
         const dimsString = dims=="" ? "" : ` [dims="${dims}"]`;
-        dotString += `"${source}" -> "${target}${dimsString};\n`;
+        const labelString = dims=="" ? "" : ` [label="${dims}"]`;
+        
+        dotString += `"${source}" -> "${target}"${labelString}${dimsString};\n`;
     });
 
     // Close the DOT format string
