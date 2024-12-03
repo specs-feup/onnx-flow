@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 // Helper function to convert a Cytoscape graph to DOT format
-function cytoscapeToDot(cyGraph) {
+export function cytoscapeToDot(cyGraph) {
     const graphName = (cyGraph.renderer.name & cyGraph.renderer.name != "null") ? cyGraph.renderer.name : "G";
     const nodes = cyGraph.elements.nodes;
     let edges = cyGraph.elements.edges;
@@ -12,16 +12,43 @@ function cytoscapeToDot(cyGraph) {
     // Start the DOT format string
     let dotString = `digraph ${graphName} {\n`;
 
-    // Add nodes
+    // Group nodes by parent/subgraph
+    const subgraphs = new Map();
+    const independentNodes = [];
+
     nodes.forEach(node => {
         const id = node.data.id;
         const opcode = node.classes ? (node.classes == "operation" ? node.data.opType : node.classes) : "";
         const opcodeString = opcode=="" ? "" : ` [opcode="${opcode}"]`;
         const constValue = opcode=="constant" ? (node.data.value ? node.data.value : (node.data.label ? node.data.label : "")) : "";
         const valueString = constValue=="" ? "" : `[value="${constValue}"]`;
-        const labelString = (opcode=="input" || opcode=="output") ? `[label="${opcode +"_"+ id}"]` : "";
+        const labelString = (opcode=="input" || opcode=="output" || opcode=="constant") ? `[label="${opcode +" "+ id}"]` : "";
 
-        dotString += `"${id}"${opcodeString}${valueString}${labelString};\n`;
+        const parent = node.data.parent;
+
+        if (parent) {
+            if (!subgraphs.has(parent)) {
+                subgraphs.set(parent, []);
+            }
+            subgraphs.get(parent).push({ id, opcodeString, valueString, labelString });
+        } else {
+            independentNodes.push({ id, opcodeString, valueString, labelString });
+        }
+    });
+
+    // Add independent nodes (nodes without parents)
+    independentNodes.forEach(({ id, opcodeString, valueString, labelString }) => {
+        dotString += `   "${id}"${opcodeString}${valueString}${labelString};\n`;
+    });
+
+    // Add subgraphs
+    subgraphs.forEach((nodes, parentId) => {
+        dotString += `   subgraph "cluster_${parentId}" {\n`;
+        dotString += `      label="${parentId}";\n`;
+        nodes.forEach(({ id, opcodeString, valueString, labelString }) => {
+            dotString += `      "${id}"${opcodeString}${valueString}${labelString};\n`;
+        });
+        dotString += `   }\n`;
     });
 
     // Add edges
@@ -31,8 +58,8 @@ function cytoscapeToDot(cyGraph) {
         const dims = edge.data.label ? edge.data.label : ((edge.data.dims && Array.isArray(edge.data.dims)) ? edge.data.dims.map(dim => dim.dimValue).join(",") : "");
         const dimsString = dims=="" ? "" : ` [dims="${dims}"]`;
         const labelString = dims=="" ? "" : ` [label="${dims}"]`;
-        
-        dotString += `"${source}" -> "${target}"${labelString}${dimsString};\n`;
+
+        dotString += `   "${source}" -> "${target}"${labelString}${dimsString};\n`;
     });
 
     // Close the DOT format string
@@ -66,4 +93,7 @@ async function main() {
     }
 }
 
-main();
+// Only run `main` if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+    main();
+}
