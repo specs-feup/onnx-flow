@@ -29,17 +29,17 @@ const argv = yargs(hideBin(process.argv))
     type: 'number',
     default: 1,
   })
-  .option('no-optimize', {
+  .option('noOptimize', {
     describe: 'Disable optimization steps',
     type: 'boolean',
     default: false,
   })
-  .option('no-codegen', {
+  .option('noCodegen', {
     describe: 'Disable code generation step',
     type: 'boolean',
     default: false,
   })
-  .option('no-visualization', {
+  .option('noVisualization', {
     describe: 'Disable web visualization',
     type: 'boolean',
     default: false,
