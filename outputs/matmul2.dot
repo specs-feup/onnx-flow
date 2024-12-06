@@ -1,0 +1,9 @@
+digraph G {
+   "A" [opcode="input"][label="input A"];
+   "X" [opcode="input"][label="input X"];
+   "Y" [opcode="output"][label="output Y"];
+   "Multiplication_MatMul_0" [opcode="Multiplication"];
+   "X" -> "Multiplication_MatMul_0" [label="1,1"] [dims="1,1"];
+   "A" -> "Multiplication_MatMul_0" [label="1,1"] [dims="1,1"];
+   "Multiplication_MatMul_0" -> "Y" [label="1,1"] [dims="1,1"];
+}

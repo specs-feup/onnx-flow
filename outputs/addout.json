@@ -1,0 +1,215 @@
+{
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "X",
+          "label": "X",
+          "elemType": 6,
+          "dimensions": [
+            {
+              "dimValue": "1"
+            },
+            {
+              "dimValue": "1"
+            }
+          ]
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": "input"
+      },
+      {
+        "data": {
+          "id": "A",
+          "label": "A",
+          "elemType": 6,
+          "dimensions": [
+            {
+              "dimValue": "1"
+            },
+            {
+              "dimValue": "1"
+            }
+          ]
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": "input"
+      },
+      {
+        "data": {
+          "id": "Y",
+          "label": "Y",
+          "elemType": 6,
+          "dimensions": [
+            {
+              "dimValue": "1"
+            },
+            {
+              "dimValue": "1"
+            }
+          ]
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": "output"
+      },
+      {
+        "data": {
+          "id": "Addition_Add_0",
+          "label": "+",
+          "opType": "Addition"
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": "operation"
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "source": "X",
+          "target": "Addition_Add_0",
+          "label": "1,1",
+          "dims": [
+            {
+              "dimValue": "1"
+            },
+            {
+              "dimValue": "1"
+            }
+          ],
+          "elemType": 6,
+          "order": 1,
+          "id": "10672720-2bf7-4dfa-bb40-fbbe851c67bc"
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": "input"
+      },
+      {
+        "data": {
+          "source": "Addition_Add_0",
+          "target": "Y",
+          "label": "1,1",
+          "dims": [
+            {
+              "dimValue": "1"
+            },
+            {
+              "dimValue": "1"
+            }
+          ],
+          "elemType": 6,
+          "opType": "Addition",
+          "order": 3,
+          "id": "71609f28-e012-4249-a6fa-91974f007d1d"
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": "operation variable outer"
+      },
+      {
+        "data": {
+          "source": "A",
+          "target": "Addition_Add_0",
+          "label": "1,1",
+          "dims": [
+            {
+              "dimValue": "1"
+            },
+            {
+              "dimValue": "1"
+            }
+          ],
+          "elemType": 6,
+          "order": 2,
+          "id": "67ce09c3-1d7c-47b7-9874-529205beeddc"
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": "input"
+      }
+    ]
+  },
+  "data": {},
+  "zoomingEnabled": true,
+  "userZoomingEnabled": true,
+  "zoom": 1,
+  "minZoom": 1e-50,
+  "maxZoom": 1e+50,
+  "panningEnabled": true,
+  "userPanningEnabled": true,
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "boxSelectionEnabled": true,
+  "renderer": {
+    "name": "null"
+  }
+}

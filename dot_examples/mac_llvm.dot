@@ -1,0 +1,14 @@
+digraph G {
+input0[opcode=input][argNo=0][argType=reference][offset=0][inner_loops=1][DFG_position=0][stride_0="1"][iterations_0="LOOP_SIZE_1"][stride_1=0][iterations_1="0"][stride_2=0][iterations_2="0"];
+input1[opcode=input][argNo=1][argType=reference][offset=0][inner_loops=1][DFG_position=0][stride_0="1"][iterations_0="LOOP_SIZE_1"][stride_1=0][iterations_1="0"][stride_2=0][iterations_2="0"];
+mul2[opcode=mul][unitary_loop=0];
+input3[opcode=input][argNo=2][argType=reference][offset=0][inner_loops=1][DFG_position=0][stride_0=0][iterations_0="LOOP_SIZE_1"][stride_1=0][iterations_1="0"][stride_2=0][iterations_2="0"];
+add4[opcode=add][unitary_loop=1][iterations_reset="LOOP_SIZE_1"][loop_size=0][loop_operand_pos=0];
+output5[opcode=output][argNo=2][argType=reference][offset=0][inner_loops=1][DFG_position=0][stride_0=0][iterations_0=1][stride_1=0][iterations_1="0"][stride_2=0][iterations_2="0"];
+input0->mul2[operand=1]; //input->mulval_name : 
+input1->mul2[operand=0]; //input->mulval_name : 
+mul2->add4[operand=1]; //mul->addval_name : 
+input3->add4[operand=0]; //input->addval_name : 
+add4->output5[operand=0]; //add->outputval_name : 
+add4->add4[operand=0]; //add->addval_name : 
+}

@@ -7,6 +7,7 @@ import { createGraph } from './initGraph.js';
 import { transformOpps, optimizeForDimensions } from './transformOpps.js';
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
+import { cytoscapeToDot } from './cytoscape2dot.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -23,23 +24,30 @@ const argv = yargs(hideBin(process.argv))
     describe: 'Output resulting graph to a JSON file',
     type: 'string',
   })
+  .option('format', {
+    alias: 'f',
+    describe: 'Output format (json or dot)',
+    type: 'string',
+    choices: ['json', 'dot'],
+    default: 'json',
+  })
   .option('verbosity', {
     alias: 'v',
     describe: 'Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)',
     type: 'number',
     default: 1,
   })
-  .option('no-optimize', {
+  .option('noOptimize', {
     describe: 'Disable optimization steps',
     type: 'boolean',
     default: false,
   })
-  .option('no-codegen', {
+  .option('noCodegen', {
     describe: 'Disable code generation step',
     type: 'boolean',
     default: false,
   })
-  .option('no-visualization', {
+  .option('noVisualization', {
     describe: 'Disable web visualization',
     type: 'boolean',
     default: false,
@@ -50,6 +58,7 @@ const argv = yargs(hideBin(process.argv))
 const inputFilePath = argv._[0]; // Positional argument for input file
 const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
+const outputFormat = argv.format;
 
 (async function main() {
   try {
@@ -66,8 +75,14 @@ const outputFilePath = argv.output;
 
     // Step 2: Process the graph
     let cy = createGraph(onnxObject);
-    if (verbosity > 1) console.log('Generated Cytoscape Graph:', JSON.stringify(cy.json(), null, 2));
-
+    if (verbosity > 1){
+      if (outputFormat === 'json') {
+        console.log('Initially Generated Cytoscape Graph:', JSON.stringify(cy.json(), null, 2));
+      } else if (outputFormat === 'dot') {
+        console.log('Initially Generated Cytoscape Graph in DOT Format:', cytoscapeToDot(cy.json()));
+      }
+    }
+      
     if (!argv.noOptimize) {
       transformOpps(cy);
       optimizeForDimensions(cy);
@@ -80,10 +95,23 @@ const outputFilePath = argv.output;
 
     // Step 3: Output the graph if requested
     if (outputFilePath) {
-      fs.writeFileSync(outputFilePath, JSON.stringify(cy.json(), null, 2));
-      if (verbosity > 0) console.log(`Output Graph JSON written to ${outputFilePath}`);
+      if (outputFormat === 'json') {
+        fs.writeFileSync(outputFilePath, JSON.stringify(cy.json(), null, 2));
+      } else if (outputFormat === 'dot') {
+        const dotGraph = cytoscapeToDot(cy.json());
+        fs.writeFileSync(outputFilePath, dotGraph);
+      }
+      if (verbosity > 0) console.log(`Output Graph written to ${outputFilePath} in ${outputFormat} format`);
     }
-    if (verbosity > 0) console.log('Output Cytoscape Graph:', JSON.stringify(cy.json(), null, 2));
+
+    // Print the output graph to stdout
+    if (verbosity > 0) {
+      if (outputFormat === 'json') {
+        console.log('Output Cytoscape Graph:', JSON.stringify(cy.json(), null, 2));
+      } else if (outputFormat === 'dot') {
+        console.log('Output Cytoscape Graph in DOT Format:', cytoscapeToDot(cy.json()));
+      }
+    }
 
     // Step 4: Serve visualization if enabled
     if (!argv.noVisualization) {
