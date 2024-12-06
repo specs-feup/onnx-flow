@@ -1,0 +1,1 @@
+{"version":3,"file":"TransformMatMul.d.ts","sourceRoot":"","sources":["../../../../../../src/Onnx/transformation/LowLevelTransformation/TransformMatMul.ts"],"names":[],"mappings":"AAGA,OAAO,aAAa,MAAM,wBAAwB,CAAC;AAEnD,OAAO,SAAS,MAAM,oBAAoB,CAAA;AAQ1C,MAAM,CAAC,OAAO,UAAU,eAAe,CAAC,IAAI,EAAE,aAAa,CAAC,KAAK,EAAE,KAAK,EAAE,SAAS,CAAC,KAAK,GAAG,IAAI,CA4R/F"}

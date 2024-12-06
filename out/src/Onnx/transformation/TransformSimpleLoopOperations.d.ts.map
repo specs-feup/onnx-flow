@@ -1,0 +1,1 @@
+{"version":3,"file":"TransformSimpleLoopOperations.d.ts","sourceRoot":"","sources":["../../../../src/Onnx/transformation/TransformSimpleLoopOperations.ts"],"names":[],"mappings":"AAGA,OAAO,aAAa,MAAM,qBAAqB,CAAC;AAEhD,OAAO,SAAS,MAAM,iBAAiB,CAAA;AAOvC,MAAM,CAAC,OAAO,UAAU,6BAA6B,CAAC,IAAI,EAAE,aAAa,CAAC,KAAK,EAAE,KAAK,EAAE,SAAS,CAAC,KAAK,GAAG,IAAI,CA6E7G"}

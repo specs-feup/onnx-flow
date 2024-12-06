@@ -655,8 +655,6 @@ function optimizeMatMul(node, cy) {
 export function optimizeForDimensions(cy) {
     const operationNodesWithoutParents = cy.nodes('.operation').filter(node => !node.data('parent'))
 
-
-
     operationNodesWithoutParents.forEach(node => {
         if (node.data('opType') === 'MatMul') {
             optimizeMatMul(node, cy)

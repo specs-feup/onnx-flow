@@ -32,7 +32,6 @@ function handleOperation(edge, variables, operations, code) {
             if (!variables[source]) {
                 variables[source] = `(${variables[operations[source][0]]} + ${variables[operations[source][1]]})`
             }
-
             break
         case 'Subtraction':
             if (!variables[source]) {
