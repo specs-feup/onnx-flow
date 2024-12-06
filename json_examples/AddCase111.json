@@ -23,10 +23,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   }
                 ]
               }
@@ -41,10 +41,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   }
                 ]
               }
@@ -61,10 +61,10 @@
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "1"
                   }
                 ]
               }

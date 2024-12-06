@@ -10,23 +10,23 @@
           "output": [
             "Y"
           ],
-          "opType": "Add"
+          "opType": "MatMul"
         }
       ],
-      "name": "Add",
+      "name": "MatMul",
       "input": [
         {
           "name": "X",
           "type": {
             "tensorType": {
-              "elemType": 6,
+              "elemType": 1,
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   }
                 ]
               }
@@ -37,14 +37,14 @@
           "name": "A",
           "type": {
             "tensorType": {
-              "elemType": 6,
+              "elemType": 1,
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   }
                 ]
               }
@@ -57,14 +57,14 @@
           "name": "Y",
           "type": {
             "tensorType": {
-              "elemType": 6,
+              "elemType": 1,
               "shape": {
                 "dim": [
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   },
                   {
-                    "dimValue": "2"
+                    "dimValue": "3"
                   }
                 ]
               }
