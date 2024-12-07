@@ -10,27 +10,29 @@ digraph {
     Index_0 [label=index shape=ellipse];
     displacementInMemory_0 [label=4 shape=ellipse color="#A52A2A"];
     Index0_0 [label=Multiplication shape=box color="#0000FF"];
-    Index1_0 [label=0 shape=ellipse color="#A52A2A"];
+    Index1_0 [label=Multiplication shape=box color="#0000FF"];
+    IndexResNode_0 [label=0 shape=ellipse color="#A52A2A"];
     X_0 [label="&X" shape=ellipse color="#00FF00"];
     A_0 [label="&A" shape=ellipse color="#00FF00"];
     MatMul_0 [label="&Result" shape=ellipse color="#FF0000"];
     Multiplication4_0 [label=Multiplication shape=box color="#0000FF"];
     Addition2_0 [label=Addition shape=box color="#0000FF"];
     Addition8_0 [label=Addition shape=box color="#0000FF"];
-    Addition9_0 [label=Addition shape=box color="#0000FF"];
     Load0_0 [label=Load shape=box color="#0000FF"];
     Load1_0 [label=Load shape=box color="#0000FF"];
     Load2_0 [label=Load shape=box color="#0000FF"];
     Store_0 [label=Store shape=box color="#0000FF"];
   }
 
-  Loop_iterations_0 [label=4 shape=ellipse color="#A52A2A"];
-  X -> 0 [label="{4,1}" lhead=cluster_0];
-  A -> 0 [label="{1,1}" lhead=cluster_0];
-  0 -> Y [label="{4,1}" ltail=cluster_0];
+  Loop_iterations_0 [label=3 shape=ellipse color="#A52A2A"];
+  X -> 0 [label="{1,3}" lhead=cluster_0];
+  A -> 0 [label="{3,1}" lhead=cluster_0];
+  0 -> Y [label="{1,1}" ltail=cluster_0];
   Loop_iterations_0 -> 0 [lhead=cluster_0];
   Index_0 -> Index0_0;
   displacementInMemory_0 -> Index0_0;
+  Index_0 -> Index1_0;
+  displacementInMemory_0 -> Index1_0;
   X_0 -> Load0_0;
   Index0_0 -> Load0_0;
   A_0 -> Load1_0;
@@ -38,10 +40,10 @@ digraph {
   Load0_0 -> Multiplication4_0;
   Load1_0 -> Multiplication4_0;
   MatMul_0 -> Load2_0;
-  Index0_0 -> Load2_0;
+  IndexResNode_0 -> Load2_0;
   Load2_0 -> Addition2_0;
   Multiplication4_0 -> Addition2_0;
-  Index0_0 -> Store_0;
+  IndexResNode_0 -> Store_0;
   Addition2_0 -> Store_0;
   Store_0 -> MatMul_0;
   Index_0 -> Addition8_0;

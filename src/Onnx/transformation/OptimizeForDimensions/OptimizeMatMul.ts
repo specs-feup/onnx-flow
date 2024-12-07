@@ -237,7 +237,6 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
         const multiplication4Node = graph.addNode(formatId("Multiplication4", nodeId), node).init(new OperationNode.Builder("Multiplication")).as(OperationNode);
         const addition2Node = graph.addNode(formatId("Addition2", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
         const addition8Node = graph.addNode(formatId("Addition8", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
-        const addition9Node = graph.addNode(formatId("Addition9", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
         const load0Node = graph.addNode(formatId("Load0", nodeId), node).init(new OperationNode.Builder("Load")).as(OperationNode);
         const load1Node = graph.addNode(formatId("Load1", nodeId), node).init(new OperationNode.Builder("Load")).as(OperationNode);
         const load2Node = graph.addNode(formatId("Load2", nodeId), node).init(new OperationNode.Builder("Load")).as(OperationNode);
@@ -268,6 +267,8 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
         graph.addEdge(addition8Node, indexNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
         if (kNode && jNode) {
+
+            const addition9Node = graph.addNode(formatId("Addition9", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
 
             graph.addEdge(kNode, addition9Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
             graph.addEdge(addToIndexNode, addition9Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);

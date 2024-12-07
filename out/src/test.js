@@ -5,7 +5,7 @@ import OnnxGraphTransformer from "./Onnx/transformation/LowLevelTransformation/L
 import OnnxGraphOptimizer from "./Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js";
 import { generateCode } from "./codeGeneration.js";
 // Load ONNX JSON data from a file
-const onnxJsonData = JSON.parse(fs.readFileSync("../specs-onnx/json_examples/MatMulCase011.json", "utf-8"));
+const onnxJsonData = JSON.parse(fs.readFileSync("../specs-onnx/json_examples/MatMulCase101.json", "utf-8"));
 // Create the graph using the ONNX JSON data
 const graph = createGraph(onnxJsonData).apply(new OnnxGraphTransformer()).apply(new OnnxGraphOptimizer());
 // Generate code
