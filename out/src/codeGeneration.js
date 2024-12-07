@@ -112,7 +112,6 @@ function handleEdges(edge, graph, outputName) {
         }
     }
     else if (source.is(ConstantNode)) {
-        //console.log(source.as(ConstantNode).value.toString())
         variables.set(source.id, source.as(ConstantNode).value.toString());
     }
     else if (source.is(VariableNode)) {
@@ -151,6 +150,7 @@ function handleOuterOperationNode(node, graph) {
         }
         const displacementInMemoryNode = graph.getNodeById(`displacementInMemory_${node.id}`);
         if (displacementInMemoryNode && shape) {
+            console.log("entrei aqui");
             if (displacementInMemoryNode.is(ConstantNode)) {
                 const displacementInMemory = displacementInMemoryNode.as(ConstantNode).value;
                 const totalElements = shape.reduce((acc, val) => acc * val, 1);
@@ -188,6 +188,7 @@ function handleOuterOperationNode(node, graph) {
         if (outgoers.length) {
             outputName = outgoers[0].target.id;
         }
+        code += `   let ${outputName}= {0: 0};\n`;
         orderedEdges.forEach(edge => {
             code += handleEdges(edge, graph, outputName);
         });
@@ -207,7 +208,7 @@ export function generateCode(graph) {
     outerNodes.forEach(node => {
         code += handleOuterOperationNode(node, graph);
     });
-    code += "    return ";
+    code += "   return ";
     const outputNodes = graph.nodes.filterIs(TensorNode).filter(node => node.type === 'output');
     if (outputNodes.length > 1) {
         code += "{";

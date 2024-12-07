@@ -38,7 +38,7 @@ export default function transformSimpleLoopOperations(node, graph) {
         return;
     const loopIterationsNode = graph.addNode(formatId("Loop_iterations", nodeId)).init(new ConstantNode.Builder(numberOfIterations)).as(ConstantNode);
     const indexNode = graph.addNode(formatId("Index", nodeId), node).init(new VariableNode.Builder(6, "index", 'index')).as(VariableNode);
-    const displacementInMemoryNode = graph.addNode(formatId("Displacement_in_memory", nodeId), node).init(new ConstantNode.Builder(displacementInMemory)).as(ConstantNode);
+    const displacementInMemoryNode = graph.addNode(formatId("displacementInMemory", nodeId), node).init(new ConstantNode.Builder(displacementInMemory)).as(ConstantNode);
     const input0Node = graph.addNode(formatId(incomingEdges[0].source.id, nodeId), node).init(new VariableNode.Builder(type, `&${incomingEdges[0].source.id}`, 'input')).as(VariableNode);
     const input1Node = graph.addNode(formatId(incomingEdges[1].source.id, nodeId), node).init(new VariableNode.Builder(type, `&${incomingEdges[1].source.id}`, 'input')).as(VariableNode);
     const outputNode = graph.addNode(formatId(node.type, nodeId), node).init(new VariableNode.Builder(type, '&Result', 'output')).as(VariableNode);

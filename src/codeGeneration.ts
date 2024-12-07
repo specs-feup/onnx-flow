@@ -130,7 +130,6 @@ function handleEdges(edge : BaseEdge.Class, graph : OnnxGraph.Class, outputName 
             code += `       ${target.id} = ${variables.get(source.id)}\n`
         }
     } else if (source.is(ConstantNode)) {
-        //console.log(source.as(ConstantNode).value.toString())
         variables.set(source.id, source.as(ConstantNode).value.toString());
     } else if (source.is(VariableNode)) {
         if (source.as(VariableNode).type === 'input') {
@@ -174,10 +173,10 @@ function handleOuterOperationNode(node : OperationNode.Class, graph: OnnxGraph.C
             }
             
         } 
-
+        
         const displacementInMemoryNode = graph.getNodeById(`displacementInMemory_${node.id}`);
-
         if (displacementInMemoryNode && shape) {
+            console.log("entrei aqui");
             if (displacementInMemoryNode.is(ConstantNode)) {
                 const displacementInMemory = displacementInMemoryNode.as(ConstantNode).value;
                 const totalElements = shape.reduce((acc, val) => acc * val, 1);
@@ -219,7 +218,9 @@ function handleOuterOperationNode(node : OperationNode.Class, graph: OnnxGraph.C
 
         if (outgoers.length) {
             outputName = outgoers[0].target.id; 
-        } 
+        }
+
+        code += `   let ${outputName}= {0: 0};\n`;
         
         orderedEdges.forEach(edge => {
             code += handleEdges(edge, graph, outputName);
@@ -250,7 +251,7 @@ export function generateCode(graph: OnnxGraph.Class) : string {
         code += handleOuterOperationNode(node, graph);
     });
 
-    code += "    return "
+    code += "   return "
 
     const outputNodes = graph.nodes.filterIs(TensorNode).filter(node => node.type === 'output');
 
