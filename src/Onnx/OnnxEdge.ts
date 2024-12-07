@@ -3,7 +3,7 @@ import Edge from "@specs-feup/flow/graph/Edge";
 
 namespace OnnxEdge {
 
-    export const TAG = "__specs-onnx__graph_edge";
+    export const TAG = "__specs-onnx__onnx_edge";
     export const VERSION = "1";
 
     export class Class<

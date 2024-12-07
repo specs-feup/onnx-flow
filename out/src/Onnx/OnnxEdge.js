@@ -2,7 +2,7 @@ import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
 var OnnxEdge;
 (function (OnnxEdge) {
-    OnnxEdge.TAG = "__specs-onnx__graph_edge";
+    OnnxEdge.TAG = "__specs-onnx__onnx_edge";
     OnnxEdge.VERSION = "1";
     class Class extends BaseEdge.Class {
         get literalType() {

@@ -1,7 +1,7 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
 declare namespace OnnxEdge {
-    const TAG = "__specs-onnx__graph_edge";
+    const TAG = "__specs-onnx__onnx_edge";
     const VERSION = "1";
     class Class<D extends Data = Data, S extends ScratchData = ScratchData> extends BaseEdge.Class<D, S> {
         get literalType(): number | undefined;

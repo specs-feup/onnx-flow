@@ -6,7 +6,7 @@ import OnnxGraphOptimizer from "./Onnx/transformation/OptimizeForDimensions/Opti
 import { generateCode } from "./codeGeneration.js";
 
 // Load ONNX JSON data from a file
-const onnxJsonData = JSON.parse(fs.readFileSync("../specs-onnx/json_examples/AddCase111.json", "utf-8"));
+const onnxJsonData = JSON.parse(fs.readFileSync("../specs-onnx/json_examples/MatMulCase011.json", "utf-8"));
 
 // Create the graph using the ONNX JSON data
 const graph = createGraph(onnxJsonData).apply(new OnnxGraphTransformer()).apply(new OnnxGraphOptimizer());
