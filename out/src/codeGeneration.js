@@ -136,21 +136,23 @@ function handleEdges(edge, graph, outputName) {
 function handleOuterOperationNode(node, graph) {
     let code = "";
     const loopIterationsNode = graph.getNodeById(`Loop_iterations_${node.id}`)?.tryAs(ConstantNode);
-    const outgoers = node.outgoers.filter(edge => edge.target.is(TensorNode) && edge.target.as(TensorNode).type === 'output');
+    const outputOutgoers = node.outgoers.filter(edge => edge.target.is(TensorNode) && edge.target.as(TensorNode).type === 'output');
+    const outgoers = node.outgoers;
     let outputName = "tensor_" + node.id;
     const orderedEdges = graph.edges.filter(edge => edge.source.parent?.tryAs(OperationNode)?.id === node.id)
         .filterIs(OnnxInnerEdge).sort((a, b) => a.order - b.order);
     if (loopIterationsNode && node.children.length) {
         let shape;
-        if (outgoers.length) {
-            outputName = outgoers[0].target.id;
-            if (outgoers[0].is(OnnxEdge)) {
-                shape = outgoers[0].as(OnnxEdge).shape;
+        if (outgoers.length && outgoers[0].is(OnnxEdge))
+            shape = outgoers[0].as(OnnxEdge).shape;
+        if (outputOutgoers.length) {
+            outputName = outputOutgoers[0].target.id;
+            if (outputOutgoers[0].is(OnnxEdge)) {
+                shape = outputOutgoers[0].as(OnnxEdge).shape;
             }
         }
         const displacementInMemoryNode = graph.getNodeById(`displacementInMemory_${node.id}`);
         if (displacementInMemoryNode && shape) {
-            console.log("entrei aqui");
             if (displacementInMemoryNode.is(ConstantNode)) {
                 const displacementInMemory = displacementInMemoryNode.as(ConstantNode).value;
                 const totalElements = shape.reduce((acc, val) => acc * val, 1);
@@ -185,8 +187,8 @@ function handleOuterOperationNode(node, graph) {
     }
     else {
         indentationValue = "   ";
-        if (outgoers.length) {
-            outputName = outgoers[0].target.id;
+        if (outputOutgoers.length) {
+            outputName = outputOutgoers[0].target.id;
         }
         code += `   let ${outputName}= {0: 0};\n`;
         orderedEdges.forEach(edge => {

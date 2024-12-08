@@ -42,8 +42,8 @@ export default function transformSimpleLoopOperations(node: OperationNode.Class,
     
     const type = incomingEdges[0].literalType;
     const shape = incomingEdges[0].shape;
-    const numberOfIterations = shape.reduce((sum, value) => sum + value, 0);
-
+    const numberOfIterations = shape.reduce((product, value) => product * value, 1);
+    
     let displacementInMemory: number;
     
     if (type !== undefined) {
