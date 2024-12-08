@@ -196,7 +196,6 @@ function handleOuterOperationNode(node, graph) {
         });
         indentationValue = "        ";
     }
-    console.log("\n");
     return code;
 }
 //posso dar replace do k pelo index na otimização do matmul
@@ -224,6 +223,9 @@ export function generateCode(graph) {
         code += `${outputNodes[0].id};\n`;
     }
     code += "\n}\n";
+    variables.clear();
+    operations.clear();
+    indentationValue = "       ";
     return code;
 }
 //# sourceMappingURL=codeGeneration.js.map

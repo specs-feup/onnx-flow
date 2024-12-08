@@ -4,8 +4,6 @@ import OperationNode from "./Onnx/OperationNode.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import VariableNode from "./Onnx/VariableNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
-import Graph from "@specs-feup/flow/graph/Graph";
-import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "./Onnx/OnnxInnerEdge.js";
@@ -235,7 +233,6 @@ function handleOuterOperationNode(node : OperationNode.Class, graph: OnnxGraph.C
         indentationValue = "        "
         
     }
-    console.log("\n");
     return code;
 
 }
@@ -273,6 +270,10 @@ export function generateCode(graph: OnnxGraph.Class) : string {
     }
 
     code += "\n}\n";
+
+    variables.clear();
+    operations.clear();
+    indentationValue = "       ";
     
     return code;
 }
