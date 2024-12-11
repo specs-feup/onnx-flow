@@ -6,14 +6,15 @@ The resulting graph maintains its initial structure. That is (as in all ONNX gra
 Usage: onnx2cytoscape <input_file> [options]
 
 Options:
-      --version           Show version number                          [boolean]
-  -o, --output            Output resulting graph to a JSON file         [string]
-  -v, --verbosity         Control verbosity (0 = silent, 1 = normal/outputs, 2 =
-                           verbose)                        [number] [default: 1]
-      --no-optimize       Disable optimization steps  [boolean] [default: false]
-      --no-codegen        Disable code generation step[boolean] [default: false]
-      --no-visualization  Disable web visualization   [boolean] [default: false]
-      --help              Show help                                    [boolean]
+      --version                Show version number                      [boolean]
+  -o, --output                 Output resulting graph to a file         [string]
+  -f, --format                 Output format (json or dot)              [string] [choices: "json", "dot"] [default: "json"]
+  -v, --verbosity              Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)              [number] [default: 1]
+      --noLowLevel, --nl       Disable the low-level conversion         [boolean] [default: false]
+      --noOptimize, --no       Disable optimization steps               [boolean] [default: false]
+      --noCodegen, --nc        Disable code generation step             [boolean] [default: false]
+      --noVisualization, --nv  Disable Graphviz Online link generation  [boolean] [default: false]
+      --help                   Show help                                [boolean]
 
 You need to provide an input file (ONNX or JSON)
 ```
