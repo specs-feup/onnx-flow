@@ -1,16 +1,17 @@
 import { InferenceSession, Tensor } from 'onnxruntime-web';
-import { onnx2json } from './onnx2json.js';
-import { createGraph } from "./initGraph.js";
-import OnnxGraphTransformer from "./Onnx/transformation/LowLevelTransformation/LowLevelConversion.js";
-import OnnxGraphOptimizer from "./Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js";
-import { generateCode } from "./codeGeneration.js";
-import { typeSizeMap } from './Onnx/transformation/Utilities.js';
+import { onnx2json } from '../src/onnx2json.js';
+import { createGraph } from "../src/initGraph.js";
+import OnnxGraphTransformer from "../src/Onnx/transformation/LowLevelTransformation/LowLevelConversion.js";
+import OnnxGraphOptimizer from "../src/Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js";
+import { generateCode } from "../src/codeGeneration.js";
+import { typeSizeMap } from '../src/Onnx/transformation/Utilities.js';
 
 //AddAdd, AddAddAdd
 async function runTests() {
   // Load the ONNX model or convert JSON to ONNX
-  const inputFilePath = '../specs-onnx/onnx_examples/AddAddAdd.onnx';
+  const inputFilePath = './specs-onnx/examples/onnx/AddAddAdd.onnx';
   let onnxObject = await onnx2json(inputFilePath);
+
   /*
   if (inputFilePath.endsWith('.json')) {
     const tempOnnxFilePath = path.join(path.dirname(inputFilePath), 'temp.onnx');
@@ -19,7 +20,9 @@ async function runTests() {
     fs.unlinkSync(tempOnnxFilePath); // Clean up temporary file
   } else {
     onnxObject = await onnx2json(inputFilePath);
-  }*/
+  }
+  */
+
   // Create an inference session
   const session = await InferenceSession.create(inputFilePath);
 
