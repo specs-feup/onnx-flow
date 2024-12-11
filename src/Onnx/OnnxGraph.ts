@@ -20,18 +20,18 @@ namespace OnnxGraph {
     > extends BaseGraph.Class<D, S> {
 
         // Retrieve all TensorNodes with type 'input'
-        getInputTensorNodes(): NodeCollection<TensorNode.Data, TensorNode.ScratchData, TensorNode.Class> {
+        getInputTensorNodes(): NodeCollection<TensorNode.Class> {
             return this.nodes.filterIs(TensorNode).filter(n => n.type === "input");
         }
 
         // Retrieve all TensorNodes with type 'output'
-        getOutputTensorNodes(): NodeCollection<TensorNode.Data, TensorNode.ScratchData, TensorNode.Class> {
+        getOutputTensorNodes(): NodeCollection<TensorNode.Class> {
             return this.nodes.filterIs(TensorNode).filter(n => n.type === "output");
         }
 
 
         // Retrieve all OperationNodes
-        getOperationNodes(): NodeCollection<OperationNode.Data, OperationNode.ScratchData, OperationNode.Class> {
+        getOperationNodes(): NodeCollection<OperationNode.Class> {
             return this.nodes.filterIs(OperationNode);
         }
         

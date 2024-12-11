@@ -99,12 +99,7 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 }
 
 
-function findDims(outputNodes : NodeCollection<OperationNode.Data,
-     OperationNode.ScratchData, 
-     OperationNode.Class<OperationNode.Data, 
-     OperationNode.ScratchData>>, 
-     graph : OnnxGraph.Class) 
-{
+function findDims(outputNodes : NodeCollection<OperationNode.Class>, graph : OnnxGraph.Class) {
     outputNodes.forEach(node => {
         const incomingEdges = node.geIncomers;
         incomingEdges.forEach(edge => {

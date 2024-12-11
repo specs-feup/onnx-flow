@@ -1,6 +1,5 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import LaraFlowError from "@specs-feup/flow/error/LaraFlowError";
 import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 
@@ -26,19 +25,11 @@ namespace TensorNode {
             return this.data[TAG].type;
         }
 
-        get geIncomers(): EdgeCollection<
-        OnnxEdge.Data,
-        OnnxEdge.ScratchData,
-        OnnxEdge.Class
-        > {
+        get geIncomers(): EdgeCollection<OnnxEdge.Class> {
             return this.incomers.filterIs(OnnxEdge);
         }
 
-        get geOutgoers(): EdgeCollection<
-        OnnxEdge.Data,
-        OnnxEdge.ScratchData,
-        OnnxEdge.Class
-        > {
+        get geOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }
     }   

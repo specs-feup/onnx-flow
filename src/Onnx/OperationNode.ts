@@ -21,19 +21,11 @@ namespace OperationNode {
             this.data[TAG].type = newType;
         }
 
-        get geIncomers(): EdgeCollection<
-        OnnxEdge.Data,
-        OnnxEdge.ScratchData,
-        OnnxEdge.Class
-        > {
+        get geIncomers(): EdgeCollection<OnnxEdge.Class> {
             return this.incomers.filterIs(OnnxEdge);
         }
 
-        get geOutgoers(): EdgeCollection<
-        OnnxEdge.Data,
-        OnnxEdge.ScratchData,
-        OnnxEdge.Class
-        > {
+        get geOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }
     }   

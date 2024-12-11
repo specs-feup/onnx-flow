@@ -1,8 +1,5 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import LaraFlowError from "@specs-feup/flow/error/LaraFlowError";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
-import OnnxEdge from "./OnnxEdge.js";
 
 namespace ConstantNode {
 
