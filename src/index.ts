@@ -49,6 +49,12 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: false,
   })
+  .option('noVisualization', {
+    alias: 'nv',
+    describe: 'Disable Graphviz Online link generation',
+    type: 'boolean',
+    default: false,
+  })
   .help()
   .argv;
 
@@ -126,6 +132,13 @@ const dotFormatter = new OnnxDotFormatter();
     if (!argv.noLowLevel && !argv.noCodegen) {
       const generatedCode = generateCode(graph);
       if (verbosity > 0) console.log('Generated Code:', generatedCode);
+    }
+
+    // Step 5: Graphviz Online link generation
+    if (!argv.noVisualization) {
+      const baseUrl = "https://dreampuf.github.io/GraphvizOnline/#";
+      const encodedDot = encodeURIComponent(graph.toString(dotFormatter));
+      console.log('Graphviz Online Link:', baseUrl + encodedDot);
     }
 
   } catch (error) {
