@@ -70,6 +70,16 @@ export default class OnnxDotFormatter<
     }
 
     /**
+     * @returns The attributes of the graph.
+     */
+    static defaultGetGraphAttrs(): Record<string, string> {
+        return {
+            rankdir: "LR",
+            ...DefaultDotFormatter.defaultGetGraphAttrs(),
+        };
+    }
+
+    /**
      * Creates a new ONNX DOT formatter.
      */
     constructor() {
@@ -77,6 +87,7 @@ export default class OnnxDotFormatter<
             OnnxDotFormatter.defaultGetNodeAttrs,
             OnnxDotFormatter.defaultGetEdgeAttrs,
             DefaultDotFormatter.defaultGetContainer,
+            OnnxDotFormatter.defaultGetGraphAttrs,
         );
     }
 }
