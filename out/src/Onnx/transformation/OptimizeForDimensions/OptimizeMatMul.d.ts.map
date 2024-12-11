@@ -1,1 +1,0 @@
-{"version":3,"file":"OptimizeMatMul.d.ts","sourceRoot":"","sources":["../../../../../src/Onnx/transformation/OptimizeForDimensions/OptimizeMatMul.ts"],"names":[],"mappings":"AACA,OAAO,aAAa,MAAM,wBAAwB,CAAC;AAEnD,OAAO,SAAS,MAAM,oBAAoB,CAAA;AAQ1C,MAAM,CAAC,OAAO,UAAU,cAAc,CAAC,IAAI,EAAE,aAAa,CAAC,KAAK,EAAE,KAAK,EAAE,SAAS,CAAC,KAAK,GAAG,IAAI,CAkT9F"}

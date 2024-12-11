@@ -1,1 +1,0 @@
-{"version":3,"file":"json2onnx.d.ts","sourceRoot":"","sources":["../../src/json2onnx.ts"],"names":[],"mappings":"AA+BA,cAAM,mBAAmB;IACrB,MAAM,CAAC,OAAO,CAAC,YAAY,EAAE,MAAM,EAAE,kBAAkB,EAAE,MAAM,GAAG,OAAO,CAAC,IAAI,CAAC;CAiGlF;AAED,eAAe,mBAAmB,CAAC"}
