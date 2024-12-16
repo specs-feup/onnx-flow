@@ -74,21 +74,6 @@ export default function optimizeSimpleLoopOperations(node: OperationNode.Class, 
 
             graph.addEdge(storeNode, outputNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
-            /*
-            graph.addEdge(input0Node, load0Node);
-            graph.addEdge(zero, load0Node);
-
-            graph.addEdge(input1Node, load1Node);
-            graph.addEdge(zero, load1Node);
-
-            graph.addEdge(load0Node, opTypeNode);
-            graph.addEdge(load1Node, opTypeNode);
-        
-            graph.addEdge(zero, storeNode);
-            graph.addEdge(opTypeNode, storeNode);
-        
-            graph.addEdge(storeNode, outputNode);
-            */
         }
     }
 

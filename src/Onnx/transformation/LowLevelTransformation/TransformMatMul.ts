@@ -67,25 +67,6 @@ export default function transformMatMul(node: OperationNode.Class, graph: OnnxGr
     graph.addEdge(addition1Node, index1Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
     graph.addEdge(displacementInMemoryNode, index1Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
-    /*
-    graph.addEdge(iNode, multiplication0Node);
-    graph.addEdge(rows1Node, multiplication0Node);
-
-    graph.addEdge(kNode, multiplication1Node);
-    graph.addEdge(columns1Node, multiplication1Node);
-
-    graph.addEdge(multiplication0Node, addition0Node);
-    graph.addEdge(kNode, addition0Node);
-
-    graph.addEdge(multiplication1Node, addition1Node);
-    graph.addEdge(jNode, addition1Node);
-
-    graph.addEdge(addition0Node, index0Node);
-    graph.addEdge(displacementInMemoryNode, index0Node);
-
-    graph.addEdge(addition1Node, index1Node);
-    graph.addEdge(displacementInMemoryNode, index1Node);
-    */
     const multiplication5Node = graph.addNode(formatId("Multiplication5", nodeId), node).init(new OperationNode.Builder("Multiplication")).as(OperationNode);
     const IndexResNode = graph.addNode(formatId("IndexRes", nodeId), node).init(new OperationNode.Builder("Multiplication")).as(OperationNode);
     const Addition3Node = graph.addNode(formatId("Addition3", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
@@ -99,16 +80,6 @@ export default function transformMatMul(node: OperationNode.Class, graph: OnnxGr
     graph.addEdge(Addition3Node, IndexResNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
     graph.addEdge(displacementInMemoryNode, IndexResNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
-    /*
-    graph.addEdge(iNode, multiplication5Node);
-    graph.addEdge(columns1Node, multiplication5Node);
-
-    graph.addEdge(jNode, Addition3Node);
-    graph.addEdge(multiplication5Node, Addition3Node);
-
-    graph.addEdge(Addition3Node, IndexResNode);
-    graph.addEdge(displacementInMemoryNode, IndexResNode);
-    */
 
     const addToIndexNode = graph.addNode(formatId("addToIndexNode", nodeId), node).init(new ConstantNode.Builder(1)).as(ConstantNode);
     const indexNode = graph.addNode(formatId("Index", nodeId), node).init(new VariableNode.Builder(6,"index", 'index')).as(VariableNode);
@@ -151,35 +122,6 @@ export default function transformMatMul(node: OperationNode.Class, graph: OnnxGr
     graph.addEdge(kNode, addition9Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
     graph.addEdge(addToIndexNode, addition9Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
     graph.addEdge(addition9Node, kNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
-    /*
-    graph.addEdge(input0Node, load0Node);
-    graph.addEdge(index0Node, load0Node);
-
-    graph.addEdge(input1Node, load1Node);
-    graph.addEdge(index1Node, load1Node);
-
-    graph.addEdge(load0Node, multiplication4Node);
-    graph.addEdge(load1Node, multiplication4Node);
-
-    graph.addEdge(outputNode, load2Node);
-    graph.addEdge(IndexResNode, load2Node);
-
-    graph.addEdge(load2Node, addition2Node);
-    graph.addEdge(multiplication4Node, addition2Node);
-
-    graph.addEdge(IndexResNode, storeNode);
-    graph.addEdge(addition2Node, storeNode);
-    
-    graph.addEdge(storeNode, outputNode);
-
-    graph.addEdge(indexNode, addition8Node);
-    graph.addEdge(addToIndexNode, addition8Node);
-    graph.addEdge(addition8Node, indexNode);
-
-    graph.addEdge(kNode, addition9Node);
-    graph.addEdge(addToIndexNode, addition9Node);
-    graph.addEdge(addition9Node, kNode);
-    */
 
     const addition4Node = graph.addNode(formatId("Addition4", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
     const addition5Node = graph.addNode(formatId("Addition5", nodeId), node).init(new OperationNode.Builder("Addition")).as(OperationNode);
@@ -244,55 +186,5 @@ export default function transformMatMul(node: OperationNode.Class, graph: OnnxGr
     graph.addEdge(jNode, multiplication12Node).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
     graph.addEdge(multiplication12Node, jNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
-
-    /*
-    graph.addEdge(kNode, equality0Node);
-    graph.addEdge(rows1Node, equality0Node);
-
-    graph.addEdge(addToIndexNode, addition4Node);
-    graph.addEdge(jNode, addition4Node);
-
-    graph.addEdge(equality0Node, multiplication7Node);
-    graph.addEdge(addition4Node, multiplication7Node);
-
-    graph.addEdge(equality0Node, not0Node);
-
-    graph.addEdge(not0Node, multiplication8Node);
-    graph.addEdge(jNode, multiplication8Node);
-
-    graph.addEdge(multiplication7Node, addition5Node);
-    graph.addEdge(multiplication8Node, addition5Node);
-
-    graph.addEdge(addition5Node, jNode);
-
-    graph.addEdge(not0Node, multiplication9Node);
-    graph.addEdge(kNode, multiplication9Node);
-
-    graph.addEdge(multiplication9Node, kNode);
-
-    graph.addEdge(jNode, equality1Node);
-    graph.addEdge(columns1Node, equality1Node);
-
-    graph.addEdge(iNode, addition6Node);
-    graph.addEdge(addToIndexNode, addition6Node);
-
-    graph.addEdge(equality1Node, multiplication10Node);
-    graph.addEdge(addition6Node, multiplication10Node);
-
-    graph.addEdge(equality1Node, not1Node);
-
-    graph.addEdge(not1Node, multiplication11Node);
-    graph.addEdge(iNode, multiplication11Node);
-
-    graph.addEdge(multiplication10Node, addition7Node);
-    graph.addEdge(multiplication11Node, addition7Node);
-
-    graph.addEdge(addition7Node, iNode);
-
-    graph.addEdge(not1Node, multiplication12Node);
-    graph.addEdge(jNode, multiplication12Node);
-
-    graph.addEdge(multiplication12Node, jNode);
-    */
 
 }

@@ -71,21 +71,6 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
 
         graph.addEdge(storeNode, outputNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
         
-        /*
-        graph.addEdge(input0Node, load0Node);
-        graph.addEdge(zero, load0Node);
-
-        graph.addEdge(input1Node, load1Node);
-        graph.addEdge(zero, load1Node);
-
-        graph.addEdge(load0Node, multiplicationNode);
-        graph.addEdge(load1Node, multiplicationNode);
-    
-        graph.addEdge(zero, storeNode);
-        graph.addEdge(multiplicationNode, storeNode);
-    
-        graph.addEdge(storeNode, outputNode);
-        */
         return;
     }
 
@@ -202,7 +187,6 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
             break;
         case '110':
 
-            //kNode = graph.addNode(formatId("k", nodeId), node).init(new VariableNode.Builder(6, 'k', 'index_aux')).as(VariableNode);
             displacementInMemoryNode = graph.addNode(formatId("displacementInMemory", nodeId), node).init(new ConstantNode.Builder(displacementInMemory)).as(ConstantNode);
             index1Node = graph.addNode(formatId("Index1", nodeId), node).init(new OperationNode.Builder("Multiplication")).as(OperationNode);
             index0Node = graph.addNode(formatId("Index0", nodeId), node).init(new ConstantNode.Builder(0)).as(ConstantNode);
@@ -215,7 +199,6 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
             break;
         case '011':
 
-            //kNode = graph.addNode(formatId("k", nodeId), node).init(new VariableNode.Builder(6, 'k', 'index_aux')).as(VariableNode);
             displacementInMemoryNode = graph.addNode(formatId("displacementInMemory", nodeId), node).init(new ConstantNode.Builder(displacementInMemory)).as(ConstantNode);
             index0Node = graph.addNode(formatId("Index0", nodeId), node).init(new OperationNode.Builder("Multiplication")).as(OperationNode);
             index1Node = graph.addNode(formatId("Index1", nodeId), node).init(new ConstantNode.Builder(0)).as(ConstantNode);

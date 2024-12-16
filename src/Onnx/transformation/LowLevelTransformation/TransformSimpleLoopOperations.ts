@@ -89,29 +89,4 @@ export default function transformSimpleLoopOperations(node: OperationNode.Class,
 
     graph.addEdge(additionNode, indexNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
-    /*
-    graph.addEdge(indexNode, multiplicationNode)
-    graph.addEdge(displacementInMemoryNode, multiplicationNode)
-
-    graph.addEdge(input0Node, load0Node);
-    graph.addEdge(multiplicationNode, load0Node);
-
-    graph.addEdge(input1Node, load1Node);
-    graph.addEdge(multiplicationNode, load1Node);
-
-    graph.addEdge(load0Node, opTypeNode);
-    graph.addEdge(load1Node, opTypeNode);
-
-    graph.addEdge(multiplicationNode, storeNode);
-    graph.addEdge(opTypeNode, storeNode);
-    
-
-    graph.addEdge(storeNode, outputNode);
-
-    graph.addEdge(indexNode, additionNode);
-    graph.addEdge(addToIndexNode, additionNode);
-
-    graph.addEdge(additionNode, indexNode);
-    */
-
 }
