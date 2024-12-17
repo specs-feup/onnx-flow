@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "NodeNext",
+        "outDir": "out/",
+        "declaration": true,
+        "strict": true,
+        "allowJs": false,
+        "moduleResolution": "NodeNext",
+        "sourceMap": true,
+        "declarationMap": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "paths": {
+            "@specs-feup/specs-onnx/*": ["./src/*.ts"]
+        }
+    },
+    "exclude": ["node_modules", "out"]
+}
