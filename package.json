@@ -15,7 +15,7 @@
     "build:watch": "tsc --watch"
   },
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "@specs-feup/flow": "1.0.0",
     "cytoscape": "~3.26.0",
