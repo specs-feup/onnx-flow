@@ -13,6 +13,38 @@ import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
+export async function onnxFileParser(inputFilePath: string){
+  return await onnx2json(inputFilePath);
+}
+
+export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true) {
+  let graph = createGraph(onnxObject);
+
+  if (enableLowLevel) {
+    graph = graph.apply(new OnnxGraphTransformer());
+  }
+
+  if (enableOptimize) {
+    graph = graph.apply(new OnnxGraphOptimizer());
+  }
+
+  return graph;
+}
+
+export async function renderDotToSVG(dotGraph: string): Promise<string> {
+  const svgStream = await toStream(dotGraph, { format: "svg" });
+  return await streamToString(svgStream);
+}
+
+export function generateGraphvizOnlineLink(dotGraph: string): string {
+  const baseUrl = "https://dreampuf.github.io/GraphvizOnline/#";
+  return baseUrl + encodeURIComponent(dotGraph);
+}
+
+export function generateGraphCode(graph: any): string {
+  return generateCode(graph);
+}
+
 const argv = await yargs(hideBin(process.argv))
   .usage('Usage: onnx2cytoscape <input_file> [options]')
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
@@ -81,7 +113,7 @@ const dotFormatter = new OnnxDotFormatter();
     if (inputFilePath.endsWith('.json')) {
       onnxObject = JSON.parse(fs.readFileSync(inputFilePath, 'utf8'));
     } else {
-      onnxObject = await onnx2json(inputFilePath);
+      onnxObject = await onnxFileParser(inputFilePath);
     }
 
     if (verbosity > 1) console.log('Input ONNX/JSON Graph:', JSON.stringify(onnxObject, null, 2));
@@ -134,16 +166,14 @@ const dotFormatter = new OnnxDotFormatter();
 
     // Step 4: Code generation
     if (!argv.noLowLevel && !argv.noCodegen) {
-      const generatedCode = generateCode(graph);
+      const generatedCode = generateGraphCode(graph);
       if (verbosity > 0) console.log('Generated Code:', generatedCode);
     }
 
     // Step 5: Graphviz Online link generation
     if (visualizationOption) {
       if (visualizationOption == 1){
-        const baseUrl = "https://dreampuf.github.io/GraphvizOnline/#";
-        const encodedDot = encodeURIComponent(graph.toString(dotFormatter));
-        console.log('Graphviz Online Link:', baseUrl + encodedDot);
+        console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
       }
       else{
         const app = express();
@@ -153,8 +183,7 @@ const dotFormatter = new OnnxDotFormatter();
         app.get("/", async (req: Request, res: Response) => {
           try {
             // Render the DOT graph to SVG
-            const svgStream = await toStream(graph.toString(dotFormatter), { format: 'svg' });
-            const svgContent = await streamToString(svgStream);
+            const svgContent = await renderDotToSVG(graph.toString(dotFormatter));
 
             // Create an HTML page with the embedded SVG
             const htmlContent = `
