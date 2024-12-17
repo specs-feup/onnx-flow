@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import express, { Request, Response } from "express";
+import { toStream } from 'ts-graphviz/adapter';
 import { createGraph } from './initGraph.js';
+import streamToString from "stream-to-string";
 import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
 import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
@@ -49,11 +52,11 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: false,
   })
-  .option('noVisualization', {
-    alias: 'nv',
-    describe: 'Disable Graphviz Online link generation',
-    type: 'boolean',
-    default: false,
+  .option('visualization', {
+    alias: 'vz',
+    describe: 'Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)',
+    type: 'number',
+    default: 2,
   })
   .help()
   .argv;
@@ -67,6 +70,7 @@ if (typeof inputFilePath !== 'string') {
 const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
+const visualizationOption = argv.visualization;
 const dotFormatter = new OnnxDotFormatter();
 
 (async function main() {
@@ -135,10 +139,92 @@ const dotFormatter = new OnnxDotFormatter();
     }
 
     // Step 5: Graphviz Online link generation
-    if (!argv.noVisualization) {
-      const baseUrl = "https://dreampuf.github.io/GraphvizOnline/#";
-      const encodedDot = encodeURIComponent(graph.toString(dotFormatter));
-      console.log('Graphviz Online Link:', baseUrl + encodedDot);
+    if (visualizationOption) {
+      if (visualizationOption == 1){
+        const baseUrl = "https://dreampuf.github.io/GraphvizOnline/#";
+        const encodedDot = encodeURIComponent(graph.toString(dotFormatter));
+        console.log('Graphviz Online Link:', baseUrl + encodedDot);
+      }
+      else{
+        const app = express();
+        const port = 8080;
+
+        // Serve HTML with embedded SVG at the root ("/")
+        app.get("/", async (req: Request, res: Response) => {
+          try {
+            // Render the DOT graph to SVG
+            const svgStream = await toStream(graph.toString(dotFormatter), { format: 'svg' });
+            const svgContent = await streamToString(svgStream);
+
+            // Create an HTML page with the embedded SVG
+            const htmlContent = `
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Graphviz Visualization</title>
+                <style>
+                  /* General Reset */
+                  body, html {
+                    margin: 0;
+                    padding: 0;
+                    height: 100vh; /* Set height to 100% of the viewport */
+                    overflow: hidden; /* Remove page scroll bar */
+                    font-family: Arial, sans-serif;
+                    background-color: #f9f9f9; /* Light background */
+                    text-align: center;
+                  }
+                  /* Title Styling */
+                  h1 {
+                    margin: 20px 0; /* Top margin */
+                    font-size: 2.5em;
+                    color: #333;
+                  }
+                  /* Container for the graph */
+                  .graph-container {
+                    max-width: 90%; /* Prevent horizontal overflow */
+                    height: calc(100vh - 160px); /* Subtract title height from viewport height */
+                    margin: 0 auto; /* Center horizontally */
+                    overflow: auto; /* Enable scrolling inside the container */
+                    border: 1px solid #ddd;
+                    padding: 10px;
+                    background-color: #fff;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                    border-radius: 8px;
+                  }
+                  /* SVG Responsiveness */
+                  svg {
+                    max-width: 100%; /* Scale the graph to fit the container */
+                    height: auto;
+                  }
+                </style>
+              </head>
+              <body>
+                <h1>Graphviz Visualization</h1>
+                <div class="graph-container">
+                  ${svgContent}
+                </div>
+              </body>
+              </html>
+            `;
+
+
+            // Send the HTML response
+            res.setHeader("Content-Type", "text/html");
+            res.send(htmlContent);
+
+          } catch (error) {
+            console.error("Error rendering graph:", error);
+            res.status(500).send(error);
+          }
+        });
+
+        // Start the server
+        app.listen(port, () => {
+          console.log(`Graphviz Visualization server running at http://localhost:${port}`);
+        });
+      }
     }
 
   } catch (error) {
