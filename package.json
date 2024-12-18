@@ -22,10 +22,9 @@
     "cytoscape-fcose": "^2.2.0",
     "express": "^4.21.1",
     "misc-utils-of-mine-typescript": "^0.0.12",
+    "node-graphviz": "^0.1.1",
     "onnxruntime-web": "^1.20.1",
     "protobufjs": "^7.4.0",
-    "stream-to-string": "^1.2.1",
-    "ts-graphviz": "^2.1.5",
     "yargs": "^17.7.2"
   },
   "type": "module",

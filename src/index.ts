@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
 import express, { Request, Response } from "express";
-import { toStream } from 'ts-graphviz/adapter';
+import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
-import streamToString from "stream-to-string";
 import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
 import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
@@ -32,8 +31,7 @@ export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enabl
 }
 
 export async function renderDotToSVG(dotGraph: string): Promise<string> {
-  const svgStream = await toStream(dotGraph, { format: "svg" });
-  return await streamToString(svgStream);
+  return await graphviz.layout(dotGraph);
 }
 
 export function generateGraphvizOnlineLink(dotGraph: string): string {
