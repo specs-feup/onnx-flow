@@ -4,7 +4,7 @@
         "module": "NodeNext",
         "outDir": "out/",
         "declaration": true,
-        "strict": true,
+        "strict": false,
         "allowJs": false,
         "moduleResolution": "NodeNext",
         "sourceMap": true,
@@ -13,7 +13,7 @@
         "forceConsistentCasingInFileNames": true,
         "noFallthroughCasesInSwitch": true,
         "paths": {
-            "@specs-feup/specs-onnx/*": ["./src/*.ts"]
+            "@specs-feup/specs-onnx/*": ["./src/*.ts", "./test/*.ts"]
         }
     },
     "exclude": ["node_modules", "out"]

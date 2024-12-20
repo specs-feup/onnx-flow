@@ -6,12 +6,15 @@
   },
   "description": "Tool to convert an ONNX graph into a data-flow graph (DFG), decomposing its high-level operations into low-level operations and performing a set of optimizations.",
   "bin": {
-    "onnx2dfg": "./index.js"
+    "onnx2dfg": "./out/src/index.js"
   },
-
-  "main": "index.js",
+  "main": "./out/src/index.js",
+  "files": [
+  "out/"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "prebuild": "tsc -p tsconfig.prebuild.json",
+    "test": "node ./out/test/testing.js",
     "build": "tsc",
     "build:watch": "tsc --watch"
   },
