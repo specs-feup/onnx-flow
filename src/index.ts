@@ -12,21 +12,24 @@ import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-export async function onnxFileParser(inputFilePath: string){
+export async function parseOnnxFile(inputFilePath: string){
   return await onnx2json(inputFilePath);
 }
 
-export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true) {
+export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, dotOutput: boolean = true) {
   let graph = createGraph(onnxObject);
 
   if (enableLowLevel) {
     graph = graph.apply(new OnnxGraphTransformer());
   }
 
-  if (enableOptimize) {
+  if (enableLowLevel && enableOptimize) {
     graph = graph.apply(new OnnxGraphOptimizer());
   }
 
+  if(dotOutput){
+    return graph.toString(dotFormatter);
+  }
   return graph;
 }
 
@@ -40,11 +43,12 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
 }
 
 export function generateGraphCode(graph: any): string {
+
   return generateCode(graph);
 }
 
 const argv = await yargs(hideBin(process.argv))
-  .usage('Usage: onnx2cytoscape <input_file> [options]')
+  .usage('Usage: onnx2dfg <input_file> [options]')
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
   .option('output', {
     alias: 'o',
@@ -111,7 +115,7 @@ const dotFormatter = new OnnxDotFormatter();
     if (inputFilePath.endsWith('.json')) {
       onnxObject = JSON.parse(fs.readFileSync(inputFilePath, 'utf8'));
     } else {
-      onnxObject = await onnxFileParser(inputFilePath);
+      onnxObject = await parseOnnxFile(inputFilePath);
     }
 
     if (verbosity > 1) console.log('Input ONNX/JSON Graph:', JSON.stringify(onnxObject, null, 2));

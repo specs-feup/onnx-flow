@@ -1,12 +1,12 @@
 {
-  "name": "@specs-feup/onnx2cytoscape",
+  "name": "@specs-feup/onnx2dfg",
   "version": "1.0.2",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Tool to convert an ONNX graph into a Cytoscape graph, using Cytoscape.js and decompose its high-level operations into low-level operations.",
+  "description": "Tool to convert an ONNX graph into a data-flow graph (DFG), decomposing its high-level operations into low-level operations and performing a set of optimizations.",
   "bin": {
-    "onnx2cytoscape": "./index.js"
+    "onnx2dfg": "./index.js"
   },
   "main": "index.js",
   "scripts": {
