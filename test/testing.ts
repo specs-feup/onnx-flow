@@ -5,11 +5,18 @@ import OnnxGraphTransformer from "../src/Onnx/transformation/LowLevelTransformat
 import OnnxGraphOptimizer from "../src/Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js";
 import { generateCode } from "../src/codeGeneration.js";
 import { typeSizeMap } from '../src/Onnx/transformation/Utilities.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Dynamically determine the project root directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '../../'); // Adjust based on directory structure
 
 //AddAdd, AddAddAdd
 async function runTests() {
   // Load the ONNX model or convert JSON to ONNX
-  const inputFilePath = './specs-onnx/examples/onnx/AddAddAdd.onnx';
+  const inputFilePath = path.resolve(PROJECT_ROOT, 'examples/onnx/AddAddAdd.onnx');
   let onnxObject = await onnx2json(inputFilePath);
 
   /*
