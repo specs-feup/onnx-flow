@@ -1,6 +1,6 @@
 {
   "name": "@specs-feup/onnx2dfg",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "publishConfig": {
     "access": "public"
   },
@@ -8,13 +8,19 @@
   "bin": {
     "onnx2dfg": "./index.js"
   },
+
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "build:watch": "tsc --watch"
   },
-  "author": "",
+  "author": "Nelson Neto, José Pedro Ferreira",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specs-feup/specs-onnx.git"
+  },
+  "homepage": "https://github.com/specs-feup/specs-onnx#readme",
   "license": "Apache-2.0",
   "dependencies": {
     "@specs-feup/flow": "1.0.0",
