@@ -48,7 +48,7 @@ export function generateGraphCode(graph: any): string {
 }
 
 const argv = await yargs(hideBin(process.argv))
-  .usage('Usage: onnx2dfg <input_file> [options]')
+  .usage('Usage: onnx-flow <input_file> [options]')
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
   .option('output', {
     alias: 'o',
@@ -194,7 +194,7 @@ const dotFormatter = new OnnxDotFormatter();
               <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Graphviz Visualization</title>
+                <title>onnx-flow Graphviz Visualization</title>
                 <style>
                   /* General Reset */
                   body, html {
@@ -232,7 +232,7 @@ const dotFormatter = new OnnxDotFormatter();
                 </style>
               </head>
               <body>
-                <h1>Graphviz Visualization</h1>
+                <h1>onnx-flow Graphviz Visualization</h1>
                 <div class="graph-container">
                   ${svgContent}
                 </div>

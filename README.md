@@ -1,4 +1,4 @@
-# ONNX2DFG
+# onnx-flow
 Tool to convert an ONNX graph into a data-flow graph, decomposing its high-level operations into low-level operations and performing a set of optimizations. The resulting graph maintains its initial structure, that is (as in all ONNX graphs), the nodes represent operations, initial inputs, and final outputs.
 
 ## Installation
@@ -6,13 +6,13 @@ Tool to convert an ONNX graph into a data-flow graph, decomposing its high-level
 To install the package:
 
 ```bash
-npm install @specs-feup/onnx2dfg
+npm install @specs-feup/onnx-flow
 ```
 
 ## CLI Usage
 
 ```
-Usage: onnx2dfg <input_file> [options]
+Usage: onnx-flow <input_file> [options]
 
 Options:
       --version                Show version number                      [boolean]
@@ -30,7 +30,7 @@ You need to provide an input file (ONNX or JSON)
 
 ## Programmatic Usage
 
-In addition to the CLI, `ONNX2DFG` can be used programmatically by importing its functions in your project. This allows you to parse ONNX files, manipulate data-flow graphs, and generate outputs programmatically. The available functions are the following:
+In addition to the CLI, `onnx-flow` can be used programmatically by importing its functions in your project. This allows you to parse ONNX files, manipulate data-flow graphs, and generate outputs programmatically. The available functions are the following:
 
 ### `onnxFileParser`
 Parses an ONNX file or JSON graph into an ONNX object.
@@ -39,7 +39,7 @@ Parses an ONNX file or JSON graph into an ONNX object.
  - Output: ONNX graph parsed into a JSON file (`json`)
 
 ```typescript
-import { onnxFileParser } from "@specs-feup/onnx2dfg";
+import { onnxFileParser } from "@specs-feup/onnx-flow";
 
 const onnxObject = await onnxFileParser("path/to/file.onnx");
 console.log(onnxObject);
@@ -57,7 +57,7 @@ Loads an ONNX object into a data-flow graph and optionally applies low-level tra
  - Output: Resulting flow graph, either the object or in DOT format depending on the option chosen (`flow graph` or `string`)
 
 ```typescript
-import { loadGraph } from "@specs-feup/onnx2dfg";
+import { loadGraph } from "@specs-feup/onnx-flow";
 
 const dotGraph = loadGraph(onnxObject, true, true, true); // Enable both low-level and optimization steps and convert output to DOT format
 console.log(dotGraph);
@@ -72,7 +72,7 @@ Converts a DOT graph string into an SVG string for rendering or embedding.
  - Output: SVG image of the graph (`string`)
 
 ```typescript
-import { renderDotToSVG } from "@specs-feup/onnx2dfg";
+import { renderDotToSVG } from "@specs-feup/onnx-flow";
 
 const dotGraph = "digraph { a -> b }";
 const svgContent = await renderDotToSVG(dotGraph);
@@ -88,7 +88,7 @@ Generates a link to visualize a DOT graph on [Graphviz Online](https://dreampuf.
 - Output: Link to open the given graph in Graphviz Online (`string`)
 
 ```typescript
-import { generateGraphvizOnlineLink } from "@specs-feup/onnx2dfg";
+import { generateGraphvizOnlineLink } from "@specs-feup/onnx-flow";
 
 const dotGraph = "digraph { a -> b }";
 const link = generateGraphvizOnlineLink(dotGraph);
@@ -104,7 +104,7 @@ Generates code from a data-flow graph.
  - Output: Code corresponding to the source graph (`string`)
 
 ```typescript
-import { generateGraphCode } from "@specs-feup/onnx2dfg";
+import { generateGraphCode } from "@specs-feup/onnx-flow";
 
 const code = generateGraphCode(graph);
 console.log(code);
