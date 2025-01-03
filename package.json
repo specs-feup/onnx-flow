@@ -8,6 +8,12 @@
   "bin": {
     "onnx-flow": "./out/src/index.js"
   },
+  "keywords": [
+    "onnx",
+    "optimization",
+    "operation decomposition",
+    "dfg"
+  ],
   "main": "./out/src/index.js",
   "files": [
   "out/"
