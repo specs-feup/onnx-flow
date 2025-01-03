@@ -19,7 +19,6 @@
   "out/"
   ],
   "scripts": {
-    "prebuild": "tsc -p tsconfig.prebuild.json",
     "test": "node ./out/test/testing.js",
     "build": "tsc",
     "build:watch": "tsc --watch"
@@ -50,7 +49,6 @@
   },
   "parserOptions": {
     "project": [
-      "./*/tsconfig.json",
       "./tsconfig.*.json"
     ]
   },
