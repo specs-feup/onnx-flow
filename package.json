@@ -1,6 +1,6 @@
 {
   "name": "@specs-feup/onnx-flow",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "publishConfig": {
     "access": "public"
   },
@@ -21,7 +21,8 @@
   "scripts": {
     "test": "node ./out/test/testing.js",
     "build": "tsc",
-    "build:watch": "tsc --watch"
+    "build:watch": "tsc --watch",
+    "postinstall": "cd node_modules/@specs-feup/flow && tsc -p tsconfig.json --strict false"
   },
   "author": "Nelson Neto, José Pedro Ferreira",
   "repository": {
