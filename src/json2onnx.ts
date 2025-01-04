@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 export function json2onnx(jsonFilePath : string, outputOnnxPath : string) {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const protoPath = path.join(__dirname, '../../out/src/Onnx', 'onnx.proto');
+    const protoPath = path.join(__dirname, '../../out/src/Onnx/onnx.proto');
 
     return new Promise((resolve, reject) => {
         // Load the ONNX protobuf definition
