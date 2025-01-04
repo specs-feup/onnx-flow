@@ -22,6 +22,7 @@
     "test": "node ./out/test/testing.js",
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "postbuild": "cp src/Onnx/onnx.proto out/src/Onnx/onnx.proto",
     "postinstall": "cd node_modules/@specs-feup/flow && tsc -p tsconfig.json --strict false"
   },
   "author": "Nelson Neto, José Pedro Ferreira",
