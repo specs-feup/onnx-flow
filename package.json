@@ -16,13 +16,13 @@
   ],
   "main": "./out/src/index.js",
   "files": [
-  "out/"
+    "out/"
   ],
   "scripts": {
     "test": "node ./out/test/testing.js",
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "postbuild": "cp src/Onnx/onnx.proto out/src/Onnx/onnx.proto",
+    "postbuild": "cpx \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
     "postinstall": "cd node_modules/@specs-feup/flow && tsc -p tsconfig.json --strict false"
   },
   "author": "Nelson Neto, José Pedro Ferreira",
@@ -47,6 +47,7 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/yargs": "^17.0.33",
+    "cpx": "^1.5.0",
     "typescript": "^5.7.2"
   },
   "parserOptions": {
