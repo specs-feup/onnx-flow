@@ -1,6 +1,6 @@
 {
   "name": "@specs-feup/onnx-flow",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publishConfig": {
     "access": "public"
   },
@@ -22,8 +22,7 @@
     "test": "node ./out/test/testing.js",
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "postbuild": "cpx \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
-    "postinstall": "cd node_modules/@specs-feup/flow && tsc -p tsconfig.json --strict false"
+    "postbuild": "cpx \"src/Onnx/onnx.proto\" \"out/src/Onnx\""
   },
   "author": "Nelson Neto, José Pedro Ferreira",
   "repository": {
@@ -33,7 +32,7 @@
   "homepage": "https://github.com/specs-feup/onnx-flow#readme",
   "license": "Apache-2.0",
   "dependencies": {
-    "@specs-feup/flow": "1.0.0",
+    "@specs-feup/flow": "^1.0.3",
     "cytoscape": "~3.26.0",
     "cytoscape-fcose": "^2.2.0",
     "express": "^4.21.1",
