@@ -1,6 +1,9 @@
 {
   "name": "@specs-feup/onnx-flow",
   "version": "1.0.5",
+  "engines": {
+    "node": ">=16"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -16,13 +19,15 @@
   ],
   "main": "./out/src/index.js",
   "files": [
-    "out/"
+    "out/",
+    "package.json",
+    "README.md"
   ],
   "scripts": {
     "test": "node ./out/test/testing.js",
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "postbuild": "cpx \"src/Onnx/onnx.proto\" \"out/src/Onnx\""
+    "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\""
   },
   "author": "Nelson Neto, José Pedro Ferreira",
   "repository": {
@@ -33,10 +38,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@specs-feup/flow": "^1.0.3",
-    "cytoscape": "~3.26.0",
-    "cytoscape-fcose": "^2.2.0",
     "express": "^4.21.1",
-    "misc-utils-of-mine-typescript": "^0.0.12",
     "node-graphviz": "^0.1.1",
     "onnxruntime-web": "^1.20.1",
     "protobufjs": "^7.4.0",
@@ -46,7 +48,7 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/yargs": "^17.0.33",
-    "cpx": "^1.5.0",
+    "cpx2": "^8.0.0",
     "typescript": "^5.7.2"
   },
   "parserOptions": {

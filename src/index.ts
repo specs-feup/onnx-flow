@@ -9,6 +9,8 @@ import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
@@ -47,8 +49,23 @@ export function generateGraphCode(graph: any): string {
   return generateCode(graph);
 }
 
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+let version = 'unknown';
+try {
+  const packageJson = JSON.parse(
+    fs.readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')
+  );
+  version = packageJson.version;
+} catch (error) {
+  console.warn('Warning: Unable to read package.json for version info.', error);
+}
+
 const argv = await yargs(hideBin(process.argv))
   .usage('Usage: onnx-flow <input_file> [options]')
+  .version(version)
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
   .option('output', {
     alias: 'o',
