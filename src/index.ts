@@ -8,6 +8,8 @@ import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/Opti
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
+import { json2onnx } from "./json2onnx.js";
+import { convertCytoscapeGraphToOnnxModelProto } from "./flow2json.js";
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -16,6 +18,14 @@ import { hideBin } from 'yargs/helpers';
 
 export async function parseOnnxFile(inputFilePath: string){
   return await onnx2json(inputFilePath);
+}
+
+export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
+  return await json2onnx(jsonFilePath, outputFilePath);
+}
+
+export async function flowToJson(cytoGraph : any) {
+  return await convertCytoscapeGraphToOnnxModelProto(cytoGraph);
 }
 
 export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, dotOutput: boolean = true) {
@@ -173,6 +183,18 @@ const dotFormatter = new OnnxDotFormatter();
       }
       if (verbosity > 0) console.log(`Output Graph written to ${outputFilePath} in ${outputFormat} format`);
     }
+
+    const outputJsonPath = 'examples/onnxflow.json';
+    const outputOnnxPath = 'examples/onnxflow.onnx';
+
+    // Convert the graph to ONNX JSON format
+    const onnxModelJson = await flowToJson(graph.toCy().json());
+    fs.writeFileSync(outputJsonPath, JSON.stringify(onnxModelJson, null, 2));
+    console.log(`Output ONNX JSON written to ${outputJsonPath}`);
+
+    // Convert the ONNX JSON format to ONNX binary format
+    await jsonToOnnx(outputJsonPath, outputOnnxPath);
+    console.log(`Output ONNX written to ${outputOnnxPath}`);
 
     // Print the output graph to stdout
     if (verbosity > 0) {
