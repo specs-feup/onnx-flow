@@ -21,6 +21,7 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
 
     switch (source.type) {
         case 'Addition':
+        case 'Add':
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
@@ -29,6 +30,7 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
             }
             break;
         case 'Subtraction':
+        case 'Sub':
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
@@ -37,6 +39,7 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
             }
             break;
         case 'Multiplication':
+        case 'Mul':
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
@@ -45,6 +48,7 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
             }
             break;
         case 'Division':
+        case 'Div':
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
