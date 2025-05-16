@@ -4,119 +4,133 @@ export function convertCytoscapeGraphToOnnxModelProto(cytoGraph : any): any {
   
   console.log("Processing graph with direct implementation...");
   
-  type nodeInputsMap = Record<string, string[]>;
-  type nodeOutputsMap = Record<string, string[]>;
+  type nodeIdsMap = Record<string, any>;
 
   const modelNodes = [];
   
-  const nodeInputs: nodeInputsMap = {};
-  const nodeOutputs: nodeOutputsMap = {};
+  const nodeIds: nodeIdsMap = {}; 
   
-  const inputNodes = [];
-  const outputNodes = [];
-  
-  const operationTypeMap = {
-    'Load': 'Load',
-    'Store': 'Store',
-    'Addition': 'Add',
-    'Multiplication': 'Mul',
-    'Subtraction': 'Sub',
-    'Division': 'Div'
-  };
-  
-  const allNodeIds: Set<string> = new Set();
   const modelInputs = [];
   const modelOutputs = [];
+  const modelInitializers = [];
+
+  const specsOnnxNodeTypes = {
+    Tensor: '__specs-onnx__tensor_node',
+    Variable: '__specs-onnx__variable_node',
+    Operation: '__specs-onnx__operation_node',
+    Constant: '__specs-onnx__constant_node'
+  };
 
   for (const node of nodes) {
-    if (node.data['__specs-onnx__tensor_node']) {
-      const tensorSpec = node.data['__specs-onnx__tensor_node'];
-      const tensorId = node.data.id;
+    if (node.data[specsOnnxNodeTypes.Tensor] || (node.data[specsOnnxNodeTypes.Operation] && !node.data.parent)) {
+      continue;
+    }
 
-      if (tensorSpec.type === "input") {
-        inputNodes.push(tensorId);
-      } else if (tensorSpec.type === "output") {
-        outputNodes.push(tensorId);
-      }
+    if (node.data[specsOnnxNodeTypes.Constant]) {
+      nodeIds[node.data.id] = {
+        value: node.data[specsOnnxNodeTypes.Constant].value
+      };
+    } else if (node.data[specsOnnxNodeTypes.Variable]) {
+      nodeIds[node.data.id] = {
+        literalType: node.data[specsOnnxNodeTypes.Variable].literalType,
+        name: node.data[specsOnnxNodeTypes.Variable].name,
+        type: node.data[specsOnnxNodeTypes.Variable].type
+      };
+    } else if (node.data[specsOnnxNodeTypes.Operation]) {
+      nodeIds[node.data.id] = {
+        type: node.data[specsOnnxNodeTypes.Operation].type
+      };
+    }
+  }
+
+  for (const [key, value] of Object.entries(nodeIds)) {
+    if (value.type && value.type === 'input') {
+      modelInputs.push({
+        name: key,
+        type: {
+          tensorType: {
+            elemType: value.literalType,
+            shape: {
+              dim: [
+                {
+                  dimValue: 1
+                },
+                {
+                  dimValue: 1
+                }
+              ]
+            }
+          }
+        } 
+      });
+    } else if (value.type && value.type === 'output') {
+      modelOutputs.push({
+        name: key,
+        type: {
+          tensorType: {
+            elemType: value.literalType,
+              shape: {
+              dim: [
+                {
+                  dimValue: 1
+                },
+                {
+                  dimValue: 1
+                }
+              ]
+            }
+          }
+        }
+      });
     }
   }
 
   for (const edge of edges) {
-    if (edge.data['__specs-onnx__onnx_edge']) {
-      const sourceId = edge.data.source;
-      const targetId = edge.data.target;
+    const sourceNode = edge.data.source;
+    const targetNode = edge.data.target;
 
-      allNodeIds.add(sourceId);
-      allNodeIds.add(targetId);
+    if (!nodeIds[sourceNode] || !nodeIds[targetNode]) {
+      continue;
+    }
 
-      if (!nodeOutputs[sourceId]) {
-        nodeOutputs[sourceId] = [];
-      }
-      if (!nodeInputs[targetId]) {
-        nodeInputs[targetId] = [];
-      }
+    modelNodes.push({
+      opType: nodeIds[targetNode].type || 'Unknown',
+      input: [sourceNode],
+      output: [targetNode]
+    });
 
-      nodeOutputs[sourceId].push(targetId);
-      nodeInputs[targetId].push(sourceId);
+    if (nodeIds[sourceNode].value) {
+      modelNodes.push({
+        opType: 'Constant',
+        input: [],
+        output: [sourceNode],
+        attribute: [
+          {
+            name: 'value_int',
+            type: 2,
+            i: nodeIds[sourceNode].value
+          }
+        ]
+      })
     }
   }
 
-  for (const id of allNodeIds) {
-    const originalNode = nodes.find(n => n.data.id === id);
-    const inputIds: string[] = nodeInputs[id] || [];
-    const outputIds: string[] = nodeOutputs[id] || [];
+  const tempModelNodes = [];
+  let already = false;
 
-    if (originalNode) {
-      const opSpec = originalNode.data['__specs-onnx__operation_node'];
-      const tensorSpec = originalNode.data['__specs-onnx__tensor_node'];
-
-      if (opSpec && !originalNode.data['parent']) {
-        const opType = operationTypeMap[opSpec.type] || opSpec.type;
-
-        if (outputNodes.includes(nodeOutputs[id][0])) {
-          modelNodes.push({
-            opType: opType,
-            input: inputIds,
-            output: outputIds
-          });
-        } else {
-          modelNodes.push({
-            opType: opType,
-            input: inputIds,
-            output: [id]
-          });
-        }
-      } else if (tensorSpec) {
-        const tensorName = tensorSpec.name || id;
-        const tensorType = tensorSpec.literalType;
-        const tensorShape = tensorSpec.shape || [1];
-
-        if (tensorSpec.type === "input") {
-          modelInputs.push({
-            name: tensorName,
-            type: {
-              tensorType: {
-                elemType: tensorType,
-                shape: {
-                  dim: tensorShape.map(dim => ({ dimValue: dim }))
-                }
-              }
-            }
-          });
-        } else if (tensorSpec.type === "output") {
-          modelOutputs.push({
-            name: tensorName,
-            type: {
-              tensorType: {
-                elemType: tensorType,
-                shape: {
-                  dim: tensorShape.map(dim => ({ dimValue: dim }))
-                }
-              }
-            }
-          });
-        }
+  for (const node of modelNodes) {
+    already = false;
+    for (const tempNode of tempModelNodes) {
+      if (tempNode.output[0] === node.output[0]) {
+        tempNode.input.push(...node.input);
+        tempNode.output = node.output;
+        already = true;
+        break;
       }
+    }
+    if (!already) {
+      tempModelNodes.push(node);
+      already = false;
     }
   }
 
@@ -127,7 +141,8 @@ export function convertCytoscapeGraphToOnnxModelProto(cytoGraph : any): any {
       name: "Graph",
       input: modelInputs,
       output: modelOutputs,
-      node: modelNodes
+      node: tempModelNodes,
+      initializer: modelInitializers
     }
   };
 }
