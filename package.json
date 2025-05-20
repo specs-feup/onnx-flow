@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "test": "node ./out/test/testing.js",
+    "testcomp": "node ./out/test/compatibility_test.js",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\""
