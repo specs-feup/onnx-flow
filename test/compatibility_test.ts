@@ -44,7 +44,7 @@ async function runVectorAddEquivalenceTest() {
 
   try {
     // Load and run standard model
-    const stdSession = await InferenceSession.create('examples/onnx/standard_vector_add.onnx');
+    const stdSession = await InferenceSession.create('examples/onnx/vector_add_standard.onnx');
     const stdOutput = await stdSession.run({ A: feeds.A, B: feeds.B });
     const stdKey = Object.keys(stdOutput)[0];
     const stdResult = Array.from(stdOutput[stdKey].data as Float32Array);
@@ -52,7 +52,7 @@ async function runVectorAddEquivalenceTest() {
     console.log(`standard_vector_add.onnx → Output (${stdKey}):`, stdResult);
 
     // Load and run scalar-loop model
-    const loopSession = await InferenceSession.create('examples/onnx/scalar_loop_vector_add.onnx');
+    const loopSession = await InferenceSession.create('examples/onnx/vector_add_decomposed.onnx');
     const loopOutput = await loopSession.run({
       A: feeds.A,
       B: feeds.B,
@@ -76,4 +76,109 @@ async function runVectorAddEquivalenceTest() {
   }
 }
 
-runVectorAddEquivalenceTest();
+async function runAddChainEquivalenceTest() {
+  const shape = [4];
+
+  // Generate shared random vectors
+  const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+  const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+  const C = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+  const D = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+
+  const feeds = {
+    A: new Tensor('float32', A, shape),
+    B: new Tensor('float32', B, shape),
+    C: new Tensor('float32', C, shape),
+    D: new Tensor('float32', D, shape),
+    trip_count: new Tensor('int64', [BigInt(4)], []),
+    cond: new Tensor('bool', [true], []),
+  };
+
+  console.log('\n=== Running Add(Add(A, B), Add(C, D)) model comparison ===');
+  printInputs('AddChain Models', feeds);
+
+  try {
+    // Run standard add chain model
+    const stdSession = await InferenceSession.create('examples/onnx/add_chain_standard.onnx');
+    const stdOutput = await stdSession.run({
+      A: feeds.A,
+      B: feeds.B,
+      C: feeds.C,
+      D: feeds.D,
+    });
+    const stdKey = Object.keys(stdOutput)[0];
+    const stdResult = Array.from(stdOutput[stdKey].data as Float32Array);
+
+    console.log(`add_chain_standard.onnx → Output (${stdKey}):`, stdResult);
+
+    // Run decomposed scalar loop version
+    const loopSession = await InferenceSession.create('examples/onnx/add_chain_decomposed.onnx');
+    const loopOutput = await loopSession.run(feeds);
+    const loopKey = Object.keys(loopOutput)[0];
+    const loopResult = Array.from(loopOutput[loopKey].data as Float32Array);
+
+    console.log(`add_chain_decomposed.onnx → Output (${loopKey}):`, loopResult);
+
+    // Check equivalence
+    const tolerance = 1e-5;
+    const equivalent =
+      stdResult.length === loopResult.length &&
+      stdResult.every((v, i) => Math.abs(v - loopResult[i]) < tolerance);
+
+    console.log('✅ Add-chain model outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('add-chain model comparison', err);
+  }
+}
+
+async function runMatmulEquivalenceTest() {
+  const shape = [2, 2];
+
+  const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+  const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+
+  const feeds = {
+    A: new Tensor('float32', A, shape),
+    B: new Tensor('float32', B, shape),
+    trip_count: new Tensor('int64', [BigInt(4)], []),
+    cond: new Tensor('bool', [true], []),
+  };
+
+  console.log('\n=== Running MatMul model comparison ===');
+  printInputs('MatMul Models', feeds);
+
+  try {
+    const stdSession = await InferenceSession.create('examples/onnx/matmul_standard.onnx');
+    const stdOutput = await stdSession.run({ A: feeds.A, B: feeds.B });
+    const stdKey = Object.keys(stdOutput)[0];
+    const stdResult = Array.from(stdOutput[stdKey].data as Float32Array);
+
+    console.log(`matmul_standard.onnx → Output (${stdKey}):`, stdResult);
+
+    const loopSession = await InferenceSession.create('examples/onnx/matmul_decomposed.onnx');
+    const loopOutput = await loopSession.run({
+      A: feeds.A,
+      B: feeds.B,
+      trip_count: feeds.trip_count,
+      cond: feeds.cond,
+    });
+    const loopKey = Object.keys(loopOutput)[0];
+    const loopResult = Array.from(loopOutput[loopKey].data as Float32Array);
+
+    console.log(`matmul_decomposed.onnx → Output (${loopKey}):`, loopResult);
+
+    const tolerance = 1e-5;
+    const equivalent =
+      stdResult.length === loopResult.length &&
+      stdResult.every((v, i) => Math.abs(v - loopResult[i]) < tolerance);
+
+    console.log('✅ MatMul outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('MatMul model comparison', err);
+  }
+}
+
+// Tests to run
+await runVectorAddEquivalenceTest();
+await runAddChainEquivalenceTest();
+await runMatmulEquivalenceTest();

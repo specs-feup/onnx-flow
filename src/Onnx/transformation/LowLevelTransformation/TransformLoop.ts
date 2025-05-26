@@ -4,7 +4,7 @@ import OnnxEdge from "../../OnnxEdge.js";
 import OnnxGraph from "../../OnnxGraph.js";
 import ConstantNode from "../../ConstantNode.js";
 import VariableNode from "../../VariableNode.js";
-import { typeSizeMap, formatId, getArrayType } from "../Utilities.js";
+import { typeSizeMap, formatId} from "../Utilities.js";
 import OnnxInnerEdge from "../../OnnxInnerEdge.js";
 
 export default function transformLoop(node: OperationNode.Class, graph: OnnxGraph.Class): void {
