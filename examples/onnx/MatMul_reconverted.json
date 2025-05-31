@@ -1,0 +1,83 @@
+{
+  "irVersion": 8,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "input": [
+      {
+        "name": "X1",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "X2",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "initializer": [],
+    "node": [
+      {
+        "opType": "Mul",
+        "input": [
+          "X1",
+          "X2"
+        ],
+        "output": [
+          "Y"
+        ],
+        "attribute": []
+      }
+    ]
+  }
+}
