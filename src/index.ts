@@ -9,7 +9,7 @@ import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
-import { convertCytoscapeGraphToOnnxModelProto } from "./flow2json.js";
+import { convertFlowGraphToOnnxJson } from "./flow2json.js";
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -22,10 +22,6 @@ export async function parseOnnxFile(inputFilePath: string){
 
 export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
   return await json2onnx(jsonFilePath, outputFilePath);
-}
-
-export async function flowToJson(cytoGraph : any) {
-  return await convertCytoscapeGraphToOnnxModelProto(cytoGraph);
 }
 
 export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, dotOutput: boolean = true) {
@@ -76,6 +72,13 @@ try {
 const argv = await yargs(hideBin(process.argv))
   .usage('Usage: onnx-flow <input_file> [options]')
   .version(version)
+  .parserConfiguration({
+    'short-option-groups': false,
+    'camel-case-expansion': true,
+    'boolean-negation': true,
+    'duplicate-arguments-array': false,
+  })
+  .strictOptions()
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
   .option('output', {
     alias: 'o',
@@ -113,6 +116,12 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: false,
   })
+  .option('noReconversion', {
+    alias: 'nr',
+    describe: 'Skip ONNX reconversion',
+    type: 'boolean',
+    default: false,
+  })
   .option('visualization', {
     alias: 'vz',
     describe: 'Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)',
@@ -134,6 +143,7 @@ const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
 const dotFormatter = new OnnxDotFormatter();
 
+
 (async function main() {
   try {
     let onnxObject;
@@ -143,6 +153,7 @@ const dotFormatter = new OnnxDotFormatter();
       onnxObject = JSON.parse(fs.readFileSync(inputFilePath, 'utf8'));
     } else {
       onnxObject = await parseOnnxFile(inputFilePath);
+      //fs.writeFileSync("./examples/onnxmodel.json", JSON.stringify(onnxObject, null, 2));
     }
 
     if (verbosity > 1) console.log('Input ONNX/JSON Graph:', JSON.stringify(onnxObject, null, 2));
@@ -184,17 +195,32 @@ const dotFormatter = new OnnxDotFormatter();
       if (verbosity > 0) console.log(`Output Graph written to ${outputFilePath} in ${outputFormat} format`);
     }
 
-    const outputJsonPath = 'examples/onnxflow.json';
-    const outputOnnxPath = 'examples/onnxflow.onnx';
+    function getReconvertedPaths(inputPath: string): { json: string; onnx: string } {
+      const extIndex = inputPath.lastIndexOf('.');
+      const base = extIndex === -1 ? inputPath : inputPath.slice(0, extIndex);
+      const reconvertedBase = base + '_reconverted';
 
-    // Convert the graph to ONNX JSON format
-    const onnxModelJson = await flowToJson(graph.toCy().json());
-    fs.writeFileSync(outputJsonPath, JSON.stringify(onnxModelJson, null, 2));
-    console.log(`Output ONNX JSON written to ${outputJsonPath}`);
+      return {
+        json: reconvertedBase + '.json',
+        onnx: reconvertedBase + '.onnx',
+      };
+    }
 
-    // Convert the ONNX JSON format to ONNX binary format
-    await jsonToOnnx(outputJsonPath, outputOnnxPath);
-    console.log(`Output ONNX written to ${outputOnnxPath}`);
+
+    // Convert the ONNX JSON format to ONNX binary format if not disabled
+    if (!argv.noReconversion) {
+      const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
+      const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
+
+      fs.writeFileSync(reconvertedJsonPath, JSON.stringify(onnxCompatibleJson, null, 2));
+      console.log(`Reconverted JSON written to ${reconvertedJsonPath}`);
+
+      await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
+      console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
+    } 
+    else if (verbosity > 0) {
+      console.log('Skipping ONNX reconversion.');
+    }
 
     // Print the output graph to stdout
     if (verbosity > 0) {
@@ -212,7 +238,7 @@ const dotFormatter = new OnnxDotFormatter();
     }
 
     // Step 5: Graphviz Online link generation
-    if (visualizationOption) {
+    if (visualizationOption > 0) {
       if (visualizationOption == 1){
         console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
       }

@@ -1,137 +1,159 @@
-export function convertCytoscapeGraphToOnnxModelProto(cytoGraph : any): any {
-  const nodes = cytoGraph.elements.nodes;
-  const edges = cytoGraph.elements.edges;
-  
-  console.log("Processing graph with direct implementation...");
-  
-  type nodeIdsMap = Record<string, any>;
+import OnnxGraph from "./Onnx/OnnxGraph.js";
+import TensorNode from "./Onnx/TensorNode.js";
+import OperationNode from "./Onnx/OperationNode.js";
+import ConstantNode from "./Onnx/ConstantNode.js";
+import VariableNode from "./Onnx/VariableNode.js";
 
-  const modelNodes = [];
-  
-  const nodeIds: nodeIdsMap = {}; 
-  
-  const modelInputs = [];
-  const modelOutputs = [];
-  const modelInitializers = [];
+export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class): any {
+  const nodeMap: Record<string, any> = {};
+  const modelInputs: any[] = [];
+  const modelOutputs: any[] = [];
+  const modelInitializers: any[] = [];
+  const modelNodes: any[] = [];
 
-  const specsOnnxNodeTypes = {
-    Tensor: '__specs-onnx__tensor_node',
-    Variable: '__specs-onnx__variable_node',
-    Operation: '__specs-onnx__operation_node',
-    Constant: '__specs-onnx__constant_node'
-  };
+  /*
+  // Phase 1: Register all nodes
+  for (const node of graph.nodes) {
+    const id = node.id;
 
-  for (const node of nodes) {
-    if (node.data[specsOnnxNodeTypes.Tensor] || (node.data[specsOnnxNodeTypes.Operation] && !node.data.parent)) {
-      continue;
-    }
-
-    if (node.data[specsOnnxNodeTypes.Constant]) {
-      nodeIds[node.data.id] = {
-        value: node.data[specsOnnxNodeTypes.Constant].value
+    if (node instanceof TensorNode.Class) {
+      nodeMap[id] = {
+        type: "tensor",
+        literalType: node.literalType,
+        shape: node.shape,
       };
-    } else if (node.data[specsOnnxNodeTypes.Variable]) {
-      nodeIds[node.data.id] = {
-        literalType: node.data[specsOnnxNodeTypes.Variable].literalType,
-        name: node.data[specsOnnxNodeTypes.Variable].name,
-        type: node.data[specsOnnxNodeTypes.Variable].type
+    } else if (node instanceof ConstantNode.Class) {
+      nodeMap[id] = {
+        type: "constant",
+        value: node.value,
       };
-    } else if (node.data[specsOnnxNodeTypes.Operation]) {
-      nodeIds[node.data.id] = {
-        type: node.data[specsOnnxNodeTypes.Operation].type
+    } else if (node instanceof VariableNode.Class) {
+      nodeMap[id] = {
+        type: "variable",
+        literalType: node.literalType,
+        name: node.name,
+      };
+    } else if (node instanceof OperationNode.Class) {
+      console.log("HEREOP", node);
+      nodeMap[id] = {
+        type: "operation",
+        opType: node.type ?? "UnknownOp",
+        attributes: node.attributes ?? {},
       };
     }
   }
+    */
 
-  for (const [key, value] of Object.entries(nodeIds)) {
-    if (value.type && value.type === 'input') {
-      modelInputs.push({
-        name: key,
-        type: {
-          tensorType: {
-            elemType: value.literalType,
-            shape: {
-              dim: [
-                {
-                  dimValue: 1
-                },
-                {
-                  dimValue: 1
-                }
-              ]
-            }
-          }
-        } 
-      });
-    } else if (value.type && value.type === 'output') {
-      modelOutputs.push({
-        name: key,
-        type: {
-          tensorType: {
-            elemType: value.literalType,
-              shape: {
-              dim: [
-                {
-                  dimValue: 1
-                },
-                {
-                  dimValue: 1
-                }
-              ]
-            }
-          }
-        }
-      });
-    }
-  }
-
-  for (const edge of edges) {
-    const sourceNode = edge.data.source;
-    const targetNode = edge.data.target;
-
-    if (!nodeIds[sourceNode] || !nodeIds[targetNode]) {
-      continue;
-    }
-
-    modelNodes.push({
-      opType: nodeIds[targetNode].type || 'Unknown',
-      input: [sourceNode],
-      output: [targetNode]
+  // Phase 1: Inputs & Outputs
+  for (const node of graph.getInputTensorNodes()) {
+    modelInputs.push({
+      name: node.id,
+      type: {
+        tensorType: {
+          elemType: node.literalType,
+          shape: { dim: node.shape.map(d => ({ dimValue: d })) },
+        },
+      },
     });
+  }
 
-    if (nodeIds[sourceNode].value) {
+  for (const node of graph.getOutputTensorNodes()) {
+    modelOutputs.push({
+      name: node.id,
+      type: {
+        tensorType: {
+          elemType: node.literalType,
+          shape: { dim: node.shape.map(d => ({ dimValue: d })) },
+        },
+      },
+    });
+  }
+
+  // Phase 2: Constant nodes
+  for (const [id, meta] of Object.entries(nodeMap)) {
+    if (meta.type === "constant") {
       modelNodes.push({
-        opType: 'Constant',
+        opType: "Constant",
         input: [],
-        output: [sourceNode],
+        output: [id],
         attribute: [
           {
-            name: 'value_int',
+            name: "value_int",
             type: 2,
-            i: nodeIds[sourceNode].value
-          }
-        ]
-      })
+            i: meta.value,
+          },
+        ],
+      });
     }
   }
 
-  const tempModelNodes = [];
-  let already = false;
+  // Phase 3: Operation nodes
+  for (const opNode of graph.getOperationNodes()) {
+    const opType = opNode.type ?? "UnknownOp";
 
-  for (const node of modelNodes) {
-    already = false;
-    for (const tempNode of tempModelNodes) {
-      if (tempNode.output[0] === node.output[0]) {
-        tempNode.input.push(...node.input);
-        tempNode.output = node.output;
-        already = true;
-        break;
+    const inputs = opNode.getIncomers.sources.toArray().map(n => n.id);
+    const outputs = opNode.getOutgoers.targets.toArray().map(n => n.id);
+
+    let nodeEntry = {
+      opType,
+      input: inputs,
+      output: outputs,
+      attribute: Object.entries(opNode.attributes || {}).map(([name, value]) => {
+        const attr: any = { name };
+        if (Array.isArray(value)) {
+          attr.ints = value;
+          attr.type = 7;
+        } else if (typeof value === "number") {
+          attr.i = value;
+          attr.type = 2;
+        } else if (typeof value === "string") {
+          attr.s = value;
+          attr.type = 3;
+        }
+        return attr;
+      }),
+    };
+
+    // Special handling for Loop
+    if (opType === "Loop") {
+      const bodyGraph = opNode.getBodySubgraph?.();
+      const bodyGraphJson = bodyGraph ? convertFlowGraphToOnnxJson(bodyGraph).graph : null;
+
+      const baseAttrs = Object.entries(opNode.attributes || {}).map(([name, value]) => {
+        const attr: any = { name };
+        if (Array.isArray(value)) {
+          attr.ints = value;
+          attr.type = 7;
+        } else if (typeof value === "number") {
+          attr.i = value;
+          attr.type = 2;
+        } else if (typeof value === "string") {
+          attr.s = value;
+          attr.type = 3;
+        }
+        return attr;
+      });
+
+      // Remove any attribute with name "body" to prevent duplicates
+      const filteredAttrs = baseAttrs.filter(attr => attr.name !== "body");
+
+      if (bodyGraphJson) {
+        filteredAttrs.push({
+          name: "body",
+          type: 4, // GRAPH
+          g: bodyGraphJson,
+        });
       }
+
+      nodeEntry = {
+        opType,
+        input: inputs,
+        output: outputs,
+        attribute: filteredAttrs,
+      };
     }
-    if (!already) {
-      tempModelNodes.push(node);
-      already = false;
-    }
+
+    modelNodes.push(nodeEntry);
   }
 
   return {
@@ -141,8 +163,8 @@ export function convertCytoscapeGraphToOnnxModelProto(cytoGraph : any): any {
       name: "Graph",
       input: modelInputs,
       output: modelOutputs,
-      node: tempModelNodes,
-      initializer: modelInitializers
-    }
+      initializer: modelInitializers,
+      node: modelNodes,
+    },
   };
 }

@@ -29,10 +29,18 @@ namespace OnnxGraph {
             return this.nodes.filterIs(TensorNode).filter(n => n.type === "output");
         }
 
+        // Retrieve all TensorNodes
+        getTensorNodes(): NodeCollection<TensorNode.Class> {
+            return this.nodes.filterIs(TensorNode);
+        }
 
         // Retrieve all OperationNodes
         getOperationNodes(): NodeCollection<OperationNode.Class> {
             return this.nodes.filterIs(OperationNode);
+        }
+
+        hasNode(id: string): boolean {
+            return this.getNodeById(id) !== undefined;
         }
         
     }   

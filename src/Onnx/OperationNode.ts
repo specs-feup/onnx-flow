@@ -2,11 +2,12 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
 import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
+import OnnxGraph from "./OnnxGraph.js";
 
 namespace OperationNode {
 
     export const TAG = "__specs-onnx__operation_node";
-    export const VERSION = "1";
+    export const VERSION = "2";
 
     export class Class<
         D extends Data = Data,
@@ -21,21 +22,44 @@ namespace OperationNode {
             this.data[TAG].type = newType;
         }
 
-        get geIncomers(): EdgeCollection<OnnxEdge.Class> {
+        get attributes(): Record<string, any> {
+            return this.data[TAG].attributes || {};
+        }
+
+        set attributes(attrs: Record<string, any>) {
+            this.data[TAG].attributes = attrs;
+        }
+
+        setAttributes(attrs: Record<string, any>): void {
+            this.attributes = attrs;
+        }
+
+        getAttributes(): Record<string, any> {
+            return this.attributes;
+        }
+
+        get getIncomers(): EdgeCollection<OnnxEdge.Class> {
             return this.incomers.filterIs(OnnxEdge);
         }
 
-        get geOutgoers(): EdgeCollection<OnnxEdge.Class> {
+        get getOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }
-    }   
+
+        getBodySubgraph(): OnnxGraph.Class | undefined {
+            return this.data[TAG].bodyGraph;
+        }
+    }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
-
         private type: string;
+        private attributes?: Record<string, any>;
+        private bodyGraph?: OnnxGraph.Class;
 
-        constructor(type: string) {
+        constructor(type: string, attributes?: Record<string, any>, bodyGraph?: OnnxGraph.Class) {
             this.type = type;
+            this.attributes = attributes;
+            this.bodyGraph = bodyGraph;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -44,6 +68,8 @@ namespace OperationNode {
                 [TAG]: {
                     version: VERSION,
                     type: this.type,
+                    attributes: this.attributes || {},
+                    bodyGraph: this.bodyGraph,
                 },
             };
         }
@@ -56,11 +82,13 @@ namespace OperationNode {
     }
 
     export const TypeGuard = Node.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseNode.Data {
         [TAG]: {
             version: typeof VERSION;
             type: string;
+            attributes?: Record<string, any>;
+            bodyGraph?: OnnxGraph.Class;
         };
     }
 
