@@ -1,4 +1,8 @@
 import { InferenceSession, Tensor } from 'onnxruntime-web';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+
 
 function printInputs(label: string, inputs: Record<string, Tensor>) {
   console.log(`Inputs for ${label}:`);
@@ -6,10 +10,6 @@ function printInputs(label: string, inputs: Record<string, Tensor>) {
     const dataArray = Array.from(tensor.data as Iterable<number>);
     console.log(`  ${key}:`, dataArray);
   }
-}
-
-function printTensorInfo(tensor: Tensor, name: string) {
-  console.log(`  [${name}] shape: ${tensor.dims}, type: ${tensor.type}`);
 }
 
 function logErrorDetails(context: string, e: any) {
@@ -178,7 +178,68 @@ async function runMatmulEquivalenceTest() {
   }
 }
 
+function getReconvertedPath(originalPath: string): string {
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  return `${base}_reconverted.onnx`;
+}
+
+async function runAddAddAddReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/AddAddAdd.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const C = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const X = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const shape = [2, 2];
+
+    const feeds = {
+      A: new Tensor('float32', A, shape),
+      B: new Tensor('float32', B, shape),
+      C: new Tensor('float32', C, shape),
+      X: new Tensor('float32', X, shape),
+    };
+
+    console.log('\n=== Comparing original and reconverted AddAddAdd model ===');
+    printInputs('AddAddAdd', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOutput = await originalSession.run(feeds);
+    const originalKey = Object.keys(originalOutput)[0];
+    const originalResult = Array.from(originalOutput[originalKey].data as Float32Array);
+    console.log(`${path.basename(originalPath)} → Output (${originalKey}):`, originalResult);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedKey = Object.keys(reconvertedOutput)[0];
+    const reconvertedResult = Array.from(reconvertedOutput[reconvertedKey].data as Float32Array);
+    console.log(`${path.basename(reconvertedPath)} → Output (${reconvertedKey}):`, reconvertedResult);
+
+    const tolerance = 1e-5;
+    const equivalent =
+      originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
+
+    console.log('✅ AddAddAdd outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('AddAddAdd reconversion test', err);
+  }
+}
+
 // Tests to run
 await runVectorAddEquivalenceTest();
 await runAddChainEquivalenceTest();
 await runMatmulEquivalenceTest();
+await runAddAddAddReconversionEquivalenceTest();
