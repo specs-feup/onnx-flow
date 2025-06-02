@@ -48,7 +48,7 @@ export default function transformChain(addNodes: OperationNode.Class[], graph: O
   
   // Loop condition handling
   const condIn = graph.addNode(formatId("cond_in", nodeId), loopNode)
-    .init(new VariableNode.Builder(typeSizeMap["bool"], "cond_in", "output")).as(VariableNode);
+    .init(new VariableNode.Builder(typeSizeMap["bool"], "cond_in", "input")).as(VariableNode);
   const identityOp = graph.addNode(formatId("identity", nodeId), loopNode)
     .init(new OperationNode.Builder("Identity")).as(OperationNode);
   const condOut = graph.addNode(formatId("cond_out", nodeId), loopNode)
