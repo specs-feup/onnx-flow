@@ -31,18 +31,23 @@ export default function transformSimpleLoopOperations(node: OperationNode.Class,
     .init(new ConstantNode.Builder(elemCount)).as(ConstantNode);
   const loopCond = graph.addNode(formatId("cond", nodeId))
     .init(new ConstantNode.Builder(1)).as(ConstantNode);
-
-  // Initial state tensor (zeros)
-  const initialState = graph.addNode(formatId("initialState", nodeId))
-    .init(new TensorNode.Builder(order++, new Array(elemCount).fill(0), "input")).as(TensorNode);
-
+    
   // Loop node
   const loopNode = graph.addNode(formatId("Loop", nodeId))
-    .init(new OperationNode.Builder("Loop")).as(OperationNode);
-
+  .init(new OperationNode.Builder("Loop")).as(OperationNode);
+  
+  const condIn = graph.addNode(formatId("cond_in", nodeId), loopNode)
+    .init(new VariableNode.Builder(typeSizeMap["bool"], "cond_in", "output")).as(VariableNode);
+  const identityOp = graph.addNode(formatId("identity", nodeId), loopNode)
+    .init(new OperationNode.Builder("Identity")).as(OperationNode);
+  const condOut = graph.addNode(formatId("cond_out", nodeId), loopNode)
+    .init(new VariableNode.Builder(typeSizeMap["bool"], "cond_out", "output")).as(VariableNode);
+  
+  graph.addEdge(condIn, identityOp).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
+  graph.addEdge(identityOp, condOut).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
+  
   graph.addEdge(tripCount, loopNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
   graph.addEdge(loopCond, loopNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
-  graph.addEdge(initialState, loopNode).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
   // Loop body (inlined inside same graph for now)
   const iterIdx = graph.addNode(formatId("iter", nodeId), loopNode)
@@ -74,9 +79,15 @@ export default function transformSimpleLoopOperations(node: OperationNode.Class,
   const scatter = graph.addNode(formatId("scatter", nodeId), loopNode)
     .init(new OperationNode.Builder("ScatterElements")).as(OperationNode);
 
-  graph.addEdge(initialState, scatter).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
+  const carry = graph.addNode(formatId("carry", nodeId), loopNode)
+    .init(new VariableNode.Builder(typeId, "carry", "output")).as(VariableNode);
+  const carryOut = graph.addNode(formatId("carry_out", nodeId), loopNode)
+    .init(new VariableNode.Builder(typeId, "carry_out", "output")).as(VariableNode);
+
   graph.addEdge(unsqueeze, scatter).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
   graph.addEdge(op, scatter).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
+  graph.addEdge(carry, scatter).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
+  graph.addEdge(scatter, carryOut).init(new OnnxInnerEdge.Builder(order++)).as(OnnxInnerEdge);
 
   node.outgoers.forEach(edge => {
     const target = edge.target;
