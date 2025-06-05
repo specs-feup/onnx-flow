@@ -21,6 +21,30 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
           sanitized[key] = value.map(v =>
             typeof v === "string" ? Number(v) : v
           );
+        } else if (
+          key.endsWith("Data") &&
+          tensor.rawData &&
+          !value.length // only override if missing
+        ) {
+          // Try decoding rawData if value array is empty
+          const dtype = tensor.dataType ?? 7; // INT64 default
+          const buffer = Buffer.from(tensor.rawData.data);
+          if (dtype === 7) { // INT64
+            sanitized.int64Data = [];
+            for (let i = 0; i < buffer.length; i += 8) {
+              sanitized.int64Data.push(buffer.readBigInt64LE(i));
+            }
+          } else if (dtype === 6) { // INT32
+            sanitized.int32Data = [];
+            for (let i = 0; i < buffer.length; i += 4) {
+              sanitized.int32Data.push(buffer.readInt32LE(i));
+            }
+          } else if (dtype === 1) { // FLOAT
+            sanitized.floatData = [];
+            for (let i = 0; i < buffer.length; i += 4) {
+              sanitized.floatData.push(buffer.readFloatLE(i));
+            }
+          }
         } else {
           sanitized[key] = value;
         }

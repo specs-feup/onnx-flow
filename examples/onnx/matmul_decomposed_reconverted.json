@@ -300,7 +300,7 @@
                   "attribute": [
                     {
                       "name": "axis",
-                      "i": 0,
+                      "i": 1,
                       "type": 2
                     }
                   ]

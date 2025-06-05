@@ -107,12 +107,36 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
       if (allInputsDefined) {
         const attributes: Record<string, any> = {};
         if (node.attribute) {
-          for (const attr of node.attribute) {
-            if (attr.name && attr.name == "axis"){
-                attributes["axis"] = attr.f;
+            for (const attr of node.attribute) {
+                if (!attr.name || attr.name === "body") continue;
+
+                switch (attr.type) {
+                case 1:
+                case "FLOAT":
+                    attributes[attr.name] = Number(attr.f);
+                    break;
+                case 2:
+                case "INT":
+                    attributes[attr.name] = Number(attr.i);
+                    break;
+                case 3:
+                case "STRING":
+                    attributes[attr.name] = attr.s;
+                    break;
+                case 7:
+                case "INTS":
+                    attributes[attr.name] = attr.ints;
+                    break;
+                case 6:
+                case "FLOATS":
+                    attributes[attr.name] = attr.floats;
+                    break;
+                default:
+                    console.warn(`[addNodes] Unhandled attribute type '${attr.type}' for '${attr.name}'`);
+                }
             }
-          }
         }
+
 
         // Handle Loop's body subgraph
         let opBuilder;
