@@ -238,8 +238,111 @@ async function runAddAddAddReconversionEquivalenceTest() {
   }
 }
 
+async function runAddChainDecomposedReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/add_chain_decomposed.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted add_chain_decomposed model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const shape = [4];
+    const feeds = {
+      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      C: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      D: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      trip_count: new Tensor('int64', [BigInt(4)], []),
+      cond: new Tensor('bool', [true], []),
+    };
+
+    console.log('\n=== Comparing add_chain_decomposed and its reconverted version ===');
+    printInputs('add_chain_decomposed', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOutput = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOutput)[0].data as Float32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOutput)[0].data as Float32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const tolerance = 1e-5;
+    const equivalent = originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('add_chain_decomposed reconversion test', err);
+  }
+}
+
+
+async function runMatmulDecomposedReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_decomposed.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_decomposed model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const shape = [2, 2];
+    const feeds = {
+      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      trip_count: new Tensor('int64', [BigInt(4)], []),
+      cond: new Tensor('bool', [true], []),
+    };
+
+    console.log('\n=== Comparing matmul_decomposed and its reconverted version ===');
+    printInputs('matmul_decomposed', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOutput = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOutput)[0].data as Float32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOutput)[0].data as Float32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const tolerance = 1e-5;
+    const equivalent = originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('matmul_decomposed reconversion test', err);
+  }
+}
+
+
+
 // Tests to run
 await runVectorAddEquivalenceTest();
 await runAddChainEquivalenceTest();
 await runMatmulEquivalenceTest();
+
 await runAddAddAddReconversionEquivalenceTest();
+
+await runAddChainDecomposedReconversionEquivalenceTest();
+await runMatmulDecomposedReconversionEquivalenceTest();
+
+

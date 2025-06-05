@@ -3,6 +3,29 @@ import path from 'path';
 import protobuf from 'protobufjs';
 import { fileURLToPath } from 'url';
 
+
+/**
+ * Recursively traverses an object and converts any { type: 'Buffer', data: [...] }
+ * back into actual Node.js Buffers for protobuf compatibility.
+ */
+function fixBuffers(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(fixBuffers);
+  }
+
+  if (obj && typeof obj === 'object') {
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return Buffer.from(obj.data);
+    }
+
+    for (const key of Object.keys(obj)) {
+      obj[key] = fixBuffers(obj[key]);
+    }
+  }
+
+  return obj;
+}
+
 export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): Promise<void> {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const protoPath = path.join(__dirname, '../../out/src/Onnx/onnx.proto');
@@ -19,16 +42,14 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
     const jsonText = fs.readFileSync(jsonFilePath, 'utf-8');
     const jsonData = JSON.parse(jsonText);
 
-    // Validate essential fields
     const defaultFields = {
-      ir_version: 8,                    // Use current minimum ONNX IR version
-      opset_import: [{ domain: '', version: 13 }],
+      ir_version: 9,
+      opset_import: [{ domain: '', version: 17 }],
       producer_name: 'onnx-flow',
       producer_version: '0.1.0',
       model_version: 1,
     };
 
-    // Fill in any missing required fields
     const completeJson = {
       ...defaultFields,
       ...jsonData,
@@ -38,14 +59,14 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
       }
     };
 
-    // Validate against the protobuf schema
-    const errMsg = ModelProto.verify(completeJson);
+    const fixedJson = fixBuffers(completeJson);
+
+    const errMsg = ModelProto.verify(fixedJson);
     if (errMsg) {
       throw new Error('Validation error: ' + errMsg);
     }
 
-    // Create the ONNX model
-    const message = ModelProto.create(completeJson);
+    const message = ModelProto.create(fixedJson);
     const buffer = ModelProto.encode(message).finish();
 
     fs.writeFileSync(outputOnnxPath, buffer);

@@ -1,5 +1,5 @@
 {
-  "irVersion": 8,
+  "irVersion": 9,
   "opsetImport": [
     {
       "version": 17
@@ -7,6 +7,42 @@
   ],
   "graph": {
     "name": "Graph",
+    "initializer": [],
+    "node": [
+      {
+        "opType": "Add",
+        "input": [
+          "X",
+          "A"
+        ],
+        "output": [
+          "XA"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Add",
+        "input": [
+          "B",
+          "C"
+        ],
+        "output": [
+          "BC"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Add",
+        "input": [
+          "XA",
+          "BC"
+        ],
+        "output": [
+          "Z"
+        ],
+        "attribute": []
+      }
+    ],
     "input": [
       {
         "name": "A",
@@ -99,42 +135,6 @@
             }
           }
         }
-      }
-    ],
-    "initializer": [],
-    "node": [
-      {
-        "opType": "Add",
-        "input": [
-          "X",
-          "A"
-        ],
-        "output": [
-          "XA"
-        ],
-        "attribute": []
-      },
-      {
-        "opType": "Add",
-        "input": [
-          "B",
-          "C"
-        ],
-        "output": [
-          "BC"
-        ],
-        "attribute": []
-      },
-      {
-        "opType": "Add",
-        "input": [
-          "XA",
-          "BC"
-        ],
-        "output": [
-          "Z"
-        ],
-        "attribute": []
       }
     ]
   }

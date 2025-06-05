@@ -49,17 +49,23 @@ namespace OperationNode {
         getBodySubgraph(): OnnxGraph.Class | undefined {
             return this.data[TAG].bodyGraph;
         }
+
+        getInputs(): BaseNode.Class[] | undefined {
+            return this.data[TAG].inputs;
+        }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private type: string;
         private attributes?: Record<string, any>;
         private bodyGraph?: OnnxGraph.Class;
+        private inputs?: BaseNode.Class[];
 
-        constructor(type: string, attributes?: Record<string, any>, bodyGraph?: OnnxGraph.Class) {
+        constructor(type: string, inputs?: BaseNode.Class[], attributes?: Record<string, any>, bodyGraph?: OnnxGraph.Class) {
             this.type = type;
             this.attributes = attributes;
             this.bodyGraph = bodyGraph;
+            this.inputs = inputs;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -68,6 +74,7 @@ namespace OperationNode {
                 [TAG]: {
                     version: VERSION,
                     type: this.type,
+                    inputs: this.inputs || [],
                     attributes: this.attributes || {},
                     bodyGraph: this.bodyGraph,
                 },
@@ -87,6 +94,7 @@ namespace OperationNode {
         [TAG]: {
             version: typeof VERSION;
             type: string;
+            inputs?: BaseNode.Class[];
             attributes?: Record<string, any>;
             bodyGraph?: OnnxGraph.Class;
         };

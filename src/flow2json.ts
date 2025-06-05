@@ -1,50 +1,67 @@
 import OnnxGraph from "./Onnx/OnnxGraph.js";
-import TensorNode from "./Onnx/TensorNode.js";
-import OperationNode from "./Onnx/OperationNode.js";
-import ConstantNode from "./Onnx/ConstantNode.js";
-import VariableNode from "./Onnx/VariableNode.js";
 
-export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class): any {
-  const nodeMap: Record<string, any> = {};
+export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String): any {
   const modelInputs: any[] = [];
   const modelOutputs: any[] = [];
-  const modelInitializers: any[] = [];
+  const modelInitializers = convertInitializers(graph);
   const modelNodes: any[] = [];
 
-  /*
-  // Phase 1: Register all nodes
-  for (const node of graph.nodes) {
-    const id = node.id;
+  function sanitizeTensor(tensor: any): any {
+    const allowedKeys = [
+      "dataType", "dims", "floatData", "int32Data", "stringData", "int64Data",
+      "doubleData", "uint64Data", "externalData"
+    ];
 
-    if (node instanceof TensorNode.Class) {
-      nodeMap[id] = {
-        type: "tensor",
-        literalType: node.literalType,
-        shape: node.shape,
-      };
-    } else if (node instanceof ConstantNode.Class) {
-      nodeMap[id] = {
-        type: "constant",
-        value: node.value,
-      };
-    } else if (node instanceof VariableNode.Class) {
-      nodeMap[id] = {
-        type: "variable",
-        literalType: node.literalType,
-        name: node.name,
-      };
-    } else if (node instanceof OperationNode.Class) {
-      console.log("HEREOP", node);
-      nodeMap[id] = {
-        type: "operation",
-        opType: node.type ?? "UnknownOp",
-        attributes: node.attributes ?? {},
+    const sanitized: any = { name: tensor.name };
+
+    for (const key of allowedKeys) {
+      const value = tensor[key];
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          sanitized[key] = value.map(v =>
+            typeof v === "string" ? Number(v) : v
+          );
+        } else {
+          sanitized[key] = value;
+        }
+      }
+    }
+
+    // Special handling for rawData
+    if (tensor.rawData && Buffer.isBuffer(tensor.rawData) && tensor.rawData.length > 0) {
+      sanitized.rawData = {
+        type: "Buffer",
+        data: Array.from(tensor.rawData),
       };
     }
-  }
-    */
 
-  // Phase 1: Inputs & Outputs
+    return sanitized;
+  }
+
+
+  function convertInitializers(graph: OnnxGraph.Class): any[] {
+    const initializers: any[] = [];
+
+    for (const node of graph.getTensorNodes()) {
+      const meta = node.data["__specs-onnx__tensor_node"];
+      if (meta?.type !== "initializer") continue;
+
+      const original = node.data["__specs-onnx__initializer_data"];
+      if (!original) {
+        console.warn(`[Convert] Missing original initializer data for '${node.id}'`);
+        continue;
+      }
+
+      const serialized = sanitizeTensor({ ...original, name: node.id });
+
+      initializers.push(serialized);
+    }
+
+    return initializers;
+  }
+
+
+
   for (const node of graph.getInputTensorNodes()) {
     modelInputs.push({
       name: node.id,
@@ -69,102 +86,104 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class): any {
     });
   }
 
-  // Phase 2: Constant nodes
-  for (const [id, meta] of Object.entries(nodeMap)) {
-    if (meta.type === "constant") {
-      modelNodes.push({
-        opType: "Constant",
-        input: [],
-        output: [id],
-        attribute: [
-          {
-            name: "value_int",
-            type: 2,
-            i: meta.value,
-          },
-        ],
-      });
-    }
-  }
+    for (const tensorNode of graph.getTensorNodes()) {
+      if (tensorNode.data["__specs-onnx__constant_value"]) {
+        const original = tensorNode.data["__specs-onnx__constant_value"];
+        const serialized = sanitizeTensor({ ...original, name: tensorNode.id });
 
-  // Phase 3: Operation nodes
+        const attrs = [{
+          name: "value",
+          type: 4, //TENSOR TYPE
+          t: serialized
+        }];
+
+        // Include any other preserved attributes
+        for (const key of Object.keys(tensorNode.data)) {
+          if (key.startsWith("__specs-onnx__constant_attr_")) {
+            const attr = tensorNode.data[key];
+            attrs.push(attr);
+          }
+        }
+
+        modelNodes.push({
+          opType: "Constant",
+          input: [],
+          output: [tensorNode.id],
+          attribute: attrs,
+        });
+      }
+    }
+
+
   for (const opNode of graph.getOperationNodes()) {
     const opType = opNode.type ?? "UnknownOp";
-
-    const inputs = opNode.getIncomers.sources.toArray().map(n => n.id);
+    const inputs = opNode.getInputs().map(n => n.id);
     const outputs = opNode.getOutgoers.targets.toArray().map(n => n.id);
 
-    let nodeEntry = {
-      opType,
-      input: inputs,
-      output: outputs,
-      attribute: Object.entries(opNode.attributes || {}).map(([name, value]) => {
-        const attr: any = { name };
-        if (Array.isArray(value)) {
-          attr.ints = value;
-          attr.type = 7;
-        } else if (typeof value === "number") {
-          attr.i = value;
-          attr.type = 2;
-        } else if (typeof value === "string") {
-          attr.s = value;
-          attr.type = 3;
-        }
-        return attr;
-      }),
-    };
 
-    // Special handling for Loop
+    const baseAttrs = Object.entries(opNode.attributes || {}).map(([name, value]) => {
+      const attr: any = { name };
+      if (Array.isArray(value)) {
+        attr.ints = value;
+        attr.type = 7;
+      } else if (typeof value === "number") {
+        attr.i = value;
+        attr.type = 2;
+      } else if (typeof value === "string") {
+        attr.s = value;
+        attr.type = 3;
+      }
+      return attr;
+    });
+
     if (opType === "Loop") {
       const bodyGraph = opNode.getBodySubgraph?.();
-      const bodyGraphJson = bodyGraph ? convertFlowGraphToOnnxJson(bodyGraph).graph : null;
+      const bodyGraphJson = bodyGraph ? convertFlowGraphToOnnxJson(bodyGraph, "loop_body").graph : null;
 
-      const baseAttrs = Object.entries(opNode.attributes || {}).map(([name, value]) => {
-        const attr: any = { name };
-        if (Array.isArray(value)) {
-          attr.ints = value;
-          attr.type = 7;
-        } else if (typeof value === "number") {
-          attr.i = value;
-          attr.type = 2;
-        } else if (typeof value === "string") {
-          attr.s = value;
-          attr.type = 3;
-        }
-        return attr;
-      });
-
-      // Remove any attribute with name "body" to prevent duplicates
       const filteredAttrs = baseAttrs.filter(attr => attr.name !== "body");
 
       if (bodyGraphJson) {
+        // Include valueInfo in the body subgraph if missing (helps Netron)
+        const valueInfo = (bodyGraphJson.output ?? []).map((out: any) => ({
+          name: out.name,
+          type: out.type,
+        }));
+
         filteredAttrs.push({
           name: "body",
-          type: 4, // GRAPH
-          g: bodyGraphJson,
+          type: 5,
+          g: {
+            ...bodyGraphJson,
+            valueInfo,
+          },
         });
       }
 
-      nodeEntry = {
+      modelNodes.push({
         opType,
         input: inputs,
         output: outputs,
         attribute: filteredAttrs,
-      };
+      });
+    } else {
+      modelNodes.push({
+        opType,
+        input: inputs,
+        output: outputs,
+        attribute: baseAttrs,
+      });
     }
-
-    modelNodes.push(nodeEntry);
   }
 
   return {
-    irVersion: 8,
+    irVersion: 9,
     opsetImport: [{ version: 17 }],
     graph: {
-      name: "Graph",
-      input: modelInputs,
-      output: modelOutputs,
+      name: name ?? "Graph",
       initializer: modelInitializers,
       node: modelNodes,
+      input: modelInputs,
+      output: modelOutputs,
     },
   };
 }
