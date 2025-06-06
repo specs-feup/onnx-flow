@@ -178,14 +178,102 @@ async function runMatmulEquivalenceTest() {
   }
 }
 
+async function runMatmulAddEquivalenceTest() {
+  const X = Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10));
+  const A = Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10));
+  const B = Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10));
+
+  const feeds = {
+    X: new Tensor('int32', X, [3, 1]),
+    A: new Tensor('int32', A, [1, 3]),
+    B: new Tensor('int32', B, [3, 3]),
+    trip_count: new Tensor('int64', [BigInt(9)], []),
+    cond: new Tensor('bool', [true], []),
+  };
+
+  console.log('\n=== Running MatMul+Add model comparison ===');
+  printInputs('MatMulAdd Models', feeds);
+
+  try {
+    const stdSession = await InferenceSession.create('examples/onnx/matmul_add_standard.onnx');
+    const stdOut = await stdSession.run({ X: feeds.X, A: feeds.A, B: feeds.B });
+    const stdResult = Array.from(Object.values(stdOut)[0].data as Int32Array);
+
+    console.log(`matmul_add_standard.onnx → Output:`, stdResult);
+
+    const decSession = await InferenceSession.create('examples/onnx/matmul_add_decomposed.onnx');
+    const decOut = await decSession.run(feeds);
+    const decResult = Array.from(Object.values(decOut)[0].data as Int32Array);
+
+    console.log(`matmul_add_decomposed.onnx → Output:`, decResult);
+
+    const equivalent = stdResult.length === decResult.length &&
+      stdResult.every((v, i) => v === decResult[i]);
+
+    console.log('✅ MatMul+Add outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('MatMul+Add comparison', err);
+  }
+}
+
+
 function getReconvertedPath(originalPath: string): string {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   return `${base}_reconverted.onnx`;
 }
 
-async function runAddAddAddReconversionEquivalenceTest() {
-  const originalPath = 'examples/onnx/AddAddAdd.onnx';
+async function runVectorAddStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/vector_add_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted vector_add_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const shape = [4];
+    const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const feeds = {
+      A: new Tensor('float32', A, shape),
+      B: new Tensor('float32', B, shape),
+    };
+
+    console.log('\n=== Comparing vector_add_standard and its reconverted version ===');
+    printInputs('vector_add_standard', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOut = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const tolerance = 1e-5;
+    const equivalent =
+      originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
+
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('vector_add_standard reconversion test', err);
+  }
+}
+
+
+async function runAddChainStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/add_chain_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
 
   try {
@@ -199,17 +287,19 @@ async function runAddAddAddReconversionEquivalenceTest() {
       return;
     }
 
+    const shape = [4];
+
+    // Generate shared random vectors
     const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
     const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
     const C = Float32Array.from({ length: 4 }, () => Math.random() * 10);
-    const X = Float32Array.from({ length: 4 }, () => Math.random() * 10);
-    const shape = [2, 2];
+    const D = Float32Array.from({ length: 4 }, () => Math.random() * 10);
 
     const feeds = {
       A: new Tensor('float32', A, shape),
       B: new Tensor('float32', B, shape),
       C: new Tensor('float32', C, shape),
-      X: new Tensor('float32', X, shape),
+      D: new Tensor('float32', D, shape),
     };
 
     console.log('\n=== Comparing original and reconverted AddAddAdd model ===');
@@ -238,13 +328,157 @@ async function runAddAddAddReconversionEquivalenceTest() {
   }
 }
 
+async function runMatmulStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const shape = [2, 2];
+    const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
+    const feeds = {
+      A: new Tensor('float32', A, shape),
+      B: new Tensor('float32', B, shape),
+    };
+
+    console.log('\n=== Comparing matmul_standard and its reconverted version ===');
+    printInputs('matmul_standard', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOut = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const tolerance = 1e-5;
+    const equivalent =
+      originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
+
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('matmul_standard reconversion test', err);
+  }
+}
+
+async function runMatmulAddStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_add_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_add_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const feeds = {
+      X: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [3, 1]),
+      A: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [1, 3]),
+      B: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+    };
+
+    console.log('\n=== Comparing matmul_add_standard and its reconverted version ===');
+    printInputs('matmul_add_standard', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOut = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOut)[0].data as Int32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Int32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const equivalent = originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => v === reconvertedResult[i]);
+
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('matmul_add_standard reconversion test', err);
+  }
+}
+
+async function runVectorAddDecomposedReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/vector_add_decomposed.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted vector_add_decomposed model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --noLowLevel --format dot  -vz 0 -v 0 -o ${base}.dot`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const shape = [4];
+    const feeds = {
+      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      trip_count: new Tensor('int64', [BigInt(4)], []),
+      cond: new Tensor('bool', [true], []),
+    };
+
+    console.log('\n=== Comparing vector_add_decomposed and its reconverted version ===');
+    printInputs('vector_add_decomposed', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOut = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const tolerance = 1e-5;
+    const equivalent =
+      originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
+
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('vector_add_decomposed reconversion test', err);
+  }
+}
+
 async function runAddChainDecomposedReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/add_chain_decomposed.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
 
   try {
     console.log('\n=== Running CLI to generate reconverted add_chain_decomposed model ===');
-    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+    execSync(`node ./out/src/index.js ${originalPath} --noLowLevel --format dot  -vz 0 -v 0 -o ${base}.dot`, {
       stdio: 'inherit',
     });
 
@@ -289,11 +523,13 @@ async function runAddChainDecomposedReconversionEquivalenceTest() {
 
 async function runMatmulDecomposedReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/matmul_decomposed.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_decomposed model ===');
-    execSync(`node ./out/src/index.js ${originalPath} --format json --noLowLevel -vz 0 -v 0`, {
+    execSync(`node ./out/src/index.js ${originalPath} --noLowLevel --format dot  -vz 0 -v 0 -o ${base}.dot`, {
       stdio: 'inherit',
     });
 
@@ -333,16 +569,73 @@ async function runMatmulDecomposedReconversionEquivalenceTest() {
   }
 }
 
+async function runMatmulAddDecomposedReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_add_decomposed.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_add_decomposed model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --noLowLevel --format dot  -vz 0 -v 0 -o ${base}.dot`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const feeds = {
+      X: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [3, 1]),
+      A: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [1, 3]),
+      B: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+      trip_count: new Tensor('int64', [BigInt(9)], []),
+      cond: new Tensor('bool', [true], []),
+    };
+
+    console.log('\n=== Comparing matmul_add_decomposed and its reconverted version ===');
+    printInputs('matmul_add_decomposed', feeds);
+
+    const originalSession = await InferenceSession.create(originalPath);
+    const originalOut = await originalSession.run(feeds);
+    const originalResult = Array.from(Object.values(originalOut)[0].data as Int32Array);
+
+    const reconvertedSession = await InferenceSession.create(reconvertedPath);
+    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Int32Array);
+
+    console.log(`→ original:`, originalResult);
+    console.log(`→ reconverted:`, reconvertedResult);
+
+    const equivalent = originalResult.length === reconvertedResult.length &&
+      originalResult.every((v, i) => v === reconvertedResult[i]);
+
+    console.log('✅ Outputs equivalent:', equivalent);
+  } catch (err) {
+    logErrorDetails('matmul_add_decomposed reconversion test', err);
+  }
+}
+
 
 
 // Tests to run
+// Standard vs Decomposed Equivalence
 await runVectorAddEquivalenceTest();
 await runAddChainEquivalenceTest();
 await runMatmulEquivalenceTest();
+await runMatmulAddEquivalenceTest();
 
-await runAddAddAddReconversionEquivalenceTest();
+// Standard vs Standadard Reconverted Equivalence
+await runVectorAddStandardReconversionEquivalenceTest();
+await runAddChainStandardReconversionEquivalenceTest();
+await runMatmulStandardReconversionEquivalenceTest();
+await runMatmulAddStandardReconversionEquivalenceTest();
 
+// Decomposed vs Decomposed Reconverted Equivalence
+await runVectorAddDecomposedReconversionEquivalenceTest();
 await runAddChainDecomposedReconversionEquivalenceTest();
 await runMatmulDecomposedReconversionEquivalenceTest();
+await runMatmulAddDecomposedReconversionEquivalenceTest();
 
 

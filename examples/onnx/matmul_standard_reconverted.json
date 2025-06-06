@@ -1,0 +1,83 @@
+{
+  "irVersion": 9,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "initializer": [],
+    "node": [
+      {
+        "opType": "MatMul",
+        "input": [
+          "A",
+          "B"
+        ],
+        "output": [
+          "Y"
+        ],
+        "attribute": []
+      }
+    ],
+    "input": [
+      {
+        "name": "A",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 2
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 2
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 2
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
