@@ -14,64 +14,51 @@ import Node from "@specs-feup/flow/graph/Node";
 export default class OnnxDotFormatter<
     G extends OnnxGraph.Class = OnnxGraph.Class,
 > extends DefaultDotFormatter<G> {
-    /**
-     * @param node The node to get the attributes for.
-     * @returns The attributes of the node.
-     */
+
     static defaultGetNodeAttrs(node: BaseNode.Class): Record<string, string> {
         const result: Record<string, string> = { label: node.id, shape: "box" };
         node.switch(
             Node.Case(TensorNode, (n) => {
                 if (n.type === "input") {
-                    result.color = "#00FF00"; // Green
+                    result.color = "#00FF00";
                     result.shape = "ellipse";
                 } else if (n.type === "output") {
-                    result.color = "#FF0000"; // Red
+                    result.color = "#FF0000";
                     result.shape = "ellipse";
                 } else if (n.type === "index" || n.type === "index_aux") {
-                    result.color = "#FF00FF"; // Red
+                    result.color = "#FF00FF";
                     result.shape = "ellipse";
                 }
             }),
             Node.Case(VariableNode, (n) => {
-                if (n.type === "input") {
-                    result.color = "#00FF00"; // Green
-                } else if (n.type === "output") {
-                    result.color = "#FF0000"; // Red
-                }
                 result.shape = "ellipse";
                 result.label = n.name;
+                result.color = n.type === "input" ? "#00FF00" : "#FF0000";
             }),
             Node.Case(ConstantNode, (n) => {
                 result.label = n.value.toString();
-                result.color = "#A52A2A"; // Brown
+                result.color = "#A52A2A";
                 result.shape = "ellipse";
             }),
             Node.Case(OperationNode, (n) => {
                 result.label = n.type;
-                result.color = "#0000FF"; // Blue
+                result.color = "#0000FF";
             }),
         );
         return result;
     }
 
-    /**
-     * @param edge The edge to get the attributes for.
-     * @returns The attributes of the edge.
-     */
     static defaultGetEdgeAttrs(edge: BaseEdge.Class): Record<string, string> {
-        const result: Record<string, string> = { };
+        const result: Record<string, string> = {};
         edge.switch(
             Edge.Case(OnnxEdge, (e) => {
-                result.label = `{${e.shape.join(',')}}`;
+                const shapeString = `{${e.shape.join(',')}}`;
+                result.label = shapeString === "{}" ? "" : `{${e.shape.join(',')}}`;
             }),
         );
         return result;
     }
 
-    /**
-     * @returns The attributes of the graph.
-     */
     static defaultGetGraphAttrs(): Record<string, string> {
         return {
             rankdir: "LR",
@@ -79,9 +66,6 @@ export default class OnnxDotFormatter<
         };
     }
 
-    /**
-     * Creates a new ONNX DOT formatter.
-     */
     constructor() {
         super(
             OnnxDotFormatter.defaultGetNodeAttrs,
@@ -90,4 +74,33 @@ export default class OnnxDotFormatter<
             OnnxDotFormatter.defaultGetGraphAttrs,
         );
     }
+
+    toDot(graph: G): DotGraph {
+        const dot = super.toDot(graph); // get the base DOT graph from DefaultDotFormatter
+
+        // Inject subgraphs for Loop nodes
+        for (const loopNode of graph.getOperationNodes()) {
+            if (loopNode.type === "Loop") {
+                const body = loopNode.getBodySubgraph?.();
+                if (body && body instanceof OnnxGraph.Class) {
+                    // Format the body subgraph
+                    const subFormatter = new OnnxDotFormatter();
+                    const bodyDot = subFormatter.toDot(body); // <-- use toDot, not format/generate
+
+                    // Wrap in cluster
+                    const cluster = new DotSubgraph(`cluster_loop_${loopNode.id}`, bodyDot.statementList)
+                        .graphAttr("label", `Loop ${loopNode.id}`)
+                        .graphAttr("style", "dashed")
+                        .graphAttr("color", "gray");
+
+                    // Append to the main DOT graph
+                    dot.statements(cluster);
+                }
+            }
+        }
+
+        return dot;
+    }
+
 }
+
