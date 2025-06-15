@@ -3,6 +3,7 @@ import Graph from "@specs-feup/flow/graph/Graph";
 import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import TensorNode from "./TensorNode.js";
 import OperationNode from "./OperationNode.js";
+import OnnxEdge from "./OnnxEdge.js";
 
 
 //preciso de nodes constant (têm um value associado), operationNode (igual ao outro, mas precisam de um parent),
@@ -42,7 +43,16 @@ namespace OnnxGraph {
         hasNode(id: string): boolean {
             return this.getNodeById(id) !== undefined;
         }
-        
+
+        getEdge(sourceId: string, targetId: string): OnnxEdge.Class | undefined {
+            const source = this.getNodeById(sourceId);
+            const target = this.getNodeById(targetId);
+            if (!source || !target) return undefined;
+
+            return source.outgoers
+                .filterIs(OnnxEdge).toArray()
+                .find(edge => edge.target === target);
+        }
     }   
 
     export class Builder implements Graph.Builder<Data, ScratchData> {
