@@ -1,4 +1,8 @@
 import OnnxGraph from "./Onnx/OnnxGraph.js";
+import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
+
+const IR_VERSION = 9;
+const OPSET_IMPORT = 17;
 
 export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String): any {
   const modelInputs: any[] = [];
@@ -7,6 +11,7 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
   const modelNodes: any[] = [];
 
   function sanitizeTensor(tensor: any): any {
+    // TensorProto keys except name and rawData (handled differently)
     const allowedKeys = [
       "dataType", "dims", "floatData", "int32Data", "stringData", "int64Data",
       "doubleData", "uint64Data", "externalData"
@@ -27,19 +32,19 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
           !value.length // only override if missing
         ) {
           // Try decoding rawData if value array is empty
-          const dtype = tensor.dataType ?? 7; // INT64 default
+          const dtype = tensor.dataType ?? DataType.INT64;
           const buffer = Buffer.from(tensor.rawData.data);
-          if (dtype === 7) { // INT64
+          if (dtype === DataType.INT64) { 
             sanitized.int64Data = [];
             for (let i = 0; i < buffer.length; i += 8) {
               sanitized.int64Data.push(buffer.readBigInt64LE(i));
             }
-          } else if (dtype === 6) { // INT32
+          } else if (dtype === DataType.INT32) {
             sanitized.int32Data = [];
             for (let i = 0; i < buffer.length; i += 4) {
               sanitized.int32Data.push(buffer.readInt32LE(i));
             }
-          } else if (dtype === 1) { // FLOAT
+          } else if (dtype === DataType.FLOAT) {
             sanitized.floatData = [];
             for (let i = 0; i < buffer.length; i += 4) {
               sanitized.floatData.push(buffer.readFloatLE(i));
@@ -67,10 +72,9 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
     const initializers: any[] = [];
 
     for (const node of graph.getTensorNodes()) {
-      const meta = node.data["__specs-onnx__tensor_node"];
-      if (meta?.type !== "initializer") continue;
+      if (node.type !== "initializer") continue;
+      const original = node.originalInitializer;
 
-      const original = node.data["__specs-onnx__initializer_data"];
       if (!original) {
         console.warn(`[Convert] Missing original initializer data for '${node.id}'`);
         continue;
@@ -111,22 +115,19 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
   }
 
     for (const tensorNode of graph.getTensorNodes()) {
-      if (tensorNode.data["__specs-onnx__constant_value"]) {
-        const original = tensorNode.data["__specs-onnx__constant_value"];
+      if (tensorNode.isConstant()) {
+        const original = tensorNode.constantValue!;
         const serialized = sanitizeTensor({ ...original, name: tensorNode.id });
 
-        const attrs = [{
+        const attrs: AttributeProto[] = [{
           name: "value",
-          type: 4, //TENSOR TYPE
+          type: AttributeType.TENSOR,
           t: serialized
         }];
 
         // Include any other preserved attributes
-        for (const key of Object.keys(tensorNode.data)) {
-          if (key.startsWith("__specs-onnx__constant_attr_")) {
-            const attr = tensorNode.data[key];
-            attrs.push(attr);
-          }
+        for (const attr of tensorNode.extraAttrs ?? []) {
+          attrs.push(attr);
         }
 
         modelNodes.push({
@@ -149,13 +150,13 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
       const attr: any = { name };
       if (Array.isArray(value)) {
         attr.ints = value;
-        attr.type = 7;
+        attr.type = AttributeType.INTS;
       } else if (typeof value === "number") {
         attr.i = value;
-        attr.type = 2;
+        attr.type = AttributeType.INT;
       } else if (typeof value === "string") {
         attr.s = value;
-        attr.type = 3;
+        attr.type = AttributeType.STRING;
       }
       return attr;
     });
@@ -175,7 +176,7 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
 
         filteredAttrs.push({
           name: "body",
-          type: 5,
+          type: AttributeType.GRAPH,
           g: {
             ...bodyGraphJson,
             valueInfo,
@@ -200,8 +201,8 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
   }
 
   return {
-    irVersion: 9,
-    opsetImport: [{ version: 17 }],
+    irVersion: IR_VERSION,
+    opsetImport: [{ version: OPSET_IMPORT }],
     graph: {
       name: name ?? "Graph",
       initializer: modelInitializers,
