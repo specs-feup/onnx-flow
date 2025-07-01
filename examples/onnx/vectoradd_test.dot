@@ -1,0 +1,47 @@
+digraph {
+  graph [compound=true];
+  A [label=A shape=ellipse color="#00FF00"];
+  B [label=B shape=ellipse color="#00FF00"];
+  C [label=C shape=ellipse color="#FF0000"];
+  trip_count [label=trip_count shape=ellipse color="#00FF00"];
+  cond [label=cond shape=ellipse color="#00FF00"];
+  init_carry [label=init_carry shape=box];
+  subgraph cluster_loop_Loop_0 {
+    graph [rankdir=LR compound=true];
+    loopLoop_0_iter_idx [label=iter_idx shape=ellipse color="#00FF00"];
+    loopLoop_0_cond_in [label=cond_in shape=ellipse color="#00FF00"];
+    loopLoop_0_carry [label=carry shape=ellipse color="#00FF00"];
+    loopLoop_0_axes [label=axes shape=box];
+    loopLoop_0_idx_unsq [label=Unsqueeze shape=box color="#0000FF"];
+    loopLoop_0_idx_unsq -> loopLoop_0_g_A [label=""];
+    loopLoop_0_idx_unsq -> loopLoop_0_g_B [label=""];
+    loopLoop_0_idx_unsq -> loopLoop_0_scatter [label=""];
+    loopLoop_0_g_A [label=Gather shape=box color="#0000FF"];
+    loopLoop_0_g_A -> loopLoop_0_Add_0 [label=""];
+    loopLoop_0_g_B [label=Gather shape=box color="#0000FF"];
+    loopLoop_0_g_B -> loopLoop_0_Add_0 [label=""];
+    loopLoop_0_Add_0 [label=Add shape=box color="#0000FF"];
+    loopLoop_0_Add_0 -> loopLoop_0_scatter [label=""];
+    loopLoop_0_scatter [label=ScatterElements shape=box color="#0000FF"];
+    loopLoop_0_id_cond [label=Identity shape=box color="#0000FF"];
+    loopLoop_0_cond_out [label=cond_out shape=ellipse color="#FF0000"];
+    loopLoop_0_carry_out [label=carry_out shape=ellipse color="#FF0000"];
+    loopLoop_0_iter_idx -> loopLoop_0_idx_unsq [label=""];
+    loopLoop_0_axes -> loopLoop_0_idx_unsq [label=""];
+    loopLoop_0_carry -> loopLoop_0_scatter [label=""];
+    loopLoop_0_cond_in -> loopLoop_0_id_cond [label=""];
+    loopLoop_0_id_cond -> loopLoop_0_cond_out [label=""];
+    loopLoop_0_scatter -> loopLoop_0_carry_out [label="{4}"];
+    A -> loopLoop_0_g_A [style=dashed color=gray label=ext];
+    B -> loopLoop_0_g_B [style=dashed color=gray label=ext];
+    graph [label="Loop Loop_0"];
+    graph [style=dashed];
+    graph [color=gray];
+  }
+
+  cond -> loopLoop_0_Loop_0 [label="" lhead=cluster_loop_Loop_0];
+  A -> loopLoop_0_Loop_0 [label="{4}" lhead=cluster_loop_Loop_0];
+  loopLoop_0_Loop_0 -> C [label="{4}" ltail=cluster_loop_Loop_0];
+  B -> loopLoop_0_Loop_0 [label="{4}" lhead=cluster_loop_Loop_0];
+  trip_count -> loopLoop_0_Loop_0 [label="" lhead=cluster_loop_Loop_0];
+}

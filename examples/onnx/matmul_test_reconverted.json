@@ -1,0 +1,523 @@
+{
+  "irVersion": 9,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "initializer": [
+      {
+        "name": "init_carry",
+        "dataType": 1,
+        "dims": [
+          4
+        ],
+        "floatData": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "node": [
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "reshape_shape_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "reshape_shape_0",
+              "dataType": 7,
+              "dims": [
+                2
+              ],
+              "int64Data": [
+                2,
+                2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Loop",
+        "input": [
+          "trip_count",
+          "cond",
+          "init_carry"
+        ],
+        "output": [
+          "loop_out"
+        ],
+        "attribute": [
+          {
+            "name": "body",
+            "type": 5,
+            "g": {
+              "name": "loop_body",
+              "initializer": [],
+              "node": [
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "axes"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "axes",
+                        "dataType": 7,
+                        "dims": [
+                          1
+                        ],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "N"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "N",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          2
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "shape1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "shape1",
+                        "dataType": 7,
+                        "dims": [
+                          1
+                        ],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "shapeK"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "shapeK",
+                        "dataType": 7,
+                        "dims": [
+                          1
+                        ],
+                        "int64Data": [
+                          2
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "iter_idx",
+                    "axes"
+                  ],
+                  "output": [
+                    "idx_unsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter_idx",
+                    "N"
+                  ],
+                  "output": [
+                    "row_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter_idx",
+                    "N"
+                  ],
+                  "output": [
+                    "col_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "row_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "rowU_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "col_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "colU_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "A",
+                    "rowU_out"
+                  ],
+                  "output": [
+                    "g_A_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "g_A_out",
+                    "shapeK"
+                  ],
+                  "output": [
+                    "aVec_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "B",
+                    "colU_out"
+                  ],
+                  "output": [
+                    "g_B_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 1,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "g_B_out",
+                    "shapeK"
+                  ],
+                  "output": [
+                    "bVec_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "aVec_out",
+                    "bVec_out"
+                  ],
+                  "output": [
+                    "prod_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "ReduceSum",
+                  "input": [
+                    "prod_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "dot_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "dot_out",
+                    "shape1"
+                  ],
+                  "output": [
+                    "dotS_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "ScatterElements",
+                  "input": [
+                    "carry",
+                    "idx_unsq_out",
+                    "dotS_out"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Identity",
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "attribute": []
+                }
+              ],
+              "input": [
+                {
+                  "name": "iter_idx",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 4
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 4
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "valueInfo": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 4
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Reshape",
+        "input": [
+          "loop_out",
+          "reshape_shape_0"
+        ],
+        "output": [
+          "Y"
+        ],
+        "attribute": []
+      }
+    ],
+    "input": [
+      {
+        "name": "A",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 2
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 2
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "trip_count",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      },
+      {
+        "name": "cond",
+        "type": {
+          "tensorType": {
+            "elemType": 9,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 2
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
