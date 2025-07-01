@@ -41,7 +41,7 @@ export type TensorProto = {
   name?: string;
   dataType?: DataType;
   dims?: number[];
-  rawData?: { type: string; data: number[] }; // Buffer
+  rawData?: { type: string; data: number[] | Buffer }; // Buffer
   floatData?: number[];
   int32Data?: number[];
   int64Data?: (number | bigint)[];
