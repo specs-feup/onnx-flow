@@ -204,46 +204,49 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 }
 
 
-// Find dimensions
-function findDims(outputNodes: NodeCollection<OperationNode.Class>, graph: OnnxGraph.Class) {
-    outputNodes.forEach(node => {
-        const inputNodes = node.getInputs();
+// Infer Intermediate Shapes
+function inferShapes(graph: OnnxGraph.Class): void {
+  /* The nodes were inserted only after *all* their inputs existed, so
+     the numeric string-ids are already a topological ordering.        */
+  const ops = graph.getOperationNodes()
+                   .toArray()
+                   .sort((a, b) => Number(a.id) - Number(b.id));
 
-        // Fallback: gather shapes/types from inputs or incomer edges
-        const shapeInfo = inputNodes.map(input => {
-            const edge = graph.getEdge(input.id, node.id)?.tryAs(OnnxEdge); // real edge if it exists
-            const tensor = input.tryAs(TensorNode);
+  for (const node of ops) {
+    const inputs  = node.getInputs?.() ?? [];
+    const infos   = inputs.map(inp => {
+      const edge  = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
+      const tns   = inp.tryAs(TensorNode);
 
-            const shape = edge?.shape ?? tensor?.shape ?? [];
-            const literalType = edge?.literalType ?? tensor?.literalType ?? AttributeType.UNDEFINED;
-
-            return { shape, literalType, input };
-        });
-
-        // Special case: MatMul
-        if (node.type === "MatMul" && shapeInfo.length >= 2) {
-            const [a, b] = shapeInfo;
-            const aShape = a.shape;
-            const bShape = b.shape;
-            const resultShape = (aShape[1] === bShape[0])
-                ? [aShape[0], bShape[1]]
-                : [aShape[1], bShape[0]];
-            node.getOutgoers.forEach(edge => {
-                edge.shape = resultShape;
-                edge.literalType = a.literalType;
-            });
-            return;
-        }
-
-        // Default: propagate shape of first available input with shape info
-        const firstValid = shapeInfo.find(info => info.shape.length > 0);
-        if (firstValid) {
-            node.getOutgoers.forEach(edge => {
-                edge.shape = firstValid.shape;
-                edge.literalType = firstValid.literalType;
-            });
-        }
+      return {
+        shape : edge?.shape       ?? tns?.shape       ?? [],
+        dtype : edge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED
+      };
     });
+
+    /* special MatMul rule ------------------------------------------ */
+    if (node.type === "MatMul" && infos.length >= 2) {
+      const [a,b]    = infos;
+      const resShape = (a.shape[1] === b.shape[0])
+                     ? [a.shape[0], b.shape[1]]
+                     : [a.shape[1], b.shape[0]];
+
+      node.getOutgoers.forEach(e => {
+        e.shape       = resShape;
+        e.literalType = a.dtype;
+      });
+      continue;
+    }
+
+    /* fall-back: copy first available shape ------------------------ */
+    const first = infos.find(i => i.shape.length);
+    if (first) {
+      node.getOutgoers.forEach(e => {
+        e.shape       = first.shape;
+        e.literalType = first.dtype;
+      });
+    }
+  }
 }
 
 
@@ -262,8 +265,7 @@ export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.C
     addNodes(data, graph, mapNodeAndOutput, mapNodeAndInputs, mainGraph);
     addEdges(graph, mapNodeAndOutput, mapNodeAndInputs);
 
-    const lastOpNodes = graph.getOutputTensorNodes().incomers.sources.filterIs(OperationNode);
-    findDims(lastOpNodes, graph);
+    inferShapes(graph);
 
     return graph;
 }
