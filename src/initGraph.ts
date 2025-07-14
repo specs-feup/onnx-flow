@@ -3,7 +3,6 @@ import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
 
 const BASE_TEN = 10;
