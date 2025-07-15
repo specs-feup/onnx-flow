@@ -26,8 +26,8 @@
       {
         "opType": "Loop",
         "input": [
-          "trip_count",
-          "cond",
+          "trip_count_0",
+          "cond_0",
           "init_carry"
         ],
         "output": [
@@ -67,11 +67,11 @@
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "iter_idx",
+                    "iter",
                     "axes"
                   ],
                   "output": [
-                    "idx_unsq_out"
+                    "unsq_out"
                   ],
                   "attribute": []
                 },
@@ -79,10 +79,10 @@
                   "opType": "Gather",
                   "input": [
                     "A",
-                    "idx_unsq_out"
+                    "unsq_out"
                   ],
                   "output": [
-                    "g_A_out"
+                    "g_A_0_out"
                   ],
                   "attribute": [
                     {
@@ -96,10 +96,10 @@
                   "opType": "Gather",
                   "input": [
                     "B",
-                    "idx_unsq_out"
+                    "unsq_out"
                   ],
                   "output": [
-                    "g_B_out"
+                    "g_B_0_out"
                   ],
                   "attribute": [
                     {
@@ -112,11 +112,11 @@
                 {
                   "opType": "Add",
                   "input": [
-                    "g_A_out",
-                    "g_B_out"
+                    "g_A_0_out",
+                    "g_B_0_out"
                   ],
                   "output": [
-                    "Add_0_out"
+                    "0_out"
                   ],
                   "attribute": []
                 },
@@ -124,8 +124,8 @@
                   "opType": "ScatterElements",
                   "input": [
                     "carry",
-                    "idx_unsq_out",
-                    "Add_0_out"
+                    "unsq_out",
+                    "0_out"
                   ],
                   "output": [
                     "carry_out"
@@ -151,7 +151,7 @@
               ],
               "input": [
                 {
-                  "name": "iter_idx",
+                  "name": "iter",
                   "type": {
                     "tensorType": {
                       "elemType": 7,
@@ -281,7 +281,7 @@
         }
       },
       {
-        "name": "trip_count",
+        "name": "trip_count_0",
         "type": {
           "tensorType": {
             "elemType": 7,
@@ -292,7 +292,7 @@
         }
       },
       {
-        "name": "cond",
+        "name": "cond_0",
         "type": {
           "tensorType": {
             "elemType": 9,

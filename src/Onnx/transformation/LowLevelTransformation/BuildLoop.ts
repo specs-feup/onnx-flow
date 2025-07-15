@@ -8,6 +8,8 @@ import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import { DataType, TensorProto } from "../../OnnxTypes.js";
 import { int64Vec, scalarInt64, zeroTensor } from "../Utilities.js";
+import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -97,6 +99,75 @@ function gatherAndReshape(
   return out;
 }
 
+function reshapeTensor(
+  g: OnnxGraph.Class,
+  input: TensorNode.Class,
+  shape: TensorNode.Class,
+  tag: string
+): TensorNode.Class {
+  const reshape = g.addNode(uniq(g, `reshape_${tag}`))
+                   .init(new OperationNode.Builder("Reshape", [input, shape]))
+                   .as(OperationNode);
+  const out = g.addNode(uniq(g, `reshaped_${tag}`))
+               .init(new TensorNode.Builder(input.literalType, shape.shape, "intermediate"))
+               .as(TensorNode);
+  g.addEdge(reshape, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  return out;
+}
+
+function resolveFusedInput(
+  g: OnnxGraph.Class,
+  input: BaseNode.Class,
+  ctx: {
+    opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
+    unsqIdx: TensorNode.Class,
+    outShape: number[]
+  },
+  op: OperationNode.Class,
+  flatten : boolean = true,
+  returnGather : boolean = true
+): TensorNode.Class {
+  // Case 1: Input is a TensorNode (could be intermediate, input, etc.)
+  if (input.is(TensorNode)) {
+    const t = input.as(TensorNode);
+
+    // Check if it's intermediate and has a producer that is fused
+    if (t.type === "intermediate" && t.getIncomers.length > 0) {
+      const producer = t.getIncomers[0].source;
+      if (producer.is(OperationNode)) {
+        const fused = Array.from(ctx.opMap.entries()).find(([key]) => key.id === producer.id);
+        if (fused) {
+          return fused[1][1]; // second element is the fused output tensor
+        }
+      }
+    }
+
+    // Otherwise fall back to Gather
+    let gatherInput = t;
+    if(flatten) gatherInput = ensureFlatInput(g, ctx.outShape, t);
+    if(returnGather){
+      const [gather, gathered] = gatherFrom(g, gatherInput, `g_${t.id}_${op.id}`, ctx.unsqIdx, 0);
+      g.addEdge(ctx.unsqIdx, gather).init(new OnnxEdge.Builder()).as(OnnxEdge);
+      return gathered;
+    }
+    else{
+      return gatherInput;
+    }
+  }
+
+  // Case 2: Direct operation input
+  if (input.is(OperationNode)) {
+    const fused = Array.from(ctx.opMap.entries()).find(([key]) => key.id === input.id);
+    if (fused) {
+      return fused[1][1]; // second element is the fused output tensor
+    }
+  }
+
+  throw new Error(`Unhandled input case in resolveFusedInput for ${input.id}`);
+}
+
+
+
 /* ------------------- Handlers for Operation Types ------------------- */
 
 function handleSimpleArithmeticOperation(
@@ -104,25 +175,13 @@ function handleSimpleArithmeticOperation(
   g: OnnxGraph.Class,
   ctx: {
     opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
+    iter: TensorNode.Class,
     unsqIdx: TensorNode.Class,
     axes: TensorNode.Class,
     outShape: number[]
   }
 ): TensorNode.Class {
-  const inputs = op.getInputs()!.map(inp => {
-    if (inp.is(TensorNode)) {
-      const t = inp.as(TensorNode);
-      const flat = ensureFlatInput(g, ctx.outShape, t);
-      const [gather, gathered] = gatherFrom(g, flat, `g_${t.id}_${op.id}`, ctx.unsqIdx, 0);
-      g.addEdge(ctx.unsqIdx, gather).init(new OnnxEdge.Builder()).as(OnnxEdge);
-      return gathered;
-    }
-
-    // Operation input from previous op
-    const prevOut = ctx.opMap.get(inp as OperationNode.Class)?.[1];
-    if (!prevOut) throw new Error(`Missing value for op input: ${inp.id}`);
-    return prevOut;
-  });
+  const inputs = op.getInputs()!.map(inp => resolveFusedInput(g, inp, ctx, op));
 
   const node = g.addNode(uniq(g, `${op.type}_${op.id}`))
                 .init(new OperationNode.Builder(op.type, inputs))
@@ -143,30 +202,39 @@ function handleMatMul(
   g: OnnxGraph.Class,
   ctx: {
     opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
+    iter: TensorNode.Class,
     unsqIdx: TensorNode.Class,
     axes: TensorNode.Class,
     outShape: number[]
   }
 ): TensorNode.Class {
-  const [lhs, rhs] = op.getInputs()!.map(i => i.as(TensorNode));
-  const K = lhs.shape.at(-1)!;
-  const N = rhs.shape.at(-1)!;
+  const lhsInput = op.getInputs()![0];
+  const rhsInput = op.getInputs()![1];
+
+  const lhsTensor = resolveFusedInput(g, lhsInput, ctx, op, false, false);
+  const rhsTensor = resolveFusedInput(g, rhsInput, ctx, op, false, false);
+
+  const K = lhsTensor.shape.at(-1)!;
+  const N = rhsTensor.shape.at(-1)!;
 
   const Nconst = makeTensorConst(g, `N_${op.id}`, DataType.INT64, "constant", scalarInt64(N));
   const shape1 = makeTensorConst(g, `shape1_${op.id}`, DataType.INT64, "constant", int64Vec([1]));
   const shapeK = makeTensorConst(g, `shapeK_${op.id}`, DataType.INT64, "constant", int64Vec([K]));
 
-  const rowIdx = divmod(g, ctx.unsqIdx, Nconst, op.id, "Div");
-  const colIdx = divmod(g, ctx.unsqIdx, Nconst, op.id, "Mod");
+  const rowIdx = divmod(g, ctx.iter, Nconst, op.id, "Div");
+  const colIdx = divmod(g, ctx.iter, Nconst, op.id, "Mod");
 
   const rowU = unsqueezeIdx(g, rowIdx, ctx.axes, `rowU_${op.id}`);
   const colU = unsqueezeIdx(g, colIdx, ctx.axes, `colU_${op.id}`);
 
-  const aRow = gatherAndReshape(g, lhs, rowU, 0, shapeK, `A_${op.id}`);
-  const bCol = gatherAndReshape(g, rhs, colU, 1, shapeK, `B_${op.id}`);
+  const [_, rowGathered] = gatherFrom(g, lhsTensor, `g_${lhsTensor.id}_${op.id}`, rowU, 0);
+  const [__, colGathered] = gatherFrom(g, rhsTensor, `g_${rhsTensor.id}_${op.id}`, colU, 1);
+
+  const row = reshapeTensor(g, rowGathered, shapeK, `reshapeRow_${op.id}`);
+  const col = reshapeTensor(g, colGathered, shapeK, `reshapeCol_${op.id}`);
 
   const mul = g.addNode(uniq(g, `mul_${op.id}`))
-               .init(new OperationNode.Builder("Mul", [aRow, bCol]))
+               .init(new OperationNode.Builder("Mul", [row, col]))
                .as(OperationNode);
   const mulOut = g.addNode(uniq(g, `mul_out_${op.id}`))
                   .init(new TensorNode.Builder(DataType.UNDEFINED, [K], "intermediate"))
@@ -251,6 +319,7 @@ export function buildLoopForChain(
     if (!handler) throw new Error(`Unsupported op: ${op.type}`);
     const output = handler(op, body, {
       opMap,
+      iter,
       unsqIdx: unsqOut,
       axes,
       outShape,

@@ -50,8 +50,8 @@
       {
         "opType": "Loop",
         "input": [
-          "trip_count",
-          "cond",
+          "trip_count_0",
+          "cond_0",
           "init_carry"
         ],
         "output": [
@@ -92,14 +92,14 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "N"
+                    "N_0"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "N",
+                        "name": "N_0",
                         "dataType": 7,
                         "dims": [],
                         "int64Data": [
@@ -113,14 +113,14 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "shape1"
+                    "shape1_0"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "shape1",
+                        "name": "shape1_0",
                         "dataType": 7,
                         "dims": [
                           1
@@ -136,14 +136,14 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "shapeK"
+                    "shapeK_0"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "shapeK",
+                        "name": "shapeK_0",
                         "dataType": 7,
                         "dims": [
                           1
@@ -158,55 +158,55 @@
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "iter_idx",
+                    "iter",
                     "axes"
                   ],
                   "output": [
-                    "idx_unsq_out"
+                    "unsq_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Div",
                   "input": [
-                    "iter_idx",
-                    "N"
+                    "iter",
+                    "N_0"
                   ],
                   "output": [
-                    "row_out"
+                    "Div_0_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Mod",
                   "input": [
-                    "iter_idx",
-                    "N"
+                    "iter",
+                    "N_0"
                   ],
                   "output": [
-                    "col_out"
+                    "Mod_0_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "row_out",
+                    "Div_0_out",
                     "axes"
                   ],
                   "output": [
-                    "rowU_out"
+                    "rowU_0_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "col_out",
+                    "Mod_0_out",
                     "axes"
                   ],
                   "output": [
-                    "colU_out"
+                    "colU_0_out"
                   ],
                   "attribute": []
                 },
@@ -214,10 +214,10 @@
                   "opType": "Gather",
                   "input": [
                     "A",
-                    "rowU_out"
+                    "rowU_0_out"
                   ],
                   "output": [
-                    "g_A_out"
+                    "g_A_0_out"
                   ],
                   "attribute": [
                     {
@@ -228,24 +228,13 @@
                   ]
                 },
                 {
-                  "opType": "Reshape",
-                  "input": [
-                    "g_A_out",
-                    "shapeK"
-                  ],
-                  "output": [
-                    "aVec_out"
-                  ],
-                  "attribute": []
-                },
-                {
                   "opType": "Gather",
                   "input": [
                     "B",
-                    "colU_out"
+                    "colU_0_out"
                   ],
                   "output": [
-                    "g_B_out"
+                    "g_B_0_out"
                   ],
                   "attribute": [
                     {
@@ -258,44 +247,55 @@
                 {
                   "opType": "Reshape",
                   "input": [
-                    "g_B_out",
-                    "shapeK"
+                    "g_A_0_out",
+                    "shapeK_0"
                   ],
                   "output": [
-                    "bVec_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Mul",
-                  "input": [
-                    "aVec_out",
-                    "bVec_out"
-                  ],
-                  "output": [
-                    "prod_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "ReduceSum",
-                  "input": [
-                    "prod_out",
-                    "axes"
-                  ],
-                  "output": [
-                    "dot_out"
+                    "reshaped_reshapeRow_0"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Reshape",
                   "input": [
-                    "dot_out",
-                    "shape1"
+                    "g_B_0_out",
+                    "shapeK_0"
                   ],
                   "output": [
-                    "dotS_out"
+                    "reshaped_reshapeCol_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "reshaped_reshapeRow_0",
+                    "reshaped_reshapeCol_0"
+                  ],
+                  "output": [
+                    "mul_out_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "ReduceSum",
+                  "input": [
+                    "mul_out_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "reduce_out_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "reduce_out_0",
+                    "shape1_0"
+                  ],
+                  "output": [
+                    "final_out_0"
                   ],
                   "attribute": []
                 },
@@ -303,8 +303,8 @@
                   "opType": "ScatterElements",
                   "input": [
                     "carry",
-                    "idx_unsq_out",
-                    "dotS_out"
+                    "unsq_out",
+                    "final_out_0"
                   ],
                   "output": [
                     "carry_out"
@@ -330,7 +330,7 @@
               ],
               "input": [
                 {
-                  "name": "iter_idx",
+                  "name": "iter",
                   "type": {
                     "tensorType": {
                       "elemType": 7,
@@ -477,7 +477,7 @@
         }
       },
       {
-        "name": "trip_count",
+        "name": "trip_count_0",
         "type": {
           "tensorType": {
             "elemType": 7,
@@ -488,7 +488,7 @@
         }
       },
       {
-        "name": "cond",
+        "name": "cond_0",
         "type": {
           "tensorType": {
             "elemType": 9,
