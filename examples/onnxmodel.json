@@ -1,0 +1,778 @@
+{
+  "opsetImport": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ],
+  "metadataProps": [],
+  "trainingInfo": [],
+  "functions": [],
+  "irVersion": "9",
+  "producerName": "",
+  "producerVersion": "",
+  "domain": "",
+  "modelVersion": "0",
+  "docString": "",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "trip_count",
+          "cond",
+          "init_carry"
+        ],
+        "output": [
+          "Y_flat"
+        ],
+        "attribute": [
+          {
+            "floats": [],
+            "ints": [],
+            "strings": [],
+            "tensors": [],
+            "graphs": [],
+            "typeProtos": [],
+            "sparseTensors": [],
+            "name": "body",
+            "f": 0,
+            "i": "0",
+            "s": {
+              "type": "Buffer",
+              "data": []
+            },
+            "t": null,
+            "g": {
+              "node": [
+                {
+                  "input": [
+                    "i",
+                    "axes0"
+                  ],
+                  "output": [
+                    "idx"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Unsqueeze",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "i",
+                    "const_N"
+                  ],
+                  "output": [
+                    "row"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Div",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "i",
+                    "const_N"
+                  ],
+                  "output": [
+                    "col"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Mod",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "row",
+                    "axes0"
+                  ],
+                  "output": [
+                    "row_idx"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Unsqueeze",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "col",
+                    "axes0"
+                  ],
+                  "output": [
+                    "col_idx"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Unsqueeze",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "A",
+                    "row_idx"
+                  ],
+                  "output": [
+                    "a_row"
+                  ],
+                  "attribute": [
+                    {
+                      "floats": [],
+                      "ints": [],
+                      "strings": [],
+                      "tensors": [],
+                      "graphs": [],
+                      "typeProtos": [],
+                      "sparseTensors": [],
+                      "name": "axis",
+                      "f": 0,
+                      "i": "0",
+                      "s": {
+                        "type": "Buffer",
+                        "data": []
+                      },
+                      "t": null,
+                      "g": null,
+                      "docString": "",
+                      "tp": null,
+                      "type": "INT",
+                      "refAttrName": "",
+                      "sparseTensor": null
+                    }
+                  ],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Gather",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "a_row",
+                    "reshape_k"
+                  ],
+                  "output": [
+                    "a_vec"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Reshape",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "B",
+                    "col_idx"
+                  ],
+                  "output": [
+                    "b_col"
+                  ],
+                  "attribute": [
+                    {
+                      "floats": [],
+                      "ints": [],
+                      "strings": [],
+                      "tensors": [],
+                      "graphs": [],
+                      "typeProtos": [],
+                      "sparseTensors": [],
+                      "name": "axis",
+                      "f": 0,
+                      "i": "1",
+                      "s": {
+                        "type": "Buffer",
+                        "data": []
+                      },
+                      "t": null,
+                      "g": null,
+                      "docString": "",
+                      "tp": null,
+                      "type": "INT",
+                      "refAttrName": "",
+                      "sparseTensor": null
+                    }
+                  ],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Gather",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "b_col",
+                    "reshape_k"
+                  ],
+                  "output": [
+                    "b_vec"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Reshape",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "a_vec",
+                    "b_vec"
+                  ],
+                  "output": [
+                    "prod"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Mul",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "prod",
+                    "axes0"
+                  ],
+                  "output": [
+                    "dot"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "ReduceSum",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "dot",
+                    "shape_1"
+                  ],
+                  "output": [
+                    "dot_unsqueezed"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Reshape",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "carry",
+                    "idx",
+                    "dot_unsqueezed"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "attribute": [
+                    {
+                      "floats": [],
+                      "ints": [],
+                      "strings": [],
+                      "tensors": [],
+                      "graphs": [],
+                      "typeProtos": [],
+                      "sparseTensors": [],
+                      "name": "axis",
+                      "f": 0,
+                      "i": "0",
+                      "s": {
+                        "type": "Buffer",
+                        "data": []
+                      },
+                      "t": null,
+                      "g": null,
+                      "docString": "",
+                      "tp": null,
+                      "type": "INT",
+                      "refAttrName": "",
+                      "sparseTensor": null
+                    }
+                  ],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "ScatterElements",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                },
+                {
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "attribute": [],
+                  "metadataProps": [],
+                  "name": "",
+                  "opType": "Identity",
+                  "docString": "",
+                  "domain": "",
+                  "overload": ""
+                }
+              ],
+              "initializer": [
+                {
+                  "dims": [],
+                  "floatData": [],
+                  "int32Data": [],
+                  "stringData": [],
+                  "int64Data": [],
+                  "doubleData": [],
+                  "uint64Data": [],
+                  "externalData": [],
+                  "metadataProps": [],
+                  "dataType": 7,
+                  "segment": null,
+                  "name": "const_N",
+                  "rawData": {
+                    "type": "Buffer",
+                    "data": [
+                      2,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "docString": "",
+                  "dataLocation": "DEFAULT"
+                },
+                {
+                  "dims": [
+                    "1"
+                  ],
+                  "floatData": [],
+                  "int32Data": [],
+                  "stringData": [],
+                  "int64Data": [],
+                  "doubleData": [],
+                  "uint64Data": [],
+                  "externalData": [],
+                  "metadataProps": [],
+                  "dataType": 7,
+                  "segment": null,
+                  "name": "axes0",
+                  "rawData": {
+                    "type": "Buffer",
+                    "data": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "docString": "",
+                  "dataLocation": "DEFAULT"
+                },
+                {
+                  "dims": [
+                    "1"
+                  ],
+                  "floatData": [],
+                  "int32Data": [],
+                  "stringData": [],
+                  "int64Data": [],
+                  "doubleData": [],
+                  "uint64Data": [],
+                  "externalData": [],
+                  "metadataProps": [],
+                  "dataType": 7,
+                  "segment": null,
+                  "name": "shape_1",
+                  "rawData": {
+                    "type": "Buffer",
+                    "data": [
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "docString": "",
+                  "dataLocation": "DEFAULT"
+                },
+                {
+                  "dims": [
+                    "1"
+                  ],
+                  "floatData": [],
+                  "int32Data": [],
+                  "stringData": [],
+                  "int64Data": [],
+                  "doubleData": [],
+                  "uint64Data": [],
+                  "externalData": [],
+                  "metadataProps": [],
+                  "dataType": 7,
+                  "segment": null,
+                  "name": "reshape_k",
+                  "rawData": {
+                    "type": "Buffer",
+                    "data": [
+                      2,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "docString": "",
+                  "dataLocation": "DEFAULT"
+                }
+              ],
+              "input": [
+                {
+                  "metadataProps": [],
+                  "name": "i",
+                  "type": {
+                    "denotation": "",
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  },
+                  "docString": ""
+                },
+                {
+                  "metadataProps": [],
+                  "name": "cond_in",
+                  "type": {
+                    "denotation": "",
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  },
+                  "docString": ""
+                },
+                {
+                  "metadataProps": [],
+                  "name": "carry",
+                  "type": {
+                    "denotation": "",
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "denotation": "",
+                            "dimValue": "4"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "docString": ""
+                }
+              ],
+              "output": [
+                {
+                  "metadataProps": [],
+                  "name": "cond_out",
+                  "type": {
+                    "denotation": "",
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  },
+                  "docString": ""
+                },
+                {
+                  "metadataProps": [],
+                  "name": "carry_out",
+                  "type": {
+                    "denotation": "",
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "denotation": "",
+                            "dimValue": "4"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "docString": ""
+                }
+              ],
+              "valueInfo": [],
+              "quantizationAnnotation": [],
+              "sparseInitializer": [],
+              "metadataProps": [],
+              "name": "MatMulLoopBody",
+              "docString": ""
+            },
+            "docString": "",
+            "tp": null,
+            "type": "GRAPH",
+            "refAttrName": "",
+            "sparseTensor": null
+          }
+        ],
+        "metadataProps": [],
+        "name": "",
+        "opType": "Loop",
+        "docString": "",
+        "domain": "",
+        "overload": ""
+      },
+      {
+        "input": [
+          "Y_flat",
+          "final_shape"
+        ],
+        "output": [
+          "Y"
+        ],
+        "attribute": [],
+        "metadataProps": [],
+        "name": "",
+        "opType": "Reshape",
+        "docString": "",
+        "domain": "",
+        "overload": ""
+      }
+    ],
+    "initializer": [
+      {
+        "dims": [
+          "4"
+        ],
+        "floatData": [],
+        "int32Data": [],
+        "stringData": [],
+        "int64Data": [],
+        "doubleData": [],
+        "uint64Data": [],
+        "externalData": [],
+        "metadataProps": [],
+        "dataType": 1,
+        "segment": null,
+        "name": "init_carry",
+        "rawData": {
+          "type": "Buffer",
+          "data": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "docString": "",
+        "dataLocation": "DEFAULT"
+      },
+      {
+        "dims": [
+          "2"
+        ],
+        "floatData": [],
+        "int32Data": [],
+        "stringData": [],
+        "int64Data": [],
+        "doubleData": [],
+        "uint64Data": [],
+        "externalData": [],
+        "metadataProps": [],
+        "dataType": 7,
+        "segment": null,
+        "name": "final_shape",
+        "rawData": {
+          "type": "Buffer",
+          "data": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "docString": "",
+        "dataLocation": "DEFAULT"
+      }
+    ],
+    "input": [
+      {
+        "metadataProps": [],
+        "name": "A",
+        "type": {
+          "denotation": "",
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "denotation": "",
+                  "dimValue": "2"
+                },
+                {
+                  "denotation": "",
+                  "dimValue": "2"
+                }
+              ]
+            }
+          }
+        },
+        "docString": ""
+      },
+      {
+        "metadataProps": [],
+        "name": "B",
+        "type": {
+          "denotation": "",
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "denotation": "",
+                  "dimValue": "2"
+                },
+                {
+                  "denotation": "",
+                  "dimValue": "2"
+                }
+              ]
+            }
+          }
+        },
+        "docString": ""
+      },
+      {
+        "metadataProps": [],
+        "name": "trip_count",
+        "type": {
+          "denotation": "",
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": []
+            }
+          }
+        },
+        "docString": ""
+      },
+      {
+        "metadataProps": [],
+        "name": "cond",
+        "type": {
+          "denotation": "",
+          "tensorType": {
+            "elemType": 9,
+            "shape": {
+              "dim": []
+            }
+          }
+        },
+        "docString": ""
+      }
+    ],
+    "output": [
+      {
+        "metadataProps": [],
+        "name": "Y",
+        "type": {
+          "denotation": "",
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "denotation": "",
+                  "dimValue": "2"
+                },
+                {
+                  "denotation": "",
+                  "dimValue": "2"
+                }
+              ]
+            }
+          }
+        },
+        "docString": ""
+      }
+    ],
+    "valueInfo": [],
+    "quantizationAnnotation": [],
+    "sparseInitializer": [],
+    "metadataProps": [],
+    "name": "MatMulDecomposedGraph",
+    "docString": ""
+  }
+}

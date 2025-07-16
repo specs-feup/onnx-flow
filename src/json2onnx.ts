@@ -3,62 +3,81 @@ import path from 'path';
 import protobuf from 'protobufjs';
 import { fileURLToPath } from 'url';
 
-export function json2onnx(jsonFilePath : string, outputOnnxPath : string) {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const protoPath = path.join(__dirname, '../../out/src/Onnx/onnx.proto');
 
-    return new Promise((resolve, reject) => {
-        // Load the ONNX protobuf definition
-        protobuf.load(protoPath, (err, root) => {
-            if (err) {
-                return reject('Error loading ONNX protobuf definition: ' + err);
-            }
+/**
+ * Recursively traverses an object and converts any { type: 'Buffer', data: [...] }
+ * back into actual Node.js Buffers for protobuf compatibility.
+ */
+function fixBuffers(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(fixBuffers);
+  }
 
-            // Get the ModelProto message type
-            if (!root) {
-                return reject('Error: ONNX protobuf root is undefined.');
-            }
+  if (obj && typeof obj === 'object') {
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return Buffer.from(obj.data);
+    }
 
-            const ModelProto = root.lookupType('onnx.ModelProto');
+    for (const key of Object.keys(obj)) {
+      obj[key] = fixBuffers(obj[key]);
+    }
+  }
 
-            // Function to encode and save the ONNX model
-            function encodeAndSaveModel(jsonPath : string, outputPath : string) {
-                try {
-                    // Check if the input file exists and is a valid JSON file
-                    if (path.extname(jsonPath) !== '.json') {
-                        return reject('The specified file is not a JSON file. Please provide a valid .json file.');
-                    }
+  return obj;
+}
 
-                    // Read and parse the JSON file
-                    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): Promise<void> {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const protoPath = path.join(__dirname, '../../out/src/Onnx/onnx.proto');
 
-                    // Verify that the JSON data matches the ONNX schema
-                    const errMsg = ModelProto.verify(jsonData);
-                    if (errMsg) {
-                        return reject('Error verifying JSON model data: ' + errMsg);
-                    }
+  try {
+    // Load the ONNX protobuf definition
+    const root = await protobuf.load(protoPath);
+    const ModelProto = root.lookupType('onnx.ModelProto');
 
-                    // Create a ModelProto message from the JSON data
-                    const message = ModelProto.create(jsonData);
+    if (path.extname(jsonFilePath) !== '.json') {
+      throw new Error('The specified file is not a JSON file. Please provide a valid .json file.');
+    }
 
-                    // Encode the message to a buffer
-                    const buffer = ModelProto.encode(message).finish();
+    const jsonText = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData = JSON.parse(jsonText);
 
-                    // Write the buffer to the output ONNX file
-                    fs.writeFileSync(outputPath, buffer);
+    const defaultFields = {
+      ir_version: 9,
+      opset_import: [{ domain: '', version: 17 }],
+      producer_name: 'onnx-flow',
+      producer_version: '0.1.0',
+      model_version: 1,
+    };
 
-                    resolve(`ONNX model successfully written to ${outputPath}`);
-                } catch (error) {
-                    if (error instanceof Error) {
-                        reject('Error converting JSON to ONNX: ' + error.message);
-                    } else {
-                        reject('Error converting JSON to ONNX: ' + String(error));
-                    }
-                }
-            }
+    const completeJson = {
+      ...defaultFields,
+      ...jsonData,
+      graph: {
+        name: jsonData.graph?.name ?? 'default_graph',
+        ...jsonData.graph,
+      }
+    };
 
-            // Encode and save the ONNX model
-            encodeAndSaveModel(jsonFilePath, outputOnnxPath);
-        });
-    });
+    const fixedJson = fixBuffers(completeJson);
+
+    const errMsg = ModelProto.verify(fixedJson);
+    if (errMsg) {
+      throw new Error('Validation error: ' + errMsg);
+    }
+
+    const message = ModelProto.create(fixedJson);
+    const buffer = ModelProto.encode(message).finish();
+
+    fs.writeFileSync(outputOnnxPath, buffer);
+    console.log(`ONNX model successfully written to ${outputOnnxPath}`);
+  } catch (error) {
+    console.error('Failed to convert JSON to ONNX:');
+    if (error instanceof Error) {
+      console.error('Message:', error.message);
+    } else {
+      console.error(error);
+    }
+    throw error;
+  }
 }

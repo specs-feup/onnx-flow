@@ -1,0 +1,74 @@
+{
+  "irVersion": 9,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "initializer": [],
+    "node": [
+      {
+        "opType": "Add",
+        "input": [
+          "A",
+          "B"
+        ],
+        "output": [
+          "C"
+        ],
+        "attribute": []
+      }
+    ],
+    "input": [
+      {
+        "name": "A",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 4
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 4
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "C",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 4
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

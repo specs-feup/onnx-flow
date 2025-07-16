@@ -1,3 +1,5 @@
+import { DataType, TensorProto } from "../OnnxTypes.js";
+
 export const typeSizeMap: Record<number, number> = {
     0: 0,    // onnx.TensorProto.UNDEFINED
     1: 4,    // onnx.TensorProto.FLOAT
@@ -27,5 +29,29 @@ export const typeSizeMap: Record<number, number> = {
 
 export function formatId(name : string, nodeId : string) : string {
     return `${name}_${nodeId}`;
+}
+
+/* scalar INT64 tensor                                                       */
+export function scalarInt64(v: number): TensorProto {
+  return { dataType: DataType.INT64, dims: [], int64Data: [Number(v)] };
+}
+
+/* 1-D INT64 tensor                                                          */
+export function int64Vec(arr: (number)[]): TensorProto {
+  return { dataType: DataType.INT64, dims: [arr.length], int64Data: arr.map(Number) };
+}
+
+/* zero tensor that matches elemType + shape                                 */
+export function zeroTensor(elemType: DataType, shape: number[]): TensorProto {
+  const n = shape.reduce((a, b) => a * b, 1);
+  switch (elemType) {
+    case DataType.FLOAT:
+    case DataType.DOUBLE:
+      return { dataType: elemType, dims: shape, floatData: Array(n).fill(0) };
+    case DataType.INT32:
+      return { dataType: elemType, dims: shape, int32Data: Array(n).fill(0) };
+    default:
+      return { dataType: DataType.INT64, dims: shape, int64Data: Array(n).fill(Number(0)) };
+  }
 }
 

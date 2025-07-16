@@ -1,0 +1,208 @@
+{
+  "irVersion": 9,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "input": [
+      {
+        "name": "trip_count",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      },
+      {
+        "name": "cond",
+        "type": {
+          "tensorType": {
+            "elemType": 9,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      },
+      {
+        "name": "initial_sum",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "final_sum",
+        "type": {
+          "tensorType": {
+            "elemType": 7,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      }
+    ],
+    "initializer": [],
+    "node": [
+      {
+        "opType": "Loop",
+        "input": [
+          "trip_count",
+          "cond",
+          "initial_sum"
+        ],
+        "output": [
+          "final_sum"
+        ],
+        "attribute": [
+          {
+            "name": "body",
+            "type": 5,
+            "g": {
+              "name": "loop_body",
+              "input": [
+                {
+                  "name": "iter_count",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sum_in",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sum_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                }
+              ],
+              "initializer": [
+                {
+                  "name": "one_const",
+                  "dataType": 7,
+                  "dims": [],
+                  "floatData": [],
+                  "int32Data": [],
+                  "stringData": [],
+                  "int64Data": [
+                    1
+                  ],
+                  "doubleData": [],
+                  "uint64Data": [],
+                  "externalData": [],
+                  "rawData": {
+                    "type": "Buffer",
+                    "data": []
+                  }
+                }
+              ],
+              "node": [
+                {
+                  "opType": "Add",
+                  "input": [
+                    "sum_in",
+                    "iter_count"
+                  ],
+                  "output": [
+                    "sum_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Identity",
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "attribute": []
+                }
+              ],
+              "valueInfo": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sum_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
