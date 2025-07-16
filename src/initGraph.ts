@@ -204,49 +204,99 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 
 
 // Infer Intermediate Shapes
-function inferShapes(graph: OnnxGraph.Class): void {
-  /* The nodes were inserted only after *all* their inputs existed, so
-     the numeric string-ids are already a topological ordering.        */
+export function inferShapes(graph: OnnxGraph.Class): void {
   const ops = graph.getOperationNodes()
                    .toArray()
                    .sort((a, b) => Number(a.id) - Number(b.id));
 
   for (const node of ops) {
-    const inputs  = node.getInputs?.() ?? [];
-    const infos   = inputs.map(inp => {
-      const edge  = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
-      const tns   = inp.tryAs(TensorNode);
-
+    const inputs = node.getInputs?.() ?? [];
+    const edges  = inputs.map(inp => graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge));
+    const infos  = inputs.map((inp, i) => {
+      const edge = edges[i];
+      const tns  = inp.tryAs(TensorNode);
       return {
         shape : edge?.shape       ?? tns?.shape       ?? [],
         dtype : edge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED
       };
     });
 
-    /* special MatMul rule ------------------------------------------ */
-    if (node.type === "MatMul" && infos.length >= 2) {
-      const [a,b]    = infos;
-      const resShape = (a.shape[1] === b.shape[0])
-                     ? [a.shape[0], b.shape[1]]
-                     : [a.shape[1], b.shape[0]];
+    let outShape: number[] = [];
+    let outDtype = infos[0]?.dtype ?? AttributeType.UNDEFINED;
 
-      node.getOutgoers.forEach(e => {
-        e.shape       = resShape;
-        e.literalType = a.dtype;
-      });
-      continue;
+    switch (node.type) {
+      case "MatMul":
+        if (infos.length >= 2) {
+          const [a, b] = infos;
+          outShape = (a.shape[1] === b.shape[0])
+            ? [a.shape[0], b.shape[1]]
+            : [a.shape[1], b.shape[0]];
+        }
+        break;
+
+      case "Unsqueeze":
+        // Input 0 = tensor, Input 1 = axes (constant)
+        console.log("Unsq infos:", infos);
+        const tensorShape = infos[0].shape;
+        const axesNode = inputs[1]?.tryAs(TensorNode);
+        const axes = axesNode?.constantValue?.int32Data ?? [];  // uses ONNX tensor proto
+        console.log("Unsq tensorShape:", tensorShape);
+        console.log("Unsq axes:", axes);
+        if (tensorShape && axes.length > 0) {
+          outShape = [...tensorShape];
+          axes.sort((a, b) => a - b).forEach(axis => {
+            outShape.splice(axis, 0, 1);
+          });
+        }
+        break;
+
+      case "Gather":
+        // Input 0 = data, Input 1 = indices
+        const dataShape = infos[0].shape;
+        const indicesShape = infos[1].shape;
+        const axis = node.getAttributes["axis"] ?? 0;
+        console.log("Gather dataShape:", dataShape);
+        console.log("Gather indicesShape:", indicesShape);
+        console.log("Gather axis:", axis);
+
+        if (dataShape.length && indicesShape.length) {
+          outShape = [
+            ...dataShape.slice(0, axis),
+            ...indicesShape,
+            ...dataShape.slice(axis + 1)
+          ];
+          console.log("Gather outshape:", outShape);
+        }
+        break;
+
+      case "Reshape":
+        // Input 0 = tensor, Input 1 = target shape
+        const shapeInput = inputs[1]?.tryAs(TensorNode);
+        const shapeProto = shapeInput?.constantValue;
+        console.log("Reshape shapeProto:", shapeProto);
+        console.log("Reshape outShape:", shapeProto?.int64Data ? shapeProto.int64Data : "NO DATA");
+        if (shapeProto?.int64Data) {
+          outShape = Array.from(shapeProto.int64Data.map(n => Number(n)));
+        }
+        break;
+
+      default:
+        // Fallback: copy shape from first input
+        const first = infos.find(i => i.shape.length);
+        if (first) {
+          outShape = first.shape;
+          outDtype = first.dtype;
+        }
     }
 
-    /* fall-back: copy first available shape ------------------------ */
-    const first = infos.find(i => i.shape.length);
-    if (first) {
-      node.getOutgoers.forEach(e => {
-        e.shape       = first.shape;
-        e.literalType = first.dtype;
-      });
-    }
+    // Write result to all output edges
+    node.getOutgoers.forEach(e => {
+      e.shape       = outShape;
+      e.literalType = outDtype;
+    });
   }
 }
+
 
 
 
