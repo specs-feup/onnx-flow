@@ -31,6 +31,11 @@ export function formatId(name : string, nodeId : string) : string {
     return `${name}_${nodeId}`;
 }
 
+/* boolean tensor                                                       */
+export function bool(v: boolean): TensorProto {
+  return { dataType: DataType.BOOL, dims: [], int32Data: [v ? 1 : 0] };
+}
+
 /* scalar INT64 tensor                                                       */
 export function scalarInt64(v: number): TensorProto {
   return { dataType: DataType.INT64, dims: [], int64Data: [Number(v)] };
