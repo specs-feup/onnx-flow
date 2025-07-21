@@ -251,6 +251,13 @@ export function inferShapes(graph: OnnxGraph.Class): void {
     let outDtype = infos[0]?.dtype ?? AttributeType.UNDEFINED;
 
     switch (node.type) {
+      case "Transpose":
+        if (infos.length >= 1) {
+          const [orgMatrix] = infos;
+          const [N, M] = orgMatrix.shape;
+          outShape = [M, N]
+        }
+        break;
       case "MatMul":
         if (infos.length >= 2) {
           const [a, b] = infos;
