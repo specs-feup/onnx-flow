@@ -79,9 +79,11 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
             }
         }
 
+        const dataType = constantValue?.dataType ?? AttributeType.UNDEFINED;
+        const shape = constantValue?.dims ?? [];
         graph.addNode(name)
-        .init(new TensorNode.Builder(AttributeType.UNDEFINED, [], "constant", constantValue, undefined, extraAttrs))
-        .as(TensorNode);
+          .init(new TensorNode.Builder(dataType, shape, "constant", constantValue, undefined, extraAttrs))
+          .as(TensorNode);
 
 
         definedVars.push(name);
@@ -141,6 +143,25 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
           const bodyAttr = node.attribute.find((attr: any) => attr.name === "body" && attr.g);
           const subgraph = bodyAttr ? createGraph({ graph: bodyAttr.g }, graph) : undefined;
           opBuilder = new OperationNode.Builder(node.opType, inputs, attributes, subgraph);
+        } else if (node.opType === "If") {
+          const thenAttr = node.attribute.find((attr: any) => attr.name === "then_branch" && attr.g);
+          const elseAttr = node.attribute.find((attr: any) => attr.name === "else_branch" && attr.g);
+
+          const thenGraph = thenAttr ? createGraph({ graph: thenAttr.g }, graph) : undefined;
+          const elseGraph = elseAttr ? createGraph({ graph: elseAttr.g }, graph) : undefined;
+
+          const subgraphs = {
+            thenBranch: thenGraph,
+            elseBranch: elseGraph
+          };
+
+          opBuilder = new OperationNode.Builder(node.opType, inputs, attributes, subgraphs);
+
+        } else if (node.opType === "Scan") {
+          const bodyAttr = node.attribute.find((attr: any) => attr.name === "body" && attr.g);
+          const subgraph = bodyAttr ? createGraph({ graph: bodyAttr.g }, graph) : undefined;
+          opBuilder = new OperationNode.Builder(node.opType, inputs, attributes, { body: subgraph });
+
         } else {
           opBuilder = new OperationNode.Builder(node.opType, inputs, attributes);
         }
@@ -149,7 +170,12 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
 
         node.output.forEach((output: any) => {
           if (!graph.hasNode(output)) {
-            graph.addNode(output).init(new TensorNode.Builder(AttributeType.UNDEFINED, [], 'intermediate')).as(TensorNode);
+            const inferredShape = inputs[0]?.tryAs(TensorNode)?.shape ?? [];
+            const inferredType = inputs[0]?.tryAs(TensorNode)?.literalType ?? AttributeType.UNDEFINED;
+
+            graph.addNode(output)
+              .init(new TensorNode.Builder(inferredType, inferredShape, 'intermediate'))
+              .as(TensorNode);
           }
 
           mapNodeAndOutput.push({ nodeId: index.toString(), output });
@@ -184,7 +210,7 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
                     if (nodeWithCorrespondingOutput) {
                         const outputNode = graph.getNodeById(nodeWithCorrespondingOutput.nodeId)?.tryAs(TensorNode);
                         if (outputNode && !outputNode.isConstant()) {
-                            graph.addEdge(outputNode, opNode).init(new OnnxEdge.Builder()).as(OnnxEdge);
+                            graph.addEdge(outputNode, opNode).init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape)).as(OnnxEdge);
                         }
                     }
                 }
@@ -194,7 +220,7 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
                 if (nodeAndOutput.nodeId === opNode.id) {
                     const outputNode = graph.getNodeById(nodeAndOutput.output)?.tryAs(TensorNode);
                     if (outputNode && !outputNode.isConstant()) {
-                        graph.addEdge(opNode, outputNode).init(new OnnxEdge.Builder()).as(OnnxEdge);
+                        graph.addEdge(opNode, outputNode).init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape)).as(OnnxEdge);
                     }
                 }
             });
@@ -250,6 +276,21 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         }
         break;
 
+      case "Squeeze": {
+        const inputShape = infos[0].shape;
+        const axesNode = inputs[1]?.tryAs(TensorNode);
+        const axes = axesNode?.constantValue?.int64Data?.map(Number);
+        if (!axes || axes.length === 0) {
+          // If no axes provided, remove all dims of size 1
+          outShape = inputShape.filter(dim => dim !== 1);
+        } else {
+          const axisSet = new Set(axes);
+          outShape = inputShape.filter((dim, idx) => !axisSet.has(idx) || dim !== 1);
+        }
+        break;
+      }
+
+      // ScatterElements preserves the shape of the inputs (default behaviour)
       case "Gather":
         // Input 0 = data, Input 1 = indices
         const dataShape = infos[0].shape;
@@ -280,8 +321,44 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         }
         break;
 
+      case "Transpose": {
+        const inputShape = infos[0].shape;
+        const perm = node.getAttributes["perm"] ?? inputShape.map((_, i) => i); // default: reverse dims
+        outShape = perm.map((p: number) => inputShape[p] ?? 1);
+        break;
+      }
+
+      case "Concat": {
+        const axis = node.getAttributes["axis"] ?? 0;
+        const inputShapes = infos.map(i => i.shape);
+        const refShape = inputShapes[0] ?? [];
+
+        outShape = [...refShape];
+        outShape[axis] = inputShapes.reduce((sum, s) => sum + (s[axis] ?? 0), 0);
+        break;
+      }
+
+      case "Flatten": {
+        const inputShape = infos[0].shape;
+        const axis = node.getAttributes["axis"] ?? 1;
+
+        const d0 = inputShape.slice(0, axis).reduce((a, b) => a * b, 1);
+        const d1 = inputShape.slice(axis).reduce((a, b) => a * b, 1);
+        outShape = [d0, d1];
+        break;
+      }
+
+      case "Expand": {
+        const shapeInput = inputs[1]?.tryAs(TensorNode);
+        const targetShape = shapeInput?.constantValue?.int64Data?.map(Number);
+        if (targetShape && targetShape.length > 0) {
+          outShape = targetShape;
+        }
+        break;
+      }
+
       default:
-        // Fallback: copy shape from first input
+        // Maintain input shape
         const first = infos.find(i => i.shape.length);
         if (first) {
           outShape = first.shape;
