@@ -260,10 +260,119 @@ function handleMatMul(
   return finalOut;
 }
 
+function handleTranspose(
+  op: OperationNode.Class,
+  g: OnnxGraph.Class,
+  ctx: {
+    opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
+    iter: TensorNode.Class,
+    unsqIdx: TensorNode.Class,
+    axes: TensorNode.Class,
+    outShape: number[]
+  }
+): TensorNode.Class {
+  const firstInput = op.getInputs()![0];
+
+  const matTensor = resolveFusedInput(g, firstInput, ctx, op, false, false);
+
+  const rowSize = matTensor.shape.at(0)!; // N
+  const colSize = matTensor.shape.at(1)!; // M
+
+  const Nconst = makeTensorConst(g, `N_${op.id}`, DataType.INT64, "constant", scalarInt64(rowSize));
+  const flattenedShape = makeTensorConst(g, `shape1_${op.id}`, DataType.INT64, "constant", int64Vec([colSize]));
+
+  // Row index
+  const scalarRowIdx = g.addNode(uniq(g, `Mod_${op.id}`))
+                   .init(new OperationNode.Builder("Mod", [ctx.iter, Nconst]))
+                   .as(OperationNode);
+  
+  g.addEdge(ctx.iter, scalarRowIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the iteration with the "Mod" operation.
+  g.addEdge(Nconst, scalarRowIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Nconst with the "Mod" operation.
+
+  const scalarRowIdxOut = g.addNode(uniq(g, `rowIndex_out_${op.id}`))
+               .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
+               .as(TensorNode);
+
+  g.addEdge(scalarRowIdx, scalarRowIdxOut).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Div operation with its output.
+
+
+  // Column index
+  const scalarColIdx = g.addNode(uniq(g, `Div_${op.id}`))
+                   .init(new OperationNode.Builder("Div", [ctx.iter, Nconst]))
+                   .as(OperationNode);
+  
+  g.addEdge(ctx.iter, scalarColIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "iteration number" with the Div operation.
+  g.addEdge(Nconst, scalarColIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "Nconst" with the Div operation.
+
+  
+  const scalarColIdxOut = g.addNode(uniq(g, `columnIndex_out_${op.id}`))
+               .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
+               .as(TensorNode);
+  
+  g.addEdge(scalarColIdx, scalarColIdxOut).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Mod operation with its output.
+
+
+  // Column index unsqueeze
+  const columnIndexNode = g.addNode(uniq(g, "columnIndex_${op.id}"))
+                .init(new OperationNode.Builder("Unsqueeze", [scalarColIdxOut, ctx.axes]))
+                .as(OperationNode);
+  g.addEdge(scalarColIdxOut, columnIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "scalarColIdxOut" to the unsqueeze operator.
+  g.addEdge(ctx.axes, columnIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "axes" to the unsqueeze operator.
+
+  const colU = g.addNode(uniq(g, `columnIndex_out_${op.id}`))
+               .init(new TensorNode.Builder(DataType.UNDEFINED, [1], "intermediate"))
+               .as(TensorNode);
+
+  g.addEdge(columnIndexNode, colU).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Unsqueeze operation with its output.
+
+
+  // Row index unsqueeze
+  const rowIndexNode = g.addNode(uniq(g, "rowIndex_${op.id}"))
+                .init(new OperationNode.Builder("Unsqueeze", [scalarRowIdxOut, ctx.axes]))
+                .as(OperationNode);
+  g.addEdge(scalarRowIdxOut, rowIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "scalarRowIdxOut" to the unsqueeze operator.
+  g.addEdge(ctx.axes, rowIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "axes" to the unsqueeze operator.
+
+  const rowU = g.addNode(uniq(g, `rowIndex_out_${op.id}`))
+               .init(new TensorNode.Builder(DataType.UNDEFINED, [1], "intermediate"))
+               .as(TensorNode);
+
+  g.addEdge(rowIndexNode, rowU).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Unsqueeze operation with its output.
+
+  // Gather entire row
+  const [_, rowMatrix] = gatherFrom(g, matTensor, `rowMatrix_${op.id}`, rowU, 0);
+
+  g.addEdge(rowU, _).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the unsqueeze for "rowIndex" to the gather for "rowMatrix".
+  
+  // Reshape row to 1D vector
+  const reshape = g.addNode(uniq(g, `reshape_row_${op.id}`))
+                   .init(new OperationNode.Builder("Reshape", [rowMatrix, flattenedShape]))
+                   .as(OperationNode);
+
+  g.addEdge(flattenedShape, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the "iteration number" to reshape.
+  g.addEdge(_, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the gather for "rowMatrix" to reshape.
+      
+  const row = g.addNode(uniq(g, `row_${op.id}`))
+                   .init(new TensorNode.Builder(DataType.UNDEFINED, [1], "intermediate"))
+                   .as(TensorNode);
+  
+  g.addEdge(reshape, row).init(new OnnxEdge.Builder()).as(OnnxEdge);
+
+
+  const [__, matrixElement] = gatherFrom(g, row, `matrixElement_${op.id}`, colU, 0)
+
+  g.addEdge(colU, __).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(row, __).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects "row" to the last gather.
+
+
+  return matrixElement;
+}
+
 
 export {
   handleSimpleArithmeticOperation,
-  handleMatMul
+  handleMatMul,
+  handleTranspose
 };
 
 
@@ -312,6 +421,7 @@ export function buildLoopForChain(
     Mul: handleSimpleArithmeticOperation,
     Div: handleSimpleArithmeticOperation,
     MatMul: handleMatMul,
+    Transpose: handleTranspose,
   };
 
   for (const op of chain) {
