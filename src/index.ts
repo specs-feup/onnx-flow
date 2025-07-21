@@ -239,6 +239,11 @@ const dotFormatter = new OnnxDotFormatter();
 
     // Step 5: Graphviz Online link generation
     if (visualizationOption > 0) {
+      // TEMP
+      if(!argv.noLowLevel){
+        graph = createGraph(convertFlowGraphToOnnxJson(graph));
+      }
+
       if (visualizationOption == 1){
         console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
       }

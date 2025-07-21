@@ -4,7 +4,7 @@ import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 const IR_VERSION = 9;
 const OPSET_IMPORT = 17;
 
-export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String): any {
+export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String, bodyCount : number = 0): any {
   const modelInputs: any[] = [];
   const modelOutputs: any[] = [];
   const modelInitializers = convertInitializers(graph);
@@ -96,7 +96,7 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
       type: {
         tensorType: {
           elemType: node.literalType,
-          shape: { dim: node.shape.map(d => ({ dimValue: d })) },
+          shape: { dim: node.shape.map(d => d == null ? {} : { dimValue: d }) },
         },
       },
     });
@@ -108,7 +108,7 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
       type: {
         tensorType: {
           elemType: node.literalType,
-          shape: { dim: node.shape.map(d => ({ dimValue: d })) },
+          shape: { dim: node.shape.map(d => d == null ? {} : { dimValue: d }) },
         },
       },
     });
@@ -163,7 +163,7 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
 
     if (opType === "Loop") {
       const bodyGraph = opNode.getBodySubgraph?.();
-      const bodyGraphJson = bodyGraph ? convertFlowGraphToOnnxJson(bodyGraph, "loop_body").graph : null;
+      const bodyGraphJson = bodyGraph ? convertFlowGraphToOnnxJson(bodyGraph, `loop_body_${bodyCount}`, bodyCount + 1).graph : null;
 
       const filteredAttrs = baseAttrs.filter(attr => attr.name !== "body");
 
@@ -190,7 +190,63 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
         output: outputs,
         attribute: filteredAttrs,
       });
+    } else if (opType === "If") {
+      const subgraphs = opNode.getSubgraphs();
+      const filteredAttrs = baseAttrs.filter(attr => attr.name !== "then_branch" && attr.name !== "else_branch");
+      const thenGraph = subgraphs["then_branch"];
+      const elseGraph = subgraphs["else_branch"];
+
+      if (thenGraph) {
+        const thenJson = convertFlowGraphToOnnxJson(thenGraph, `then_branch_${bodyCount}`, bodyCount + 1).graph;
+        const thenInfo = (thenJson.output ?? []).map((out: any) => ({ name: out.name, type: out.type }));
+        filteredAttrs.push({
+          name: "then_branch",
+          type: AttributeType.GRAPH,
+          g: { ...thenJson, valueInfo: thenInfo },
+        });
+      }
+
+      if (elseGraph) {
+        const elseJson = convertFlowGraphToOnnxJson(elseGraph, `else_branch_${bodyCount}`, bodyCount + 1).graph;
+        const elseInfo = (elseJson.output ?? []).map((out: any) => ({ name: out.name, type: out.type }));
+        filteredAttrs.push({
+          name: "else_branch",
+          type: AttributeType.GRAPH,
+          g: { ...elseJson, valueInfo: elseInfo },
+        });
+      }
+
+      modelNodes.push({
+        opType,
+        input: inputs,
+        output: outputs,
+        attribute: filteredAttrs,
+      });
+
+    } else if (opType === "Scan") {
+      const subgraphs = opNode.getSubgraphs();
+      const filteredAttrs = baseAttrs.filter(attr => attr.name !== "body");
+
+      const scanBody = subgraphs["body"];
+      if (scanBody) {
+        const scanJson = convertFlowGraphToOnnxJson(scanBody, `scan_body_${bodyCount}`, bodyCount + 1).graph;
+        const scanInfo = (scanJson.output ?? []).map((out: any) => ({ name: out.name, type: out.type }));
+        filteredAttrs.push({
+          name: "body",
+          type: AttributeType.GRAPH,
+          g: { ...scanJson, valueInfo: scanInfo },
+        });
+      }
+
+      modelNodes.push({
+        opType,
+        input: inputs,
+        output: outputs,
+        attribute: filteredAttrs,
+      });
+
     } else {
+      // Generic operator
       modelNodes.push({
         opType,
         input: inputs,

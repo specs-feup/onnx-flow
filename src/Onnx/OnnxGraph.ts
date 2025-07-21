@@ -5,11 +5,6 @@ import TensorNode from "./TensorNode.js";
 import OperationNode from "./OperationNode.js";
 import OnnxEdge from "./OnnxEdge.js";
 
-
-//preciso de nodes constant (têm um value associado), operationNode (igual ao outro, mas precisam de um parent),
-//compound Node (pode ser um operationNode, só que é parent)
-//edges dentro do parent vão precisar de quê
-
 namespace OnnxGraph {
 
     export const TAG = "__specs-onnx__onnx_graph";

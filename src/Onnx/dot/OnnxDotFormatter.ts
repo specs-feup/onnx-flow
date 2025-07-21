@@ -152,7 +152,7 @@ export default class OnnxDotFormatter<
 
         for (const node of graph.nodes) {
             const tensorNode = node.tryAs(TensorNode)
-            const isIntermediateTensor = tensorNode && tensorNode.type === "intermediate";
+            const isIntermediateTensor = tensorNode && (tensorNode.type === "intermediate" || tensorNode.type === "constant");
 
             if (isIntermediateTensor) {
                 const incomers = tensorNode.getIncomers;
@@ -207,7 +207,7 @@ export default class OnnxDotFormatter<
                     dot.statements(Dot.edge(
                         ext.id,
                         this.idPrefix + opNode.id,
-                        { style: "dashed", color: "gray", label: "ext" }
+                        { style: "dashed", color: "gray", label: (ext.is(TensorNode) && ext.as(TensorNode).shape) ? `{${ext.as(TensorNode).shape.join(',')}}` : ""}
                     ));
                 }
             }
