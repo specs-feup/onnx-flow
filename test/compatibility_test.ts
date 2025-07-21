@@ -638,8 +638,8 @@ async function runVectorAddCompleteEquivalenceTest() {
     const feeds = {
       A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      trip_count_0: new Tensor('int64', [BigInt(4)], []),
-      cond_0: new Tensor('bool', [true], []),
+      //trip_count_0: new Tensor('int64', [BigInt(4)], []),
+      //cond_0: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing vectoradd_test and its decomposed reconverted version ===');
@@ -693,8 +693,8 @@ async function runAddChainCompleteEquivalenceTest() {
       B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       C: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       D: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      trip_count_1: new Tensor('int64', [BigInt(4)], []),
-      cond_1: new Tensor('bool', [true], []),
+      //trip_count_1: new Tensor('int64', [BigInt(4)], []),
+      //cond_1: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing addchain_test and its decomposed reconverted version ===');
@@ -747,8 +747,8 @@ async function runMatmulCompleteEquivalenceTest() {
     const feeds = {
       A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      trip_count_0: new Tensor('int64', [BigInt(4)], []),
-      cond_0: new Tensor('bool', [true], []),
+      //trip_count_0: new Tensor('int64', [BigInt(4)], []),
+      //cond_0: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing matmul_test and its decomposed reconverted version ===');
@@ -798,8 +798,8 @@ async function runMatmulAddCompleteEquivalenceTest() {
       X: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
       A: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
       B: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
-      trip_count_0: new Tensor('int64', [BigInt(9)], []),
-      cond_0: new Tensor('bool', [true], []),
+      //trip_count_0: new Tensor('int64', [BigInt(9)], []),
+      //cond_0: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing matmuladd_test and its decomposed reconverted version ===');

@@ -6,6 +6,6 @@ export default class OnnxGraphTransformer
   implements Graph.Transformation<OnnxGraph.Class,OnnxGraph.Class>
 {
   apply(graph: OnnxGraph.Class): OnnxGraph.Class {
-    return new TransformChain().apply(graph);
+    return new TransformChain(true, false).apply(graph);
   }
 }
