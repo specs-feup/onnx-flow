@@ -12,16 +12,16 @@ const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul"]);
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) {
-    console.log(`[${op.id}] ❌ Not in SUP`);
+    //console.log(`[${op.id}] ❌ Not in SUP`);
     return false;
   }
 
   const incs = op.getIncomers ?? [];
 
   // 1. First check edge shapes directly
-  const edgeHasShape = incs.some(edge => edge.shape && edge.shape.length >= 1);
+  const edgeHasShape = incs.some(edge => edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1)));
   if (edgeHasShape) {
-    console.log(`[${op.id}] ✅ Edge has shape`);
+    //console.log(`[${op.id}] ✅ Edge has shape`);
     return true;
   }
 
@@ -37,11 +37,12 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     if (t.shape.length === 1) {
       const producer = t.getIncomers?.[0]?.source;
       if (producer?.is(OperationNode) && producer.as(OperationNode).type === "Gather") {
-        console.log(`[${op.id}] ❌ Skipping due to [1] input from Gather (${producer.id})`);
+        //console.log(`[${op.id}] ❌ Skipping due to [1] input from Gather (${producer.id})`);
         return false;
       }
     }
   }
+  
   /*
   const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
   if (inputHasShape) {
@@ -55,16 +56,16 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     if (t.type !== "intermediate") continue;
     const interIncs = t.getIncomers ?? [];
     for (const edge of interIncs) {
-      if (edge.shape && edge.shape.length >= 1) {
-        console.log(`[${op.id}] ✅ Found shape in intermediate edge from ${edge.source.id}`, edge.shape);
+      if (edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1))) {
+        //console.log(`[${op.id}] ✅ Found shape in intermediate edge from ${edge.source.id}`, edge.shape);
         return true;
       }
       const prod = edge.source;
       if (prod.is(OperationNode)) {
         const outEdges = prod.getOutgoers ?? [];
         for (const outEdge of outEdges) {
-          if (outEdge.shape && outEdge.shape.length >= 1) {
-            console.log(`[${op.id}] ✅ Found shape in producer ${prod.id}'s output`);
+          if (outEdge.shape && (outEdge.shape.length > 1 || (outEdge.shape.length == 1 && outEdge.shape[0] > 1))) {
+            //console.log(`[${op.id}] ✅ Found shape in producer ${prod.id}'s output`);
             return true;
           }
         }
@@ -84,7 +85,7 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   });
   */
 
-  console.log(`[${op.id}] ❌ No shape found`);
+  //console.log(`[${op.id}] ❌ No shape found`);
   return false;
 }
 
