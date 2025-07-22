@@ -24,6 +24,14 @@ namespace TensorNode {
       return this.data[TAG].shape;
     }
 
+    setShape(shape: number[]): void {
+      this.data[TAG].shape = shape;
+    }
+
+    setLiteralType(dtype: number): void {
+      this.data[TAG].literalType = dtype;
+    }
+
     get type(): TensorKind {
       return this.data[TAG].type;
     }

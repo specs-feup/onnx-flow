@@ -4,6 +4,7 @@ import OperationNode from "./Onnx/OperationNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
+import { topologicalSortOperationNodes } from "./flow2json.js";
 
 const BASE_TEN = 10;
 
@@ -231,19 +232,29 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 
 // Infer Intermediate Shapes
 export function inferShapes(graph: OnnxGraph.Class): void {
-  const ops = graph.getOperationNodes()
-                   .toArray()
-                   .sort((a, b) => Number(a.id) - Number(b.id));
-
+  const ops = topologicalSortOperationNodes(graph);
+  
   for (const node of ops) {
     const inputs = node.getInputs?.() ?? [];
-    const edges  = inputs.map(inp => graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge));
-    const infos  = inputs.map((inp, i) => {
-      const edge = edges[i];
-      const tns  = inp.tryAs(TensorNode);
+    const infos = inputs.map(inp => {
+      const tns = inp.tryAs(TensorNode);
+
+      let interEdge = null;
+      if (tns.type === "intermediate") interEdge = tns.getIncomers.first;
+
+      const directEdge = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
+
+      // Optional Debug: Log all sources to help debug which one is being used
+      /*
+      console.log(`INFO CALC FOR node ${node.id}, input ${inp.id}`);
+      console.log("Intermediate edge:", interEdge?.shape, interEdge?.literalType);
+      console.log("Direct edge:", directEdge?.shape, directEdge?.literalType);
+      console.log("Tensor node:", tns?.shape, tns?.literalType);
+      */
+
       return {
-        shape : edge?.shape       ?? tns?.shape       ?? [],
-        dtype : edge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED
+        shape: interEdge?.shape ?? directEdge?.shape ?? tns?.shape ?? [],
+        dtype: interEdge?.literalType ?? directEdge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED
       };
     });
 
@@ -254,27 +265,35 @@ export function inferShapes(graph: OnnxGraph.Class): void {
       case "MatMul":
         if (infos.length >= 2) {
           const [a, b] = infos;
-          outShape = (a.shape[1] === b.shape[0])
-            ? [a.shape[0], b.shape[1]]
-            : [a.shape[1], b.shape[0]];
+          if (a.shape.length === 2 && b.shape.length === 2) {
+            outShape = [a.shape[0], b.shape[1]];
+          } else {
+            console.warn("MatMul with non-2D tensors:", a.shape, b.shape);
+            outShape = []; // fallback
+          }
         }
         break;
 
-      case "Unsqueeze":
+      case "Unsqueeze": {
         // Input 0 = tensor, Input 1 = axes (constant)
-        console.log("Unsq infos:", infos);
-        const tensorShape = infos[0].shape;
+        //console.log("Unsq infos:", infos);
+
+        const tensorShape = infos[0].shape ?? [];
         const axesNode = inputs[1]?.tryAs(TensorNode);
-        const axes = axesNode?.constantValue?.int32Data ?? [];  // uses ONNX tensor proto
-        console.log("Unsq tensorShape:", tensorShape);
-        console.log("Unsq axes:", axes);
-        if (tensorShape && axes.length > 0) {
-          outShape = [...tensorShape];
+
+        let axes: number[] = axesNode?.constantValue?.dims ?? axesNode?.constantValue?.int32Data ?? axesNode?.constantValue?.int64Data.map(v => Number(v)) ?? axesNode?.constantValue?.stringData.map(v => Number(v)) ?? [];
+
+        //console.log("Unsq tensorShape:", tensorShape);
+        //console.log("Unsq axes:", axes);
+
+        if (axes.length > 0) {
+          outShape = [...tensorShape]; // may be [] if scalar
           axes.sort((a, b) => a - b).forEach(axis => {
             outShape.splice(axis, 0, 1);
           });
         }
         break;
+      }
 
       case "Squeeze": {
         const inputShape = infos[0].shape;
@@ -291,31 +310,34 @@ export function inferShapes(graph: OnnxGraph.Class): void {
       }
 
       // ScatterElements preserves the shape of the inputs (default behaviour)
-      case "Gather":
-        // Input 0 = data, Input 1 = indices
-        const dataShape = infos[0].shape;
-        const indicesShape = infos[1].shape;
+      case "Gather": {
+        const dataShape = infos[0].shape ?? [];
+        const indicesShape = infos[1].shape ?? [];
         const axis = node.getAttributes["axis"] ?? 0;
-        console.log("Gather dataShape:", dataShape);
-        console.log("Gather indicesShape:", indicesShape);
-        console.log("Gather axis:", axis);
 
-        if (dataShape.length && indicesShape.length) {
+        //console.log("Gather dataShape:", dataShape);
+        //console.log("Gather indicesShape:", indicesShape);
+        //console.log("Gather axis:", axis);
+
+        if (dataShape.length >= axis) {
           outShape = [
             ...dataShape.slice(0, axis),
             ...indicesShape,
-            ...dataShape.slice(axis + 1)
+            ...dataShape.slice(axis + 1),
           ];
-          console.log("Gather outshape:", outShape);
+          //console.log("Gather outShape:", outShape);
+        } else {
+          console.warn(`Invalid axis ${axis} for data shape [${dataShape}]`);
         }
         break;
+      }
 
       case "Reshape":
         // Input 0 = tensor, Input 1 = target shape
         const shapeInput = inputs[1]?.tryAs(TensorNode);
         const shapeProto = shapeInput?.constantValue;
-        console.log("Reshape shapeProto:", shapeProto);
-        console.log("Reshape outShape:", shapeProto?.int64Data ? shapeProto.int64Data : "NO DATA");
+        //console.log("Reshape shapeProto:", shapeProto);
+        //console.log("Reshape outShape:", shapeProto?.int64Data ? shapeProto.int64Data : "NO DATA");
         if (shapeProto?.int64Data) {
           outShape = Array.from(shapeProto.int64Data.map(n => Number(n)));
         }
@@ -331,7 +353,8 @@ export function inferShapes(graph: OnnxGraph.Class): void {
       case "Concat": {
         const axis = node.getAttributes["axis"] ?? 0;
         const inputShapes = infos.map(i => i.shape);
-        const refShape = inputShapes[0] ?? [];
+        if (inputShapes.length === 0) break;
+        const refShape = inputShapes.find(s => s.length) ?? [];
 
         outShape = [...refShape];
         outShape[axis] = inputShapes.reduce((sum, s) => sum + (s[axis] ?? 0), 0);
@@ -359,18 +382,38 @@ export function inferShapes(graph: OnnxGraph.Class): void {
 
       default:
         // Maintain input shape
-        const first = infos.find(i => i.shape.length);
+        //console.log(node.type, "infos:", infos);
+        const first = infos.find(i => i.shape !== undefined);
         if (first) {
           outShape = first.shape;
           outDtype = first.dtype;
         }
+        //console.log(node.type, "outshape:", outShape);
     }
 
-    // Write result to all output edges
-    node.getOutgoers.forEach(e => {
-      e.shape       = outShape;
-      e.literalType = outDtype;
-    });
+    // Get current output TensorNodes
+    const outputs = node.getOutgoers.targets;
+    const outputTensors = outputs.filter(t => t.is(TensorNode));
+
+    // Clean old outgoing edges (to avoid duplicates)
+    node.getOutgoers.forEach(e => graph.getEdgeById(e.id).remove());
+
+    // Reconnect updated output edges with correct shape/dtype
+    for (const output of outputs) {
+      graph.addEdge(node, output).init(new OnnxEdge.Builder(outDtype, outShape));
+    }
+
+    // Also update the tensor node itself
+    for (const outTensor of outputTensors) {
+      const tensorNode = outTensor.tryAs(TensorNode);
+      if (tensorNode) {
+        // Optional: only override if intermediate or undefined
+        if (tensorNode.type === "intermediate" || tensorNode.shape?.length === 0) {
+          tensorNode.setShape(outShape);
+          tensorNode.setLiteralType(outDtype);
+        }
+      }
+    }
   }
 }
 

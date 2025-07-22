@@ -7,15 +7,18 @@ import TensorNode from "../../TensorNode.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import { DataType, TensorProto } from "../../OnnxTypes.js";
-import { int64Vec, scalarInt64, zeroTensor } from "../Utilities.js";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import { bool, int64Vec, scalarInt64, zeroTensor } from "../Utilities.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import TransformChain from "./TransformChain.js";
+import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
+
+const GRAPHS : OnnxGraph.Class[] = [];
 
 /* ------------------------------ Helpers ------------------------------ */
 
 export function uniq(g: OnnxGraph.Class, base: string): string {
   let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
+  while (GRAPHS.some(gr => gr.hasNode(id))) id = `${base}_${++i}`;
   return id;
 }
 
@@ -37,7 +40,7 @@ function gatherFrom(
   const out = g.addNode(uniq(g, `${tag}_out`))
     .init(new TensorNode.Builder(data.literalType, data.shape, 'intermediate'))
     .as(TensorNode);
-  g.addEdge(gather, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(gather, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return [gather, out];
 }
 
@@ -65,9 +68,9 @@ function divmod(
                 .init(new OperationNode.Builder(op, [lhs, rhs]))
                 .as(OperationNode);
   const out = g.addNode(uniq(g, `${op}_${tag}_out`))
-               .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
+               .init(new TensorNode.Builder(lhs.literalType, [], "intermediate"))
                .as(TensorNode);
-  g.addEdge(node, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return out;
 }
 
@@ -78,9 +81,9 @@ function unsqueezeIdx(
                 .init(new OperationNode.Builder("Unsqueeze", [idx, axes]))
                 .as(OperationNode);
   const out = g.addNode(uniq(g, `${tag}_out`))
-               .init(new TensorNode.Builder(DataType.UNDEFINED, [1], "intermediate"))
+               .init(new TensorNode.Builder(idx.literalType, [1], "intermediate"))
                .as(TensorNode);
-  g.addEdge(unsq, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(unsq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return out;
 }
 
@@ -93,9 +96,9 @@ function gatherAndReshape(
                    .init(new OperationNode.Builder("Reshape", [gathered, shape]))
                    .as(OperationNode);
   const out = g.addNode(uniq(g, `${tag}_out`))
-               .init(new TensorNode.Builder(DataType.UNDEFINED, [shape.shape[0]], "intermediate"))
+               .init(new TensorNode.Builder(t.literalType, [shape.shape[0]], "intermediate"))
                .as(TensorNode);
-  g.addEdge(reshape, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return out;
 }
 
@@ -111,7 +114,7 @@ function reshapeTensor(
   const out = g.addNode(uniq(g, `reshaped_${tag}`))
                .init(new TensorNode.Builder(input.literalType, shape.shape, "intermediate"))
                .as(TensorNode);
-  g.addEdge(reshape, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return out;
 }
 
@@ -146,8 +149,8 @@ function resolveFusedInput(
     let gatherInput = t;
     if(flatten) gatherInput = ensureFlatInput(g, ctx.outShape, t);
     if(returnGather){
-      const [gather, gathered] = gatherFrom(g, gatherInput, `g_${t.id}_${op.id}`, ctx.unsqIdx, 0);
-      g.addEdge(ctx.unsqIdx, gather).init(new OnnxEdge.Builder()).as(OnnxEdge);
+      const [gather, gathered] = gatherFrom(g, gatherInput, `gather_${t.id}_${op.id}`, ctx.unsqIdx, 0);
+      g.addEdge(ctx.unsqIdx, gather).init(new OnnxEdge.Builder(ctx.unsqIdx.literalType, ctx.unsqIdx.shape)).as(OnnxEdge);
       return gathered;
     }
     else{
@@ -188,10 +191,10 @@ function handleSimpleArithmeticOperation(
                 .as(OperationNode);
 
   const out = g.addNode(uniq(g, `${op.id}_out`))
-               .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
+               .init(new TensorNode.Builder(inputs[0].literalType, inputs[0].shape, "intermediate"))
                .as(TensorNode);
 
-  g.addEdge(node, out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
 
   return out;
 }
@@ -227,8 +230,8 @@ function handleMatMul(
   const rowU = unsqueezeIdx(g, rowIdx, ctx.axes, `rowU_${op.id}`);
   const colU = unsqueezeIdx(g, colIdx, ctx.axes, `colU_${op.id}`);
 
-  const [_, rowGathered] = gatherFrom(g, lhsTensor, `g_${lhsTensor.id}_${op.id}`, rowU, 0);
-  const [__, colGathered] = gatherFrom(g, rhsTensor, `g_${rhsTensor.id}_${op.id}`, colU, 1);
+  const [_, rowGathered] = gatherFrom(g, lhsTensor, `gather_${lhsTensor.id}_${op.id}`, rowU, 0);
+  const [__, colGathered] = gatherFrom(g, rhsTensor, `gather_${rhsTensor.id}_${op.id}`, colU, 1);
 
   const row = reshapeTensor(g, rowGathered, shapeK, `reshapeRow_${op.id}`);
   const col = reshapeTensor(g, colGathered, shapeK, `reshapeCol_${op.id}`);
@@ -237,25 +240,25 @@ function handleMatMul(
                .init(new OperationNode.Builder("Mul", [row, col]))
                .as(OperationNode);
   const mulOut = g.addNode(uniq(g, `mul_out_${op.id}`))
-                  .init(new TensorNode.Builder(DataType.UNDEFINED, [K], "intermediate"))
+                  .init(new TensorNode.Builder(lhsTensor.literalType, [K], "intermediate"))
                   .as(TensorNode);
-  g.addEdge(mul, mulOut).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(mul, mulOut).init(new OnnxEdge.Builder(mulOut.literalType, mulOut.shape)).as(OnnxEdge);
 
   const reduce = g.addNode(uniq(g, `reduce_${op.id}`))
                   .init(new OperationNode.Builder("ReduceSum", [mulOut, ctx.axes]))
                   .as(OperationNode);
   const reduceOut = g.addNode(uniq(g, `reduce_out_${op.id}`))
-                     .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
+                     .init(new TensorNode.Builder(lhsTensor.literalType, [], "intermediate"))
                      .as(TensorNode);
-  g.addEdge(reduce, reduceOut).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(reduce, reduceOut).init(new OnnxEdge.Builder(reduceOut.literalType, reduceOut.shape)).as(OnnxEdge);
 
   const reshape = g.addNode(uniq(g, `reshape_${op.id}`))
                    .init(new OperationNode.Builder("Reshape", [reduceOut, shape1]))
                    .as(OperationNode);
   const finalOut = g.addNode(uniq(g, `final_out_${op.id}`))
-                    .init(new TensorNode.Builder(DataType.UNDEFINED, [1], "intermediate"))
+                    .init(new TensorNode.Builder(lhsTensor.literalType, [1], "intermediate"))
                     .as(TensorNode);
-  g.addEdge(reshape, finalOut).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  g.addEdge(reshape, finalOut).init(new OnnxEdge.Builder(finalOut.literalType, finalOut.shape)).as(OnnxEdge);
 
   return finalOut;
 }
@@ -271,8 +274,12 @@ export {
 
 export function buildLoopForChain(
   chain: OperationNode.Class[],
-  graph: OnnxGraph.Class
+  graph: OnnxGraph.Class,
+  fuse: boolean = true,
+  recurse: boolean = true
 ): void {
+  GRAPHS.push(graph);
+
   const lastOp = chain.at(-1)!;
   const outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
   const elemTy = outTensor.literalType === DataType.UNDEFINED
@@ -302,7 +309,7 @@ export function buildLoopForChain(
   const unsqOut = body.addNode(uniq(body, "unsq_out"))
     .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
     .as(TensorNode);
-  body.addEdge(unsq, unsqOut).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  body.addEdge(unsq, unsqOut).init(new OnnxEdge.Builder(unsqOut.literalType, unsqOut.shape)).as(OnnxEdge);
 
   const opMap = new Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>();
 
@@ -324,7 +331,7 @@ export function buildLoopForChain(
       axes,
       outShape,
     });
-    opMap.set(op, [undefined as any, output]); // Op node unused outside; only value matters.
+    opMap.set(op, [op, output]);
   }
 
   const lastOut = opMap.get(lastOp)![1];
@@ -333,9 +340,9 @@ export function buildLoopForChain(
                       .init(new OperationNode.Builder("ScatterElements",
                             [carry, unsqOut, lastOut], { axis: 0 }))
                       .as(OperationNode);
-  body.addEdge(carry, scatter).init(new OnnxEdge.Builder()).as(OnnxEdge);
-  body.addEdge(unsqOut,  scatter).init(new OnnxEdge.Builder()).as(OnnxEdge);
-  body.addEdge(lastOut, scatter).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  body.addEdge(carry, scatter).init(new OnnxEdge.Builder(carry.literalType, carry.shape)).as(OnnxEdge);
+  body.addEdge(unsqOut,  scatter).init(new OnnxEdge.Builder(unsqOut.literalType, unsqOut.shape)).as(OnnxEdge);
+  body.addEdge(lastOut, scatter).init(new OnnxEdge.Builder(lastOut.literalType, lastOut.shape)).as(OnnxEdge);
 
   /* cond passthrough */
   const idCond = body.addNode(uniq(body, "id_cond"))
@@ -344,8 +351,8 @@ export function buildLoopForChain(
   const condOut = body.addNode(uniq(body, "cond_out"))
                       .init(new TensorNode.Builder(DataType.BOOL, [], "output"))
                       .as(TensorNode);
-  body.addEdge(condIn,idCond).init(new OnnxEdge.Builder()).as(OnnxEdge);
-  body.addEdge(idCond,condOut).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  body.addEdge(condIn,idCond).init(new OnnxEdge.Builder(condIn.literalType, condIn.shape)).as(OnnxEdge);
+  body.addEdge(idCond,condOut).init(new OnnxEdge.Builder(condOut.literalType, condOut.shape)).as(OnnxEdge);
 
   const carryOut = body.addNode(uniq(body, "carry_out"))
                        .init(new TensorNode.Builder(elemTy, carry.shape, "output"))
@@ -353,25 +360,27 @@ export function buildLoopForChain(
   body.addEdge(scatter, carryOut)
       .init(new OnnxEdge.Builder(carryOut.literalType, carryOut.shape)).as(OnnxEdge);
 
+  inferShapes(graph);
+  inferShapes(body);
+
+  if (recurse) {
+    const recursiveDecomposer = new TransformChain(fuse, recurse);
+    recursiveDecomposer.apply(body);
+  }
   /* ---------- outer Loop node + wiring -------------------------------- */
 
   /* ensure global trip_count / cond exist                                */  
-  const trip = graph.addNode(uniq(graph, `trip_count_${chain[0].id}`))
-                    .init(new TensorNode.Builder(DataType.INT64, [], "input"))
-                    .as(TensorNode);
-  
-  const cond = graph.addNode(uniq(graph, `cond_${chain[0].id}`)) 
-                    .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
-                    .as(TensorNode);
-  
+  const trip = makeTensorConst(graph, `trip_count_${chain[0].id}`, DataType.INT64, "constant", scalarInt64(totalIters));
+  const cond = makeTensorConst(graph, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
+
 
   const v_initial = makeTensorConst(graph, "init_carry", DataType.FLOAT, "initializer", carryInit);
   const loop = graph.addNode(uniq(graph, `Loop_${chain[0].id}`))
                     .init(new OperationNode.Builder("Loop", [trip, cond, v_initial], {}, body))
                     .as(OperationNode);
 
-  graph.addEdge(trip, loop).init(new OnnxEdge.Builder()).as(OnnxEdge);
-  graph.addEdge(cond, loop).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  graph.addEdge(trip, loop).init(new OnnxEdge.Builder(trip.literalType, trip.shape)).as(OnnxEdge);
+  graph.addEdge(cond, loop).init(new OnnxEdge.Builder(cond.literalType, cond.shape)).as(OnnxEdge);
 
   /* wire original model inputs as scan inputs                            */
   inputs.forEach(t => {
@@ -386,8 +395,8 @@ export function buildLoopForChain(
   graph.addNode(outTensor.id).init(new TensorNode.Builder(elemTy, outShape, isGlobalOutput ? "output" : "intermediate")).as(TensorNode);
 
   if (outShape.length > 1) {
-    const loop_out = graph.addNode(uniq(graph, "loop_out")).init(new TensorNode.Builder(DataType.UNDEFINED, [], 'intermediate')).as(TensorNode);
-    graph.addEdge(loop, loop_out).init(new OnnxEdge.Builder()).as(OnnxEdge);
+    const loop_out = graph.addNode(uniq(graph, "loop_out")).init(new TensorNode.Builder(elemTy, [], 'intermediate')).as(TensorNode);
+    graph.addEdge(loop, loop_out).init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape)).as(OnnxEdge);
     
     const shapeProto = int64Vec(outShape);
     const shapeNode  = graph.addNode(uniq(graph, `reshape_shape_${chain[0].id}`))
@@ -400,9 +409,9 @@ export function buildLoopForChain(
                          .init(new OperationNode.Builder("Reshape",[loop_out, shapeNode]))
                          .as(OperationNode);
     
-    graph.addEdge(loop_out, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge);
+    graph.addEdge(loop_out, reshape).init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape)).as(OnnxEdge);
 
-    graph.addEdge(shapeNode, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge);
+    graph.addEdge(shapeNode, reshape).init(new OnnxEdge.Builder(shapeNode.literalType, shapeNode.shape)).as(OnnxEdge);
     graph.addEdge(reshape, outTensor)
          .init(new OnnxEdge.Builder(elemTy, outShape)).as(OnnxEdge);
   } else {
