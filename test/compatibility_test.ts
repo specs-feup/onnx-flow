@@ -829,7 +829,7 @@ async function runMatmulAddCompleteEquivalenceTest() {
   }
 }
 
-/*
+
 // Tests to run
 // Standard vs Decomposed Equivalence
 await runVectorAddEquivalenceTest();
@@ -848,7 +848,7 @@ await runVectorAddDecomposedReconversionEquivalenceTest();
 await runAddChainDecomposedReconversionEquivalenceTest();
 await runMatmulDecomposedReconversionEquivalenceTest();
 await runMatmulAddDecomposedReconversionEquivalenceTest();
-*/
+
 // Complete Equivalence
 await runVectorAddCompleteEquivalenceTest();
 await runAddChainCompleteEquivalenceTest();
