@@ -19,37 +19,52 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   const incs = op.getIncomers ?? [];
 
   // 1. First check edge shapes directly
-  const edgeHasShape = incs.some(edge => edge.shape && edge.shape.length >= 1);
+  const edgeHasShape = incs.some(edge => edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1)));
   if (edgeHasShape) {
     //console.log(`[${op.id}] ✅ Edge has shape`);
     return true;
   }
 
+  
   // 2. Check tensor input shapes
   const tensorInputs = op.getInputs()
     ?.filter(n => n.is(TensorNode))
     .map(n => n.as(TensorNode)) ?? [];
 
-  const inputHasShape = tensorInputs.length === 0 || tensorInputs.some(t => t.shape.length >= 1);
+  
+  // Reject ops whose input is a [1] tensor coming from a Gather
+  for (const t of tensorInputs) {
+    if (t.shape.length === 1) {
+      const producer = t.getIncomers?.[0]?.source;
+      if (producer?.is(OperationNode) && producer.as(OperationNode).type === "Gather") {
+        //console.log(`[${op.id}] ❌ Skipping due to [1] input from Gather (${producer.id})`);
+        return false;
+      }
+    }
+  }
+  
+  /*
+  const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
   if (inputHasShape) {
-    //console.log(`[${op.id}] ✅ Tensor input has shape`);
+    console.log(`[${op.id}] ✅ Tensor input has shape`, tensorInputs[0].shape);
     return true;
   }
+  */
 
   // 3. Recursively check intermediates' producers
   for (const t of tensorInputs) {
     if (t.type !== "intermediate") continue;
     const interIncs = t.getIncomers ?? [];
     for (const edge of interIncs) {
-      if (edge.shape && edge.shape.length >= 1) {
-        //console.log(`[${op.id}] ✅ Found shape in intermediate edge from ${edge.source.id}`);
+      if (edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1))) {
+        //console.log(`[${op.id}] ✅ Found shape in intermediate edge from ${edge.source.id}`, edge.shape);
         return true;
       }
       const prod = edge.source;
       if (prod.is(OperationNode)) {
         const outEdges = prod.getOutgoers ?? [];
         for (const outEdge of outEdges) {
-          if (outEdge.shape && outEdge.shape.length >= 1) {
+          if (outEdge.shape && (outEdge.shape.length > 1 || (outEdge.shape.length == 1 && outEdge.shape[0] > 1))) {
             //console.log(`[${op.id}] ✅ Found shape in producer ${prod.id}'s output`);
             return true;
           }
@@ -60,21 +75,22 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
 
   // Optional debug
   /*
-  console.log(`[${op.id}] ❌ No shape info found`);
+  console.log([${op.id}] ❌ No shape info found);
   console.log("  Incoming edge count:", incs.length);
   console.log("  Tensor input ids:", tensorInputs.map(t => t.id).join(", ") || "none");
   tensorInputs.forEach(t => {
-    console.log(`  Tensor ${t.id} shape:`, t.shape, "type:", t.type);
+    console.log(  Tensor ${t.id} shape:, t.shape, "type:", t.type);
     const incs = t.getIncomers ?? [];
-    incs.forEach(e => console.log(`    → from ${e.source.id} with shape`, e.shape));
+    incs.forEach(e => console.log(    → from ${e.source.id} with shape, e.shape));
   });
   */
 
+  //console.log(`[${op.id}] ❌ No shape found`);
   return false;
 }
 
 export default class TransformChain implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class> {
-  constructor(private fuse: boolean = true) {}
+  constructor(private fuse: boolean = true, private recurse: boolean = true) {}
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
 
@@ -86,7 +102,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       // Fusion disabled: decompose one op at a time
       g.getOperationNodes().forEach(op => {
         if (!supported.has(op.id)) return;
-        buildLoopForChain([op], g);
+        buildLoopForChain([op], g, this.fuse, this.recurse);
       });
       return g;
     }
@@ -146,15 +162,17 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
     }
 
     // Optional debug output
+    /*
     console.log("CHAINS");
     chains.forEach((chain, key) => {
       console.log(key.id, chain.map(op => op.id).join(", "));
     });
+    */
 
     // Step 3: Apply transformation
     for (const chain of chains.values()) {
       const chainOps = chain.reverse(); // reverse for safe ordering
-      buildLoopForChain(chainOps, g);
+      buildLoopForChain(chainOps, g, this.fuse, this.recurse);
     }
 
     return g;

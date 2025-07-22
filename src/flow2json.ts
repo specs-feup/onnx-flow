@@ -1,8 +1,108 @@
+import { inferShapes } from "./initGraph.js";
+import OnnxEdge from "./Onnx/OnnxEdge.js";
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
+import OperationNode from "./Onnx/OperationNode.js";
+import TensorNode from "./Onnx/TensorNode.js";
 
 const IR_VERSION = 9;
 const OPSET_IMPORT = 17;
+
+/**
+ * Returns the topologically sorted operation nodes.
+ */
+export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
+  const sorted: OperationNode.Class[] = [];
+  const visited = new Set<string>();
+  const temp = new Set<string>();
+
+  const opNodes = graph.getOperationNodes();
+
+  const visit = (node: OperationNode.Class) => {
+    if (visited.has(node.id) || !graph.hasNode(node.id)) return;
+    if (temp.has(node.id)) {
+      console.warn(`[TopoSort] Cycle or back-edge detected at node: ${node.id}`);
+      return;
+    }
+
+    temp.add(node.id);
+
+    function checkPred(n: TensorNode.Class | OperationNode.Class) {
+      if (n.is(OperationNode)) {
+        for (const input of n.as(OperationNode).getInputs()) {
+          if (input.tryAs(TensorNode).type === "intermediate") checkPred(input.as(TensorNode));
+        }
+      }
+
+      for (const edge of n.incomers?.toArray() ?? []) {
+        const pred = edge.source.is(OperationNode) ? edge.source.as(OperationNode) : null;
+        if (pred) visit(pred);
+        else if (edge.source.is(TensorNode)) {
+          const tensorPred = edge.source.as(TensorNode);
+          if (tensorPred && tensorPred.type === "intermediate") checkPred(tensorPred);
+        }
+      }
+    }
+
+    checkPred(node);
+
+    temp.delete(node.id);
+    visited.add(node.id);
+    sorted.push(node);
+  };
+
+  for (const node of opNodes) {
+    visit(node);
+  }
+
+  //Optional debug
+  /*
+  console.log("=== [topologicalSortOperationNodes] Final OPERATION node order ===");
+  sorted.forEach((node, i) => {
+    console.log(`[${i}] id: ${node.id}`);
+  });
+  */
+
+  return sorted;
+}
+
+export function prepareGraphForExport(graph: OnnxGraph.Class): void {
+  const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];
+  const mapNodeAndOutput: { nodeId: string; output: string }[] = [];
+
+  for (const opNode of graph.getOperationNodes()) {
+    const inputs = opNode.getInputs().map(n => n.id);
+    mapNodeAndInputs.push({ nodeId: opNode.id, inputs });
+
+    opNode.getOutgoers.targets.forEach(target => {
+      if (target.is(TensorNode)) {
+        mapNodeAndOutput.push({ nodeId: opNode.id, output: target.id });
+      }
+    });
+  }
+
+  //Optional Debug
+  //mapNodeAndInputs.forEach(({ nodeId, inputs }) => { console.log("MINP:", nodeId, inputs) });
+  //mapNodeAndOutput.forEach(({ nodeId, output }) => { console.log("MOUT:", nodeId, output) });
+
+  // Add missing edges
+  mapNodeAndInputs.forEach(({ nodeId, inputs }) => {
+    const opNode = graph.getNodeById(nodeId);
+    for (const inputId of inputs) {
+      const inputNode = graph.getNodeById(inputId)?.tryAs(TensorNode);
+      if(inputNode && inputNode.type == "intermediate"){
+        const alreadyConnected = inputNode.getOutgoers?.some(e =>
+          e.target.id === opNode.id
+        );
+        if (!alreadyConnected) {
+          const type = inputNode.literalType ?? AttributeType.UNDEFINED;
+          const shape = inputNode.shape ?? [];
+          graph.addEdge(inputNode, opNode).init(new OnnxEdge.Builder(type, shape)).as(OnnxEdge);
+        }
+      }
+    }
+  });
+}
 
 export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String, bodyCount : number = 0): any {
   const modelInputs: any[] = [];
@@ -140,7 +240,14 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
     }
 
 
-  for (const opNode of graph.getOperationNodes()) {
+  // Prepare graph (e.g. rebuild edges)
+  prepareGraphForExport(graph);
+
+  // Use sorted op nodes
+  const opNodes = topologicalSortOperationNodes(graph);
+  //const opNodes = graph.getOperationNodes();
+
+  for (const opNode of opNodes) {
     const opType = opNode.type ?? "UnknownOp";
     const inputs = opNode.getInputs().map(n => n.id);
     const outputs = opNode.getOutgoers.targets.toArray().map(n => n.id);
