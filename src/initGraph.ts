@@ -9,9 +9,19 @@ import { topologicalSortOperationNodes } from "./flow2json.js";
 const BASE_TEN = 10;
 
 // Helper function to convert shape to number[]
-function parseShape(shape: any): number[] {
-    return shape.dim.map((dim: any) => parseInt(dim.dimValue, BASE_TEN));
+function parseShape(shape: any): (number | undefined)[] {
+  if (!shape?.dim) return [];
+  return shape.dim.map((dim: any) => {
+    if (dim.dimValue !== undefined && dim.dimValue !== null) {
+      return Number(dim.dimValue);
+    } else if (dim.dimParam !== undefined && dim.dimParam !== "") {
+      return dim.dimParam; // symbolic dimension, e.g., "batch"
+    } else {
+      return undefined; // unknown dimension size
+    }
+  });
 }
+
 
 let definedVars: string[] = [];
 
