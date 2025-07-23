@@ -402,14 +402,17 @@ function handleRange(
     outShape: number[]
   }
 ): TensorNode.Class {
-  console.log("Currently in handleRange");
-  const aaaa = op.getInputs()![0];
-  const limit = op.getInputs()![1];
-  const delta = op.getInputs()![2];
+  const firstInput = op.getInputs()![0];
+  const secondInput = op.getInputs()![1];
+  const thirdInput = op.getInputs()![2];
 
-  const start = resolveFusedInput(g, aaaa, ctx, op, false, false);
+  const start = resolveFusedInput(g, firstInput, ctx, op, false, false);
+  const limit = resolveFusedInput(g, secondInput, ctx, op, false, false);
+  const delta = resolveFusedInput(g, thirdInput, ctx, op, false, false);
 
   const scalarZero = makeTensorConst(g, "zero", DataType.INT64, "constant", scalarInt64(0));
+  const scalarOne = makeTensorConst(g, "one", DataType.INT64, "constant", scalarInt64(1));
+  
   const equalNode = g.addNode(uniq(g, `equal_${op.id}`))
                    .init(new OperationNode.Builder("Equal", [ctx.iter, scalarZero]))
                    .as(OperationNode)
@@ -427,7 +430,7 @@ function handleRange(
                        .as(TensorNode);
 
   const idThenNode = thenBody.addNode(uniq(g, `then_identity_${op.id}`))
-                               .init(new OperationNode.Builder("Identity", [start])); // TODO: Change ?
+                               .init(new OperationNode.Builder("Identity", [start]));
   
   thenBody.addEdge(idThenNode, thenBodyOutput).init(new OnnxEdge.Builder()).as(OnnxEdge);
   // Then Body End
@@ -438,22 +441,30 @@ function handleRange(
                        .init(new TensorNode.Builder(DataType.INT64, [1], "output"))
                        .as(TensorNode);
 
-  const idElseNode = elseBody.addNode(uniq(g, `else_identity_${op.id}`))
-                               .init(new OperationNode.Builder("Identity", [start])); // TODO: Change ?
+  const loopCarryIn = g.getNodeById("carry").as(TensorNode);
+
+  const indexSubNode = elseBody.addNode(uniq(g, `last_index_${op.id}`))
+                               .init(new OperationNode.Builder("Sub", [ctx.iter, scalarOne]));
   
-  elseBody.addEdge(idElseNode, elseBodyOutput).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  const lastIndexOut = elseBody.addNode(uniq(g, `last_index_out_${op.id}`))
+                        .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                        .as(TensorNode);
+
+  elseBody.addEdge(indexSubNode, lastIndexOut).init(new OnnxEdge.Builder()).as(OnnxEdge);
+
+  const [gatherNode, lastElem] = gatherFrom(elseBody, loopCarryIn, `gather_lastElem_${op.id}`, lastIndexOut, 0);
+
+  const addLastElemNode = elseBody.addNode(uniq(g, `add_lastElem_${op.id}`))
+                               .init(new OperationNode.Builder("Add", [lastElem, delta]));
+
+  const addLastElemOutNode = elseBody.addNode(uniq(g, `add_lastElem_out${op.id}`))
+               .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+               .as(TensorNode);
+
+  elseBody.addEdge(addLastElemNode, elseBodyOutput).init(new OnnxEdge.Builder()).as(OnnxEdge);
   // Else Body End
 
   const [ifNode, ifOutput] = createIfSubgraph(g, op, equalResult, thenBody, elseBody)
-
-
-  /* const ifUnsqNode = g.addNode(uniq(g, `if_unsq_${op.id}`))
-                .init(new OperationNode.Builder("Unsqueeze", [ifOutput, ctx.axes]))
-                .as(OperationNode);
-  const ifOutUnsqNode = g.addNode(uniq(g, `if_unsq_out_${op.id}`))
-               .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
-               .as(TensorNode); */
-  /* g.addEdge(ifUnsqNode, ifOutUnsqNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Unsqueeze operation with its output. */
 
   return ifOutput;
 }

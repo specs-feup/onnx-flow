@@ -146,6 +146,53 @@ export default class OnnxDotFormatter<
         return null;
     }
 
+    ifBodyToDot(node: OperationNode.Class): {thenSubgraph?: DotSubgraph, elseSubgraph?: DotSubgraph, idPrefix: string} {
+        let idPrefix = `if${node.id}_`;
+        let result: {thenSubgraph?: DotSubgraph, elseSubgraph?: DotSubgraph, idPrefix: string} = {idPrefix};
+        
+        // Get then branch
+        const thenBody = node.getThenBranch?.();
+        if (thenBody && thenBody instanceof OnnxGraph.Class) {
+            const thenFormatter = new OnnxDotFormatter(
+                OnnxDotFormatter.defaultGetNodeAttrs,
+                OnnxDotFormatter.defaultGetEdgeAttrs,
+                DefaultDotFormatter.defaultGetContainer,
+                OnnxDotFormatter.defaultGetGraphAttrs,
+                `${idPrefix}then_`
+            );
+            const thenDot = thenFormatter.toDot(thenBody);
+            
+            const thenCluster = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
+                .graphAttr("label", `If-Then ${node.id}`)
+                .graphAttr("style", "dashed")
+                .graphAttr("color", "green");
+                
+            result.thenSubgraph = thenCluster;
+        }
+        
+        // Get else branch
+        const elseBody = node.getElseBranch?.();
+        if (elseBody && elseBody instanceof OnnxGraph.Class) {
+            const elseFormatter = new OnnxDotFormatter(
+                OnnxDotFormatter.defaultGetNodeAttrs,
+                OnnxDotFormatter.defaultGetEdgeAttrs,
+                DefaultDotFormatter.defaultGetContainer,
+                OnnxDotFormatter.defaultGetGraphAttrs,
+                `${idPrefix}else_`
+            );
+            const elseDot = elseFormatter.toDot(elseBody);
+            
+            const elseCluster = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
+                .graphAttr("label", `If-Else ${node.id}`)
+                .graphAttr("style", "dashed")
+                .graphAttr("color", "red");
+                
+            result.elseSubgraph = elseCluster;
+        }
+        
+        return result;
+    }
+
     override toDot(graph: G): DotGraph {
         const dot = Dot.graph().graphAttrs(this.getGraphAttrs());
         const operationNodes = graph.getOperationNodes();
@@ -166,6 +213,33 @@ export default class OnnxDotFormatter<
                         const tgt = outEdge.target;
                         dot.statements(this.edgeToDotIDs(src.id, tgt.id, edgeAttrs));
                     }
+                }
+                continue;
+            }
+
+            if (operationNodes.contains(node) && node.as(OperationNode).type === "If") {
+                dot.statements(this.nodeToDot(node));
+
+                const result = this.ifBodyToDot(node.as(OperationNode));
+                if (result) {
+                    const { thenSubgraph: thenBody, elseSubgraph: elseBody, idPrefix } = result;
+                    this.nodesInCluster[node.id] = [idPrefix, thenBody.label, elseBody.label]
+
+                    dot.statements(elseBody);
+                    dot.statements(thenBody);
+
+                    dot.statements(Dot.edge(
+                        this.idPrefix + node.id,
+                        `${idPrefix}then_condition`,
+                        { label: "then", style: "dashed", color: "green" }
+                    ));
+
+                    dot.statements(Dot.edge(
+                        this.idPrefix + node.id,
+                        `${idPrefix}else_condition`,
+                        { label: "else", style: "dashed", color: "red" }
+                    ));
+
                 }
                 continue;
             }
