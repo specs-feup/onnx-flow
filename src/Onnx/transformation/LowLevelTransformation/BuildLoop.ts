@@ -289,7 +289,7 @@ function handleTranspose(
   g.addEdge(ctx.iter, scalarRowIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the iteration with the "Mod" operation.
   g.addEdge(Nconst, scalarRowIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Nconst with the "Mod" operation.
 
-  const scalarRowIdxOut = g.addNode(uniq(g, `rowIndex_out_${op.id}`))
+  const scalarRowIdxOut = g.addNode(uniq(g, `scalarRowIndex_out_${op.id}`))
                .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
                .as(TensorNode);
 
@@ -305,7 +305,7 @@ function handleTranspose(
   g.addEdge(Nconst, scalarColIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "Nconst" with the Div operation.
 
   
-  const scalarColIdxOut = g.addNode(uniq(g, `columnIndex_out_${op.id}`))
+  const scalarColIdxOut = g.addNode(uniq(g, `scalarColumnIndex_out_${op.id}`))
                .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
                .as(TensorNode);
   
@@ -313,7 +313,7 @@ function handleTranspose(
 
 
   // Column index unsqueeze
-  const columnIndexNode = g.addNode(uniq(g, "columnIndex_${op.id}"))
+  const columnIndexNode = g.addNode(uniq(g, `columnIndex_${op.id}`))
                 .init(new OperationNode.Builder("Unsqueeze", [scalarColIdxOut, ctx.axes]))
                 .as(OperationNode);
   g.addEdge(scalarColIdxOut, columnIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "scalarColIdxOut" to the unsqueeze operator.
@@ -327,7 +327,7 @@ function handleTranspose(
 
 
   // Row index unsqueeze
-  const rowIndexNode = g.addNode(uniq(g, "rowIndex_${op.id}"))
+  const rowIndexNode = g.addNode(uniq(g, `rowIndex_${op.id}`))
                 .init(new OperationNode.Builder("Unsqueeze", [scalarRowIdxOut, ctx.axes]))
                 .as(OperationNode);
   g.addEdge(scalarRowIdxOut, rowIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "scalarRowIdxOut" to the unsqueeze operator.
@@ -350,8 +350,8 @@ function handleTranspose(
                    .as(OperationNode);
 
   g.addEdge(flattenedShape, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the "iteration number" to reshape.
-  g.addEdge(_, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the gather for "rowMatrix" to reshape.
-      
+  g.addEdge(rowMatrix, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the gather for "rowMatrix" to reshape.
+  
   const row = g.addNode(uniq(g, `row_${op.id}`))
                    .init(new TensorNode.Builder(DataType.UNDEFINED, [1], "intermediate"))
                    .as(TensorNode);
