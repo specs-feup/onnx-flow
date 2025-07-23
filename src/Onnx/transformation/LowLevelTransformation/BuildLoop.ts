@@ -169,6 +169,26 @@ function resolveFusedInput(
   throw new Error(`Unhandled input case in resolveFusedInput for ${input.id}`);
 }
 
+function createIfSubgraph(
+  g: OnnxGraph.Class,
+  op: OperationNode.Class,
+  condition: TensorNode.Class,
+  thenBody: OnnxGraph.Class,
+  elseBody: OnnxGraph.Class
+) : [OperationNode.Class, TensorNode.Class] {
+  const ifNode = g.addNode(uniq(g, `if_${op.id}`))
+                   .init(new OperationNode.Builder("If", [condition], null, {"thenBranch": thenBody, "elseBranch": elseBody}))
+                   .as(OperationNode);
+  
+  const ifOutput = g.addNode(uniq(g, `if_out_${op.id}`))
+                    .init(new TensorNode.Builder(DataType.UNDEFINED, [], "intermediate"))
+                    .as(TensorNode);
+
+  g.addEdge(ifNode, ifOutput).init(new OnnxEdge.Builder()).as(OnnxEdge);
+
+  return [ifNode, ifOutput];
+}
+
 
 
 /* ------------------- Handlers for Operation Types ------------------- */
@@ -371,11 +391,79 @@ function handleTranspose(
   return matrixElement;
 }
 
+function handleRange(
+  op: OperationNode.Class,
+  g: OnnxGraph.Class,
+  ctx: {
+    opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
+    iter: TensorNode.Class,
+    unsqIdx: TensorNode.Class,
+    axes: TensorNode.Class,
+    outShape: number[]
+  }
+): TensorNode.Class {
+  console.log("Currently in handleRange");
+  const aaaa = op.getInputs()![0];
+  const limit = op.getInputs()![1];
+  const delta = op.getInputs()![2];
+
+  const start = resolveFusedInput(g, aaaa, ctx, op, false, false);
+
+  const scalarZero = makeTensorConst(g, "zero", DataType.INT64, "constant", scalarInt64(0));
+  const equalNode = g.addNode(uniq(g, `equal_${op.id}`))
+                   .init(new OperationNode.Builder("Equal", [ctx.iter, scalarZero]))
+                   .as(OperationNode)
+
+  const equalResult = g.addNode(uniq(g, `equal_out_${op.id}`))
+                       .init(new TensorNode.Builder(DataType.BOOL, [], "intermediate"))
+                       .as(TensorNode);
+
+  g.addEdge(equalNode, equalResult).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  
+  // Then Body Begin
+  const thenBody = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+  const thenBodyOutput = thenBody.addNode(uniq(thenBody, "thenOutput"))
+                       .init(new TensorNode.Builder(DataType.INT64, [1], "output"))
+                       .as(TensorNode);
+
+  const idThenNode = thenBody.addNode(uniq(g, `then_identity_${op.id}`))
+                               .init(new OperationNode.Builder("Identity", [start])); // TODO: Change ?
+  
+  thenBody.addEdge(idThenNode, thenBodyOutput).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  // Then Body End
+
+  // Else Body Begin
+  const elseBody = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+  const elseBodyOutput = elseBody.addNode(uniq(elseBody, "elseOutput"))
+                       .init(new TensorNode.Builder(DataType.INT64, [1], "output"))
+                       .as(TensorNode);
+
+  const idElseNode = elseBody.addNode(uniq(g, `else_identity_${op.id}`))
+                               .init(new OperationNode.Builder("Identity", [start])); // TODO: Change ?
+  
+  elseBody.addEdge(idElseNode, elseBodyOutput).init(new OnnxEdge.Builder()).as(OnnxEdge);
+  // Else Body End
+
+  const [ifNode, ifOutput] = createIfSubgraph(g, op, equalResult, thenBody, elseBody)
+
+
+  /* const ifUnsqNode = g.addNode(uniq(g, `if_unsq_${op.id}`))
+                .init(new OperationNode.Builder("Unsqueeze", [ifOutput, ctx.axes]))
+                .as(OperationNode);
+  const ifOutUnsqNode = g.addNode(uniq(g, `if_unsq_out_${op.id}`))
+               .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+               .as(TensorNode); */
+  /* g.addEdge(ifUnsqNode, ifOutUnsqNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Unsqueeze operation with its output. */
+
+  return ifOutput;
+}
+
 
 export {
   handleSimpleArithmeticOperation,
   handleMatMul,
-  handleTranspose
+  handleTranspose,
+  handleRange
 };
 
 
@@ -429,6 +517,7 @@ export function buildLoopForChain(
     Div: handleSimpleArithmeticOperation,
     MatMul: handleMatMul,
     Transpose: handleTranspose,
+    Range: handleRange
   };
 
   for (const op of chain) {

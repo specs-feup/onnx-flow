@@ -8,7 +8,7 @@ import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 
-const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose"]);
+const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose", "Range"]);
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) {
@@ -43,13 +43,13 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     }
   }
   
-  /*
+  
   const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
   if (inputHasShape) {
-    console.log(`[${op.id}] ✅ Tensor input has shape`, tensorInputs[0].shape);
+    //console.log(`[${op.id}] ✅ Tensor input has shape`, tensorInputs[0].shape);
     return true;
   }
-  */
+ 
 
   // 3. Recursively check intermediates' producers
   for (const t of tensorInputs) {
@@ -74,18 +74,18 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   }
 
   // Optional debug
-  /*
-  console.log([${op.id}] ❌ No shape info found);
+  
+  /* console.log(`[${op.id}] ❌ No shape info found`);
   console.log("  Incoming edge count:", incs.length);
   console.log("  Tensor input ids:", tensorInputs.map(t => t.id).join(", ") || "none");
   tensorInputs.forEach(t => {
-    console.log(  Tensor ${t.id} shape:, t.shape, "type:", t.type);
+    console.log(`  Tensor ${t.id} shape:, t.shape, "type:", t.type`);
     const incs = t.getIncomers ?? [];
-    incs.forEach(e => console.log(    → from ${e.source.id} with shape, e.shape));
+    incs.forEach(e => console.log(`    → from ${e.source.id} with shape, e.shape`));
   });
-  */
+ 
 
-  //console.log(`[${op.id}] ❌ No shape found`);
+  console.log(`[${op.id}] ❌ No shape found`); */
   return false;
 }
 

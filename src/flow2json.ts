@@ -300,8 +300,8 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
     } else if (opType === "If") {
       const subgraphs = opNode.getSubgraphs();
       const filteredAttrs = baseAttrs.filter(attr => attr.name !== "then_branch" && attr.name !== "else_branch");
-      const thenGraph = subgraphs["then_branch"];
-      const elseGraph = subgraphs["else_branch"];
+      const thenGraph = subgraphs["thenBranch"];
+      const elseGraph = subgraphs["elseBranch"];
 
       if (thenGraph) {
         const thenJson = convertFlowGraphToOnnxJson(thenGraph, `then_branch_${bodyCount}`, bodyCount + 1).graph;
