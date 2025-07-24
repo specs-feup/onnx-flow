@@ -391,6 +391,9 @@ function handleTranspose(
   return matrixElement;
 }
 
+// Used to add elements before the loop.
+let addLoopInputs = (chainRef, graphRef) => {return undefined}
+
 function handleRange(
   op: OperationNode.Class,
   g: OnnxGraph.Class,
@@ -409,6 +412,92 @@ function handleRange(
   const start = resolveFusedInput(g, firstInput, ctx, op, false, false);
   const limit = resolveFusedInput(g, secondInput, ctx, op, false, false);
   const delta = resolveFusedInput(g, thirdInput, ctx, op, false, false);
+
+  // Case where the inputs that are required by the Range node are inputs of the graph...
+  if (start.indegree === 0 && limit.indegree === 0 && delta.indegree === 0) {
+    addLoopInputs = (chainRef, graphRef) => {
+
+      const startLimitSubNode = graphRef.addNode(uniq(graphRef, `start_limit_sub`))
+                                        .init(new OperationNode.Builder("Sub", [limit, start]));
+
+      const startLimitSubOut = graphRef.addNode(uniq(graphRef, "start_limit_sub_out"))
+                                       .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                                       .as(TensorNode);
+      
+      graphRef.addEdge(startLimitSubNode, startLimitSubOut).init(new OnnxEdge.Builder())
+
+      // Cast (limit - start) to (float)(limit - start)
+      const castSubResultNode = graphRef.addNode(uniq(graphRef, `sub_cast_to_float`))
+                                        .init(new OperationNode.Builder("Cast", [startLimitSubOut], {"to": DataType.FLOAT}));
+      
+      const castSubResultOut = graphRef.addNode(uniq(graphRef, "sub_cast_to_float_out"))
+                                       .init(new TensorNode.Builder(DataType.FLOAT, [1], "intermediate"))
+                                       .as(TensorNode);
+      
+      graphRef.addEdge(castSubResultNode, castSubResultOut).init(new OnnxEdge.Builder())
+
+
+      // Cast delta to (float)(delta)
+      const castDeltaNode = graphRef.addNode(uniq(graphRef, `cast_delta`))
+                                    .init(new OperationNode.Builder("Cast", [delta], {"to": DataType.FLOAT}));
+      
+      const castDeltaOut = graphRef.addNode(uniq(graphRef, "cast_delta_out"))
+                                   .init(new TensorNode.Builder(DataType.FLOAT, [1], "intermediate"))
+                                   .as(TensorNode);
+
+      graphRef.addEdge(castDeltaNode, castDeltaOut).init(new OnnxEdge.Builder())
+
+      // (limit - start) / delta
+      const numIterFloatNode = graphRef.addNode(uniq(graphRef, `num_iter_float`))
+                                       .init(new OperationNode.Builder("Div", [castSubResultOut, castDeltaOut]));
+
+      const numIterFloatOut = graphRef.addNode(uniq(graphRef, "num_iter_float_out"))
+                                      .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                                      .as(TensorNode);
+
+      graphRef.addEdge(numIterFloatNode, numIterFloatOut).init(new OnnxEdge.Builder())
+
+      // ceil((limit - start)/delta)
+      const numIterFloatCeil = graphRef.addNode(uniq(graphRef, `num_iter_float_ceil`))
+                                       .init(new OperationNode.Builder("Ceil", [numIterFloatOut]));
+
+      const numIterFloatCeilOut = graphRef.addNode(uniq(graphRef, "num_iter_float_ceil_out"))
+                                      .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                                      .as(TensorNode);
+
+      graphRef.addEdge(numIterFloatCeil, numIterFloatCeilOut).init(new OnnxEdge.Builder())
+
+
+      // Cast ceil((limit - start)/delta) to (int)ceil((limit - start)/delta)
+      const ceilResIntNode = graphRef.addNode(uniq(graphRef, `ceil_res_to_int`))
+                                        .init(new OperationNode.Builder("Cast", [numIterFloatCeilOut], {"to": DataType.INT64}));
+      
+      const trip = graphRef.addNode(uniq(graphRef, "ceil_res_to_int_out"))
+                                       .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                                       .as(TensorNode);
+      
+      graphRef.addEdge(ceilResIntNode, trip).init(new OnnxEdge.Builder())
+
+
+
+      // TODO: add max(zero, trip) -> Prevent for loop from having a negative value trip
+
+
+      // Create an array with a custom shape
+      const constantOfShapeNode = graphRef.addNode(uniq(graphRef, `constant_of_shape`))
+                                        .init(new OperationNode.Builder("ConstantOfShape", [trip], {"value": {type: "TENSOR", ...zeroTensor(DataType.INT64, [1])}}));
+
+      const v_initial = graphRef.addNode(uniq(graphRef, "init_carry"))
+                                       .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                                       .as(TensorNode);
+      
+      graphRef.addEdge(constantOfShapeNode, v_initial).init(new OnnxEdge.Builder())
+
+      const cond = makeTensorConst(graphRef, `cond_${chainRef[0].id}`, DataType.BOOL, "constant", bool(true));      
+      
+      return [trip, cond, v_initial];
+    }
+  }
 
   const scalarZero = makeTensorConst(g, "zero", DataType.INT64, "constant", scalarInt64(0));
   const scalarOne = makeTensorConst(g, "one", DataType.INT64, "constant", scalarInt64(1));
@@ -580,11 +669,21 @@ export function buildLoopForChain(
   /* ---------- outer Loop node + wiring -------------------------------- */
 
   /* ensure global trip_count / cond exist                                */  
-  const trip = makeTensorConst(graph, `trip_count_${chain[0].id}`, DataType.INT64, "constant", scalarInt64(totalIters));
-  const cond = makeTensorConst(graph, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
 
+  // Check whether to use the defaults for trip, cond and v_initial or if we can use the ones provided by the function.
+  const nodesToAdd = addLoopInputs(chain, graph);
+  let trip = null;
+  let cond = null;
+  let v_initial = null;
 
-  const v_initial = makeTensorConst(graph, "init_carry", DataType.FLOAT, "initializer", carryInit);
+  if (nodesToAdd === undefined) {
+    trip = makeTensorConst(graph, `trip_count_${chain[0].id}`, DataType.INT64, "constant", scalarInt64(totalIters));
+    cond = makeTensorConst(graph, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
+    v_initial = makeTensorConst(graph, "init_carry", DataType.FLOAT, "initializer", carryInit);
+  } else {
+    [trip, cond, v_initial] = nodesToAdd;
+  }
+
   const loop = graph.addNode(uniq(graph, `Loop_${chain[0].id}`))
                     .init(new OperationNode.Builder("Loop", [trip, cond, v_initial], {}, body))
                     .as(OperationNode);

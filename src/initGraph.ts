@@ -131,7 +131,13 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
                 case "INTS":
                     attributes[attr.name] = attr.ints;
                     break;
+                case AttributeType.TENSOR:
+                case "TENSOR":
+                  console.log("TENSOR DETECTED") // TODO: remove
+                  console.warn(attributes)// TODO: remove
+                  break;
                 default:
+                    console.warn(node)
                     console.warn(`[addNodes] Unhandled attribute type '${attr.type}' for '${attr.name}'`);
                 }
             }
