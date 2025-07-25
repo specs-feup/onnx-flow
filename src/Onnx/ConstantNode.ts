@@ -10,19 +10,23 @@ namespace ConstantNode {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseNode.Class<D, S> {
-        
+
         get value(): number {
             return this.data[TAG].value;
         }
 
-    }   
+    }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
 
-        private value : number;
+        private value: number;
 
-        constructor(value: number) {
-            this.value = value;
+        constructor(value: number | String) {
+            if (value instanceof String) {
+                value = null;
+            } else {
+                this.value = value;
+            }
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -43,15 +47,15 @@ namespace ConstantNode {
     }
 
     export const TypeGuard = Node.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseNode.Data {
         [TAG]: {
             version: typeof VERSION;
-            value : number;
+            value: number;
         };
     }
 
-    export interface ScratchData extends BaseNode.ScratchData {}
+    export interface ScratchData extends BaseNode.ScratchData { }
 
 }
 export default ConstantNode;

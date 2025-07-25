@@ -20,11 +20,11 @@ namespace TensorNode {
       return this.data[TAG].literalType;
     }
 
-    get shape(): number[] {
+    get shape(): (number|String)[] {
       return this.data[TAG].shape;
     }
 
-    setShape(shape: number[]): void {
+    setShape(shape: (number|String)[]): void {
       this.data[TAG].shape = shape;
     }
 
@@ -63,14 +63,14 @@ namespace TensorNode {
 
   export class Builder implements Node.Builder<Data, ScratchData> {
     private literalType: number;
-    private shape: number[];
+    private shape: (number|String)[];
     private type: TensorKind;
     private constantValue?: TensorProto;
     private originalInitializer?: TensorProto;
     private extraAttrs?: AttributeProto[];
 
 
-    constructor(literalType: number, shape: number[], type: TensorKind, constantValue?: TensorProto, originalInitializer?: TensorProto, extraAttrs?: AttributeProto[]) {
+    constructor(literalType: number, shape: (number|String)[], type: TensorKind, constantValue?: TensorProto, originalInitializer?: TensorProto, extraAttrs?: AttributeProto[]) {
         this.literalType = literalType;
         this.shape = shape;
         this.type = type;
@@ -107,7 +107,7 @@ namespace TensorNode {
     [TAG]: {
         version: typeof VERSION;
         literalType: number;
-        shape: number[];
+        shape: (number|String)[];
         type: TensorKind;
         constantValue?: TensorProto;
         originalInitializer?: TensorProto;

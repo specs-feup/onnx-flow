@@ -196,7 +196,15 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
       type: {
         tensorType: {
           elemType: node.literalType,
-          shape: { dim: node.shape.map(d => d == null ? {} : { dimValue: d }) },
+          shape: {
+            dim: node.shape.map(d => {
+              if (typeof d === "string") {
+                return { dimParam: d }
+              } else {
+                return d == null ? {} : { dimValue: d }
+              }
+            })
+          },
         },
       },
     });
@@ -208,7 +216,15 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
       type: {
         tensorType: {
           elemType: node.literalType,
-          shape: { dim: node.shape.map(d => d == null ? {} : { dimValue: d }) },
+          shape: {
+            dim: node.shape.map(d => {
+              if (typeof d === "string") {
+                return { dimParam: d }
+              } else {
+                return d == null ? {} : { dimValue: d }
+              }
+            })
+          },
         },
       },
     });
@@ -265,22 +281,6 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
         attr.s = value;
         attr.type = AttributeType.STRING;
       } else if (value.type === "TENSOR") {
-        /* TODO: remove 
-          {
-          "name": "value",
-          "t": {
-            "dims": [
-              "1"
-            ],
-            "data_type": 7,
-            "int64_data": [
-              "3"
-            ],
-            "name": "value"
-          },
-          "type": "TENSOR"
-          }
-        */
         attr.t = value;
         attr.type = AttributeType.TENSOR;
       }
