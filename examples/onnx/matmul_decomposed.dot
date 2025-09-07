@@ -29,11 +29,11 @@ digraph {
     loop0_4 [label=Unsqueeze shape=box color="#0000FF"];
     loop0_4 -> loop0_7 [label=""];
     loop0_5 [label=Gather shape=box color="#0000FF"];
-    loop0_5 -> loop0_6 [label=""];
+    loop0_5 -> loop0_6 [label="{2}"];
     loop0_6 [label=Reshape shape=box color="#0000FF"];
     loop0_6 -> loop0_9 [label=""];
     loop0_7 [label=Gather shape=box color="#0000FF"];
-    loop0_7 -> loop0_8 [label=""];
+    loop0_7 -> loop0_8 [label="{2}"];
     loop0_8 [label=Reshape shape=box color="#0000FF"];
     loop0_8 -> loop0_9 [label=""];
     loop0_9 [label=Mul shape=box color="#0000FF"];
@@ -46,6 +46,7 @@ digraph {
     loop0_13 [label=Identity shape=box color="#0000FF"];
     loop0_i -> loop0_0 [label=""];
     loop0_axes0 -> loop0_0 [label="{1}"];
+    loop0_12 -> loop0_carry_out [label="{4}"];
     loop0_i -> loop0_1 [label=""];
     loop0_const_N -> loop0_1 [label=""];
     loop0_i -> loop0_2 [label=""];
@@ -57,11 +58,10 @@ digraph {
     loop0_axes0 -> loop0_10 [label="{1}"];
     loop0_shape_1 -> loop0_11 [label="{1}"];
     loop0_carry -> loop0_12 [label="{4}"];
-    loop0_12 -> loop0_carry_out [label="{4}"];
     loop0_cond_in -> loop0_13 [label=""];
     loop0_13 -> loop0_cond_out [label=""];
-    A -> loop0_5 [style=dashed color=gray label=ext];
-    B -> loop0_7 [style=dashed color=gray label=ext];
+    A -> loop0_5 [style=dashed color=gray label="{2,2}"];
+    B -> loop0_7 [style=dashed color=gray label="{2,2}"];
     graph [label="Loop 0"];
     graph [style=dashed];
     graph [color=gray];
@@ -73,5 +73,5 @@ digraph {
   cond -> loop0_0 [label="" lhead=cluster_loop_0];
   init_carry -> loop0_0 [label="{4}" lhead=cluster_loop_0];
   final_shape -> 1 [label="{2}"];
-  1 -> Y [label="{2}"];
+  1 -> Y [label=""];
 }

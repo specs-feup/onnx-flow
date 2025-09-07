@@ -12,48 +12,92 @@
         "name": "init_carry",
         "dataType": 1,
         "dims": [
-          4
+          3
         ],
-        "floatData": [],
-        "int32Data": [],
-        "stringData": [],
-        "int64Data": [],
-        "doubleData": [],
-        "uint64Data": [],
-        "externalData": [],
-        "rawData": {
-          "type": "Buffer",
-          "data": [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0
-          ]
-        }
+        "floatData": [
+          0,
+          0,
+          0
+        ]
       }
     ],
     "node": [
       {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "trip_count_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "trip_count_0",
+              "dataType": 7,
+              "dims": [],
+              "int64Data": [
+                3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "cond_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "cond_0",
+              "dataType": 9,
+              "dims": [],
+              "int32Data": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "reshape_shape_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "reshape_shape_0",
+              "dataType": 7,
+              "dims": [
+                3
+              ],
+              "int64Data": [
+                3,
+                3,
+                3
+              ]
+            }
+          }
+        ]
+      },
+      {
         "opType": "Loop",
         "input": [
-          "trip_count",
-          "cond",
+          "trip_count_0",
+          "cond_0",
           "init_carry"
         ],
         "output": [
-          "Y"
+          "loop_out"
         ],
         "attribute": [
           {
@@ -79,15 +123,57 @@
                         "dims": [
                           1
                         ],
-                        "floatData": [],
-                        "int32Data": [],
-                        "stringData": [],
                         "int64Data": [
                           0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "fixshape_fix_gather_input1_0_out_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "fixshape_fix_gather_input1_0_out_0",
+                        "dataType": 7,
+                        "dims": [
+                          2
                         ],
-                        "doubleData": [],
-                        "uint64Data": [],
-                        "externalData": []
+                        "int64Data": [
+                          3,
+                          3
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "fixshape_fix_gather_input2_0_out_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "fixshape_fix_gather_input2_0_out_0",
+                        "dataType": 7,
+                        "dims": [
+                          2
+                        ],
+                        "int64Data": [
+                          3,
+                          3
+                        ]
                       }
                     }
                   ]
@@ -99,18 +185,18 @@
                     "axes"
                   ],
                   "output": [
-                    "idx"
+                    "unsq_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Gather",
                   "input": [
-                    "A",
-                    "idx"
+                    "input1",
+                    "unsq_out"
                   ],
                   "output": [
-                    "a_val"
+                    "gather_input1_0_out"
                   ],
                   "attribute": [
                     {
@@ -119,15 +205,26 @@
                       "type": 2
                     }
                   ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "gather_input1_0_out",
+                    "fixshape_fix_gather_input1_0_out_0"
+                  ],
+                  "output": [
+                    "reshaped_fix_gather_input1_0_out_0"
+                  ],
+                  "attribute": []
                 },
                 {
                   "opType": "Gather",
                   "input": [
-                    "B",
-                    "idx"
+                    "input2",
+                    "unsq_out"
                   ],
                   "output": [
-                    "b_val"
+                    "gather_input2_0_out"
                   ],
                   "attribute": [
                     {
@@ -138,69 +235,24 @@
                   ]
                 },
                 {
-                  "opType": "Gather",
+                  "opType": "Reshape",
                   "input": [
-                    "C",
-                    "idx"
+                    "gather_input2_0_out",
+                    "fixshape_fix_gather_input2_0_out_0"
                   ],
                   "output": [
-                    "c_val"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "D",
-                    "idx"
-                  ],
-                  "output": [
-                    "d_val"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Add",
-                  "input": [
-                    "a_val",
-                    "b_val"
-                  ],
-                  "output": [
-                    "ab_val"
+                    "reshaped_fix_gather_input2_0_out_0"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Add",
                   "input": [
-                    "c_val",
-                    "d_val"
+                    "reshaped_fix_gather_input1_0_out_0",
+                    "reshaped_fix_gather_input2_0_out_0"
                   ],
                   "output": [
-                    "cd_val"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Add",
-                  "input": [
-                    "ab_val",
-                    "cd_val"
-                  ],
-                  "output": [
-                    "sum_val"
+                    "0_out"
                   ],
                   "attribute": []
                 },
@@ -208,8 +260,8 @@
                   "opType": "ScatterElements",
                   "input": [
                     "carry",
-                    "idx",
-                    "sum_val"
+                    "unsq_out",
+                    "0_out"
                   ],
                   "output": [
                     "carry_out"
@@ -264,7 +316,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": 3
                           }
                         ]
                       }
@@ -292,7 +344,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": 3
                           }
                         ]
                       }
@@ -320,7 +372,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": 3
                           }
                         ]
                       }
@@ -331,18 +383,35 @@
             }
           }
         ]
+      },
+      {
+        "opType": "Reshape",
+        "input": [
+          "loop_out",
+          "reshape_shape_0"
+        ],
+        "output": [
+          "output"
+        ],
+        "attribute": []
       }
     ],
     "input": [
       {
-        "name": "A",
+        "name": "input1",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
                 }
               ]
             }
@@ -350,68 +419,22 @@
         }
       },
       {
-        "name": "B",
+        "name": "input2",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "name": "C",
-        "type": {
-          "tensorType": {
-            "elemType": 1,
-            "shape": {
-              "dim": [
+                  "dimValue": 3
+                },
                 {
-                  "dimValue": 4
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "name": "D",
-        "type": {
-          "tensorType": {
-            "elemType": 1,
-            "shape": {
-              "dim": [
+                  "dimValue": 3
+                },
                 {
-                  "dimValue": 4
+                  "dimValue": 3
                 }
               ]
-            }
-          }
-        }
-      },
-      {
-        "name": "trip_count",
-        "type": {
-          "tensorType": {
-            "elemType": 7,
-            "shape": {
-              "dim": []
-            }
-          }
-        }
-      },
-      {
-        "name": "cond",
-        "type": {
-          "tensorType": {
-            "elemType": 9,
-            "shape": {
-              "dim": []
             }
           }
         }
@@ -419,14 +442,20 @@
     ],
     "output": [
       {
-        "name": "Y",
+        "name": "output",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 3
                 }
               ]
             }

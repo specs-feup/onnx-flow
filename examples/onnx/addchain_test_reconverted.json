@@ -24,6 +24,48 @@
     ],
     "node": [
       {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "cond_1"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "cond_1",
+              "dataType": 9,
+              "dims": [],
+              "int32Data": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "trip_count_1"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "trip_count_1",
+              "dataType": 7,
+              "dims": [],
+              "int64Data": [
+                4
+              ]
+            }
+          }
+        ]
+      },
+      {
         "opType": "Loop",
         "input": [
           "trip_count_1",
@@ -38,7 +80,7 @@
             "name": "body",
             "type": 5,
             "g": {
-              "name": "loop_body",
+              "name": "loop_body_0",
               "initializer": [],
               "node": [
                 {
@@ -82,7 +124,7 @@
                     "unsq_out"
                   ],
                   "output": [
-                    "g_C_1_out"
+                    "gather_C_1_out"
                   ],
                   "attribute": [
                     {
@@ -99,7 +141,7 @@
                     "unsq_out"
                   ],
                   "output": [
-                    "g_D_1_out"
+                    "gather_D_1_out"
                   ],
                   "attribute": [
                     {
@@ -112,8 +154,8 @@
                 {
                   "opType": "Add",
                   "input": [
-                    "g_C_1_out",
-                    "g_D_1_out"
+                    "gather_C_1_out",
+                    "gather_D_1_out"
                   ],
                   "output": [
                     "1_out"
@@ -127,7 +169,7 @@
                     "unsq_out"
                   ],
                   "output": [
-                    "g_A_0_out"
+                    "gather_A_0_out"
                   ],
                   "attribute": [
                     {
@@ -144,7 +186,7 @@
                     "unsq_out"
                   ],
                   "output": [
-                    "g_B_0_out"
+                    "gather_B_0_out"
                   ],
                   "attribute": [
                     {
@@ -157,8 +199,8 @@
                 {
                   "opType": "Add",
                   "input": [
-                    "g_A_0_out",
-                    "g_B_0_out"
+                    "gather_A_0_out",
+                    "gather_B_0_out"
                   ],
                   "output": [
                     "0_out"
@@ -362,28 +404,6 @@
                   "dimValue": 4
                 }
               ]
-            }
-          }
-        }
-      },
-      {
-        "name": "cond_1",
-        "type": {
-          "tensorType": {
-            "elemType": 9,
-            "shape": {
-              "dim": []
-            }
-          }
-        }
-      },
-      {
-        "name": "trip_count_1",
-        "type": {
-          "tensorType": {
-            "elemType": 7,
-            "shape": {
-              "dim": []
             }
           }
         }
