@@ -90,7 +90,7 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
 }
 
 export default class TransformChain implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class> {
-  constructor(private fuse: boolean = true, private recurse: boolean = true) {}
+  constructor(private fuse: boolean = true, private recurse: boolean = true, private coalesce: boolean = true) {}
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
 
@@ -102,7 +102,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       // Fusion disabled: decompose one op at a time
       g.getOperationNodes().forEach(op => {
         if (!supported.has(op.id)) return;
-        buildLoopForChain([op], g, this.fuse, this.recurse);
+        buildLoopForChain([op], g, this.fuse, this.recurse, this.coalesce);
       });
       return g;
     }
@@ -172,7 +172,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
     // Step 3: Apply transformation
     for (const chain of chains.values()) {
       const chainOps = chain.reverse(); // reverse for safe ordering
-      buildLoopForChain(chainOps, g, this.fuse, this.recurse);
+      buildLoopForChain(chainOps, g, this.fuse, this.recurse, this.coalesce);
     }
 
     return g;
