@@ -5,6 +5,8 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
 import { topologicalSortOperationNodes } from "./flow2json.js";
+import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
+import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 const BASE_TEN = 10;
 
@@ -319,7 +321,6 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         break;
       }
 
-      // ScatterElements preserves the shape of the inputs (default behaviour)
       case "Gather": {
         const dataShape = infos[0].shape ?? [];
         const indicesShape = infos[1].shape ?? [];
@@ -339,6 +340,70 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         } else {
           console.warn(`Invalid axis ${axis} for data shape [${dataShape}]`);
         }
+        break;
+      }
+
+      case "GatherElements": {
+        // ONNX rule: rank(indices) == rank(data)
+        // Output shape == indices.shape; dtype == data.dtype
+        const dataShape = infos[0]?.shape ?? [];
+        const indicesShape = infos[1]?.shape ?? [];
+        const rankData = dataShape.length;
+        const rankIdx  = indicesShape.length;
+
+        // axis default 0 (normalize if negative)
+        let axis = node.getAttributes["axis"] ?? 0;
+        if (rankData > 0 && axis < 0) axis = (axis % rankData + rankData) % rankData;
+
+        if (rankData !== 0 && rankIdx !== 0 && rankIdx !== rankData) {
+          console.warn(`GatherElements: rank(indices) (${rankIdx}) != rank(data) (${rankData}). Inference may be unreliable.`);
+        }
+        outShape = indicesShape.slice();
+        outDtype = infos[0]?.dtype ?? outDtype;
+        break;
+      }
+
+      case "ScatterElements": {
+        // ONNX rule: Output shape == data.shape; dtype == data.dtype
+        // Constraints (not enforced here, but good to sanity-check):
+        // - rank(indices) == rank(updates) == rank(data)
+        // - For all dims d != axis: indices.shape[d] == updates.shape[d] == data.shape[d]
+        // - For dim 'axis':      indices.shape[axis] == updates.shape[axis]
+        const dataShape    = infos[0]?.shape ?? [];
+        const indicesShape = infos[1]?.shape ?? [];
+        const updatesShape = infos[2]?.shape ?? [];
+        const rankData = dataShape.length;
+
+        let axis = node.getAttributes["axis"] ?? 0;
+        if (rankData > 0 && axis < 0) axis = (axis % rankData + rankData) % rankData;
+
+        // Optional sanity warnings (do not block inference)
+        if (indicesShape.length && updatesShape.length) {
+          if (indicesShape.length !== rankData || updatesShape.length !== rankData) {
+            console.warn(`ScatterElements: rank mismatch (data=${rankData}, indices=${indicesShape.length}, updates=${updatesShape.length}).`);
+          }
+          // Light check for axis dim agreement when shapes are known
+          const axOk =
+            indicesShape[axis] === undefined ||
+            updatesShape[axis] === undefined ||
+            indicesShape[axis] === updatesShape[axis];
+          if (!axOk) {
+            console.warn(`ScatterElements: indices.shape[axis] != updates.shape[axis] at axis=${axis}.`);
+          }
+        }
+
+        outShape = dataShape.slice();
+        outDtype = infos[0]?.dtype ?? outDtype;
+        break;
+      }
+
+      case "Scatter": {
+        // (Legacy op) Output shape == data.shape; dtype == data.dtype
+        // axis attribute may exist (default 0); indices/upserts semantics differ from ScatterElements,
+        // but for shape inference we simply mirror data.
+        const dataShape = infos[0]?.shape ?? [];
+        outShape = dataShape.slice();
+        outDtype = infos[0]?.dtype ?? outDtype;
         break;
       }
 
@@ -386,6 +451,26 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         const targetShape = shapeInput?.constantValue?.int64Data?.map(Number);
         if (targetShape && targetShape.length > 0) {
           outShape = targetShape;
+        }
+        break;
+      }
+
+      case "Loop": {
+        // Inputs: [trip_count, cond, initial_state, ...scan inputs]
+        const initState = infos[2]; // the carry initializer
+        if (initState && initState.shape) {
+          outShape = initState.shape.slice();
+          outDtype = initState.dtype ?? outDtype;
+        } else {
+          // fallback: keep current edge shape by peeking at connected output tensor, if any
+          const outputs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
+          let firstOutT = null;
+          let ind = 0;
+          while(!firstOutT && ind < outputs.length){
+            firstOutT = outputs[ind];
+          }
+          outShape = firstOutT?.shape ?? [];
+          outDtype = firstOutT?.literalType ?? outDtype;
         }
         break;
       }

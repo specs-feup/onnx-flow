@@ -98,7 +98,7 @@ function divmod(
                 .init(new OperationNode.Builder(op, [lhs, rhs]))
                 .as(OperationNode);
   const out = g.addNode(uniq(g, `${op}_${tag}_out`))
-               .init(new TensorNode.Builder(lhs.literalType, [], "intermediate"))
+               .init(new TensorNode.Builder(lhs.literalType, lhs.shape, "intermediate"))
                .as(TensorNode);
   g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return out;
@@ -155,7 +155,7 @@ function targetReshape(
   // Check if shape is already correct
   const isSame = actualShape.length === targetShape.length &&
                  actualShape.every((d, i) => d === targetShape[i]);
-  console.log("SHAPES:", actualShape, targetShape, isSame);
+  //console.log("SHAPES:", actualShape, targetShape, isSame);
   if (isSame || targetShape.length == 0) return tensor;
 
   // Create shape constant
@@ -367,13 +367,13 @@ function handleMatMul(
     const iMulN_node = g.addNode(uniq(g, `iMulN_${op.id}`))
       .init(new OperationNode.Builder("Mul", [kIdx, N_const])).as(OperationNode);
     const iMulN = g.addNode(uniq(g, `iMulN_out_${op.id}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(DataType.INT64, kIdx.shape, "intermediate")).as(TensorNode);
     g.addEdge(iMulN_node, iMulN).init(new OnnxEdge.Builder(iMulN.literalType, iMulN.shape)).as(OnnxEdge);
 
     const flat_node = g.addNode(uniq(g, `flat_${op.id}`))
       .init(new OperationNode.Builder("Add", [iMulN, iIdx])).as(OperationNode);
     const flat = g.addNode(uniq(g, `flat_out_${op.id}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(DataType.INT64, iIdx.shape, "intermediate")).as(TensorNode);
     g.addEdge(flat_node, flat).init(new OnnxEdge.Builder(flat.literalType, flat.shape)).as(OnnxEdge);
 
     const flatU = unsqueezeIdx(g, flat, ctx.axes, `flatU_${op.id}`); // [1]
@@ -393,7 +393,7 @@ function handleMatMul(
     const a_pick_node = g.addNode(uniq(g, `a_pick_${op.id}`))
       .init(new OperationNode.Builder("Gather", [a_vec, jU], { axis: 0 })).as(OperationNode);
     const a_scalar = g.addNode(uniq(g, `a_scalar_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(a_pick_node, a_scalar).init(new OnnxEdge.Builder(a_scalar.literalType, a_scalar.shape)).as(OnnxEdge);
 
     // ---- B[k,j] as [1] ----
@@ -410,28 +410,28 @@ function handleMatMul(
     const b_pick_node = g.addNode(uniq(g, `b_pick_${op.id}`))
       .init(new OperationNode.Builder("Gather", [b_vec, jU], { axis: 0 })).as(OperationNode);
     const b_scalar = g.addNode(uniq(g, `b_scalar_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(b_pick_node, b_scalar).init(new OnnxEdge.Builder(b_scalar.literalType, b_scalar.shape)).as(OnnxEdge);
 
     // ---- prod = A[i,k] * B[k,j]  (shape [1]) ----
     const mul_node = g.addNode(uniq(g, `mul_${op.id}`))
       .init(new OperationNode.Builder("Mul", [a_scalar, b_scalar])).as(OperationNode);
     const prod = g.addNode(uniq(g, `prod_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(mul_node, prod).init(new OnnxEdge.Builder(prod.literalType, prod.shape)).as(OnnxEdge);
 
     // ---- prev = carry[flat]  (shape [1]) ----
     const prev_node = g.addNode(uniq(g, `prev_${op.id}`))
       .init(new OperationNode.Builder("GatherElements", [ctx.carry, flatU], { axis: 0 })).as(OperationNode);
     const prev = g.addNode(uniq(g, `prev_out_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, flatU.shape, "intermediate")).as(TensorNode);
     g.addEdge(prev_node, prev).init(new OnnxEdge.Builder(prev.literalType, prev.shape)).as(OnnxEdge);
 
     // ---- acc = prev + prod  (shape [1]) ----
     const add_node = g.addNode(uniq(g, `acc_${op.id}`))
       .init(new OperationNode.Builder("Add", [prev, prod])).as(OperationNode);
     const acc = g.addNode(uniq(g, `acc_out_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(add_node, acc).init(new OnnxEdge.Builder(acc.literalType, acc.shape)).as(OnnxEdge);
 
     return acc; // [1], to be scattered by the outer builder
@@ -457,8 +457,8 @@ export function buildLoopForChain(
 ): void {
   GRAPHS.push(graph);
 
-  const withoutCoalescing = !coalesce && !chain.some(op => op.type == "MatMul");
   const matmulOp = chain.find(op => op.type === "MatMul");
+  const includesCoalescedMatMul = coalesce && matmulOp;
   const lastOp = chain.at(-1)!;
   const outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
@@ -470,7 +470,8 @@ export function buildLoopForChain(
     : outTensor.shape;
 
   let totalIters: number;
-  if (coalesce && matmulOp) {
+  let carryLen: number;
+  if (includesCoalescedMatMul) {
     const lhs = matmulOp.getInputs()![0].as(TensorNode);
     const rhs = matmulOp.getInputs()![1].as(TensorNode);
     const M = lhs.shape.at(0)!;
@@ -479,13 +480,11 @@ export function buildLoopForChain(
 
     totalIters = M * K * N;
     outShape = [M, N];  // final carry shape
+    carryLen = outShape[0] * outShape[1];
   } else {
     totalIters = outShape.length <= 1 ? outShape[0] ?? 1 : outShape.reduce((a, b) => a * b, 1);
+    carryLen = totalIters;
   }
-
-  const carryLen = (coalesce && matmulOp)
-    ? (outShape[0] * outShape[1])  // M * N
-    : (outShape.length <= 1 ? (outShape[0] ?? 1) : outShape.reduce((a, b) => a * b, 1));
 
   const inputs = new Map<string, TensorNode.Class>();
   chain.forEach(op =>
@@ -501,7 +500,7 @@ export function buildLoopForChain(
   const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
   let unsqOut = null;
 
-  if (!(coalesce && matmulOp)) {
+  if (!includesCoalescedMatMul) {
     const unsq = body.addNode(uniq(body, "unsq"))
     .init(new OperationNode.Builder("Unsqueeze", [iter, axes]))
     .as(OperationNode);
@@ -604,7 +603,7 @@ export function buildLoopForChain(
   graph.addNode(outTensor.id).init(new TensorNode.Builder(elemTy, outShape, isGlobalOutput ? "output" : "intermediate")).as(TensorNode);
 
   if (outShape.length > 1) {
-    const loop_out = graph.addNode(uniq(graph, "loop_out")).init(new TensorNode.Builder(elemTy, [carryLen], 'intermediate')).as(TensorNode);
+    const loop_out = graph.addNode(uniq(graph, "loop_out")).init(new TensorNode.Builder(elemTy, carry.shape, 'intermediate')).as(TensorNode);
     graph.addEdge(loop, loop_out).init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape)).as(OnnxEdge);
     
     const shapeProto = int64Vec(outShape);
