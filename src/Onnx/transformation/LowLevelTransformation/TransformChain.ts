@@ -171,7 +171,60 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
 
     // Step 3: Apply transformation
     for (const chain of chains.values()) {
-      const chainOps = chain.reverse(); // reverse for safe ordering
+      const chainOps = chain.reverse(); // producers first
+
+      if (this.coalesce) {
+        const matmuls = chainOps.filter(op => op.type === "MatMul");
+        const hasMultipleMatMuls = matmuls.length > 1;
+
+        // Find the (single) MatMul if present
+        const mm = matmuls[0];
+
+        // Detect if the chain includes any *producers* of that MatMul
+        let hasPreOpsForMatMul = false;
+        if (mm) {
+          const matmulAncestors = new Set<string>();
+          // collect ancestors inside chainOps
+          const idToOp = new Map(chainOps.map(op => [op.id, op]));
+          const stack = [mm];
+
+          while (stack.length) {
+            const cur = stack.pop()!;
+            cur.getInputs()?.forEach(inp => {
+              if (inp.is(OperationNode)) {
+                const prod = inp.as(OperationNode);
+                if (idToOp.has(prod.id) && prod.id !== mm.id && !matmulAncestors.has(prod.id)) {
+                  matmulAncestors.add(prod.id);
+                  stack.push(prod);
+                }
+              } else if (inp.is(TensorNode)) {
+                const t = inp.as(TensorNode);
+                const e = t.getIncomers?.[0];
+                if (e?.source?.is(OperationNode)) {
+                  const prod = e.source.as(OperationNode);
+                  if (idToOp.has(prod.id) && prod.id !== mm.id && !matmulAncestors.has(prod.id)) {
+                    matmulAncestors.add(prod.id);
+                    stack.push(prod);
+                  }
+                }
+              }
+            });
+          }
+
+          // Any ancestors present means there are ops "before" MatMul in this fused set
+          hasPreOpsForMatMul = matmulAncestors.size > 0;
+        }
+
+        if (hasMultipleMatMuls || hasPreOpsForMatMul) {
+          // Do NOT fuse this chain. Decompose one op at a time.
+          for (const op of chainOps) {
+            buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
+          }
+          continue; // move to next chain
+        }
+      }
+
+      // Safe to fuse
       buildLoopForChain(chainOps, g, this.fuse, this.recurse, this.coalesce);
     }
 

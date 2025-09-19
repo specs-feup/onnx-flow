@@ -5,7 +5,6 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
 import { topologicalSortOperationNodes } from "./flow2json.js";
-import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 const BASE_TEN = 10;
