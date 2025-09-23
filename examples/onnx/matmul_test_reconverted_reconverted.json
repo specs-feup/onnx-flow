@@ -19,7 +19,13 @@
           0,
           0,
           0
-        ]
+        ],
+        "int32Data": [],
+        "stringData": [],
+        "int64Data": [],
+        "doubleData": [],
+        "uint64Data": [],
+        "externalData": []
       }
     ],
     "node": [
@@ -37,9 +43,15 @@
               "name": "trip_count_0",
               "dataType": 7,
               "dims": [],
+              "floatData": [],
+              "int32Data": [],
+              "stringData": [],
               "int64Data": [
                 8
-              ]
+              ],
+              "doubleData": [],
+              "uint64Data": [],
+              "externalData": []
             }
           }
         ]
@@ -58,9 +70,15 @@
               "name": "cond_0",
               "dataType": 9,
               "dims": [],
+              "floatData": [],
               "int32Data": [
                 1
-              ]
+              ],
+              "stringData": [],
+              "int64Data": [],
+              "doubleData": [],
+              "uint64Data": [],
+              "externalData": []
             }
           }
         ]
@@ -81,10 +99,16 @@
               "dims": [
                 2
               ],
+              "floatData": [],
+              "int32Data": [],
+              "stringData": [],
               "int64Data": [
                 2,
                 2
-              ]
+              ],
+              "doubleData": [],
+              "uint64Data": [],
+              "externalData": []
             }
           }
         ]
@@ -123,9 +147,15 @@
                         "dims": [
                           1
                         ],
+                        "floatData": [],
+                        "int32Data": [],
+                        "stringData": [],
                         "int64Data": [
                           0
-                        ]
+                        ],
+                        "doubleData": [],
+                        "uint64Data": [],
+                        "externalData": []
                       }
                     }
                   ]
@@ -144,9 +174,15 @@
                         "name": "KN_0",
                         "dataType": 7,
                         "dims": [],
+                        "floatData": [],
+                        "int32Data": [],
+                        "stringData": [],
                         "int64Data": [
                           4
-                        ]
+                        ],
+                        "doubleData": [],
+                        "uint64Data": [],
+                        "externalData": []
                       }
                     }
                   ]
@@ -165,9 +201,15 @@
                         "name": "N_0",
                         "dataType": 7,
                         "dims": [],
+                        "floatData": [],
+                        "int32Data": [],
+                        "stringData": [],
                         "int64Data": [
                           2
-                        ]
+                        ],
+                        "doubleData": [],
+                        "uint64Data": [],
+                        "externalData": []
                       }
                     }
                   ]
@@ -188,9 +230,15 @@
                         "dims": [
                           1
                         ],
+                        "floatData": [],
+                        "int32Data": [],
+                        "stringData": [],
                         "int64Data": [
                           2
-                        ]
+                        ],
+                        "doubleData": [],
+                        "uint64Data": [],
+                        "externalData": []
                       }
                     }
                   ]
@@ -211,9 +259,15 @@
                         "dims": [
                           1
                         ],
+                        "floatData": [],
+                        "int32Data": [],
+                        "stringData": [],
                         "int64Data": [
                           2
-                        ]
+                        ],
+                        "doubleData": [],
+                        "uint64Data": [],
+                        "externalData": []
                       }
                     }
                   ]

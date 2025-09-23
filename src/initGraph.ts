@@ -3,22 +3,29 @@ import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
+import { AttributeProto, AttributeType, DataType, TensorProto } from "./Onnx/OnnxTypes.js";
 import { topologicalSortOperationNodes } from "./flow2json.js";
+import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 const BASE_TEN = 10;
 
 // Helper function to convert shape to number[]
-function parseShape(shape: any): (number|String)[] {
-    let conv = shape.dim.map((dim: any) => {
-      if (typeof dim.dimParam === "string") {
+function parseShape(shape: any): (number | String)[] {
+  if (!shape?.dim) return [];
+  return shape.dim.map((dim: any) => {
+     if (typeof dim.dimParam === "string") {
         return dim.dimParam;
-      } else {
-        return parseInt(dim.dimValue, BASE_TEN);
-      }
-    });
-    return conv
+    }
+    if (dim.dimValue !== undefined && dim.dimValue !== null) {
+      return Number(dim.dimValue);
+    } else if (dim.dimParam !== undefined && dim.dimParam !== "") {
+      return dim.dimParam; // symbolic dimension, e.g., "batch"
+    } else {
+      return undefined; // unknown dimension size
+    }
+  });
 }
+
 
 let definedVars: string[] = [];
 
@@ -273,6 +280,30 @@ export function inferShapes(graph: OnnxGraph.Class): void {
     let outShape: number[] = [];
     let outDtype = infos[0]?.dtype ?? AttributeType.UNDEFINED;
 
+    function broadcastTwoShapes(a: number[], b: number[]): number[] {
+      const ra = a.length, rb = b.length;
+      const r = Math.max(ra, rb);
+      const out = new Array<number>(r);
+
+      for (let i = 0; i < r; i++) {
+        const da = a[ra - 1 - i] ?? 1;
+        const db = b[rb - 1 - i] ?? 1;
+
+        if (da === 1) out[r - 1 - i] = db;
+        else if (db === 1) out[r - 1 - i] = da;
+        else if (da === db) out[r - 1 - i] = da;
+        else {
+          console.warn(`Broadcast mismatch at dim ${r - 1 - i}: ${da} vs ${db}. Guessing max.`);
+          out[r - 1 - i] = Math.max(da, db);
+        }
+      }
+      return out;
+    }
+
+    function broadcastShapes(...shapes: number[][]): number[] {
+      return shapes.reduce((acc, s) => broadcastTwoShapes(acc, s), []);
+    }
+
     switch (node.type) {
       case "Transpose":
         if (infos.length >= 1) {
@@ -328,7 +359,6 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         break;
       }
 
-      // ScatterElements preserves the shape of the inputs (default behaviour)
       case "Gather": {
         const dataShape = infos[0].shape ?? [];
         const indicesShape = infos[1].shape ?? [];
@@ -348,6 +378,70 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         } else {
           console.warn(`Invalid axis ${axis} for data shape [${dataShape}]`);
         }
+        break;
+      }
+
+      case "GatherElements": {
+        // ONNX rule: rank(indices) == rank(data)
+        // Output shape == indices.shape; dtype == data.dtype
+        const dataShape = infos[0]?.shape ?? [];
+        const indicesShape = infos[1]?.shape ?? [];
+        const rankData = dataShape.length;
+        const rankIdx  = indicesShape.length;
+
+        // axis default 0 (normalize if negative)
+        let axis = node.getAttributes["axis"] ?? 0;
+        if (rankData > 0 && axis < 0) axis = (axis % rankData + rankData) % rankData;
+
+        if (rankData !== 0 && rankIdx !== 0 && rankIdx !== rankData) {
+          console.warn(`GatherElements: rank(indices) (${rankIdx}) != rank(data) (${rankData}). Inference may be unreliable.`);
+        }
+        outShape = indicesShape.slice();
+        outDtype = infos[0]?.dtype ?? outDtype;
+        break;
+      }
+
+      case "ScatterElements": {
+        // ONNX rule: Output shape == data.shape; dtype == data.dtype
+        // Constraints (not enforced here, but good to sanity-check):
+        // - rank(indices) == rank(updates) == rank(data)
+        // - For all dims d != axis: indices.shape[d] == updates.shape[d] == data.shape[d]
+        // - For dim 'axis':      indices.shape[axis] == updates.shape[axis]
+        const dataShape    = infos[0]?.shape ?? [];
+        const indicesShape = infos[1]?.shape ?? [];
+        const updatesShape = infos[2]?.shape ?? [];
+        const rankData = dataShape.length;
+
+        let axis = node.getAttributes["axis"] ?? 0;
+        if (rankData > 0 && axis < 0) axis = (axis % rankData + rankData) % rankData;
+
+        // Optional sanity warnings (do not block inference)
+        if (indicesShape.length && updatesShape.length) {
+          if (indicesShape.length !== rankData || updatesShape.length !== rankData) {
+            console.warn(`ScatterElements: rank mismatch (data=${rankData}, indices=${indicesShape.length}, updates=${updatesShape.length}).`);
+          }
+          // Light check for axis dim agreement when shapes are known
+          const axOk =
+            indicesShape[axis] === undefined ||
+            updatesShape[axis] === undefined ||
+            indicesShape[axis] === updatesShape[axis];
+          if (!axOk) {
+            console.warn(`ScatterElements: indices.shape[axis] != updates.shape[axis] at axis=${axis}.`);
+          }
+        }
+
+        outShape = dataShape.slice();
+        outDtype = infos[0]?.dtype ?? outDtype;
+        break;
+      }
+
+      case "Scatter": {
+        // (Legacy op) Output shape == data.shape; dtype == data.dtype
+        // axis attribute may exist (default 0); indices/upserts semantics differ from ScatterElements,
+        // but for shape inference we simply mirror data.
+        const dataShape = infos[0]?.shape ?? [];
+        outShape = dataShape.slice();
+        outDtype = infos[0]?.dtype ?? outDtype;
         break;
       }
 
@@ -395,6 +489,53 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         const targetShape = shapeInput?.constantValue?.int64Data?.map(Number);
         if (targetShape && targetShape.length > 0) {
           outShape = targetShape;
+        }
+        break;
+      }
+
+      case "Loop": {
+        // Inputs: [trip_count, cond, initial_state, ...scan inputs]
+        const initState = infos[2]; // the carry initializer
+        if (initState && initState.shape) {
+          outShape = initState.shape.slice();
+          outDtype = initState.dtype ?? outDtype;
+        } else {
+          // fallback: keep current edge shape by peeking at connected output tensor, if any
+          const outputs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
+          let firstOutT = null;
+          let ind = 0;
+          while(!firstOutT && ind < outputs.length){
+            firstOutT = outputs[ind];
+          }
+          outShape = firstOutT?.shape ?? [];
+          outDtype = firstOutT?.literalType ?? outDtype;
+        }
+        break;
+      }
+
+      case "Equal": {
+        // Output dtype is BOOL; shape is broadcast of the two inputs
+        const s0 = infos[0]?.shape ?? [];
+        const s1 = infos[1]?.shape ?? [];
+        outShape = broadcastShapes(s0, s1);
+        outDtype = DataType.BOOL;
+        break;
+      }
+
+      case "Where": {
+        // Inputs: condition (bool), x, y
+        // Output shape is broadcast(cond, x, y); dtype follows x/y
+        const sc = infos[0]?.shape ?? [];
+        const sx = infos[1]?.shape ?? [];
+        const sy = infos[2]?.shape ?? [];
+        outShape = broadcastShapes(sc, sx, sy);
+
+        // Prefer dtype of X (then Y) as per ONNX semantics
+        outDtype = infos[1]?.dtype ?? infos[2]?.dtype ?? outDtype;
+
+        // (Optional sanity)
+        if (infos[0]?.dtype !== DataType.BOOL) {
+          console.warn("Where: condition input is not BOOL (dtype:", infos[0]?.dtype, ")");
         }
         break;
       }
