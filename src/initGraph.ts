@@ -3,7 +3,7 @@ import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
+import { AttributeProto, AttributeType, DataType, TensorProto } from "./Onnx/OnnxTypes.js";
 import { topologicalSortOperationNodes } from "./flow2json.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
@@ -272,6 +272,30 @@ export function inferShapes(graph: OnnxGraph.Class): void {
     let outShape: number[] = [];
     let outDtype = infos[0]?.dtype ?? AttributeType.UNDEFINED;
 
+    function broadcastTwoShapes(a: number[], b: number[]): number[] {
+      const ra = a.length, rb = b.length;
+      const r = Math.max(ra, rb);
+      const out = new Array<number>(r);
+
+      for (let i = 0; i < r; i++) {
+        const da = a[ra - 1 - i] ?? 1;
+        const db = b[rb - 1 - i] ?? 1;
+
+        if (da === 1) out[r - 1 - i] = db;
+        else if (db === 1) out[r - 1 - i] = da;
+        else if (da === db) out[r - 1 - i] = da;
+        else {
+          console.warn(`Broadcast mismatch at dim ${r - 1 - i}: ${da} vs ${db}. Guessing max.`);
+          out[r - 1 - i] = Math.max(da, db);
+        }
+      }
+      return out;
+    }
+
+    function broadcastShapes(...shapes: number[][]): number[] {
+      return shapes.reduce((acc, s) => broadcastTwoShapes(acc, s), []);
+    }
+
     switch (node.type) {
       case "MatMul":
         if (infos.length >= 2) {
@@ -470,6 +494,33 @@ export function inferShapes(graph: OnnxGraph.Class): void {
           }
           outShape = firstOutT?.shape ?? [];
           outDtype = firstOutT?.literalType ?? outDtype;
+        }
+        break;
+      }
+
+      case "Equal": {
+        // Output dtype is BOOL; shape is broadcast of the two inputs
+        const s0 = infos[0]?.shape ?? [];
+        const s1 = infos[1]?.shape ?? [];
+        outShape = broadcastShapes(s0, s1);
+        outDtype = DataType.BOOL;
+        break;
+      }
+
+      case "Where": {
+        // Inputs: condition (bool), x, y
+        // Output shape is broadcast(cond, x, y); dtype follows x/y
+        const sc = infos[0]?.shape ?? [];
+        const sx = infos[1]?.shape ?? [];
+        const sy = infos[2]?.shape ?? [];
+        outShape = broadcastShapes(sc, sx, sy);
+
+        // Prefer dtype of X (then Y) as per ONNX semantics
+        outDtype = infos[1]?.dtype ?? infos[2]?.dtype ?? outDtype;
+
+        // (Optional sanity)
+        if (infos[0]?.dtype !== DataType.BOOL) {
+          console.warn("Where: condition input is not BOOL (dtype:", infos[0]?.dtype, ")");
         }
         break;
       }
