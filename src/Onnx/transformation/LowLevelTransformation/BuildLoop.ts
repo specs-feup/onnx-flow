@@ -133,6 +133,20 @@ function gatherAt2DPoint(
   return [g1, out];
 }
 
+function squeezeIfLen1(g: OnnxGraph.Class, t: TensorNode.Class, axes: TensorNode.Class, tag: string) {
+  if (t.shape.length === 1 && t.shape[0] === 1) {
+    const sq = g.addNode(uniq(g, `sq_${tag}`))
+      .init(new OperationNode.Builder("Squeeze", [t, axes]))
+      .as(OperationNode);
+    const out = g.addNode(uniq(g, `sq_${tag}_out`))
+      .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
+      .as(TensorNode);
+    g.addEdge(sq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
+  }
+  return t;
+}
+
 function ensureFlatInput(
   g: OnnxGraph.Class, t: TensorNode.Class
 ): TensorNode.Class {
@@ -363,11 +377,15 @@ function handleSimpleArithmeticOperation(
 ): TensorNode.Class {
   const inputs = op.getInputs()!.map(inp => resolveFusedInput(g, inp, ctx, op));
 
+  // Turn [1] -> [] (scalar) when allowed; leave other shapes alone
+  const effInputs = inputs.map((inp, i) => squeezeIfLen1(g, inp, ctx.axes, `${op.id}_in${i}_scalar`));
+
   const node = g.addNode(uniq(g, `${op.type}_${op.id}`))
-                .init(new OperationNode.Builder(op.type, inputs))
+                .init(new OperationNode.Builder(op.type, effInputs))
                 .as(OperationNode);
 
-  const outShape = getLargestRankShape(inputs);
+  const allScalars = effInputs.every(t => t.shape.length === 0);
+  const outShape = allScalars ? [] : getLargestRankShape(effInputs);
   const out = g.addNode(uniq(g, `${op.id}_out`))
                .init(new TensorNode.Builder(inputs[0].literalType, outShape, "intermediate"))
                .as(TensorNode);
@@ -384,7 +402,7 @@ function handleSimpleArithmeticOperation(
                    .as(TensorNode);
     g.addEdge(eqNode, eqOut).init(new OnnxEdge.Builder(eqOut.literalType, eqOut.shape)).as(OnnxEdge);
 
-    const passthrough = ctx.running ?? inputs[0];
+    let passthrough = ctx.running ?? inputs[0];
 
     // Where(eq, applied_out, passthrough_left_input)
     const whereNode = g.addNode(uniq(g, `gate_${op.type}_${op.id}`))
@@ -522,8 +540,9 @@ function handleMatMul(
     const a_pick_node = g.addNode(uniq(g, `a_pick_${op.id}`))
       .init(new OperationNode.Builder("Gather", [a_vec, kU], { axis: 0 })).as(OperationNode);
     const a_scalar = g.addNode(uniq(g, `a_scalar_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
     g.addEdge(a_pick_node, a_scalar).init(new OnnxEdge.Builder(a_scalar.literalType, a_scalar.shape)).as(OnnxEdge);
+    const sq_a = squeezeIfLen1(g, a_scalar, ctx.axes, `a_sq_${op.id}`);
 
     // ---- B[k,j] as [1] ----
     const b_col_node = g.addNode(uniq(g, `b_col_${op.id}`))
@@ -539,28 +558,31 @@ function handleMatMul(
     const b_pick_node = g.addNode(uniq(g, `b_pick_${op.id}`))
       .init(new OperationNode.Builder("Gather", [b_vec, kU], { axis: 0 })).as(OperationNode);
     const b_scalar = g.addNode(uniq(g, `b_scalar_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
     g.addEdge(b_pick_node, b_scalar).init(new OnnxEdge.Builder(b_scalar.literalType, b_scalar.shape)).as(OnnxEdge);
+    const sq_b = squeezeIfLen1(g, b_scalar, ctx.axes, `b_sq_${op.id}`);
 
-    // ---- prod = A[i,k] * B[k,j]  (shape [1]) ----
+    // ---- prod = A[i,k] * B[k,j]  (scalar) ----
     const mul_node = g.addNode(uniq(g, `mul_${op.id}`))
-      .init(new OperationNode.Builder("Mul", [a_scalar, b_scalar])).as(OperationNode);
+      .init(new OperationNode.Builder("Mul", [sq_a, sq_b])).as(OperationNode);
     const prod = g.addNode(uniq(g, `prod_${op.id}`))
       .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(mul_node, prod).init(new OnnxEdge.Builder(prod.literalType, prod.shape)).as(OnnxEdge);
 
-    // ---- prev = carry[flat]  (shape [1]) ----
+    // ---- prev = carry[flat]  (scalar) ----
     const prev_node = g.addNode(uniq(g, `prev_${op.id}`))
       .init(new OperationNode.Builder("GatherElements", [ctx.carry, flatU], { axis: 0 })).as(OperationNode);
     const prev = g.addNode(uniq(g, `prev_out_${op.id}`))
       .init(new TensorNode.Builder(elemTy, flatU.shape, "intermediate")).as(TensorNode);
     g.addEdge(prev_node, prev).init(new OnnxEdge.Builder(prev.literalType, prev.shape)).as(OnnxEdge);
+    const prev_sq = squeezeIfLen1(g, prev, ctx.axes, `prev_sq_${op.id}`);
 
-    // ---- acc = prev + prod  (shape [1]) ----
+
+    // ---- acc = prev + prod  (scalar) ----
     const add_node = g.addNode(uniq(g, `acc_${op.id}`))
-      .init(new OperationNode.Builder("Add", [prev, prod])).as(OperationNode);
+      .init(new OperationNode.Builder("Add", [prev_sq, prod])).as(OperationNode);
     const acc = g.addNode(uniq(g, `acc_out_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [1], "intermediate")).as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(add_node, acc).init(new OnnxEdge.Builder(acc.literalType, acc.shape)).as(OnnxEdge);
 
     ctx.running = acc;
@@ -685,8 +707,10 @@ export function buildLoopForChain(
     opMap.set(op, [op, output]);
   }
 
-  const lastOut = opMap.get(lastOp)![1];
-  
+  let lastOut = opMap.get(lastOp)![1];
+  if(lastOut.shape.length === 0){
+    lastOut = unsqueezeIdx(body, lastOut, ctx.axes, "updateUnsq");
+  }
 
   const scatter = body.addNode(uniq(body, "scatter"))
     .init(new OperationNode.Builder("ScatterElements", [carry, indicesOut, lastOut], { axis: 0 }))
