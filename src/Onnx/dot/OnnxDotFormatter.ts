@@ -54,7 +54,7 @@ export default class OnnxDotFormatter<
         edge.switch(
             Edge.Case(OnnxEdge, (e) => {
                 const shapeString = `{${e.shape.join(',')}}`;
-                result.label = shapeString === "{}" ? "" : `{${e.shape.join(',')}}`;
+                result.label = shapeString === "{}" ? "sc" : `{${e.shape.join(',')}}`;
             }),
         );
         return result;
