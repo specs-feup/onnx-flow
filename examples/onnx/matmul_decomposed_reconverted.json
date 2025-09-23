@@ -95,7 +95,7 @@
             "name": "body",
             "type": 5,
             "g": {
-              "name": "loop_body",
+              "name": "loop_body_0",
               "initializer": [
                 {
                   "name": "const_N",

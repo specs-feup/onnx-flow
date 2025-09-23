@@ -24,11 +24,13 @@ export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
   return await json2onnx(jsonFilePath, outputFilePath);
 }
 
-export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, dotOutput: boolean = true) {
+export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, 
+  dotOutput: boolean = true, 
+  fuse: boolean = true, recurse: boolean = false, coalesce: boolean = true) {
   let graph = createGraph(onnxObject);
 
   if (enableLowLevel) {
-    graph = graph.apply(new OnnxGraphTransformer());
+    graph = graph.apply(new OnnxGraphTransformer(fuse, recurse, coalesce));
   }
 
   if (enableLowLevel && enableOptimize) {
@@ -86,7 +88,7 @@ const argv = await yargs(hideBin(process.argv))
     type: 'string',
   })
   .option('format', {
-    alias: 'f',
+    alias: 'fm',
     describe: 'Output format (json or dot)',
     type: 'string',
     choices: ['json', 'dot'],
@@ -127,6 +129,24 @@ const argv = await yargs(hideBin(process.argv))
     describe: 'Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)',
     type: 'number',
     default: 2,
+  })
+    .option('fuse', {
+    alias: 'f',
+    describe: 'Fuse supported ops into a single Loop when possible',
+    type: 'boolean',
+    default: true,
+  })
+  .option('coalesce', {
+    alias: 'c',
+    describe: 'Use coalesced scalar MAC for MatMul inside Loop bodies',
+    type: 'boolean',
+    default: true,
+  })
+  .option('recurse', {
+    alias: 'r',
+    describe: 'Recursively decompose inside generated Loop bodies',
+    type: 'boolean',
+    default: false,
   })
   .help()
   .argv;
@@ -170,7 +190,7 @@ const dotFormatter = new OnnxDotFormatter();
     }
 
     if(!argv.noLowLevel){
-      graph.apply(new OnnxGraphTransformer());
+      graph.apply(new OnnxGraphTransformer(argv.fuse, argv.recurse, argv.coalesce));
     }
 
     if (verbosity > 1){
