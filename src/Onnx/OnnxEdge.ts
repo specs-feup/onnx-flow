@@ -19,7 +19,7 @@ namespace OnnxEdge {
             this.data[TAG].literalType = value;
         }
 
-        get shape(): number[] {
+        get shape(): (number|String)[] {
             return this.data[TAG].shape;
         }
 
@@ -31,9 +31,9 @@ namespace OnnxEdge {
     export class Builder implements Edge.Builder<Data, ScratchData> {
 
         private literalType?: number;
-        private shape: number[];
+        private shape: (number|String)[];
 
-        constructor(literalType?: number, shape: number[] = []) {
+        constructor(literalType?: number, shape: (number|String)[] = []) {
             this.literalType = literalType;
             this.shape = shape;
         }
@@ -62,7 +62,7 @@ namespace OnnxEdge {
         [TAG]: {
             version: typeof VERSION;
             literalType?: number;
-            shape: number[];
+            shape: (number|String)[];
         };
     }
 

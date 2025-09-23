@@ -10,9 +10,12 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 const BASE_TEN = 10;
 
 // Helper function to convert shape to number[]
-function parseShape(shape: any): (number | undefined)[] {
+function parseShape(shape: any): (number | String)[] {
   if (!shape?.dim) return [];
   return shape.dim.map((dim: any) => {
+     if (typeof dim.dimParam === "string") {
+        return dim.dimParam;
+    }
     if (dim.dimValue !== undefined && dim.dimValue !== null) {
       return Number(dim.dimValue);
     } else if (dim.dimParam !== undefined && dim.dimParam !== "") {
@@ -142,7 +145,12 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
                 case "INTS":
                     attributes[attr.name] = attr.ints;
                     break;
+                case AttributeType.TENSOR:
+                case "TENSOR":
+                  attributes[attr.name] = attr.t;
+                  break;
                 default:
+                    console.warn(node)
                     console.warn(`[addNodes] Unhandled attribute type '${attr.type}' for '${attr.name}'`);
                 }
             }
@@ -297,6 +305,13 @@ export function inferShapes(graph: OnnxGraph.Class): void {
     }
 
     switch (node.type) {
+      case "Transpose":
+        if (infos.length >= 1) {
+          const [orgMatrix] = infos;
+          const [N, M] = orgMatrix.shape;
+          outShape = [M, N]
+        }
+        break;
       case "MatMul":
         if (infos.length >= 2) {
           const [a, b] = infos;

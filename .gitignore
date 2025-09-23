@@ -28,3 +28,4 @@ node_modules
 /out
 .idea
 /graph.dot
+.DS_Store
