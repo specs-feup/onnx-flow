@@ -32,6 +32,19 @@ type LoopCtx = {
   running?: TensorNode.Class | null,
 };
 
+// --- Dimension helpers ---
+type Dim = number | String;
+type Shape = Dim[];
+
+function isNum(d: Dim): d is number {
+  return typeof d === "number" && Number.isFinite(d);
+}
+
+// Convert a (number|string)[] to number[] by mapping symbolic dims to -1
+function toStaticShape(shape: Shape): number[] {
+  return shape.map(d => (typeof d === "number" ? d : -1));
+}
+
 /* ------------------------------ Helpers ------------------------------ */
 
 export function uniq(g: OnnxGraph.Class, base: string): string {
@@ -149,19 +162,31 @@ function squeezeIfLen1(g: OnnxGraph.Class, t: TensorNode.Class, axes: TensorNode
 function ensureFlatInput(
   g: OnnxGraph.Class, t: TensorNode.Class
 ): TensorNode.Class {
-  const shape = t.shape;
+  const shape: Shape = t.shape;
   if (shape.length <= 1) return t;
-  const total = shape.reduce((a, d) => a * d, 1);
-  const shapeConst = makeTensorConst(g, `flat_shape_${t.id}`, DataType.INT64, "constant", int64Vec([total]));
+
+  const allNum = shape.every(isNum);
+  const total = allNum
+    ? (shape as number[]).reduce((a, d) => a * d, 1)
+    : -1; // unknown size → use -1
+
+  // Reshape to [total] ([-1] when dynamic)
+  const shpVec = int64Vec([total]);
+  const shapeConst = makeTensorConst(g, `flat_shape_${t.id}`, DataType.INT64, "constant", shpVec);
+
   const rs = g.addNode(uniq(g, `flat_rs_${t.id}`))
     .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
     .as(OperationNode);
+
+  const outStatic = [total]; // number[]
   const flat = g.addNode(uniq(g, `${t.id}_flat`))
-    .init(new TensorNode.Builder(t.literalType, [total], "intermediate"))
+    .init(new TensorNode.Builder(t.literalType, outStatic, "intermediate"))
     .as(TensorNode);
-  g.addEdge(rs, flat).init(new OnnxEdge.Builder(t.literalType, [total])).as(OnnxEdge);
+
+  g.addEdge(rs, flat).init(new OnnxEdge.Builder(t.literalType, outStatic)).as(OnnxEdge);
   return flat;
 }
+
 
 function divmod(
   g: OnnxGraph.Class, lhs: TensorNode.Class, rhs: TensorNode.Class,
@@ -190,7 +215,7 @@ function unsqueezeIdx(
   return out;
 }
 
-function getSmallestRankShape(tensors: TensorNode.Class[]): number[] {
+function getSmallestRankShape(tensors: TensorNode.Class[]): Shape {
   if (tensors.length === 0) return [];
 
   let smallest = tensors[0].shape;
@@ -202,7 +227,7 @@ function getSmallestRankShape(tensors: TensorNode.Class[]): number[] {
   return smallest;
 }
 
-function getLargestRankShape(tensors: TensorNode.Class[]): number[] {
+function getLargestRankShape(tensors: TensorNode.Class[]): Shape {
   if (tensors.length === 0) return [];
   let largest = tensors[0].shape;
   for (let i = 1; i < tensors.length; i++) {
@@ -612,13 +637,7 @@ function handleMatMul(
 function handleTranspose(
   op: OperationNode.Class,
   g: OnnxGraph.Class,
-  ctx: {
-    opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
-    iter: TensorNode.Class,
-    unsqIdx: TensorNode.Class,
-    axes: TensorNode.Class,
-    outShape: (number | String)[]
-  }
+  ctx: LoopCtx
 ): TensorNode.Class {
   const firstInput = op.getInputs()![0];
 
@@ -723,13 +742,7 @@ let addLoopInputs = (chainRef, graphRef) => { return undefined }
 function handleRange(
   op: OperationNode.Class,
   g: OnnxGraph.Class,
-  ctx: {
-    opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
-    iter: TensorNode.Class,
-    unsqIdx: TensorNode.Class,
-    axes: TensorNode.Class,
-    outShape: number[]
-  }
+  ctx: LoopCtx
 ): TensorNode.Class {
   const firstInput = op.getInputs()![0];
   const secondInput = op.getInputs()![1];
@@ -924,20 +937,21 @@ export function buildLoopForChain(
     ? lastOp.getOutgoers.first().shape
     : outTensor.shape;
 
-  let totalIters: number;
-  let carryLen: number;
+  let totalIters: number = null;
+  let carryLen: number = null;
   if (includesCoalescedMatMul) {
     const lhs = matmulOp.getInputs()![0].as(TensorNode);
     const rhs = matmulOp.getInputs()![1].as(TensorNode);
-    const M = lhs.shape.at(0)!;
-    const K = lhs.shape.at(1)!;
-    const N = rhs.shape.at(1)!;
+    const M = Number(lhs.shape.at(0)!);
+    const K = Number(lhs.shape.at(1)!);
+    const N = Number(rhs.shape.at(1)!);
 
     totalIters = M * K * N;
     outShape = [M, N];  // final carry shape
-    carryLen = outShape[0] * outShape[1];
+    carryLen = M * N;
   } else {
-    totalIters = outShape.length <= 1 ? outShape[0] ?? 1 : outShape.reduce((a, b) => a * b, 1);
+    const staticOut = toStaticShape(outShape as Shape);
+    totalIters = staticOut.length <= 1 ? (staticOut[0] ?? 1) : staticOut.reduce((a, b) => a * b, 1);
     carryLen = totalIters;
   }
 
@@ -951,7 +965,6 @@ export function buildLoopForChain(
   const iter = body.addNode(uniq(body, "iter")).init(new TensorNode.Builder(DataType.INT64, [], "input")).as(TensorNode);
   const condIn = body.addNode(uniq(body, "cond_in")).init(new TensorNode.Builder(DataType.BOOL, [], "input")).as(TensorNode);
 
-  let totalIters: number = null;
   let carryInit = null;
   let carry = null;
 
