@@ -18,28 +18,25 @@ namespace VariableNode {
         get name(): string {
             return this.data[TAG].name;
         }
-        
+
         get type(): string {
             return this.data[TAG].type;
         }
-
-
-    }   
+    }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
 
-       
+
         private literalType : number;
         private name : string;
         private type : string;
 
-        
+
 
         constructor(literalType: number, name : string, type : string) {
             this.literalType = literalType;
             this.name = name;
             this.type = type;
-            
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -49,7 +46,7 @@ namespace VariableNode {
                     version: VERSION,
                     literalType: this.literalType,
                     name: this.name,
-                    type: this.type                  
+                    type: this.type
                 },
             };
         }
@@ -62,7 +59,7 @@ namespace VariableNode {
     }
 
     export const TypeGuard = Node.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseNode.Data {
         [TAG]: {
             version: typeof VERSION;

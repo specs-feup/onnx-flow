@@ -5,7 +5,8 @@ import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
 import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
 import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
-import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
+// import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
+import OnnxModDotFormatter from './Onnx/dot/OnnxModDotFormatter.js'
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
@@ -24,8 +25,8 @@ export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
   return await json2onnx(jsonFilePath, outputFilePath);
 }
 
-export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, 
-  dotOutput: boolean = true, 
+export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true,
+  dotOutput: boolean = true,
   fuse: boolean = true, recurse: boolean = false, coalesce: boolean = true) {
   let graph = createGraph(onnxObject);
 
@@ -161,8 +162,7 @@ const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = new OnnxDotFormatter();
-
+const dotFormatter = new OnnxModDotFormatter();
 
 (async function main() {
   try {
@@ -199,8 +199,8 @@ const dotFormatter = new OnnxDotFormatter();
       } else if (outputFormat === 'dot') {
         console.log('Low-level Graph in DOT Format:', graph.toString(dotFormatter));
       }
-    }    
-      
+    }
+
     if (!argv.noLowLevel && !argv.noOptimize) {
       graph.apply(new OnnxGraphOptimizer());
     }
@@ -237,7 +237,7 @@ const dotFormatter = new OnnxDotFormatter();
 
       await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
       console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-    } 
+    }
     else if (verbosity > 0) {
       console.log('Skipping ONNX reconversion.');
     }
