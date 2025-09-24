@@ -26,6 +26,41 @@ function fixBuffers(obj: any): any {
   return obj;
 }
 
+// Coerce numeric-like strings to numbers for fields protobuf expects as ints/floats.
+// Also normalizes common ONNX numeric array fields (ints, floats, dims, etc.).
+function coerceNumericFields(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(coerceNumericFields);
+  }
+  if (obj && typeof obj === 'object') {
+    for (const k of Object.keys(obj)) {
+      const v = obj[k];
+
+      // Recurse first
+      obj[k] = coerceNumericFields(v);
+
+      // Now fix known numeric fields
+      if (k === 'ints' && Array.isArray(obj[k])) {
+        obj[k] = obj[k].map((x: any) =>
+          typeof x === 'string' ? parseInt(x, 10) : x
+        );
+      } else if (k === 'floats' && Array.isArray(obj[k])) {
+        obj[k] = obj[k].map((x: any) =>
+          typeof x === 'string' ? parseFloat(x) : x
+        );
+      } else if ((k === 'i' || k === 'f') && (typeof obj[k] === 'string')) {
+        obj[k] = k === 'i' ? parseInt(obj[k], 10) : parseFloat(obj[k]);
+      } else if (k === 'dims' && Array.isArray(obj[k])) {
+        // Tensor/shape dims (accept -1, etc.)
+        obj[k] = obj[k].map((x: any) =>
+          typeof x === 'string' ? parseInt(x, 10) : x
+        );
+      }
+    }
+  }
+  return obj;
+}
+
 export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): Promise<void> {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const protoPath = path.join(__dirname, '../../out/src/Onnx/onnx.proto');
@@ -60,13 +95,14 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
     };
 
     const fixedJson = fixBuffers(completeJson);
+    const normalizedJson = coerceNumericFields(fixedJson);
 
-    const errMsg = ModelProto.verify(fixedJson);
+    const errMsg = ModelProto.verify(normalizedJson);
     if (errMsg) {
       throw new Error('Validation error: ' + errMsg);
     }
 
-    const message = ModelProto.create(fixedJson);
+    const message = ModelProto.create(normalizedJson);
     const buffer = ModelProto.encode(message).finish();
 
     fs.writeFileSync(outputOnnxPath, buffer);

@@ -16,6 +16,9 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     return false;
   }
 
+  // Range is a generator: even with scalar inputs it produces a vector.
+  if (op.type === "Range") return true;
+
   const incs = op.getIncomers ?? [];
 
   // 1. First check edge shapes directly
@@ -221,6 +224,26 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
             buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
           }
           continue; // move to next chain
+        }
+      }
+
+      // --- block fusion when a layout-changing op appears after MatMul ---
+      if (this.coalesce) {
+        const matmuls = chainOps.filter(op => op.type === "MatMul");
+        const mm = matmuls[0];
+        if (mm) {
+          const mmIdx = chainOps.indexOf(mm);
+          const afterMM = chainOps.slice(mmIdx + 1);
+          const hasLayoutChangingAfter = afterMM.some(op => op.type === "Transpose");
+          // You can add more here later if needed (e.g. reshape-like index changes)
+
+          if (hasLayoutChangingAfter) {
+            // Decompose one-by-one to keep indices correct
+            for (const op of chainOps) {
+              buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
+            }
+            continue;
+          }
         }
       }
 
