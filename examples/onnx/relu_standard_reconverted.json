@@ -12,9 +12,11 @@
         "name": "init_carry",
         "dataType": 1,
         "dims": [
-          4
+          6
         ],
         "floatData": [
+          0,
+          0,
           0,
           0,
           0,
@@ -38,7 +40,7 @@
               "dataType": 7,
               "dims": [],
               "int64Data": [
-                4
+                6
               ]
             }
           }
@@ -73,7 +75,7 @@
           "init_carry"
         ],
         "output": [
-          "C"
+          "Y"
         ],
         "attribute": [
           {
@@ -120,28 +122,11 @@
                 {
                   "opType": "Gather",
                   "input": [
-                    "A",
+                    "X",
                     "unsq_out"
                   ],
                   "output": [
-                    "gather_A_0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "B",
-                    "unsq_out"
-                  ],
-                  "output": [
-                    "gather_B_0_out"
+                    "gather_X_0_out"
                   ],
                   "attribute": [
                     {
@@ -154,7 +139,7 @@
                 {
                   "opType": "Squeeze",
                   "input": [
-                    "gather_A_0_out",
+                    "gather_X_0_out",
                     "axes"
                   ],
                   "output": [
@@ -163,21 +148,9 @@
                   "attribute": []
                 },
                 {
-                  "opType": "Squeeze",
+                  "opType": "Relu",
                   "input": [
-                    "gather_B_0_out",
-                    "axes"
-                  ],
-                  "output": [
-                    "sq_0_in1_scalar_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Add",
-                  "input": [
-                    "sq_0_in0_scalar_out",
-                    "sq_0_in1_scalar_out"
+                    "sq_0_in0_scalar_out"
                   ],
                   "output": [
                     "0_out"
@@ -255,7 +228,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": 6
                           }
                         ]
                       }
@@ -283,7 +256,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": 6
                           }
                         ]
                       }
@@ -311,7 +284,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": 6
                           }
                         ]
                       }
@@ -326,29 +299,14 @@
     ],
     "input": [
       {
-        "name": "A",
+        "name": "X",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "name": "B",
-        "type": {
-          "tensorType": {
-            "elemType": 1,
-            "shape": {
-              "dim": [
-                {
-                  "dimValue": 4
+                  "dimValue": 6
                 }
               ]
             }
@@ -358,14 +316,14 @@
     ],
     "output": [
       {
-        "name": "C",
+        "name": "Y",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
+                  "dimValue": 6
                 }
               ]
             }

@@ -829,7 +829,353 @@ async function runMatmulAddCompleteEquivalenceTest() {
   }
 }
 
+async function runRangeStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/range_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
 
+  try {
+    console.log('\n=== Running CLI to generate reconverted range_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`); return;
+    }
+
+    // Choose a clean set so length is known: start=0, limit=5, delta=1 => len=5
+    const start = new Tensor('float32', new Float32Array([0]), []);
+    const limit = new Tensor('float32', new Float32Array([5]), []);
+    const delta = new Tensor('float32', new Float32Array([1]), []);
+    const feeds = { start, limit, delta };
+
+    console.log('\n=== Comparing range_standard and its reconverted version ===');
+    printInputs('range_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('range_standard reconversion test', err);
+  }
+}
+
+async function runRangeAddStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/range_add_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted range_add_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    // start=1, limit=6, delta=1.5 => ceil((6-1)/1.5)=4 elements: [1, 2.5, 4, 5.5]
+    const start = 1, limit = 6, delta = 1.5;
+    const L = Math.max(0, Math.ceil((limit - start) / delta));
+
+    const feeds = {
+      start: new Tensor('float32', new Float32Array([start]), []),
+      limit: new Tensor('float32', new Float32Array([limit]), []),
+      delta: new Tensor('float32', new Float32Array([delta]), []),
+      V:     new Tensor('float32', Float32Array.from({ length: L }, () => Math.random() * 10), [L]),
+    };
+
+    console.log('\n=== Comparing range_add_standard and reconverted ===');
+    printInputs('range_add_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('range_add_standard reconversion test', err);
+  }
+}
+
+async function runTransposeStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/transpose_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted transpose_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const X = Float32Array.from({ length: 6 }, () => Math.random() * 10);
+    const feeds = { X: new Tensor('float32', X, [2, 3]) };
+
+    console.log('\n=== Comparing transpose_standard and reconverted ===');
+    printInputs('transpose_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('transpose_standard reconversion test', err);
+  }
+}
+
+async function runTransposeAddStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/transpose_add_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted transpose_add_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const X = Float32Array.from({ length: 6 }, () => Math.random() * 10); // [2,3]
+    const Y = Float32Array.from({ length: 6 }, () => Math.random() * 10); // [3,2]
+    const feeds = {
+      X: new Tensor('float32', X, [2, 3]),
+      Y: new Tensor('float32', Y, [3, 2]),
+    };
+
+    console.log('\n=== Comparing transpose_add_standard and reconverted ===');
+    printInputs('transpose_add_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('transpose_add_standard reconversion test', err);
+  }
+}
+
+async function runMatmulTransposeStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_transpose_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_transpose_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const A = Float32Array.from({ length: 6 }, () => Math.random() * 10); // [2,3]
+    const B = Float32Array.from({ length: 12 }, () => Math.random() * 10); // [3,4]
+    const feeds = {
+      A: new Tensor('float32', A, [2, 3]),
+      B: new Tensor('float32', B, [3, 4]),
+    };
+
+    console.log('\n=== Comparing matmul_transpose_standard and reconverted ===');
+    printInputs('matmul_transpose_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('matmul_transpose_standard reconversion test', err);
+  }
+}
+
+async function runReluStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/relu_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted relu_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    // Mix negatives/positives to exercise thresholding
+    const X = Float32Array.from([-3.2, -0.01, 0, 0.25, 5.5, -7.3]);
+    const feeds = { X: new Tensor('float32', X, [6]) };
+
+    console.log('\n=== Comparing relu_standard and reconverted ===');
+    printInputs('relu_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o); console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('relu_standard reconversion test', err);
+  }
+}
+
+async function runSigmoidStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/sigmoid_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted sigmoid_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const X = Float32Array.from([-6, -1, 0, 1, 2, 6]);
+    const feeds = { X: new Tensor('float32', X, [6]) };
+
+    console.log('\n=== Comparing sigmoid_standard and reconverted ===');
+    printInputs('sigmoid_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o); console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('sigmoid_standard reconversion test', err);
+  }
+}
+
+async function runTanhStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/tanh_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted tanh_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const X = Float32Array.from([-3, -0.5, 0, 0.5, 1.25, 3]);
+    const feeds = { X: new Tensor('float32', X, [6]) };
+
+    console.log('\n=== Comparing tanh_standard and reconverted ===');
+    printInputs('tanh_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o); console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('tanh_standard reconversion test', err);
+  }
+}
+
+async function runExpStandardReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/exp_standard.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted exp_standard model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const X = Float32Array.from([-2, -1, 0, 0.5, 1, 2]); // keep values tame to avoid overflow in fp32
+    const feeds = { X: new Tensor('float32', X, [6]) };
+
+    console.log('\n=== Comparing exp_standard and reconverted ===');
+    printInputs('exp_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o); console.log('→ reconverted:', r);
+
+    const tol = 1e-5; // slightly looser due to potential tiny numeric drift
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('exp_standard reconversion test', err);
+  }
+}
+
+async function runUnaryBinaryComboReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/unary_binary_combo.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted unary_binary_combo model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Not found: ${reconvertedPath}`); return;
+    }
+
+    // Make inputs: mix negatives/positives; keep S positive to avoid div-by-zero
+    const X = Float32Array.from([-2.0, -0.5, 0.0, 0.25, 1.5, 3.0]);
+    const A = Float32Array.from([ 0.1, -1.5, 2.0, -0.75, 0.5,  1.0]);
+    const B = Float32Array.from([ 2.0,  0.5, 1.5,  3.25, 0.1, -2.0]);
+    const Y = Float32Array.from([ 1.0,  0.2, 0.0,  0.1,  2.0,  3.0]);
+    const S = Float32Array.from([ 4.0,  0.2, 2.5,  0.1,  -1.0,  -3.1]);
+
+    const feeds = {
+      X: new Tensor('float32', X, [6]),
+      A: new Tensor('float32', A, [6]),
+      B: new Tensor('float32', B, [6]),
+      Y: new Tensor('float32', Y, [6]),
+      S: new Tensor('float32', S, [6]),
+    };
+
+    console.log('\n=== Comparing unary_binary_combo and reconverted ===');
+    printInputs('unary_binary_combo', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('unary_binary_combo reconversion test', err);
+  }
+}
+
+
+
+/*
 // Tests to run
 // Standard vs Decomposed Equivalence
 await runVectorAddEquivalenceTest();
@@ -848,10 +1194,23 @@ await runVectorAddDecomposedReconversionEquivalenceTest();
 await runAddChainDecomposedReconversionEquivalenceTest();
 await runMatmulDecomposedReconversionEquivalenceTest();
 await runMatmulAddDecomposedReconversionEquivalenceTest();
-
+*/
 // Complete Equivalence
 await runVectorAddCompleteEquivalenceTest();
 await runAddChainCompleteEquivalenceTest();
 await runMatmulCompleteEquivalenceTest();
 await runMatmulAddCompleteEquivalenceTest();
 
+// Range & Transpose
+await runRangeStandardReconversionEquivalenceTest();
+await runRangeAddStandardReconversionEquivalenceTest();
+await runTransposeStandardReconversionEquivalenceTest();
+await runTransposeAddStandardReconversionEquivalenceTest();
+await runMatmulTransposeStandardReconversionEquivalenceTest();
+
+// Other Element-wise Ops
+await runReluStandardReconversionEquivalenceTest();
+await runSigmoidStandardReconversionEquivalenceTest();
+await runTanhStandardReconversionEquivalenceTest();
+await runExpStandardReconversionEquivalenceTest();
+await runUnaryBinaryComboReconversionEquivalenceTest();

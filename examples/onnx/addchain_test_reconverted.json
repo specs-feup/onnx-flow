@@ -152,10 +152,32 @@
                   ]
                 },
                 {
-                  "opType": "Add",
+                  "opType": "Squeeze",
                   "input": [
                     "gather_C_1_out",
-                    "gather_D_1_out"
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in0_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gather_D_1_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "sq_1_in0_scalar_out",
+                    "sq_1_in1_scalar_out"
                   ],
                   "output": [
                     "1_out"
@@ -197,10 +219,32 @@
                   ]
                 },
                 {
-                  "opType": "Add",
+                  "opType": "Squeeze",
                   "input": [
                     "gather_A_0_out",
-                    "gather_B_0_out"
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_0_in0_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gather_B_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_0_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "sq_0_in0_scalar_out",
+                    "sq_0_in1_scalar_out"
                   ],
                   "output": [
                     "0_out"
@@ -219,11 +263,22 @@
                   "attribute": []
                 },
                 {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "2_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "updateUnsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
                   "opType": "ScatterElements",
                   "input": [
                     "carry",
                     "unsq_out",
-                    "2_out"
+                    "updateUnsq_out"
                   ],
                   "output": [
                     "carry_out"

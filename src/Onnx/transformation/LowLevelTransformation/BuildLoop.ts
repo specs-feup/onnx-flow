@@ -869,6 +869,10 @@ export function buildLoopForChain(
     Sub: handleSimpleArithmeticOperation,
     Mul: handleSimpleArithmeticOperation,
     Div: handleSimpleArithmeticOperation,
+    Relu: handleSimpleArithmeticOperation,
+    Sigmoid: handleSimpleArithmeticOperation, 
+    Tanh: handleSimpleArithmeticOperation, 
+    Exp: handleSimpleArithmeticOperation,
     MatMul: handleMatMul,
     Transpose: handleTranspose,
     Range: handleRange

@@ -10,12 +10,28 @@
     "initializer": [
       {
         "name": "init_carry",
-        "dataType": 6,
+        "dataType": 1,
         "dims": [
-          9
+          8
         ],
-        "int32Data": [
+        "floatData": [
           0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "init_carry_1",
+        "dataType": 1,
+        "dims": [
+          8
+        ],
+        "floatData": [
           0,
           0,
           0,
@@ -32,30 +48,6 @@
         "opType": "Constant",
         "input": [],
         "output": [
-          "reshape_shape_0"
-        ],
-        "attribute": [
-          {
-            "name": "value",
-            "type": 4,
-            "t": {
-              "name": "reshape_shape_0",
-              "dataType": 7,
-              "dims": [
-                2
-              ],
-              "int64Data": [
-                3,
-                3
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "opType": "Constant",
-        "input": [],
-        "output": [
           "trip_count_0"
         ],
         "attribute": [
@@ -67,7 +59,7 @@
               "dataType": 7,
               "dims": [],
               "int64Data": [
-                27
+                24
               ]
             }
           }
@@ -89,6 +81,96 @@
               "dims": [],
               "int32Data": [
                 1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "reshape_shape_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "reshape_shape_0",
+              "dataType": 7,
+              "dims": [
+                2
+              ],
+              "int64Data": [
+                2,
+                4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "trip_count_1"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "trip_count_1",
+              "dataType": 7,
+              "dims": [],
+              "int64Data": [
+                8
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "cond_1"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "cond_1",
+              "dataType": 9,
+              "dims": [],
+              "int32Data": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "reshape_shape_1"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "reshape_shape_1",
+              "dataType": 7,
+              "dims": [
+                2
+              ],
+              "int64Data": [
+                4,
+                2
               ]
             }
           }
@@ -150,7 +232,7 @@
                         "dataType": 7,
                         "dims": [],
                         "int64Data": [
-                          9
+                          12
                         ]
                       }
                     }
@@ -192,28 +274,7 @@
                         "dataType": 7,
                         "dims": [],
                         "int64Data": [
-                          3
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "opType": "Constant",
-                  "input": [],
-                  "output": [
-                    "Km1_0"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "value",
-                      "type": 4,
-                      "t": {
-                        "name": "Km1_0",
-                        "dataType": 7,
-                        "dims": [],
-                        "int64Data": [
-                          2
+                          4
                         ]
                       }
                     }
@@ -260,29 +321,6 @@
                         ],
                         "int64Data": [
                           3
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "opType": "Constant",
-                  "input": [],
-                  "output": [
-                    "g2d_B_1_shape1"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "value",
-                      "type": 4,
-                      "t": {
-                        "name": "g2d_B_1_shape1",
-                        "dataType": 7,
-                        "dims": [
-                          1
-                        ],
-                        "int64Data": [
-                          1
                         ]
                       }
                     }
@@ -412,7 +450,7 @@
                 {
                   "opType": "Gather",
                   "input": [
-                    "X",
+                    "A",
                     "iU_0_out"
                   ],
                   "output": [
@@ -468,7 +506,7 @@
                 {
                   "opType": "Gather",
                   "input": [
-                    "A",
+                    "B",
                     "jU_0_out"
                   ],
                   "output": [
@@ -572,99 +610,9 @@
                   "attribute": []
                 },
                 {
-                  "opType": "Gather",
-                  "input": [
-                    "B",
-                    "iU_0_out"
-                  ],
-                  "output": [
-                    "g2d_B_1_g0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "g2d_B_1_g0_out",
-                    "jU_0_out"
-                  ],
-                  "output": [
-                    "g2d_B_1_g1_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 1,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Reshape",
-                  "input": [
-                    "g2d_B_1_g1_out",
-                    "g2d_B_1_shape1"
-                  ],
-                  "output": [
-                    "g2d_B_1_out1"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Squeeze",
-                  "input": [
-                    "g2d_B_1_out1",
-                    "axes"
-                  ],
-                  "output": [
-                    "sq_1_in0_scalar_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Add",
-                  "input": [
-                    "sq_1_in0_scalar_out",
-                    "acc_out_0"
-                  ],
-                  "output": [
-                    "1_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Equal",
-                  "input": [
-                    "Mod_k_0_out",
-                    "Km1_0"
-                  ],
-                  "output": [
-                    "eq_k_last_1_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Where",
-                  "input": [
-                    "eq_k_last_1_out",
-                    "1_out",
-                    "acc_out_0"
-                  ],
-                  "output": [
-                    "gated_1"
-                  ],
-                  "attribute": []
-                },
-                {
                   "opType": "Unsqueeze",
                   "input": [
-                    "gated_1",
+                    "acc_out_0",
                     "axes"
                   ],
                   "output": [
@@ -728,11 +676,11 @@
                   "name": "carry",
                   "type": {
                     "tensorType": {
-                      "elemType": 6,
+                      "elemType": 1,
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 9
+                            "dimValue": 8
                           }
                         ]
                       }
@@ -756,11 +704,11 @@
                   "name": "carry_out",
                   "type": {
                     "tensorType": {
-                      "elemType": 6,
+                      "elemType": 1,
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 9
+                            "dimValue": 8
                           }
                         ]
                       }
@@ -784,11 +732,11 @@
                   "name": "carry_out",
                   "type": {
                     "tensorType": {
-                      "elemType": 6,
+                      "elemType": 1,
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 9
+                            "dimValue": 8
                           }
                         ]
                       }
@@ -807,39 +755,345 @@
           "reshape_shape_0"
         ],
         "output": [
-          "Y"
+          "M"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Loop",
+        "input": [
+          "trip_count_1",
+          "cond_1",
+          "init_carry_1"
+        ],
+        "output": [
+          "loop_out_1"
+        ],
+        "attribute": [
+          {
+            "name": "body",
+            "type": 5,
+            "g": {
+              "name": "loop_body_0",
+              "initializer": [],
+              "node": [
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "axes_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "axes_1",
+                        "dataType": 7,
+                        "dims": [
+                          1
+                        ],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "N_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "N_1",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          2
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "shape1_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "shape1_1",
+                        "dataType": 7,
+                        "dims": [
+                          1
+                        ],
+                        "int64Data": [
+                          4
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "iter_1",
+                    "axes_1"
+                  ],
+                  "output": [
+                    "unsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter_1",
+                    "N_1"
+                  ],
+                  "output": [
+                    "scalarRowIndex_out_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter_1",
+                    "N_1"
+                  ],
+                  "output": [
+                    "scalarColumnIndex_out_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "scalarColumnIndex_out_1",
+                    "axes_1"
+                  ],
+                  "output": [
+                    "columnIndex_out_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "scalarRowIndex_out_1",
+                    "axes_1"
+                  ],
+                  "output": [
+                    "rowIndex_out_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "M",
+                    "rowIndex_out_1"
+                  ],
+                  "output": [
+                    "rowMatrix_1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "rowMatrix_1_out",
+                    "shape1_1"
+                  ],
+                  "output": [
+                    "row_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "row_1",
+                    "columnIndex_out_1"
+                  ],
+                  "output": [
+                    "matrixElement_1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "ScatterElements",
+                  "input": [
+                    "carry_1",
+                    "unsq_out",
+                    "matrixElement_1_out"
+                  ],
+                  "output": [
+                    "carry_out_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Identity",
+                  "input": [
+                    "cond_in_1"
+                  ],
+                  "output": [
+                    "cond_out_1"
+                  ],
+                  "attribute": []
+                }
+              ],
+              "input": [
+                {
+                  "name": "iter_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 8
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 8
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "valueInfo": [
+                {
+                  "name": "cond_out_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out_1",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 8
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Reshape",
+        "input": [
+          "loop_out_1",
+          "reshape_shape_1"
+        ],
+        "output": [
+          "Z"
         ],
         "attribute": []
       }
     ],
     "input": [
       {
-        "name": "X",
-        "type": {
-          "tensorType": {
-            "elemType": 6,
-            "shape": {
-              "dim": [
-                {
-                  "dimValue": 3
-                },
-                {
-                  "dimValue": 3
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
         "name": "A",
         "type": {
           "tensorType": {
-            "elemType": 6,
+            "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 3
+                  "dimValue": 2
                 },
                 {
                   "dimValue": 3
@@ -853,14 +1107,14 @@
         "name": "B",
         "type": {
           "tensorType": {
-            "elemType": 6,
+            "elemType": 1,
             "shape": {
               "dim": [
                 {
                   "dimValue": 3
                 },
                 {
-                  "dimValue": 3
+                  "dimValue": 4
                 }
               ]
             }
@@ -870,17 +1124,17 @@
     ],
     "output": [
       {
-        "name": "Y",
+        "name": "Z",
         "type": {
           "tensorType": {
-            "elemType": 6,
+            "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 3
+                  "dimValue": 4
                 },
                 {
-                  "dimValue": 3
+                  "dimValue": 2
                 }
               ]
             }

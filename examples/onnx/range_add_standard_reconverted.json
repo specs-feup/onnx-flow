@@ -7,38 +7,47 @@
   ],
   "graph": {
     "name": "Graph",
-    "initializer": [
-      {
-        "name": "init_carry",
-        "dataType": 1,
-        "dims": [
-          4
-        ],
-        "floatData": [
-          0,
-          0,
-          0,
-          0
-        ]
-      }
-    ],
+    "initializer": [],
     "node": [
       {
         "opType": "Constant",
         "input": [],
         "output": [
-          "trip_count_0"
+          "range_zeroF_0"
         ],
         "attribute": [
           {
             "name": "value",
             "type": 4,
             "t": {
-              "name": "trip_count_0",
-              "dataType": 7,
+              "name": "range_zeroF_0",
+              "dataType": 1,
               "dims": [],
+              "floatData": [
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "axes0_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "axes0_0",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
               "int64Data": [
-                4
+                0
               ]
             }
           }
@@ -66,14 +75,141 @@
         ]
       },
       {
-        "opType": "Loop",
+        "opType": "Sub",
         "input": [
-          "trip_count_0",
-          "cond_0",
-          "init_carry"
+          "limit",
+          "start"
         ],
         "output": [
-          "C"
+          "range_sub_out_0"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Cast",
+        "input": [
+          "range_sub_out_0"
+        ],
+        "output": [
+          "range_subF_out_0"
+        ],
+        "attribute": [
+          {
+            "name": "to",
+            "i": 1,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Cast",
+        "input": [
+          "delta"
+        ],
+        "output": [
+          "range_deltaF_out_0"
+        ],
+        "attribute": [
+          {
+            "name": "to",
+            "i": 1,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Div",
+        "input": [
+          "range_subF_out_0",
+          "range_deltaF_out_0"
+        ],
+        "output": [
+          "range_divF_out_0"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Ceil",
+        "input": [
+          "range_divF_out_0"
+        ],
+        "output": [
+          "range_ceilF_out_0"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Max",
+        "input": [
+          "range_ceilF_out_0",
+          "range_zeroF_0"
+        ],
+        "output": [
+          "range_maxF_out_0"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Cast",
+        "input": [
+          "range_maxF_out_0"
+        ],
+        "output": [
+          "range_trip_out_0"
+        ],
+        "attribute": [
+          {
+            "name": "to",
+            "i": 7,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Unsqueeze",
+        "input": [
+          "range_trip_out_0",
+          "axes0_0"
+        ],
+        "output": [
+          "range_trip_vec_0"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "ConstantOfShape",
+        "input": [
+          "range_trip_vec_0"
+        ],
+        "output": [
+          "range_init_out_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "type": "TENSOR",
+              "dataType": 1,
+              "dims": [
+                1
+              ],
+              "floatData": [
+                0
+              ]
+            },
+            "type": 4
+          }
+        ]
+      },
+      {
+        "opType": "Loop",
+        "input": [
+          "range_trip_out_0",
+          "cond_0",
+          "range_init_out_0"
+        ],
+        "output": [
+          "Z"
         ],
         "attribute": [
           {
@@ -118,76 +254,86 @@
                   "attribute": []
                 },
                 {
-                  "opType": "Gather",
+                  "opType": "Cast",
                   "input": [
-                    "A",
-                    "unsq_out"
+                    "iter"
                   ],
                   "output": [
-                    "gather_A_0_out"
+                    "range_iter_cast_out_0"
                   ],
                   "attribute": [
                     {
-                      "name": "axis",
-                      "i": 0,
+                      "name": "to",
+                      "i": 1,
                       "type": 2
                     }
                   ]
                 },
                 {
-                  "opType": "Gather",
+                  "opType": "Mul",
                   "input": [
-                    "B",
-                    "unsq_out"
+                    "range_iter_cast_out_0",
+                    "delta"
                   ],
                   "output": [
-                    "gather_B_0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Squeeze",
-                  "input": [
-                    "gather_A_0_out",
-                    "axes"
-                  ],
-                  "output": [
-                    "sq_0_in0_scalar_out"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Squeeze",
-                  "input": [
-                    "gather_B_0_out",
-                    "axes"
-                  ],
-                  "output": [
-                    "sq_0_in1_scalar_out"
+                    "range_mul_out_0"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Add",
                   "input": [
-                    "sq_0_in0_scalar_out",
-                    "sq_0_in1_scalar_out"
+                    "start",
+                    "range_mul_out_0"
                   ],
                   "output": [
-                    "0_out"
+                    "range_y_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "V",
+                    "unsq_out"
+                  ],
+                  "output": [
+                    "gather_V_1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gather_V_1_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "range_y_0",
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "output": [
+                    "1_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "0_out",
+                    "1_out",
                     "axes"
                   ],
                   "output": [
@@ -255,7 +401,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": -1
                           }
                         ]
                       }
@@ -283,7 +429,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": -1
                           }
                         ]
                       }
@@ -311,7 +457,7 @@
                       "shape": {
                         "dim": [
                           {
-                            "dimValue": 4
+                            "dimValue": -1
                           }
                         ]
                       }
@@ -326,29 +472,47 @@
     ],
     "input": [
       {
-        "name": "A",
+        "name": "start",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
-              "dim": [
-                {
-                  "dimValue": 4
-                }
-              ]
+              "dim": []
             }
           }
         }
       },
       {
-        "name": "B",
+        "name": "limit",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      },
+      {
+        "name": "delta",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": []
+            }
+          }
+        }
+      },
+      {
+        "name": "V",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
+                  "dimValue": -1
                 }
               ]
             }
@@ -358,14 +522,14 @@
     ],
     "output": [
       {
-        "name": "C",
+        "name": "Z",
         "type": {
           "tensorType": {
             "elemType": 1,
             "shape": {
               "dim": [
                 {
-                  "dimValue": 4
+                  "dimValue": -1
                 }
               ]
             }

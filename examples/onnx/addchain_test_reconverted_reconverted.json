@@ -19,7 +19,13 @@
           0,
           0,
           0
-        ]
+        ],
+        "int32Data": [],
+        "stringData": [],
+        "int64Data": [],
+        "doubleData": [],
+        "uint64Data": [],
+        "externalData": []
       }
     ],
     "node": [
@@ -27,19 +33,25 @@
         "opType": "Constant",
         "input": [],
         "output": [
-          "trip_count_0"
+          "cond_1"
         ],
         "attribute": [
           {
             "name": "value",
             "type": 4,
             "t": {
-              "name": "trip_count_0",
-              "dataType": 7,
+              "name": "cond_1",
+              "dataType": 9,
               "dims": [],
-              "int64Data": [
-                4
-              ]
+              "floatData": [],
+              "int32Data": [
+                1
+              ],
+              "stringData": [],
+              "int64Data": [],
+              "doubleData": [],
+              "uint64Data": [],
+              "externalData": []
             }
           }
         ]
@@ -48,19 +60,25 @@
         "opType": "Constant",
         "input": [],
         "output": [
-          "cond_0"
+          "trip_count_1"
         ],
         "attribute": [
           {
             "name": "value",
             "type": 4,
             "t": {
-              "name": "cond_0",
-              "dataType": 9,
+              "name": "trip_count_1",
+              "dataType": 7,
               "dims": [],
-              "int32Data": [
-                1
-              ]
+              "floatData": [],
+              "int32Data": [],
+              "stringData": [],
+              "int64Data": [
+                4
+              ],
+              "doubleData": [],
+              "uint64Data": [],
+              "externalData": []
             }
           }
         ]
@@ -68,12 +86,12 @@
       {
         "opType": "Loop",
         "input": [
-          "trip_count_0",
-          "cond_0",
+          "trip_count_1",
+          "cond_1",
           "init_carry"
         ],
         "output": [
-          "C"
+          "Y"
         ],
         "attribute": [
           {
@@ -99,9 +117,15 @@
                         "dims": [
                           1
                         ],
+                        "floatData": [],
+                        "int32Data": [],
+                        "stringData": [],
                         "int64Data": [
                           0
-                        ]
+                        ],
+                        "doubleData": [],
+                        "uint64Data": [],
+                        "externalData": []
                       }
                     }
                   ]
@@ -114,6 +138,73 @@
                   ],
                   "output": [
                     "unsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "C",
+                    "unsq_out"
+                  ],
+                  "output": [
+                    "gather_C_1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "D",
+                    "unsq_out"
+                  ],
+                  "output": [
+                    "gather_D_1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gather_C_1_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in0_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gather_D_1_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "sq_1_in0_scalar_out",
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "output": [
+                    "1_out"
                   ],
                   "attribute": []
                 },
@@ -185,9 +276,20 @@
                   "attribute": []
                 },
                 {
-                  "opType": "Unsqueeze",
+                  "opType": "Add",
                   "input": [
                     "0_out",
+                    "1_out"
+                  ],
+                  "output": [
+                    "2_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "2_out",
                     "axes"
                   ],
                   "output": [
@@ -354,11 +456,41 @@
             }
           }
         }
+      },
+      {
+        "name": "C",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 4
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "D",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 4
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "output": [
       {
-        "name": "C",
+        "name": "Y",
         "type": {
           "tensorType": {
             "elemType": 1,

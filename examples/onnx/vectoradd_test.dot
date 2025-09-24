@@ -15,16 +15,19 @@ digraph {
     loopLoop_0_unsq -> loopLoop_0_scatter [label="{1}"];
     loopLoop_0_gather_A_0 [label=Gather shape=box color="#0000FF"];
     loopLoop_0_gather_B_0 [label=Gather shape=box color="#0000FF"];
+    loopLoop_0_sq_0_in0_scalar [label=Squeeze shape=box color="#0000FF"];
+    loopLoop_0_sq_0_in1_scalar [label=Squeeze shape=box color="#0000FF"];
     loopLoop_0_Add_0 [label=Add shape=box color="#0000FF"];
-    loopLoop_0_Add_0 -> loopLoop_0_scatter [label="{1}"];
+    loopLoop_0_updateUnsq [label=Unsqueeze shape=box color="#0000FF"];
+    loopLoop_0_updateUnsq -> loopLoop_0_scatter [label="{1}"];
     loopLoop_0_scatter [label=ScatterElements shape=box color="#0000FF"];
     loopLoop_0_id_cond [label=Identity shape=box color="#0000FF"];
     loopLoop_0_cond_out [label=cond_out shape=ellipse color="#FF0000"];
     loopLoop_0_carry_out [label=carry_out shape=ellipse color="#FF0000"];
     loopLoop_0_carry -> loopLoop_0_scatter [label="{4}"];
-    loopLoop_0_cond_in -> loopLoop_0_id_cond [label=""];
+    loopLoop_0_cond_in -> loopLoop_0_id_cond [label=sc];
     loopLoop_0_scatter -> loopLoop_0_carry_out [label="{4}"];
-    loopLoop_0_id_cond -> loopLoop_0_cond_out [label=""];
+    loopLoop_0_id_cond -> loopLoop_0_cond_out [label=sc];
     A -> loopLoop_0_gather_A_0 [style=dashed color=gray label="{4}"];
     B -> loopLoop_0_gather_B_0 [style=dashed color=gray label="{4}"];
     graph [label="Loop Loop_0"];
@@ -33,8 +36,8 @@ digraph {
   }
 
   A -> loopLoop_0_Loop_0 [label="{4}" lhead=cluster_loop_Loop_0];
-  cond_0 -> loopLoop_0_Loop_0 [label="" lhead=cluster_loop_Loop_0];
+  cond_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
   loopLoop_0_Loop_0 -> C [label="{4}" ltail=cluster_loop_Loop_0];
   B -> loopLoop_0_Loop_0 [label="{4}" lhead=cluster_loop_Loop_0];
-  trip_count_0 -> loopLoop_0_Loop_0 [label="" lhead=cluster_loop_Loop_0];
+  trip_count_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
 }

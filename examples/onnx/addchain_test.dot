@@ -19,20 +19,25 @@ digraph {
     loopLoop_1_unsq -> loopLoop_1_scatter [label="{1}"];
     loopLoop_1_gather_C_1 [label=Gather shape=box color="#0000FF"];
     loopLoop_1_gather_D_1 [label=Gather shape=box color="#0000FF"];
+    loopLoop_1_sq_1_in0_scalar [label=Squeeze shape=box color="#0000FF"];
+    loopLoop_1_sq_1_in1_scalar [label=Squeeze shape=box color="#0000FF"];
     loopLoop_1_Add_1 [label=Add shape=box color="#0000FF"];
     loopLoop_1_gather_A_0 [label=Gather shape=box color="#0000FF"];
     loopLoop_1_gather_B_0 [label=Gather shape=box color="#0000FF"];
+    loopLoop_1_sq_0_in0_scalar [label=Squeeze shape=box color="#0000FF"];
+    loopLoop_1_sq_0_in1_scalar [label=Squeeze shape=box color="#0000FF"];
     loopLoop_1_Add_0 [label=Add shape=box color="#0000FF"];
     loopLoop_1_Add_2 [label=Add shape=box color="#0000FF"];
-    loopLoop_1_Add_2 -> loopLoop_1_scatter [label="{1}"];
+    loopLoop_1_updateUnsq [label=Unsqueeze shape=box color="#0000FF"];
+    loopLoop_1_updateUnsq -> loopLoop_1_scatter [label="{1}"];
     loopLoop_1_scatter [label=ScatterElements shape=box color="#0000FF"];
     loopLoop_1_id_cond [label=Identity shape=box color="#0000FF"];
     loopLoop_1_cond_out [label=cond_out shape=ellipse color="#FF0000"];
     loopLoop_1_carry_out [label=carry_out shape=ellipse color="#FF0000"];
     loopLoop_1_carry -> loopLoop_1_scatter [label="{4}"];
-    loopLoop_1_cond_in -> loopLoop_1_id_cond [label=""];
+    loopLoop_1_cond_in -> loopLoop_1_id_cond [label=sc];
     loopLoop_1_scatter -> loopLoop_1_carry_out [label="{4}"];
-    loopLoop_1_id_cond -> loopLoop_1_cond_out [label=""];
+    loopLoop_1_id_cond -> loopLoop_1_cond_out [label=sc];
     C -> loopLoop_1_gather_C_1 [style=dashed color=gray label="{4}"];
     D -> loopLoop_1_gather_D_1 [style=dashed color=gray label="{4}"];
     A -> loopLoop_1_gather_A_0 [style=dashed color=gray label="{4}"];
@@ -42,9 +47,9 @@ digraph {
     graph [color=gray];
   }
 
-  trip_count_1 -> loopLoop_1_Loop_1 [label="" lhead=cluster_loop_Loop_1];
+  trip_count_1 -> loopLoop_1_Loop_1 [label=sc lhead=cluster_loop_Loop_1];
   A -> loopLoop_1_Loop_1 [label="{4}" lhead=cluster_loop_Loop_1];
-  cond_1 -> loopLoop_1_Loop_1 [label="" lhead=cluster_loop_Loop_1];
+  cond_1 -> loopLoop_1_Loop_1 [label=sc lhead=cluster_loop_Loop_1];
   C -> loopLoop_1_Loop_1 [label="{4}" lhead=cluster_loop_Loop_1];
   D -> loopLoop_1_Loop_1 [label="{4}" lhead=cluster_loop_Loop_1];
   B -> loopLoop_1_Loop_1 [label="{4}" lhead=cluster_loop_Loop_1];
