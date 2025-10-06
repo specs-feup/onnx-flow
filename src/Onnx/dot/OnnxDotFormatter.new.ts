@@ -8,6 +8,8 @@ import TensorNode from "../TensorNode.js";
 import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
+import Edge from "@specs-feup/flow/graph/Edge";
+import OnnxEdge from "../OnnxEdge.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -54,6 +56,42 @@ export default class OnnxDotFormatter<
         return attrs;
     }
 
+    static defaultGetEdgeAttrs(edge: BaseEdge.Class): Record<string, string> {
+        const attrs = super.defaultGetEdgeAttrs(edge);
+
+        const onnxEdge = edge.tryAs(OnnxEdge);
+        if (onnxEdge !== undefined) {
+            const shapeString = `{${onnxEdge.shape.join(',')}}`;
+            attrs.label = shapeString === '{}' ? 'sc' : shapeString;
+        }
+
+        return attrs;
+    }
+
+    static defaultGetGraphAttrs(): Record<string, string> {
+        const attrs = super.defaultGetGraphAttrs();
+        attrs.rankdir = 'LR';  // Due to an oversight, this had no effect before the refactor
+
+        return attrs;
+    }
+
+    constructor(
+        getNodeAttrs?: (node: BaseNode.Class) => Record<string, string>,
+        getEdgeAttrs?: (edge: BaseEdge.Class) => Record<string, string>,
+        getContainer?: (node: BaseNode.Class) => BaseNode.Class | undefined,
+        getGraphAttrs?: () => Record<string, string>,
+        idPrefix: string = ""
+    ) {
+        getNodeAttrs ??= OnnxDotFormatter.defaultGetNodeAttrs;
+        getEdgeAttrs ??= OnnxDotFormatter.defaultGetEdgeAttrs;
+        getContainer ??= OnnxDotFormatter.defaultGetContainer;  // Method not implemented, add if needed
+        getGraphAttrs ??= OnnxDotFormatter.defaultGetGraphAttrs;
+
+        super(getNodeAttrs, getEdgeAttrs, getContainer, getGraphAttrs);
+
+        this.idPrefix = idPrefix;
+    }
+
     nodeToDot(node: BaseNode.Class): DotNode {
         const id = this.idPrefix + node.id;
         const attrs = this.getNodeAttrs(node);
@@ -88,23 +126,6 @@ export default class OnnxDotFormatter<
         const attrs = this.getEdgeAttrs(edge);
 
         return this.createDotEdge(sourceId, targetId, attrs);
-    }
-
-    constructor(
-        getNodeAttrs?: (node: BaseNode.Class) => Record<string, string>,
-        getEdgeAttrs?: (edge: BaseEdge.Class) => Record<string, string>,
-        getContainer?: (node: BaseNode.Class) => BaseNode.Class | undefined,
-        getGraphAttrs?: () => Record<string, string>,
-        idPrefix: string = ""
-    ) {
-        getNodeAttrs ??= OnnxDotFormatter.defaultGetNodeAttrs;
-        getEdgeAttrs ??= DefaultDotFormatter.defaultGetEdgeAttrs;
-        getContainer ??= DefaultDotFormatter.defaultGetContainer;
-        getGraphAttrs ??= DefaultDotFormatter.defaultGetGraphAttrs;
-
-        super(getNodeAttrs, getEdgeAttrs, getContainer, getGraphAttrs);
-
-        this.idPrefix = idPrefix;
     }
 
     getExtraEdges(node: BaseNode.Class): DotEdge[] {
