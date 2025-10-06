@@ -1173,9 +1173,684 @@ async function runUnaryBinaryComboReconversionEquivalenceTest() {
   }
 }
 
+export async function runClipScalarReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/clip_scalar.onnx';
+  const decomposedPath = 'examples/onnx/clip_scalar_decomposed.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    if (!fs.existsSync(originalPath) || !fs.existsSync(decomposedPath)) {
+      throw new Error('Clip scalar models not found. Run: python "python scripts/make_clip_models.py"');
+    }
+
+    const X = new Float32Array([-1.5, 0.25, 3, 0, 0.75, 10]); // [2,3]
+    const Min = new Float32Array([0.0]); // []
+    const Max = new Float32Array([2.0]); // []
+
+    const feeds = {
+      X: new Tensor('float32', X, [2, 3]),
+      Min: new Tensor('float32', Min, []),
+      Max: new Tensor('float32', Max, []),
+    };
+
+    printInputs('clip_scalar', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+
+    const tol = 1e-6;
+
+    console.log('\n=== Running CLI to generate reconverted clip_scalar model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Not found: ${reconvertedPath}`); return;
+    }
+
+    console.log('\n=== Comparing clip_scalar and reconverted ===');
+    const rec = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const r = Array.from(Object.values(rec)[0].data as Float32Array);
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+    console.log('✅ clip_scalar vs reconverted equivalent:', eq);
+
+    if (!eq) throw new Error('Clip scalar equivalence failed.');
+  } catch (err) {
+    logErrorDetails('clip scalar reconversion test', err);
+  }
+}
+
+async function runAddScalarVectorBroadcastTest() {
+  const originalPath = 'examples/onnx/add_scalar_vector.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted add_scalar_vector model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const X = Float32Array.from([-2.0, -0.5, 0.0, 0.25, 1.5, 3.0]); // [6]
+    const S = new Float32Array([1.25]);                              // []
+    const feeds = { X: new Tensor('float32', X, [6]),
+                    S: new Tensor('float32', S, []) };
+
+    console.log('\n=== Comparing add_scalar_vector and reconverted ===');
+    printInputs('add_scalar_vector', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+  } catch (err) {
+    logErrorDetails('add_scalar_vector reconversion test', err);
+  }
+}
+
+async function runAddRowVectorToMatrixBroadcastTest() {
+  const originalPath = 'examples/onnx/add_row_vector_to_matrix.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted add_row_vector_to_matrix model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const A = Float32Array.from([ 1, 2, 3,  4, 5, 6 ]); // [2,3]
+    const B = Float32Array.from([ 10, -1, 0.5 ]);       // [3]
+    const feeds = {
+      A: new Tensor('float32', A, [2,3]),
+      B: new Tensor('float32', B, [3]),
+    };
+
+    console.log('\n=== Comparing add_row_vector_to_matrix and reconverted ===');
+    printInputs('add_row_vector_to_matrix', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+  } catch (err) {
+    logErrorDetails('add_row_vector_to_matrix reconversion test', err);
+  }
+}
+
+async function runAddColVectorToMatrixBroadcastTest() {
+  const originalPath = 'examples/onnx/add_col_vector_to_matrix.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted add_col_vector_to_matrix model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const A = Float32Array.from([ 1, 2, 3,  4, 5, 6 ]); // [2,3]
+    const C = Float32Array.from([ 100,  200 ]);         // [2,1]
+    const feeds = {
+      A: new Tensor('float32', A, [2,3]),
+      C: new Tensor('float32', C, [2,1]),
+    };
+
+    console.log('\n=== Comparing add_col_vector_to_matrix and reconverted ===');
+    printInputs('add_col_vector_to_matrix', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+  } catch (err) {
+    logErrorDetails('add_col_vector_to_matrix reconversion test', err);
+  }
+}
+
+async function runMul3DChannelBroadcastTest() {
+  const originalPath = 'examples/onnx/mul_3d_channel.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted mul_3d_channel model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    // X [2,3,4]
+    const X = Float32Array.from([
+      // batch 0
+      1,2,3,4,    5,6,7,8,    9,10,11,12,
+      // batch 1
+      2,4,6,8,    1,3,5,7,    0,-1,-2,-3,
+    ]);
+    // W [1,3,1] (per-channel scale)
+    const W = Float32Array.from([0.5, 2.0, -1.0]);
+
+    const feeds = {
+      X: new Tensor('float32', X, [2,3,4]),
+      W: new Tensor('float32', W, [1,3,1]),
+    };
+
+    console.log('\n=== Comparing mul_3d_channel and reconverted ===');
+    printInputs('mul_3d_channel', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o.slice(0,12), '...');
+    console.log('→ reconverted:', r.slice(0,12), '...');
+
+    const tol = 1e-6;
+    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+  } catch (err) {
+    logErrorDetails('mul_3d_channel reconversion test', err);
+  }
+}
+
+async function runChainBroadcastTest() {
+  const originalPath = 'examples/onnx/chain_broadcast.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  try {
+    console.log('\n=== Running CLI to generate reconverted chain_broadcast model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+    if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
+
+    const A     = Float32Array.from([ 1, 2, 3,  4, 5, 6 ]);  // [2,3]
+    const b_row = Float32Array.from([ 0.1, -1.0, 2.5 ]);     // [3]
+    const c_col = Float32Array.from([ 2.0, 0.5 ]);           // [2,1]
+    const s_sub = new Float32Array([0.75]);                  // []
+    const s_div = new Float32Array([1.25]);                  // [] > 0
+
+    const feeds = {
+      A:     new Tensor('float32', A,     [2,3]),
+      b_row: new Tensor('float32', b_row, [3]),
+      s_sub: new Tensor('float32', s_sub, []),
+      c_col: new Tensor('float32', c_col, [2,1]),
+      s_div: new Tensor('float32', s_div, []),
+    };
+
+    console.log('\n=== Comparing chain_broadcast and reconverted ===');
+    printInputs('chain_broadcast', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+  } catch (err) {
+    logErrorDetails('chain_broadcast reconversion test', err);
+  }
+}
+
+async function runTransposeBroadcast2DReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/transpose_broadcast_2d.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = `${base}_reconverted.onnx`;
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted transpose_broadcast_2d model ===');
+    // Generate reconverted model (JSON → ONNX) using your CLI. No --noLowLevel.
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // Inputs:
+    // X: [1,3]; Y: [3]. The ONNX model itself Unsqueezes Y → [3,1] before Add.
+    const X = new Float32Array([1, 2, 3]);
+    const Y = new Float32Array([10, 20, 30]);
+    const feeds = {
+      X: new Tensor('float32', X, [1, 3]),
+      Y: new Tensor('float32', Y, [3]),
+    };
+
+    console.log('\n=== Comparing transpose_broadcast_2d and reconverted ===');
+    printInputs('transpose_broadcast_2d', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    if (!eq) {
+      console.error('❌ Outputs differ beyond tolerance.');
+    } else {
+      console.log('✅ Outputs equivalent:', eq);
+    }
+  } catch (err) {
+    logErrorDetails('transpose_broadcast_2d reconversion test', err);
+  }
+}
 
 
-/*
+async function runTransposeBroadcast3DReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/transpose_broadcast_3d.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = `${base}_reconverted.onnx`;
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted transpose_broadcast_3d model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // X[2,1,3], Zin[1,3,1]; Transpose(perm=[0,2,1]) → [2,3,1]; then Add with broadcast
+    const X = Float32Array.from([0,1,2,  3,4,5]); // shaped to [2,1,3]
+    const Zin = Float32Array.from([100,200,300]);  // shaped to [1,3,1]
+    const feeds = {
+      X:   new Tensor('float32', X,   [2, 1, 3]),
+      Zin: new Tensor('float32', Zin, [1, 3, 1]),
+    };
+
+    console.log('\n=== Comparing transpose_broadcast_3d and reconverted ===');
+    printInputs('transpose_broadcast_3d', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('transpose_broadcast_3d reconversion test', err);
+  }
+}
+
+async function runTransposeBroadcast4DReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/transpose_broadcast_4d.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = `${base}_reconverted.onnx`;
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted transpose_broadcast_4d model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // 4D test feeds
+    const X = Float32Array.from([0,1,2, 3,4,5]); // [2,1,3,1]
+    const B = Float32Array.from([100,200,300]);  // [3,1,1,1]
+
+    const feeds = {
+      X: new Tensor('float32', X, [2, 1, 3, 1]),
+      B: new Tensor('float32', B, [3, 1, 1, 1]),
+    };
+
+    console.log('\n=== Comparing transpose_broadcast_4d and reconverted ===');
+    printInputs('transpose_broadcast_4d', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    if (!eq) console.error('❌ Outputs differ beyond tolerance.');
+    else console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('transpose_broadcast_4d reconversion test', err);
+  }
+}
+
+async function runTransposeBroadcast5DReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/transpose_broadcast_5d.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = `${base}_reconverted.onnx`;
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted transpose_broadcast_5d model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // X: [1,2,1,3,1] → 1*2*1*3*1 = 6 elements: 0..5
+    // C: [1,3,1,1,1] with [100,200,300]
+    const X = Float32Array.from([0,1,2, 3,4,5]);
+    const C = Float32Array.from([100,200,300]);
+
+    const feeds = {
+      X: new Tensor('float32', X, [1, 2, 1, 3, 1]),
+      C: new Tensor('float32', C, [1, 3, 1, 1, 1]),
+    };
+
+    console.log('\n=== Comparing transpose_broadcast_5d and reconverted ===');
+    printInputs('transpose_broadcast_5d', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    if (!eq) console.error('❌ Outputs differ beyond tolerance.');
+    else console.log('✅ Outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('transpose_broadcast_5d reconversion test', err);
+  }
+}
+
+async function runMatmulRectReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_rect_2x3_3x4.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_rect_2x3_3x4 model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    const A = Float32Array.from({ length: 2*3 }, () => Math.random()*5);
+    const B = Float32Array.from({ length: 3*4 }, () => Math.random()*5);
+    const feeds = { A: new Tensor('float32', A, [2,3]), B: new Tensor('float32', B, [3,4]) };
+
+    console.log('\n=== Comparing matmul_rect_2x3_3x4 and reconverted ===');
+    printInputs('matmul_rect_2x3_3x4', feeds);
+
+    const o = await (await InferenceSession.create(originalPath)).run(feeds);
+    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const O = Array.from(Object.values(o)[0].data as Float32Array);
+    const R = Array.from(Object.values(r)[0].data as Float32Array);
+
+    const tol = 1e-5;
+    const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
+    console.log('✅ Rectangular MatMul outputs equivalent:', eq);
+  } catch (err) { logErrorDetails('matmul_rect_2x3_3x4 reconversion test', err); }
+}
+
+async function runMatmulBiasReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_bias_3x2_2x5.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_bias_3x2_2x5 model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    const A = Float32Array.from({ length: 3*2 }, () => Math.random()*5);
+    const B = Float32Array.from({ length: 2*5 }, () => Math.random()*5);
+    const Bias = Float32Array.from({ length: 1*5 }, () => Math.random()*2);
+    const feeds = {
+      A: new Tensor('float32', A, [3,2]),
+      B: new Tensor('float32', B, [2,5]),
+      Bias: new Tensor('float32', Bias, [1,5]),
+    };
+
+    console.log('\n=== Comparing matmul_bias_3x2_2x5 and reconverted ===');
+    printInputs('matmul_bias_3x2_2x5', feeds);
+
+    const o = await (await InferenceSession.create(originalPath)).run(feeds);
+    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const O = Array.from(Object.values(o)[0].data as Float32Array);
+    const R = Array.from(Object.values(r)[0].data as Float32Array);
+
+    const tol = 1e-5;
+    const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
+    console.log('✅ MatMul+Bias outputs equivalent:', eq);
+  } catch (err) { logErrorDetails('matmul_bias_3x2_2x5 reconversion test', err); }
+}
+
+async function runMatmulChainRightReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_chain_right.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_chain_right model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    const A = Float32Array.from({ length: 2*3 }, () => Math.random()*5);
+    const B = Float32Array.from({ length: 3*2 }, () => Math.random()*5);
+    const C = Float32Array.from({ length: 2*2 }, () => Math.random()*5);
+    const feeds = {
+      A: new Tensor('float32', A, [2,3]),
+      B: new Tensor('float32', B, [3,2]),
+      C: new Tensor('float32', C, [2,2]),
+    };
+
+    console.log('\n=== Comparing matmul_chain_right and reconverted ===');
+    printInputs('matmul_chain_right', feeds);
+
+    const o = await (await InferenceSession.create(originalPath)).run(feeds);
+    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const O = Array.from(Object.values(o)[0].data as Float32Array);
+    const R = Array.from(Object.values(r)[0].data as Float32Array);
+
+    const tol = 1e-5;
+    const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
+    console.log('✅ (A·B)·C outputs equivalent:', eq);
+  } catch (err) { logErrorDetails('matmul_chain_right reconversion test', err); }
+}
+
+async function runMatmulMVReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_mv_4x3_k3.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_mv_4x3_k3 model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    const A = Float32Array.from({ length: 4*3 }, () => Math.random()*5);
+    const v = Float32Array.from({ length: 3 }, () => Math.random()*5);
+    const feeds = { A: new Tensor('float32', A, [4,3]), v: new Tensor('float32', v, [3]) };
+
+    console.log('\n=== Comparing matmul_mv_4x3_k3 and reconverted ===');
+    printInputs('matmul_mv_4x3_k3', feeds);
+
+    const o = await (await InferenceSession.create(originalPath)).run(feeds);
+    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const O = Array.from(Object.values(o)[0].data as Float32Array);
+    const R = Array.from(Object.values(r)[0].data as Float32Array);
+
+    const tol = 1e-5;
+    const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
+    console.log('✅ Matrix–Vector outputs equivalent:', eq);
+  } catch (err) { logErrorDetails('matmul_mv_4x3_k3 reconversion test', err); }
+}
+
+async function runMatmulVMReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/matmul_vm_k3_3x5.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+  try {
+    console.log('\n=== Running CLI to generate reconverted matmul_vm_k3_3x5 model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    const v = Float32Array.from({ length: 3 }, () => Math.random()*5);
+    const B = Float32Array.from({ length: 3*5 }, () => Math.random()*5);
+    const feeds = { v: new Tensor('float32', v, [3]), B: new Tensor('float32', B, [3,5]) };
+
+    console.log('\n=== Comparing matmul_vm_k3_3x5 and reconverted ===');
+    printInputs('matmul_vm_k3_3x5', feeds);
+
+    const o = await (await InferenceSession.create(originalPath)).run(feeds);
+    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const O = Array.from(Object.values(o)[0].data as Float32Array);
+    const R = Array.from(Object.values(r)[0].data as Float32Array);
+
+    const tol = 1e-5;
+    const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
+    console.log('✅ Vector–Matrix outputs equivalent:', eq);
+  } catch (err) { logErrorDetails('matmul_vm_k3_3x5 reconversion test', err); }
+}
+
+// Slice: [1,2,5,6] -> Slice(axes=[2,3], starts=[1,2], ends=[5,6], steps=[2,2]) -> [1,2,2,2]
+async function runSliceDecompositionReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/slice.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted slice model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    const X = Float32Array.from({ length: 1*2*5*6 }, (_, i) => i / 10); // deterministic values
+    const feeds = { X: new Tensor('float32', X, [1, 2, 5, 6]) };
+
+    console.log('\n=== Comparing slice and reconverted ===');
+    printInputs('slice', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    if (!eq) console.error('❌ Slice outputs differ beyond tolerance.');
+    else console.log('✅ Slice outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('slice reconversion test', err);
+  }
+}
+
+// Sum: Y = Sum(A[2,3], B[1,3], C[]) -> [2,3]
+async function runSumDecompositionReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/sum_variadic.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted sum model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    // Deterministic inputs
+    const A = Float32Array.from([ 1, 2, 3,  4, 5, 6 ]);       // [2,3]
+    const B = Float32Array.from([ 10, 20, 30 ]);              // [1,3]
+    const C = Float32Array.from([ 0.5 ]);                     // scalar []
+
+    const feeds = {
+      A: new Tensor('float32', A, [2, 3]),
+      B: new Tensor('float32', B, [1, 3]),
+      C: new Tensor('float32', C, []),
+    };
+
+    console.log('\n=== Comparing sum_variadic and reconverted ===');
+    printInputs('sum_variadic', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    if (!eq) console.error('❌ Sum outputs differ beyond tolerance.');
+    else console.log('✅ Sum outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('sum_variadic reconversion test', err);
+  }
+}
+
+export async function runPadDecompositionEquivalenceTest() {
+  const originalPath = 'examples/onnx/pad_normal.onnx';
+  const decomposedPath = 'examples/onnx/pad_decomposed.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+
+  try {
+    // Sanity: models created by python script
+    if (!fs.existsSync(originalPath) || !fs.existsSync(decomposedPath)) {
+      throw new Error('Pad models not found. Run: python "python scripts/make_pad_models.py"');
+    }
+
+    // Input matches the python script (N=1,C=2,H=3,W=4); values = i/10
+    const X = Float32Array.from({ length: 1*2*3*4 }, (_, i) => i / 10);
+    const feeds = { X: new Tensor('float32', X, [1, 2, 3, 4]) };
+
+    console.log('\n=== Comparing pad_normal and pad_decomposed ===');
+    printInputs('pad', feeds);
+
+    const origSession = await InferenceSession.create(originalPath);
+    const origOut = await origSession.run(feeds);
+    const o = Array.from(Object.values(origOut)[0].data as Float32Array);
+
+    const tol = 1e-6;
+
+    // Reconversion of the normal model
+    console.log('\n=== Running CLI to generate reconverted pad_normal model ===');
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    console.log('\n=== Comparing pad_normal and reconverted ===');
+    const recSession = await InferenceSession.create(reconvertedPath);
+    const recOut = await recSession.run(feeds);
+    const r = Array.from(Object.values(recOut)[0].data as Float32Array);
+
+    console.log('→ original[0:16]:   ', o.slice(0, 16));
+    console.log('→ reconverted[0:16]:', r.slice(0, 16));
+
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
+    console.log('✅ pad_normal vs reconverted equivalent:', eq);
+
+    if (!eq) throw new Error('Pad decomposition/reconversion equivalence failed.');
+  } catch (err) {
+    logErrorDetails('pad decomposition/reconversion test', err);
+  }
+}
+
+
+
+
 // Tests to run
 // Standard vs Decomposed Equivalence
 await runVectorAddEquivalenceTest();
@@ -1194,7 +1869,7 @@ await runVectorAddDecomposedReconversionEquivalenceTest();
 await runAddChainDecomposedReconversionEquivalenceTest();
 await runMatmulDecomposedReconversionEquivalenceTest();
 await runMatmulAddDecomposedReconversionEquivalenceTest();
-*/
+
 // Complete Equivalence
 await runVectorAddCompleteEquivalenceTest();
 await runAddChainCompleteEquivalenceTest();
@@ -1214,3 +1889,29 @@ await runSigmoidStandardReconversionEquivalenceTest();
 await runTanhStandardReconversionEquivalenceTest();
 await runExpStandardReconversionEquivalenceTest();
 await runUnaryBinaryComboReconversionEquivalenceTest();
+await runSumDecompositionReconversionEquivalenceTest();
+
+// Broadcast Element-wise
+await runAddScalarVectorBroadcastTest();
+await runAddRowVectorToMatrixBroadcastTest();
+await runAddColVectorToMatrixBroadcastTest();
+await runMul3DChannelBroadcastTest();
+await runChainBroadcastTest();
+
+await runTransposeBroadcast2DReconversionEquivalenceTest();
+await runTransposeBroadcast3DReconversionEquivalenceTest();
+await runTransposeBroadcast4DReconversionEquivalenceTest();
+await runTransposeBroadcast5DReconversionEquivalenceTest();
+
+/*
+await runMatmulRectReconversionEquivalenceTest();
+await runMatmulBiasReconversionEquivalenceTest();
+await runMatmulChainRightReconversionEquivalenceTest();
+await runMatmulMVReconversionEquivalenceTest();
+await runMatmulVMReconversionEquivalenceTest();
+*/
+
+await runSliceDecompositionReconversionEquivalenceTest();
+await runPadDecompositionEquivalenceTest();
+await runClipScalarReconversionEquivalenceTest();
+

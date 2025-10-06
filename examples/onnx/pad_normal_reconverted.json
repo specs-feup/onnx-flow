@@ -1,0 +1,534 @@
+{
+  "irVersion": 9,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "initializer": [],
+    "node": [
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_kT_0_3_E"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_kT_0_3_E",
+              "dataType": 1,
+              "dims": [
+                1
+              ],
+              "floatData": [
+                0.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_idx_0_2_B"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_idx_0_2_B",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_upd_0_2_B"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_upd_0_2_B",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_kT_0_2_B"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_kT_0_2_B",
+              "dataType": 1,
+              "dims": [
+                1
+              ],
+              "floatData": [
+                0.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_idx_0_2_E"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_idx_0_2_E",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_upd_0_2_E"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_upd_0_2_E",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_kT_0_2_E"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_kT_0_2_E",
+              "dataType": 1,
+              "dims": [
+                1
+              ],
+              "floatData": [
+                0.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_idx_0_3_B"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_idx_0_3_B",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_upd_0_3_B"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_upd_0_3_B",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_kT_0_3_B"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_kT_0_3_B",
+              "dataType": 1,
+              "dims": [
+                1
+              ],
+              "floatData": [
+                0.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_idx_0_3_E"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_idx_0_3_E",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "pad_upd_0_3_E"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "pad_upd_0_3_E",
+              "dataType": 7,
+              "dims": [
+                1
+              ],
+              "int64Data": [
+                4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Shape",
+        "input": [
+          "X"
+        ],
+        "output": [
+          "pad_shapeT_0_2_B"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "ScatterElements",
+        "input": [
+          "pad_shapeT_0_2_B",
+          "pad_idx_0_2_B",
+          "pad_upd_0_2_B"
+        ],
+        "output": [
+          "pad_newShapeT_0_2_B"
+        ],
+        "attribute": [
+          {
+            "name": "axis",
+            "i": 0,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Expand",
+        "input": [
+          "pad_kT_0_2_B",
+          "pad_newShapeT_0_2_B"
+        ],
+        "output": [
+          "pad_slab_0_2_B"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Shape",
+        "input": [
+          "X"
+        ],
+        "output": [
+          "pad_shapeT_0_2_E"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "ScatterElements",
+        "input": [
+          "pad_shapeT_0_2_E",
+          "pad_idx_0_2_E",
+          "pad_upd_0_2_E"
+        ],
+        "output": [
+          "pad_newShapeT_0_2_E"
+        ],
+        "attribute": [
+          {
+            "name": "axis",
+            "i": 0,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Expand",
+        "input": [
+          "pad_kT_0_2_E",
+          "pad_newShapeT_0_2_E"
+        ],
+        "output": [
+          "pad_slab_0_2_E"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Concat",
+        "input": [
+          "pad_slab_0_2_B",
+          "X",
+          "pad_slab_0_2_E"
+        ],
+        "output": [
+          "pad_mid_0_2"
+        ],
+        "attribute": [
+          {
+            "name": "axis",
+            "i": 2,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Shape",
+        "input": [
+          "pad_mid_0_2"
+        ],
+        "output": [
+          "pad_shapeT_0_3_E"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "ScatterElements",
+        "input": [
+          "pad_shapeT_0_3_E",
+          "pad_idx_0_3_E",
+          "pad_upd_0_3_E"
+        ],
+        "output": [
+          "pad_newShapeT_0_3_E"
+        ],
+        "attribute": [
+          {
+            "name": "axis",
+            "i": 0,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Expand",
+        "input": [
+          "pad_kT_0_3_E",
+          "pad_newShapeT_0_3_E"
+        ],
+        "output": [
+          "pad_slab_0_3_E"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Shape",
+        "input": [
+          "pad_mid_0_2"
+        ],
+        "output": [
+          "pad_shapeT_0_3_B"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "ScatterElements",
+        "input": [
+          "pad_shapeT_0_3_B",
+          "pad_idx_0_3_B",
+          "pad_upd_0_3_B"
+        ],
+        "output": [
+          "pad_newShapeT_0_3_B"
+        ],
+        "attribute": [
+          {
+            "name": "axis",
+            "i": 0,
+            "type": 2
+          }
+        ]
+      },
+      {
+        "opType": "Expand",
+        "input": [
+          "pad_kT_0_3_B",
+          "pad_newShapeT_0_3_B"
+        ],
+        "output": [
+          "pad_slab_0_3_B"
+        ],
+        "attribute": []
+      },
+      {
+        "opType": "Concat",
+        "input": [
+          "pad_slab_0_3_B",
+          "pad_mid_0_2",
+          "pad_slab_0_3_E"
+        ],
+        "output": [
+          "Y"
+        ],
+        "attribute": [
+          {
+            "name": "axis",
+            "i": 3,
+            "type": 2
+          }
+        ]
+      }
+    ],
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 1
+                },
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 3
+                },
+                {
+                  "dimValue": 4
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 1
+                },
+                {
+                  "dimValue": 2
+                },
+                {
+                  "dimValue": 6
+                },
+                {
+                  "dimValue": 11
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

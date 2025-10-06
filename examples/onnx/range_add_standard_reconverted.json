@@ -298,7 +298,7 @@
                     "unsq_out"
                   ],
                   "output": [
-                    "gather_V_1_out"
+                    "gb_1d_iter_V_1_out"
                   ],
                   "attribute": [
                     {
@@ -311,7 +311,7 @@
                 {
                   "opType": "Squeeze",
                   "input": [
-                    "gather_V_1_out",
+                    "gb_1d_iter_V_1_out",
                     "axes"
                   ],
                   "output": [
@@ -528,9 +528,7 @@
             "elemType": 1,
             "shape": {
               "dim": [
-                {
-                  "dimValue": -1
-                }
+                {}
               ]
             }
           }

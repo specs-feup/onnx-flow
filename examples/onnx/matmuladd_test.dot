@@ -11,7 +11,6 @@ digraph {
     loopLoop_0_iter [label=iter shape=ellipse color="#00FF00"];
     loopLoop_0_cond_in [label=cond_in shape=ellipse color="#00FF00"];
     loopLoop_0_carry [label=carry shape=ellipse color="#00FF00"];
-    loopLoop_0_unsq_idx [label=Unsqueeze shape=box color="#0000FF"];
     loopLoop_0_Div_i_0 [label=Div shape=box color="#0000FF"];
     loopLoop_0_Mod_rem_0 [label=Mod shape=box color="#0000FF"];
     loopLoop_0_Div_j_0 [label=Div shape=box color="#0000FF"];

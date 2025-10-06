@@ -109,6 +109,69 @@
                   ]
                 },
                 {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_X_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_X_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          6
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_X_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_X_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_X_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_X_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
                   "opType": "Unsqueeze",
                   "input": [
                     "iter",
@@ -120,13 +183,68 @@
                   "attribute": []
                 },
                 {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_X_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_X_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_X_0_0",
+                    "lin_stride_gb_lin_X_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_X_0",
+                    "lin_mul_out_gb_lin_X_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_X_0_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_X_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
                   "opType": "Gather",
                   "input": [
                     "X",
-                    "unsq_out"
+                    "gb_linU_X_0_out"
                   ],
                   "output": [
-                    "gather_X_0_out"
+                    "gb_g_X_0_out"
                   ],
                   "attribute": [
                     {
@@ -139,7 +257,7 @@
                 {
                   "opType": "Squeeze",
                   "input": [
-                    "gather_X_0_out",
+                    "gb_g_X_0_out",
                     "axes"
                   ],
                   "output": [

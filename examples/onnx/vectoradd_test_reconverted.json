@@ -107,6 +107,132 @@
                   ]
                 },
                 {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_A_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_A_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          4
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_A_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_A_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_A_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_A_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_B_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_B_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          4
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_B_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_B_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_B_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_B_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
                   "opType": "Unsqueeze",
                   "input": [
                     "iter",
@@ -118,13 +244,68 @@
                   "attribute": []
                 },
                 {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_A_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_A_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_A_0_0",
+                    "lin_stride_gb_lin_A_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_A_0",
+                    "lin_mul_out_gb_lin_A_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_A_0_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_A_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
                   "opType": "Gather",
                   "input": [
                     "A",
-                    "unsq_out"
+                    "gb_linU_A_0_out"
                   ],
                   "output": [
-                    "gather_A_0_out"
+                    "gb_g_A_0_out"
                   ],
                   "attribute": [
                     {
@@ -135,13 +316,68 @@
                   ]
                 },
                 {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_B_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_B_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_B_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_B_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_B_0_0",
+                    "lin_stride_gb_lin_B_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_B_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_B_0",
+                    "lin_mul_out_gb_lin_B_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_B_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_B_0_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_B_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
                   "opType": "Gather",
                   "input": [
                     "B",
-                    "unsq_out"
+                    "gb_linU_B_0_out"
                   ],
                   "output": [
-                    "gather_B_0_out"
+                    "gb_g_B_0_out"
                   ],
                   "attribute": [
                     {
@@ -154,7 +390,7 @@
                 {
                   "opType": "Squeeze",
                   "input": [
-                    "gather_A_0_out",
+                    "gb_g_A_0_out",
                     "axes"
                   ],
                   "output": [
@@ -165,7 +401,7 @@
                 {
                   "opType": "Squeeze",
                   "input": [
-                    "gather_B_0_out",
+                    "gb_g_B_0_out",
                     "axes"
                   ],
                   "output": [

@@ -289,17 +289,6 @@
                   ]
                 },
                 {
-                  "opType": "Unsqueeze",
-                  "input": [
-                    "iter",
-                    "axes"
-                  ],
-                  "output": [
-                    "unsq_idx_out"
-                  ],
-                  "attribute": []
-                },
-                {
                   "opType": "Div",
                   "input": [
                     "iter",

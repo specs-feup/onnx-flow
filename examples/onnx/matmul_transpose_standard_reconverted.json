@@ -327,17 +327,6 @@
                   ]
                 },
                 {
-                  "opType": "Unsqueeze",
-                  "input": [
-                    "iter",
-                    "axes"
-                  ],
-                  "output": [
-                    "unsq_idx_out"
-                  ],
-                  "attribute": []
-                },
-                {
                   "opType": "Div",
                   "input": [
                     "iter",
@@ -804,14 +793,14 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "N_1"
+                    "mr_dim_tp_1_1"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "N_1",
+                        "name": "mr_dim_tp_1_1",
                         "dataType": 7,
                         "dims": [],
                         "int64Data": [
@@ -825,20 +814,104 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "shape1_1"
+                    "mr_dim_tp_1_0"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "shape1_1",
+                        "name": "mr_dim_tp_1_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          4
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_tp_lin_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_tp_lin_1",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_tp_lin_1_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_tp_lin_1_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          4
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_tp_lin_1_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_tp_lin_1_1",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "flat_shape_M"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "flat_shape_M",
                         "dataType": 7,
                         "dims": [
                           1
                         ],
                         "int64Data": [
-                          4
+                          8
                         ]
                       }
                     }
@@ -859,10 +932,10 @@
                   "opType": "Mod",
                   "input": [
                     "iter_1",
-                    "N_1"
+                    "mr_dim_tp_1_1"
                   ],
                   "output": [
-                    "scalarRowIndex_out_1"
+                    "mr_mod_out_tp_1_1"
                   ],
                   "attribute": []
                 },
@@ -870,71 +943,109 @@
                   "opType": "Div",
                   "input": [
                     "iter_1",
-                    "N_1"
+                    "mr_dim_tp_1_1"
                   ],
                   "output": [
-                    "scalarColumnIndex_out_1"
+                    "mr_div_out_tp_1_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "mr_div_out_tp_1_1",
+                    "mr_dim_tp_1_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_tp_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "mr_div_out_tp_1_1",
+                    "mr_dim_tp_1_0"
+                  ],
+                  "output": [
+                    "mr_div_out_tp_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_tp_1_1",
+                    "lin_stride_tp_lin_1_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_tp_lin_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_tp_lin_1",
+                    "lin_mul_out_tp_lin_1_0"
+                  ],
+                  "output": [
+                    "lin_add_out_tp_lin_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_tp_1_0",
+                    "lin_stride_tp_lin_1_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_tp_lin_1_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_add_out_tp_lin_1_0",
+                    "lin_mul_out_tp_lin_1_1"
+                  ],
+                  "output": [
+                    "lin_add_out_tp_lin_1_1"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "scalarColumnIndex_out_1",
+                    "lin_add_out_tp_lin_1_1",
                     "axes_1"
                   ],
                   "output": [
-                    "columnIndex_out_1"
+                    "tp_linU_1_out"
                   ],
                   "attribute": []
-                },
-                {
-                  "opType": "Unsqueeze",
-                  "input": [
-                    "scalarRowIndex_out_1",
-                    "axes_1"
-                  ],
-                  "output": [
-                    "rowIndex_out_1"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "M",
-                    "rowIndex_out_1"
-                  ],
-                  "output": [
-                    "rowMatrix_1_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
                 },
                 {
                   "opType": "Reshape",
                   "input": [
-                    "rowMatrix_1_out",
-                    "shape1_1"
+                    "M",
+                    "flat_shape_M"
                   ],
                   "output": [
-                    "row_1"
+                    "M_flat"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Gather",
                   "input": [
-                    "row_1",
-                    "columnIndex_out_1"
+                    "M_flat",
+                    "tp_linU_1_out"
                   ],
                   "output": [
-                    "matrixElement_1_out"
+                    "tp_g_1_out"
                   ],
                   "attribute": [
                     {
@@ -943,13 +1054,35 @@
                       "type": 2
                     }
                   ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "tp_g_1_out",
+                    "axes_1"
+                  ],
+                  "output": [
+                    "sq_tp_sq_1_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "sq_tp_sq_1_out",
+                    "axes_1"
+                  ],
+                  "output": [
+                    "updateUnsq_out_1"
+                  ],
+                  "attribute": []
                 },
                 {
                   "opType": "ScatterElements",
                   "input": [
                     "carry_1",
                     "unsq_out",
-                    "matrixElement_1_out"
+                    "updateUnsq_out_1"
                   ],
                   "output": [
                     "carry_out_1"
