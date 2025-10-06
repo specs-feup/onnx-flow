@@ -32,7 +32,8 @@ type LoopCtx = {
   running?: TensorNode.Class | null,
 };
 
-// --- Dimension helpers ---
+// ---------- Broadcast + Index helpers ----------
+
 type Dim = number | String;
 type Shape = Dim[];
 
@@ -40,9 +41,150 @@ function isNum(d: Dim): d is number {
   return typeof d === "number" && Number.isFinite(d);
 }
 
-// Convert a (number|string)[] to number[] by mapping symbolic dims to -1
+// Convert (number|string)[] → number[]; unknown/symbolic become -1
 function toStaticShape(shape: Shape): number[] {
   return shape.map(d => (typeof d === "number" ? d : -1));
+}
+
+// Product of positive dims; treat -1 (unknown) as 1 for decoding purposes
+function prodSafe(dims: number[]): number {
+  return dims.reduce((a, b) => a * (b > 0 ? b : 1), 1);
+}
+
+// Compute strides for a fully-known numeric shape
+function computeStrides(shape: number[]): number[] {
+  const n = shape.length;
+  const s = Array(n).fill(1);
+  for (let i = n - 2; i >= 0; i--) s[i] = s[i + 1] * (shape[i + 1] > 0 ? shape[i + 1] : 1);
+  return s;
+}
+
+// Mixed-radix decode of ctx.iter into digits along 'dims' (rightmost fastest)
+function decodeMixedRadix(
+  g: OnnxGraph.Class,
+  iter: TensorNode.Class,
+  dims: number[],
+  tag: string
+): TensorNode.Class[] {
+  // We allow unknown dims (-1) by replacing them with 1 for decoding
+  const dd = dims.map(d => (d > 0 ? d : 1));
+  const out: TensorNode.Class[] = [];
+  let rem = iter;
+
+  for (let k = dd.length - 1; k >= 0; k--) {
+    const dConst = makeTensorConst(g, `mr_dim_${tag}_${k}`, DataType.INT64, "constant", scalarInt64(dd[k]));
+    const modN = g.addNode(uniq(g, `mr_mod_${tag}_${k}`))
+                  .init(new OperationNode.Builder("Mod", [rem, dConst]))
+                  .as(OperationNode);
+    const modOut = g.addNode(uniq(g, `mr_mod_out_${tag}_${k}`))
+                    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+                    .as(TensorNode);
+    g.addEdge(modN, modOut).init(new OnnxEdge.Builder(modOut.literalType, modOut.shape)).as(OnnxEdge);
+    out.unshift(modOut);
+
+    const divN = g.addNode(uniq(g, `mr_div_${tag}_${k}`))
+                  .init(new OperationNode.Builder("Div", [rem, dConst]))
+                  .as(OperationNode);
+    const divOut = g.addNode(uniq(g, `mr_div_out_${tag}_${k}`))
+                    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+                    .as(TensorNode);
+    g.addEdge(divN, divOut).init(new OnnxEdge.Builder(divOut.literalType, divOut.shape)).as(OnnxEdge);
+    rem = divOut;
+  }
+  return out; // one INT64 scalar per axis
+}
+
+// sum_i idx[i] * stride[i]
+function buildLinearIndex(
+  g: OnnxGraph.Class,
+  idx: TensorNode.Class[],
+  strides: number[],
+  tag: string
+): TensorNode.Class {
+  let acc = makeTensorConst(g, `lin_zero_${tag}`, DataType.INT64, "constant", scalarInt64(0));
+  for (let i = 0; i < idx.length; i++) {
+    const sConst = makeTensorConst(g, `lin_stride_${tag}_${i}`, DataType.INT64, "constant", scalarInt64(strides[i]));
+    const mulN = g.addNode(uniq(g, `lin_mul_${tag}_${i}`))
+                  .init(new OperationNode.Builder("Mul", [idx[i], sConst]))
+                  .as(OperationNode);
+    const mulOut = g.addNode(uniq(g, `lin_mul_out_${tag}_${i}`))
+                    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+                    .as(TensorNode);
+    g.addEdge(mulN, mulOut).init(new OnnxEdge.Builder(mulOut.literalType, mulOut.shape)).as(OnnxEdge);
+
+    const addN = g.addNode(uniq(g, `lin_add_${tag}_${i}`))
+                  .init(new OperationNode.Builder("Add", [acc, mulOut]))
+                  .as(OperationNode);
+    const addOut = g.addNode(uniq(g, `lin_add_out_${tag}_${i}`))
+                    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+                    .as(TensorNode);
+    g.addEdge(addN, addOut).init(new OnnxEdge.Builder(addOut.literalType, addOut.shape)).as(OnnxEdge);
+    acc = addOut;
+  }
+  return acc;
+}
+
+// True broadcast result for element-wise ops (numeric dims only; -1 passes through)
+function broadcastShapes(shapes: number[][]): number[] {
+  if (shapes.length === 0) return [];
+  const maxR = Math.max(...shapes.map(s => s.length));
+  const out = Array(maxR).fill(1);
+  for (let i = 0; i < maxR; i++) {
+    let dim = 1;
+    for (const s of shapes) {
+      const d = s[s.length - 1 - i] ?? 1;
+      if (d === -1) { dim = dim === 1 ? -1 : dim; continue; }
+      if (dim === 1) dim = d;
+      else if (d === 1) continue;
+      else if (dim === -1) dim = d;
+      else if (dim !== d) throw new Error(`Broadcast mismatch on axis -${i+1}: got ${dim} vs ${d}`);
+    }
+    out[maxR - 1 - i] = dim;
+  }
+  return out;
+}
+
+function asStaticDims(shape: (number | string)[]): number[] {
+  return shape.map(d => (typeof d === 'number' && d > 0) ? d : 1);
+}
+
+function getMatDims(aShape: (number|string)[], bShape: (number|string)[]) {
+  // Accept [M,K]·[K,N], also rank-1 vector cases promoted by ONNX
+  const a = asStaticDims(aShape);
+  const b = asStaticDims(bShape);
+  // Promote vectors to 2D: [K] -> [K,1] if RHS; [K] -> [1,K] if LHS
+  let aR = a.length, bR = b.length;
+  let A = a.slice(), B = b.slice();
+  if (aR === 1) { A = [1, a[0]]; aR = 2; }
+  if (bR === 1) { B = [b[0], 1]; bR = 2; }
+  const M = A[A.length - 2];
+  const K = A[A.length - 1];
+  const KN = B[B.length - 2]; // must equal K
+  const N = B[B.length - 1];
+  return { M, K, KN, N, A2: A, B2: B, aWasVec: a.length === 1, bWasVec: b.length === 1 };
+}
+
+function getAttr<T = any>(op: any, key: string, dflt?: T): T | undefined {
+  if (typeof op.getAttributes === "function") {
+    const a = op.getAttributes(); if (a && key in a) return a[key];
+  }
+  if (typeof op.getAttribute === "function") {
+    const v = op.getAttribute(key); if (v !== undefined) return v;
+  }
+  if (op.attributes && key in op.attributes) return op.attributes[key];
+  return dflt;
+}
+
+function tryReadConstI64Vector(tn?: any): number[] | undefined {
+  if (!tn) return undefined;
+  const init = tn.initializer ?? tn.constantValue ?? tn.value ?? tn.data;
+  if (!init) return undefined;
+  const arr = Array.isArray(init) ? init : Array.from(init as any);
+  return arr.map((v: any) => Number(v));
+}
+
+function int64ShapeConst(g: OnnxGraph.Class, name: string, dims: number[]) {
+  return makeTensorConst(g, name, DataType.INT64, "constant", int64Vec(dims));
 }
 
 /* ------------------------------ Helpers ------------------------------ */
@@ -144,6 +286,75 @@ function gatherAt2DPoint(
 
   return [g1, out];
 }
+
+// Gather one element from 't' following ONNX broadcast rules against ctx.outShape
+function gatherWithBroadcast(
+  g: OnnxGraph.Class,
+  t: TensorNode.Class,
+  ctx: LoopCtx,
+  tag: string
+): TensorNode.Class {
+  // Scalars don’t need gathering (broadcast naturally)
+  if (t.shape.length === 0) return t;
+
+  const outDimsStatic = toStaticShape(ctx.outShape as Shape);   // may contain -1
+  const inDims        = toStaticShape(t.shape as Shape).map(d => (d > 0 ? d : 1));
+
+  // --- 1-D unknown-length fast path (Range + Add, etc.) ---
+  if (inDims.length === 1 && outDimsStatic.length === 1 && outDimsStatic[0] <= 0) {
+    // Just use iter as the index; Range's trip_count guarantees in-bounds
+    const idx = ctx.unsqIdx ?? unsqueezeIdx(g, ctx.iter, ctx.axes, `unsq_idx_${tag}`);
+    const src = /* no need to flatten a 1-D input */ t;
+    const [__, gathered] = gatherFrom(g, src, `gb_1d_iter_${tag}`, idx, 0);
+    return gathered; // shape [1]
+  }
+
+  // If input rank > output rank, fallback to flat gather
+  if (inDims.length > outDimsStatic.length) {
+    const src = ensureFlatInput(g, t);
+    const idx = ctx.unsqIdx ?? unsqueezeIdx(g, ctx.iter, ctx.axes, `unsq_idx_${tag}`);
+    const [__, gathered] = gatherFrom(g, src, `gb_fallback_${tag}`, idx, 0);
+    return gathered; // [1]
+  }
+
+  // Build the decode radix per axis:
+  // Use output dim if known; if unknown (-1), substitute this input’s non-1 dim for that aligned axis (else 1).
+  const rO = outDimsStatic.length, rI = inDims.length;
+  const decodeDims: number[] = outDimsStatic.map(d => (d > 0 ? d : 1));
+  for (let k = 0; k < rI; k++) {
+    const outPos = rO - rI + k;
+    if (outPos >= 0 && outDimsStatic[outPos] <= 0) {
+      // unknown out dim → pick the concrete size from this input axis if >1
+      if (inDims[k] > 1) decodeDims[outPos] = inDims[k];
+    }
+  }
+
+  // Decode output digits once
+  const oDigits = decodeMixedRadix(g, ctx.iter, decodeDims, `gb_${tag}`);
+
+  // Align from the right for broadcast: input axis uses 0 if its dim is 1; otherwise reuse the output digit
+  const iDigits: TensorNode.Class[] = [];
+  for (let k = 0; k < rI; k++) {
+    const outPos = rO - rI + k;
+    const inDim  = inDims[k];
+    if (inDim === 1) {
+      const z = makeTensorConst(g, `gb_zero_${tag}_${k}`, DataType.INT64, "constant", scalarInt64(0));
+      iDigits.push(z);
+    } else {
+      iDigits.push(oDigits[outPos]);
+    }
+  }
+
+  // Build linear index and gather from a flattened view
+  const strides = computeStrides(inDims);
+  const lin = buildLinearIndex(g, iDigits, strides, `gb_lin_${tag}`);
+  const linU = unsqueezeIdx(g, lin, ctx.axes, `gb_linU_${tag}`);
+
+  const flat = ensureFlatInput(g, t);
+  const [_, gathered] = gatherFrom(g, flat, `gb_g_${tag}`, linU, 0); // [1]
+  return gathered;
+}
+
 
 function squeezeIfLen1(g: OnnxGraph.Class, t: TensorNode.Class, axes: TensorNode.Class, tag: string) {
   if (t.shape.length === 1 && t.shape[0] === 1) {
@@ -320,6 +531,10 @@ function resolveFusedInput(
       }
     }
 
+    if (!returnGather) {
+      return flatten ? ensureFlatInput(g, t) : t;
+    }
+
     // 2) Otherwise, we gather by *the correct* index for t.shape
     //    Prefer (iU, jU) / (flatU) if coalesced MatMul provided them
     let idxToUse: TensorNode.Class | null = ctx.unsqIdx; // default
@@ -361,7 +576,7 @@ function resolveFusedInput(
       }
     }
 
-    // Non-coalesced path (or no special indices available)
+    // Non-coalesced path (or no special indices available) — broadcast-aware
     if (!ctx.unsqIdx) {
       const unsq = g.addNode(uniq(g, "unsq_idx"))
         .init(new OperationNode.Builder("Unsqueeze", [ctx.iter, ctx.axes]))
@@ -373,11 +588,11 @@ function resolveFusedInput(
       ctx.unsqIdx = unsqOut;
     }
 
-    const gatherInput = flatten ? ensureFlatInput(g, t) : t;
-    if (!returnGather) return gatherInput;
-    const [__, gathered] = gatherFrom(g, gatherInput, `gather_${t.id}_${op.id}`, ctx.unsqIdx, 0);
-    g.addEdge(ctx.unsqIdx, __ as any).init(new OnnxEdge.Builder(ctx.unsqIdx.literalType, ctx.unsqIdx.shape)).as(OnnxEdge);
-    return gathered;
+    // If someone asked for the raw tensor (e.g., to reshape), honor it.
+    if (!returnGather) return flatten ? ensureFlatInput(g, t) : t;
+
+    // Broadcast-correct element gather for this input
+    return gatherWithBroadcast(g, t, ctx, `${t.id}_${op.id}`);
   }
 
   // 3) If the input is an op and it's fused, return fused out
@@ -392,7 +607,7 @@ function resolveFusedInput(
 
 /* ------------------- Handlers for Operation Types ------------------- */
 
-function handleSimpleArithmeticOperation(
+function handleElementWiseOperation(
   op: OperationNode.Class,
   g: OnnxGraph.Class,
   ctx: LoopCtx
@@ -407,7 +622,20 @@ function handleSimpleArithmeticOperation(
     .as(OperationNode);
 
   const allScalars = effInputs.every(t => t.shape.length === 0);
-  const outShape = allScalars ? [] : getLargestRankShape(effInputs);
+  let outShape: (number | String)[];
+  if (allScalars) {
+    outShape = [];
+  } else {
+    // Try true broadcast; if any unknown, fall back to "largest rank" (safe)
+    try {
+      const shapes = effInputs.map(t => toStaticShape(t.shape as Shape));
+      const bshape = broadcastShapes(shapes);
+      outShape = bshape;
+    } catch {
+      outShape = getLargestRankShape(effInputs);
+    }
+  }
+
   const out = g.addNode(uniq(g, `${op.id}_out`))
     .init(new TensorNode.Builder(inputs[0].literalType, outShape, "intermediate"))
     .as(TensorNode);
@@ -607,7 +835,7 @@ function handleMatMul(
       .init(new TensorNode.Builder(elemTy, [], "intermediate")).as(TensorNode);
     g.addEdge(add_node, acc).init(new OnnxEdge.Builder(acc.literalType, acc.shape)).as(OnnxEdge);
 
-    ctx.running = acc;
+    ctx.running = acc
     return acc; // [1], to be scattered by the outer builder
   }
 }
@@ -617,101 +845,76 @@ function handleTranspose(
   g: OnnxGraph.Class,
   ctx: LoopCtx
 ): TensorNode.Class {
-  const firstInput = op.getInputs()![0];
+    function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | undefined {
+    // Try common access patterns in your IR
+    const anyOp: any = op as any;
+    if (typeof anyOp.getAttributes === 'function') {
+      const obj = anyOp.getAttributes();
+      if (obj && key in obj) return obj[key];
+    }
+    if (typeof anyOp.getAttribute === 'function') {
+      const v = anyOp.getAttribute(key);
+      if (v !== undefined) return v;
+    }
+    if (anyOp.attributes && key in anyOp.attributes) {
+      return anyOp.attributes[key];
+    }
+    return dflt;
+  }
 
-  const matTensor = resolveFusedInput(g, firstInput, ctx, op, false, false);
+  const xIn = op.getInputs()![0];
+  const X = resolveFusedInput(g, xIn, ctx, op, /*flatten*/ false, /*returnGather*/ false);
 
-  const rowSize = (matTensor.shape as number[]).at(0)!; // N
-  const colSize = (matTensor.shape as number[]).at(1)!; // M
+  const inShapeNum = toStaticShape(X.shape as (number | String)[]);
+  const rank = inShapeNum.length;
 
-  const Nconst = makeTensorConst(g, `N_${op.id}`, DataType.INT64, "constant", scalarInt64(rowSize));
-  const flattenedShape = makeTensorConst(g, `shape1_${op.id}`, DataType.INT64, "constant", int64Vec([colSize]));
+  // Read perm safely, default to reverse if missing or wrong length
+  let perm = getAttr<number[]>(op, "perm");
+  if (!Array.isArray(perm) || perm.length !== rank) {
+    perm = Array.from({ length: rank }, (_, i) => rank - 1 - i);
+  }
 
-  // Row index
-  const scalarRowIdx = g.addNode(uniq(g, `Mod_${op.id}`))
-    .init(new OperationNode.Builder("Mod", [ctx.iter, Nconst]))
-    .as(OperationNode);
+  // Precompute inverse perm (inversePerm[k] = output axis where input axis k lands)
+  const inversePerm: number[] = new Array(rank);
+  for (let outAxis = 0; outAxis < rank; outAxis++) {
+    inversePerm[perm[outAxis]] = outAxis;
+  }
 
-  g.addEdge(ctx.iter, scalarRowIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the iteration with the "Mod" operation.
-  g.addEdge(Nconst, scalarRowIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Nconst with the "Mod" operation.
+  // Compute output shape (allow unknowns)
+  const outShape = perm.map(p => inShapeNum[p]);
+  ctx.outShape = outShape;
 
-  const scalarRowIdxOut = g.addNode(uniq(g, `scalarRowIndex_out_${op.id}`))
-    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-    .as(TensorNode);
+  // Mixed–radix decode in output space (unknown → 1 to keep arithmetic valid)
+  const decodeDims = outShape.map(d => (d > 0 ? d : 1));
+  const oDigits = decodeMixedRadix(g, ctx.iter, decodeDims, `tp_${op.id}`);
 
-  g.addEdge(scalarRowIdx, scalarRowIdxOut).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Div operation with its output.
+  // Map back to input digits, honoring broadcast (input dim == 1 → use 0)
+  const iDigits: TensorNode.Class[] = [];
+  for (let k = 0; k < rank; k++) {
+    const inDim = inShapeNum[k] > 0 ? inShapeNum[k] : 1;
+    if (inDim === 1) {
+      const z = makeTensorConst(g, `tp_zero_${op.id}_${k}`, DataType.INT64, "constant", scalarInt64(0));
+      iDigits.push(z);
+    } else {
+      const outPos = inversePerm[k]; // where input axis k appears after transpose
+      // Guard against malformed perms just in case
+      if (outPos === undefined) {
+        const z = makeTensorConst(g, `tp_safezero_${op.id}_${k}`, DataType.INT64, "constant", scalarInt64(0));
+        iDigits.push(z);
+      } else {
+        iDigits.push(oDigits[outPos]);
+      }
+    }
+  }
 
+  // Linearize and gather one element
+  const strides = computeStrides(inShapeNum.map(d => (d > 0 ? d : 1)));
+  const lin = buildLinearIndex(g, iDigits, strides, `tp_lin_${op.id}`);
+  const linU = unsqueezeIdx(g, lin, ctx.axes, `tp_linU_${op.id}`);
 
-  // Column index
-  const scalarColIdx = g.addNode(uniq(g, `Div_${op.id}`))
-    .init(new OperationNode.Builder("Div", [ctx.iter, Nconst]))
-    .as(OperationNode);
-
-  g.addEdge(ctx.iter, scalarColIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "iteration number" with the Div operation.
-  g.addEdge(Nconst, scalarColIdx).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "Nconst" with the Div operation.
-
-
-  const scalarColIdxOut = g.addNode(uniq(g, `scalarColumnIndex_out_${op.id}`))
-    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-    .as(TensorNode);
-
-  g.addEdge(scalarColIdx, scalarColIdxOut).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Mod operation with its output.
-
-
-  // Column index unsqueeze
-  const columnIndexNode = g.addNode(uniq(g, `columnIndex_${op.id}`))
-    .init(new OperationNode.Builder("Unsqueeze", [scalarColIdxOut, ctx.axes]))
-    .as(OperationNode);
-  g.addEdge(scalarColIdxOut, columnIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "scalarColIdxOut" to the unsqueeze operator.
-  g.addEdge(ctx.axes, columnIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "axes" to the unsqueeze operator.
-
-  const colU = g.addNode(uniq(g, `columnIndex_out_${op.id}`))
-    .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
-    .as(TensorNode);
-
-  g.addEdge(columnIndexNode, colU).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Unsqueeze operation with its output.
-
-
-  // Row index unsqueeze
-  const rowIndexNode = g.addNode(uniq(g, `rowIndex_${op.id}`))
-    .init(new OperationNode.Builder("Unsqueeze", [scalarRowIdxOut, ctx.axes]))
-    .as(OperationNode);
-  g.addEdge(scalarRowIdxOut, rowIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "scalarRowIdxOut" to the unsqueeze operator.
-  g.addEdge(ctx.axes, rowIndexNode).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the "axes" to the unsqueeze operator.
-
-  const rowU = g.addNode(uniq(g, `rowIndex_out_${op.id}`))
-    .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
-    .as(TensorNode);
-
-  g.addEdge(rowIndexNode, rowU).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects the Unsqueeze operation with its output.
-
-  // Gather entire row
-  const [_, rowMatrix] = gatherFrom(g, matTensor, `rowMatrix_${op.id}`, rowU, 0);
-
-  g.addEdge(rowU, _).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the unsqueeze for "rowIndex" to the gather for "rowMatrix".
-
-  // Reshape row to 1D vector
-  const reshape = g.addNode(uniq(g, `reshape_row_${op.id}`))
-    .init(new OperationNode.Builder("Reshape", [rowMatrix, flattenedShape]))
-    .as(OperationNode);
-
-  g.addEdge(flattenedShape, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the "iteration number" to reshape.
-  g.addEdge(rowMatrix, reshape).init(new OnnxEdge.Builder()).as(OnnxEdge) // Edge that connects the gather for "rowMatrix" to reshape.
-
-  const row = g.addNode(uniq(g, `row_${op.id}`))
-    .init(new TensorNode.Builder(matTensor.literalType, [colSize], "intermediate"))
-    .as(TensorNode);
-
-  g.addEdge(reshape, row).init(new OnnxEdge.Builder()).as(OnnxEdge);
-
-
-  const [__, matrixElement] = gatherFrom(g, row, `matrixElement_${op.id}`, colU, 0)
-
-  g.addEdge(colU, __).init(new OnnxEdge.Builder()).as(OnnxEdge);
-  g.addEdge(row, __).init(new OnnxEdge.Builder()).as(OnnxEdge); // Edge that connects "row" to the last gather.
-
-
-  return matrixElement;
+  const flat = ensureFlatInput(g, X);
+  const [_, gathered] = gatherFrom(g, flat, `tp_g_${op.id}`, linU, 0); // [1]
+  return squeezeIfLen1(g, gathered, ctx.axes, `tp_sq_${op.id}`); // []
 }
 
 
@@ -759,10 +962,10 @@ function handleRange(
 
 
 export {
-  handleSimpleArithmeticOperation,
+  handleElementWiseOperation,
   handleMatMul,
   handleTranspose,
-  handleRange
+  handleRange,
 };
 
 
@@ -778,8 +981,11 @@ export function buildLoopForChain(
   GRAPHS.push(graph);
 
   const matmulOp = chain.find(op => op.type === "MatMul");
+  const rangeOp = chain.find(op => op.type === "Range");
+
   const includesCoalescedMatMul = coalesce && matmulOp;
   const matmulIndex = chain.findIndex(op => op.type === "MatMul");
+
   const needsGating =
     coalesce &&
     matmulIndex !== -1 &&
@@ -795,6 +1001,11 @@ export function buildLoopForChain(
   let outShape = outTensor.shape.length === 0
     ? lastOp.getOutgoers.first().shape
     : outTensor.shape;
+  
+  if (rangeOp) {
+    // mark unknown 1-D length
+    outShape = [undefined];  
+  }
 
   let totalIters: number = null;
   let carryLen: number = null;
@@ -830,6 +1041,8 @@ export function buildLoopForChain(
   // Determine if the first dim is dynamic (string or -1)
   const firstDim = outShape[0];
   const isDynamicLen =
+    !!rangeOp ||
+    firstDim === undefined ||
     typeof firstDim === 'string' ||
     (typeof firstDim === 'number' && firstDim < 0);
 
@@ -864,15 +1077,18 @@ export function buildLoopForChain(
 
   const opMap = new Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>();
 
-  const handlers: Record<string, typeof handleSimpleArithmeticOperation> = {
-    Add: handleSimpleArithmeticOperation,
-    Sub: handleSimpleArithmeticOperation,
-    Mul: handleSimpleArithmeticOperation,
-    Div: handleSimpleArithmeticOperation,
-    Relu: handleSimpleArithmeticOperation,
-    Sigmoid: handleSimpleArithmeticOperation, 
-    Tanh: handleSimpleArithmeticOperation, 
-    Exp: handleSimpleArithmeticOperation,
+  const handlers: Record<string, typeof handleElementWiseOperation> = {
+    Add: handleElementWiseOperation,
+    Sub: handleElementWiseOperation,
+    Mul: handleElementWiseOperation,
+    Div: handleElementWiseOperation,
+    Relu: handleElementWiseOperation,
+    Sum: handleElementWiseOperation,
+    Min: handleElementWiseOperation,
+    Max: handleElementWiseOperation,
+    Sigmoid: handleElementWiseOperation, 
+    Tanh: handleElementWiseOperation, 
+    Exp: handleElementWiseOperation,
     MatMul: handleMatMul,
     Transpose: handleTranspose,
     Range: handleRange
@@ -945,7 +1161,6 @@ export function buildLoopForChain(
   let cond: TensorNode.Class;        // BOOL  scalar [] → Loop input 1
   let v_initial: TensorNode.Class;   // elemTy [1]     → Loop input 2
 
-  const rangeOp = chain.find(op => op.type === "Range");
 
   if (rangeOp) {
     const [startT, limitT, deltaT] = rangeOp.getInputs()!.map(n => n.as(TensorNode));
@@ -1027,13 +1242,14 @@ export function buildLoopForChain(
 
     // 6) v_initial = ConstantOfShape(tripVec) with zeros(elemTy)
     const init = graph.addNode(uniq(graph, `range_init_${chain[0].id}`))
-                      .init(new OperationNode.Builder("ConstantOfShape", [tripVec], {
-                        value: { type: "TENSOR", ...zeroTensor(elemTy, [1]) }
-                      }))
-                      .as(OperationNode);
+                        .init(new OperationNode.Builder("ConstantOfShape", [tripVec], {
+                          value: { type: "TENSOR", ...zeroTensor(elemTy, [1]) }
+                        }))
+                        .as(OperationNode);
+    const vInitDims = isDynamicLen ? [undefined] : [carryLen]; // or [-1]
     v_initial = graph.addNode(uniq(graph, `range_init_out_${chain[0].id}`))
-                    .init(new TensorNode.Builder(elemTy, [1], "intermediate"))
-                    .as(TensorNode);
+      .init(new TensorNode.Builder(elemTy, vInitDims, "intermediate"))
+      .as(TensorNode);
     graph.addEdge(init, v_initial).init(new OnnxEdge.Builder(v_initial.literalType, v_initial.shape)).as(OnnxEdge);
 
     // Loop inputs

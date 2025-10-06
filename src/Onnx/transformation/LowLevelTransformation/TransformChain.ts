@@ -8,7 +8,7 @@ import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 
-const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose", "Range", "Relu", "Sigmoid", "Tanh", "Exp"]);
+const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose", "Range", "Relu", "Sigmoid", "Tanh", "Exp", "Sum", "Min", "Max"]);
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) {
