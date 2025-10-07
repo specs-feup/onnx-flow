@@ -128,7 +128,7 @@ export default class OnnxDotFormatter<
         return this.createDotEdge(sourceId, targetId, attrs);
     }
 
-    loopBodyToDot(node: OperationNode.Class): DotStatement[] {
+    loopToDot(node: OperationNode.Class): DotStatement[] {
         const idPrefix = `loop${node.id}_`;
         const statements = [];
 
@@ -152,7 +152,7 @@ export default class OnnxDotFormatter<
         return statements;
     }
 
-    ifBodyToDot(node: OperationNode.Class): DotStatement[] {
+    ifToDot(node: OperationNode.Class): DotStatement[] {
         const idPrefix = `if${node.id}_`;
         const statements = [];
         const subgraphLabels = [];
@@ -208,22 +208,86 @@ export default class OnnxDotFormatter<
     }
 
     /**
+     * @brief Tries to turn a node as an intermediate tensor.
+     *
+     * @param node The node to convert.
+     * @returns The intermediate tensor node if compatible, otherwise undefined.
+     */
+    tryAsIntermediateTensor(node: BaseNode.Class): TensorNode.Class | undefined {
+        const tensorNode = node.tryAs(TensorNode);
+        if (tensorNode === undefined)
+            return undefined;
+
+        if (!['intermediate', 'constant'].includes(tensorNode.type))
+            return undefined;
+
+        return tensorNode;
+    }
+
+    /**
+     * @brief Converts an intermediate tensor node into DOT statements.
+     * This method short-circuits edges that connect through intermediate
+     * tensors, to hide the respective tensor nodes from the graph.
+     *
+     * @param node The intermediate tensor node to convert.
+     * @returns The resulting DOT statements.
+     */
+    intermediateTensorToDot(node: TensorNode.Class): DotStatement[] {
+        const statements = [];
+
+        const incomers = node.getIncomers;
+        const outgoers = node.getOutgoers;
+
+        for (const inEdge of incomers) {
+            const source = inEdge.source;
+            const edgeAttrs = this.getEdgeAttrs(inEdge);
+
+            for (const outEdge of outgoers) {
+                const target = outEdge.target;
+                const newEdge = this.createDotEdge(source.id, target.id, edgeAttrs);
+                statements.push(newEdge);
+            }
+        }
+
+        return statements;
+    }
+
+    /**
      * @brief Handles special cases in the conversion from node to DOT.
      *
      * @param node The node to convert.
      * @returns The resulting DOT statements.
      */
     specialNodeToDot(node: BaseNode.Class): DotStatement[] | null {
-        const opNode = node.tryAs(OperationNode);
-        if (opNode === undefined) {
-            return null;
+        const tensorNode = this.tryAsIntermediateTensor(node);
+        if (tensorNode !== undefined) {
+            return this.intermediateTensorToDot(tensorNode);
         }
 
-        switch (opNode.type) {
-            case 'Loop':
-                return this.loopBodyToDot(opNode);
-            case 'If':
-                return this.ifBodyToDot(opNode);
+        const opNode = node.tryAs(OperationNode);
+        if (opNode !== undefined) {
+            switch (opNode.type) {
+                case 'Loop':
+                    return this.loopToDot(opNode);
+                case 'If':
+                    return this.ifToDot(opNode);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @brief Handles special cases in the conversion from edge to DOT.
+     *
+     * @param edge The edge to convert.
+     * @returns The resulting DOT statements.
+     */
+    specialEdgeToDot(edge: BaseEdge.Class): DotStatement[] | null {
+        // Ignore original edges from and to intermediate tensors
+        if (this.tryAsIntermediateTensor(edge.source) !== undefined
+            || this.tryAsIntermediateTensor(edge.target) !== undefined) {
+            return [];
         }
 
         return null;
@@ -248,6 +312,12 @@ export default class OnnxDotFormatter<
         }
 
         for (const edge of graph.edges) {
+            const statements = this.specialEdgeToDot(edge);
+            if (statements !== null) {
+                dot.statements(...statements);
+                continue;
+            }
+
             dot.statements(this.edgeToDot(edge));
         }
 
