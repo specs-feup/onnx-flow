@@ -154,8 +154,12 @@ export default class OnnxDotFormatter<
 
     ifToDot(node: OperationNode.Class): DotStatement[] {
         const idPrefix = `if${node.id}_`;
+
         const statements = [];
         const subgraphLabels = [];
+
+        const ifDot = this.nodeToDot(node);
+        statements.push(ifDot);
 
         const thenBranch = node.getThenBranch();
         if (thenBranch !== undefined) {
@@ -186,7 +190,7 @@ export default class OnnxDotFormatter<
             const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
                 .graphAttr('label', `If-Else ${node.id}`)
                 .graphAttr('style', 'dashed')
-                .graphAttr('color', '#00ff00');
+                .graphAttr('color', '#ff0000');
 
             const elseEdge = Dot.edge(this.idPrefix + node.id, `${idPrefix}else_condition`)
                 .attr('label', 'else')
