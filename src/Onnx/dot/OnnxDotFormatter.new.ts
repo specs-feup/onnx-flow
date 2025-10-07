@@ -1,6 +1,6 @@
 import DefaultDotFormatter from "@specs-feup/flow/graph/dot/DefaultDotFormatter";
 import OnnxGraph from "../OnnxGraph.js";
-import Dot, { DotEdge, DotGraph, DotNode } from "@specs-feup/flow/graph/dot/dot";
+import Dot, { DotEdge, DotGraph, DotNode, DotStatement, DotSubgraph } from "@specs-feup/flow/graph/dot/dot";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Node from "@specs-feup/flow/graph/Node";
@@ -8,32 +8,32 @@ import TensorNode from "../TensorNode.js";
 import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
-import Edge from "@specs-feup/flow/graph/Edge";
 import OnnxEdge from "../OnnxEdge.js";
 
 type ClusterInfo = {
     idPrefix: string;
-    nodeLabels: string[];
+    subgraphLabels: string[];
 };
 
 export default class OnnxDotFormatter<
     G extends OnnxGraph.Class = OnnxGraph.Class,
 > extends DefaultDotFormatter<G> {
     private idPrefix: string;
-    private clusterNodes: Record<string, ClusterInfo> = {};
+    private clusterInfos: Record<string, ClusterInfo> = {};
 
     static defaultGetNodeAttrs(node: BaseNode.Class): Record<string, string> {
         const attrs = super.defaultGetNodeAttrs(node);
 
         node.switch(
             Node.Case(TensorNode, node => {
-                attrs.shape = 'ellipse';
-
                 if (node.type === 'input') {
+                    attrs.shape = 'ellipse';
                     attrs.color = '#00ff00';
                 } else if (node.type === 'output') {
+                    attrs.shape = 'ellipse';
                     attrs.color = '#ff0000';
-                } else {
+                } else if (['index', 'index_aux'].includes(node.type)) {
+                    attrs.shape = 'ellipse';
                     attrs.color = '#ff00ff';
                 }
             }),
@@ -76,11 +76,11 @@ export default class OnnxDotFormatter<
     }
 
     constructor(
+        idPrefix: string = "",
         getNodeAttrs?: (node: BaseNode.Class) => Record<string, string>,
         getEdgeAttrs?: (edge: BaseEdge.Class) => Record<string, string>,
         getContainer?: (node: BaseNode.Class) => BaseNode.Class | undefined,
-        getGraphAttrs?: () => Record<string, string>,
-        idPrefix: string = ""
+        getGraphAttrs?: () => Record<string, string>
     ) {
         getNodeAttrs ??= OnnxDotFormatter.defaultGetNodeAttrs;
         getEdgeAttrs ??= OnnxDotFormatter.defaultGetEdgeAttrs;
@@ -103,17 +103,17 @@ export default class OnnxDotFormatter<
         let source = this.idPrefix + sourceId;
         let target = this.idPrefix + targetId;
 
-        if (sourceId in this.clusterNodes) {
-            const sourceCluster = this.clusterNodes[sourceId];
+        if (sourceId in this.clusterInfos) {
+            const sourceCluster = this.clusterInfos[sourceId];
 
-            attrs.ltail = sourceCluster.nodeLabels[0];  // TODO(Process-ing): See if this is correct
+            attrs.ltail = sourceCluster.subgraphLabels[0];  // TODO(Process-ing): See if this is correct
             source = sourceCluster.idPrefix + source;
         }
 
-        if (targetId in this.clusterNodes) {
-            const targetCluster = this.clusterNodes[targetId];
+        if (targetId in this.clusterInfos) {
+            const targetCluster = this.clusterInfos[targetId];
 
-            attrs.lhead = targetCluster.nodeLabels[0];  // TODO(Process-ing): See if this is correct
+            attrs.lhead = targetCluster.subgraphLabels[0];  // TODO(Process-ing): See if this is correct
             target = targetCluster.idPrefix + target;
         }
 
@@ -128,8 +128,46 @@ export default class OnnxDotFormatter<
         return this.createDotEdge(sourceId, targetId, attrs);
     }
 
-    getExtraEdges(node: BaseNode.Class): DotEdge[] {
-        return [];
+    loopBodyToDot(node: OperationNode.Class): DotStatement[] | null {
+        const idPrefix = `loop${node.id}_`;
+        const body = node.getBodySubgraph();
+        if (body === undefined) {
+            return null;
+        }
+
+        const subFormatter = new OnnxDotFormatter(idPrefix);
+        const bodyDot = subFormatter.toDot(body);
+
+        const bodySubdot = new DotSubgraph(`cluster_loop_${node.id}`, bodyDot.statementList)
+            .graphAttr('label', `Loop ${node.id}`)
+            .graphAttr('style', 'dashed')
+            .graphAttr('color', 'gray');
+
+        this.clusterInfos[node.id] = {
+            idPrefix,
+            subgraphLabels: [bodySubdot.label],
+        };
+
+        return [bodySubdot];
+    }
+
+    /**
+     * @brief Handles special cases in the conversion from node to DOT.
+     *
+     * @param node The node to convert.
+     * @returns The resulting DOT statements.
+     */
+    specialNodeToDot(node: BaseNode.Class): DotStatement[] | null {
+        const opNode = node.tryAs(OperationNode);
+        if (opNode === undefined) {
+            return null;
+        }
+
+        if (opNode.type === 'Loop') {
+            return this.loopBodyToDot(opNode);
+        }
+
+        return null;
     }
 
     override toDot(graph: G): DotGraph {
@@ -137,6 +175,12 @@ export default class OnnxDotFormatter<
         const nodes = graph.nodes;
 
         for (const node of nodes.filter(node => !this.isContained(node))) {
+            const statements = this.specialNodeToDot(node);
+            if (statements !== null) {
+                dot.statements(...statements);
+                continue;
+            }
+
             if (this.isContainer(node)) {
                 dot.statements(this.clusterNodeToDot(node));
             } else {
@@ -146,10 +190,6 @@ export default class OnnxDotFormatter<
 
         for (const edge of graph.edges) {
             dot.statements(this.edgeToDot(edge));
-        }
-
-        for (const node of nodes) {
-            dot.statements(...this.getExtraEdges(node));
         }
 
         return dot;
