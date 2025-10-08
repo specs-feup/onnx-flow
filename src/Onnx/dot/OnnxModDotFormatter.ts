@@ -26,9 +26,10 @@ export default class OnnxDotFormatter<
 
         node.switch(
             Node.Case(TensorNode, node => {
-                attrs.address = '0';
+                attrs.address = node.address.toString();
+                // attrs.stride = node.literalType.toString();
                 attrs.stride = '4';
-                attrs.size = '3';
+                attrs.size = node.shape[0].toString();
             }),
             Node.Case(VariableNode, node => {
                 attrs.label = node.name;
@@ -37,7 +38,7 @@ export default class OnnxDotFormatter<
             }),
             Node.Case(ConstantNode, node => {
                 attrs.label = node.value.toString();
-                attrs.size = '1';
+                // attrs.size = node;
             }),
             Node.Case(OperationNode, node => {
                 attrs.label = node.type;

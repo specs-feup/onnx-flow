@@ -22,21 +22,23 @@ namespace VariableNode {
         get type(): string {
             return this.data[TAG].type;
         }
+
+        get address(): number {
+            return this.data[TAG].address;
+        }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
-
-
         private literalType : number;
         private name : string;
         private type : string;
-
-
+        private address : number;
 
         constructor(literalType: number, name : string, type : string) {
             this.literalType = literalType;
             this.name = name;
             this.type = type;
+            this.address = 0;  // TODO(Process-ing): Make this not hardcoded
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -46,7 +48,8 @@ namespace VariableNode {
                     version: VERSION,
                     literalType: this.literalType,
                     name: this.name,
-                    type: this.type
+                    type: this.type,
+                    address: this.address,
                 },
             };
         }
@@ -66,6 +69,7 @@ namespace VariableNode {
             literalType : number;
             name : string;
             type : string;
+            address : number;
         };
     }
 
