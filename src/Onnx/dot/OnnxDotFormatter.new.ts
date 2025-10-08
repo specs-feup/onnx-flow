@@ -28,42 +28,43 @@ export default class OnnxDotFormatter<
             Node.Case(TensorNode, node => {
                 if (node.type === 'input') {
                     attrs.shape = 'ellipse';
-                    attrs.color = '#00ff00';
+                    attrs.color = 'green';
                 } else if (node.type === 'output') {
                     attrs.shape = 'ellipse';
-                    attrs.color = '#ff0000';
+                    attrs.color = 'red';
                 } else if (['index', 'index_aux'].includes(node.type)) {
                     attrs.shape = 'ellipse';
-                    attrs.color = '#ff00ff';
+                    attrs.color = 'magenta';
                 }
             }),
             Node.Case(VariableNode, node => {
                 attrs.label = node.name;
                 attrs.shape = 'ellipse';
-                attrs.color = node.type === 'input' ? '#00ff00' : '#ff0000';
+                attrs.color = node.type === 'input' ? 'green' : 'red';
             }),
             Node.Case(ConstantNode, node => {
                 attrs.label = node.value.toString();
                 attrs.shape = 'box';
-                attrs.color = '#a52a2a';
+                attrs.color = 'maroon';
             }),
             Node.Case(OperationNode, node => {
                 attrs.label = node.type;
-                attrs.color = '#0000ff';
+                attrs.color = 'blue';
             }),
         );
 
         return attrs;
     }
 
+    static shapeToLabel(shape: (number | String)[]): string {
+        const shapeString = `{${shape.join(',')}}`;
+        return shapeString === '{}' ? 'sc' : shapeString;
+    }
+
     static defaultGetEdgeAttrs(edge: BaseEdge.Class): Record<string, string> {
         const attrs = super.defaultGetEdgeAttrs(edge);
-
-        const onnxEdge = edge.tryAs(OnnxEdge);
-        if (onnxEdge !== undefined) {
-            const shapeString = `{${onnxEdge.shape.join(',')}}`;
-            attrs.label = shapeString === '{}' ? 'sc' : shapeString;
-        }
+        const onnxEdge = edge.as(OnnxEdge);
+        attrs.label = OnnxDotFormatter.shapeToLabel(onnxEdge.shape);
 
         return attrs;
     }
@@ -92,7 +93,7 @@ export default class OnnxDotFormatter<
         this.idPrefix = idPrefix;
     }
 
-    nodeToDot(node: BaseNode.Class): DotNode {
+    override nodeToDot(node: BaseNode.Class): DotNode {
         const id = this.idPrefix + node.id;
         const attrs = this.getNodeAttrs(node);
 
@@ -120,7 +121,7 @@ export default class OnnxDotFormatter<
         return Dot.edge(source, target, attrs);
     }
 
-    edgeToDot(edge: BaseEdge.Class): DotEdge {
+    override edgeToDot(edge: BaseEdge.Class): DotEdge {
         const sourceId = edge.source.id;
         const targetId = edge.target.id;
         const attrs = this.getEdgeAttrs(edge);
@@ -133,7 +134,7 @@ export default class OnnxDotFormatter<
         const statements = [];
 
         const body = node.getBodySubgraph();
-        if (body === undefined) {
+        if (body !== undefined) {
             const subFormatter = new OnnxDotFormatter(idPrefix);
             const bodyDot = subFormatter.toDot(body);
 
@@ -141,6 +142,7 @@ export default class OnnxDotFormatter<
                 .graphAttr('label', `Loop ${node.id}`)
                 .graphAttr('style', 'dashed')
                 .graphAttr('color', 'gray');
+
             statements.push(bodySubdot);
 
             this.clusterInfos[node.id] = {
@@ -190,12 +192,12 @@ export default class OnnxDotFormatter<
             const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
                 .graphAttr('label', `If-Else ${node.id}`)
                 .graphAttr('style', 'dashed')
-                .graphAttr('color', '#ff0000');
+                .graphAttr('color', 'red');
 
             const elseEdge = Dot.edge(this.idPrefix + node.id, `${idPrefix}else_condition`)
                 .attr('label', 'else')
                 .attr('style', 'dashed')
-                .attr('color', '#ff0000');
+                .attr('color', 'red');
 
             statements.push(elseGraph);
             statements.push(elseEdge);
@@ -257,6 +259,36 @@ export default class OnnxDotFormatter<
     }
 
     /**
+     * @brief Adds edges from external inputs to a given node.
+     *
+     * @param node The node to which to add external input edges.
+     * @returns The resulting DOT statements.
+     */
+    externalInputsToDot(node: OperationNode.Class): DotStatement[] {
+        const statements = [];
+
+        const extInputs = node.getInputs().filter(input => !node.graph.as(OnnxGraph).hasNode(input.id));
+
+        for (const input of extInputs) {
+            const tensor = input.tryAs(TensorNode);
+            if (tensor === undefined)
+                continue;
+
+            const targetId = this.idPrefix + node.id;
+            const attrs = {
+                label: OnnxDotFormatter.shapeToLabel(tensor.shape),
+                style: 'dashed',
+                color: 'gray',
+            }
+
+            const edge = Dot.edge(tensor.id, targetId, attrs);
+            statements.push(edge);
+        }
+
+        return statements;
+    }
+
+    /**
      * @brief Handles special cases in the conversion from node to DOT.
      *
      * @param node The node to convert.
@@ -275,6 +307,9 @@ export default class OnnxDotFormatter<
                     return this.loopToDot(opNode);
                 case 'If':
                     return this.ifToDot(opNode);
+                case 'Gather':
+                case 'Scatter':
+                    return [this.nodeToDot(opNode), ...this.externalInputsToDot(opNode)];
             }
         }
 
@@ -298,6 +333,9 @@ export default class OnnxDotFormatter<
     }
 
     override toDot(graph: G): DotGraph {
+        // Reset state
+        this.clusterInfos = {};
+
         const dot = Dot.graph().graphAttrs(this.getGraphAttrs());
         const nodes = graph.nodes;
 
