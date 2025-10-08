@@ -5,6 +5,7 @@ import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
 import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
 import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
+import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import OnnxModDotFormatter from "./Onnx/dot/OnnxModDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
@@ -148,6 +149,13 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: false,
   })
+  .option('formatter', {
+    alias: 'fmtr',
+    describe: 'Specify the DOT formatter to use (0 = onnx, 1 = onnx-mod)',
+    type: 'string',
+    choices: ['onnx', 'onnx-mod'],
+    default: 'onnx',
+  })
   .help()
   .argv;
 
@@ -161,7 +169,7 @@ const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = new OnnxModDotFormatter();
+const dotFormatter = argv.formatter === 'onnx-mod' ? new OnnxModDotFormatter() : new OnnxDotFormatter();
 
 (async function main() {
   try {
