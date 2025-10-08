@@ -5,7 +5,7 @@ import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
 import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
 import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
-import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
+import OnnxModDotFormatter from "./Onnx/dot/OnnxModDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
@@ -161,7 +161,7 @@ const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = new OnnxDotFormatter();
+const dotFormatter = new OnnxModDotFormatter();
 
 (async function main() {
   try {
