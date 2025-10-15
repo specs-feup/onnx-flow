@@ -1,5 +1,6 @@
 import OnnxGraph from "../../OnnxGraph.js";
 import clipHandler from "./handlers/Clip.js";
+import convHandler from "./handlers/Conv.js";
 import padHandler from "./handlers/Pad.js";
 import sliceHandler from "./handlers/Slice.js";
 import { HandlersRegistry, PreDecomposeOptions } from "./types.js";
@@ -8,10 +9,10 @@ import { HandlersRegistry, PreDecomposeOptions } from "./types.js";
 function buildDefaultRegistry(): HandlersRegistry {
   return {
     // Register handlers here. Keys are op types.
+    Conv: convHandler,
     Slice: sliceHandler,
     Pad: padHandler,
     Clip: clipHandler,
-    // Conv: convHandler, // add when ready
   };
 }
 
@@ -20,7 +21,7 @@ export default function applyPreDecomposition(
   options?: PreDecomposeOptions
 ): OnnxGraph.Class {
   const opts: PreDecomposeOptions = {
-    maxPasses: 2,         // a couple passes are usually enough
+    maxPasses: 10,         // a couple passes are usually enough
     handlers: buildDefaultRegistry(),
     ...options,
   };
