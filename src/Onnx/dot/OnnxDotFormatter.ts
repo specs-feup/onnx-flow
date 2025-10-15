@@ -12,7 +12,7 @@ import OnnxEdge from "../OnnxEdge.js";
 
 type ClusterInfo = {
     idPrefix: string;
-    subgraphLabels: string[];
+    subgraphLabel: string;
 };
 
 export default class OnnxDotFormatter<
@@ -28,7 +28,7 @@ export default class OnnxDotFormatter<
             Node.Case(TensorNode, node => {
                 if (node.type === 'input') {
                     attrs.shape = 'ellipse';
-                    attrs.color = 'green';
+                    attrs.color = 'lime';
                 } else if (node.type === 'output') {
                     attrs.shape = 'ellipse';
                     attrs.color = 'red';
@@ -40,7 +40,7 @@ export default class OnnxDotFormatter<
             Node.Case(VariableNode, node => {
                 attrs.label = node.name;
                 attrs.shape = 'ellipse';
-                attrs.color = node.type === 'input' ? 'green' : 'red';
+                attrs.color = node.type === 'input' ? 'lime' : 'red';
             }),
             Node.Case(ConstantNode, node => {
                 attrs.label = node.value.toString();
@@ -107,14 +107,14 @@ export default class OnnxDotFormatter<
         if (sourceId in this.clusterInfos) {
             const sourceCluster = this.clusterInfos[sourceId];
 
-            attrs.ltail = sourceCluster.subgraphLabels[0];  // TODO(Process-ing): See if this is correct
+            attrs.ltail = sourceCluster.subgraphLabel;
             source = sourceCluster.idPrefix + source;
         }
 
         if (targetId in this.clusterInfos) {
             const targetCluster = this.clusterInfos[targetId];
 
-            attrs.lhead = targetCluster.subgraphLabels[0];  // TODO(Process-ing): See if this is correct
+            attrs.lhead = targetCluster.subgraphLabel;
             target = targetCluster.idPrefix + target;
         }
 
@@ -147,7 +147,7 @@ export default class OnnxDotFormatter<
 
             this.clusterInfos[node.id] = {
                 idPrefix,
-                subgraphLabels: [bodySubdot.label],
+                subgraphLabel: bodySubdot.label,
             };
         }
 
@@ -156,37 +156,36 @@ export default class OnnxDotFormatter<
 
     ifToDot(node: OperationNode.Class): DotStatement[] {
         const idPrefix = `if${node.id}_`;
-
         const statements = [];
-        const subgraphLabels = [];
 
         const ifDot = this.nodeToDot(node);
         statements.push(ifDot);
 
         const thenBranch = node.getThenBranch();
         if (thenBranch !== undefined) {
-            const thenFormatter = new OnnxDotFormatter(`${idPrefix}then_`);
+            const thenIdPrefix = `${idPrefix}then_`;
+            const thenFormatter = new OnnxDotFormatter(thenIdPrefix);
             const thenDot = thenFormatter.toDot(thenBranch);
 
             const thenGraph = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
                 .graphAttr('label', `If-Then ${node.id}`)
                 .graphAttr('style', 'dashed')
-                .graphAttr('color', 'green');
+                .graphAttr('color', 'lime');
 
-            const thenEdge = Dot.edge(this.idPrefix + node.id, `${idPrefix}then_condition`)
+            const thenEdge = Dot.edge(this.idPrefix + node.id, thenIdPrefix + '0')  // Linked to first node in subgraph
+                .attr('lhead', thenGraph.label)
                 .attr('label', 'then')
                 .attr('style', 'dashed')
-                .attr('color', 'green');
+                .attr('color', 'lime');
 
             statements.push(thenGraph);
             statements.push(thenEdge);
-
-            subgraphLabels.push(thenGraph.label);
         }
 
         const elseBranch = node.getElseBranch();
         if (elseBranch !== undefined) {
-            const elseFormatter = new OnnxDotFormatter(`${idPrefix}else_`);
+            const elseIdPrefix = `${idPrefix}else_`;
+            const elseFormatter = new OnnxDotFormatter(elseIdPrefix);
             const elseDot = elseFormatter.toDot(elseBranch);
 
             const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
@@ -194,21 +193,15 @@ export default class OnnxDotFormatter<
                 .graphAttr('style', 'dashed')
                 .graphAttr('color', 'red');
 
-            const elseEdge = Dot.edge(this.idPrefix + node.id, `${idPrefix}else_condition`)
+            const elseEdge = Dot.edge(this.idPrefix + node.id, elseIdPrefix + '0')  // Linked to first node in subgraph
+                .attr('lhead', elseGraph.label)
                 .attr('label', 'else')
                 .attr('style', 'dashed')
                 .attr('color', 'red');
 
             statements.push(elseGraph);
             statements.push(elseEdge);
-
-            subgraphLabels.push(elseGraph.label);
         }
-
-        this.clusterInfos[node.id] = {
-            idPrefix,
-            subgraphLabels,
-        };
 
         return statements;
     }
@@ -279,7 +272,7 @@ export default class OnnxDotFormatter<
                 label: OnnxDotFormatter.shapeToLabel(tensor.shape),
                 style: 'dashed',
                 color: 'gray',
-            }
+            };
 
             const edge = Dot.edge(tensor.id, targetId, attrs);
             statements.push(edge);
