@@ -29,7 +29,7 @@ export default class OnnxDotFormatter<
                 attrs.address = node.address.toString();
                 // attrs.stride = node.literalType.toString();
                 attrs.stride = '4';
-                attrs.size = node.shape[0].toString();
+                attrs.size = node.shape[0]?.toString() ?? '1';
             }),
             Node.Case(VariableNode, node => {
                 attrs.label = node.name;
@@ -67,7 +67,8 @@ export default class OnnxDotFormatter<
 
     static defaultGetGraphAttrs(): Record<string, string> {
         const attrs = super.defaultGetGraphAttrs();
-
+        attrs.rankdir = 'LR';
+        
         return attrs;
     }
 
@@ -95,9 +96,9 @@ export default class OnnxDotFormatter<
         return Dot.node(id, attrs);
     }
 
-    createDotEdge(sourceId: string, targetId: string, attrs: Record<string, string> = {}): DotEdge {
-        let source = this.idPrefix + sourceId;
-        let target = this.idPrefix + targetId;
+    createDotEdge(sourceId: string, targetId: string, attrs: Record<string, string> = {}, escape: boolean = true): DotEdge {
+        let source = escape ? this.idPrefix + sourceId : sourceId;
+        let target = escape ? this.idPrefix + targetId : targetId;
 
         if (sourceId in this.clusterInfos) {
             const sourceCluster = this.clusterInfos[sourceId];
@@ -313,36 +314,84 @@ export default class OnnxDotFormatter<
         return null;
     }
 
+    toIgnore(node: DotNode): boolean {
+        return ['Gather'].includes(node.attrList.label);
+    }
+
     override toDot(graph: G): DotGraph {
         // Reset state
         this.clusterInfos = {};
 
         const dot = Dot.graph().graphAttrs(this.getGraphAttrs());
         const nodes = graph.nodes;
+        const dotNodes: DotNode[] = [];
+        const dotEdges: DotEdge[] = [];
+
+        function addNodeStatements(...statements: DotStatement[]) {
+            const edges = statements?.filter(s => s instanceof DotEdge) as DotEdge[] || [];
+            const nodes = statements?.filter(s => s instanceof DotNode) as DotNode[] || [];
+            const others = statements?.filter(s => !(s instanceof DotNode) && !(s instanceof DotEdge)) || [];
+
+            dotNodes.push(...nodes);
+            dotEdges.push(...edges);
+            dot.statements(...others);
+        }
 
         for (const node of nodes.filter(node => !this.isContained(node))) {
             const statements = this.specialNodeToDot(node);
             if (statements !== null) {
-                dot.statements(...statements);
+                addNodeStatements(...statements);
                 continue;
             }
 
             if (this.isContainer(node)) {
-                dot.statements(this.clusterNodeToDot(node));
+                addNodeStatements(this.clusterNodeToDot(node));
             } else {
-                dot.statements(this.nodeToDot(node));
+                addNodeStatements(this.nodeToDot(node));
             }
         }
 
         for (const edge of graph.edges) {
             const statements = this.specialEdgeToDot(edge);
             if (statements !== null) {
-                dot.statements(...statements);
+                addNodeStatements(...statements);
                 continue;
             }
 
-            dot.statements(this.edgeToDot(edge));
+            addNodeStatements(this.edgeToDot(edge));
         }
+
+        const nextTargets = new Map<string, string[]>();
+
+        for (const node of dotNodes) {
+            if (this.toIgnore(node)) {
+                nextTargets.set(node.id as string, []);
+            }
+        }
+
+        for (const edge of dotEdges) {
+            nextTargets.get(edge.source as string)?.push(edge.target as string);
+        }
+
+        for (const edge of dotEdges) {
+            const targetSkip = nextTargets.get(edge.target as string);
+
+            if (targetSkip !== undefined) {
+                for (const nextTarget of targetSkip) {
+                    const newEdge = this.createDotEdge(
+                        edge.source as string,
+                        nextTarget,
+                        edge.attrList,
+                        false
+                    );
+
+                    dotEdges.push(newEdge);
+                }
+            }
+        }
+
+        dot.statements(...dotNodes.filter(node => !this.toIgnore(node)));
+        dot.statements(...dotEdges.filter(edge => !nextTargets.has(edge.source as string) && !nextTargets.has(edge.target as string)));
 
         return dot;
     }
