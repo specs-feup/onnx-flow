@@ -67,7 +67,6 @@ export default class OnnxDotFormatter<
 
     static defaultGetGraphAttrs(): Record<string, string> {
         const attrs = super.defaultGetGraphAttrs();
-        attrs.rankdir = 'LR';
         
         return attrs;
     }
@@ -315,7 +314,7 @@ export default class OnnxDotFormatter<
     }
 
     toIgnore(node: DotNode): boolean {
-        return ['Gather'].includes(node.attrList.label);
+        return ['Gather', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze'].includes(node.attrList.label);
     }
 
     override toDot(graph: G): DotGraph {
@@ -325,7 +324,7 @@ export default class OnnxDotFormatter<
         const dot = Dot.graph().graphAttrs(this.getGraphAttrs());
         const nodes = graph.nodes;
         const dotNodes: DotNode[] = [];
-        const dotEdges: DotEdge[] = [];
+        const dotEdges: Map<string, DotEdge> = new Map<string, DotEdge>();
 
         function addNodeStatements(...statements: DotStatement[]) {
             const edges = statements?.filter(s => s instanceof DotEdge) as DotEdge[] || [];
@@ -333,7 +332,7 @@ export default class OnnxDotFormatter<
             const others = statements?.filter(s => !(s instanceof DotNode) && !(s instanceof DotEdge)) || [];
 
             dotNodes.push(...nodes);
-            dotEdges.push(...edges);
+            edges.forEach(edge => dotEdges.set(edge.source as string + ':' + edge.target as string, edge));
             dot.statements(...others);
         }
 
@@ -369,11 +368,11 @@ export default class OnnxDotFormatter<
             }
         }
 
-        for (const edge of dotEdges) {
+        for (const edge of dotEdges.values()) {
             nextTargets.get(edge.source as string)?.push(edge.target as string);
         }
 
-        for (const edge of dotEdges) {
+        for (const edge of dotEdges.values()) {
             const targetSkip = nextTargets.get(edge.target as string);
 
             if (targetSkip !== undefined) {
@@ -385,13 +384,18 @@ export default class OnnxDotFormatter<
                         false
                     );
 
-                    dotEdges.push(newEdge);
+                    dotEdges.set(newEdge.source as string + ':' + newEdge.target as string, newEdge);
                 }
             }
         }
 
         dot.statements(...dotNodes.filter(node => !this.toIgnore(node)));
-        dot.statements(...dotEdges.filter(edge => !nextTargets.has(edge.source as string) && !nextTargets.has(edge.target as string)));
+
+        for (const edge of dotEdges.values()) {
+            if (!nextTargets.has(edge.source as string) && !nextTargets.has(edge.target as string)) {
+                dot.statements(edge);
+            }
+        }
 
         return dot;
     }
