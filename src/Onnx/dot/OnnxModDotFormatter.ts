@@ -276,9 +276,9 @@ export default class OnnxDotFormatter<
      * @returns The resulting DOT statements.
      */
     specialNodeToDot(node: BaseNode.Class): DotStatement[] | null {
-        const tensorNode = this.tryAsIntermediateTensor(node);
-        if (tensorNode !== undefined) {
-            return this.intermediateTensorToDot(tensorNode);
+        const intermediateTensorNode = this.tryAsIntermediateTensor(node);
+        if (intermediateTensorNode !== undefined) {
+            return this.intermediateTensorToDot(intermediateTensorNode);
         }
 
         const opNode = node.tryAs(OperationNode);
@@ -314,7 +314,18 @@ export default class OnnxDotFormatter<
     }
 
     toIgnore(node: DotNode): boolean {
-        return ['Gather', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze'].includes(node.attrList.label);
+        // TODO(Process-ing): Make these conditions robust to weird input names
+        if (['Gather', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze'].includes(node.attrList.label)) {
+            return true;
+        }
+
+        const id = node.id as string;
+        const label = node.attrList.label as string;
+        if (id.startsWith('loop') && (id.includes('_cond_in') || id.includes('_cond_out') || label === 'Identity')) {
+            return true;
+        }
+
+        return false;
     }
 
     override toDot(graph: G): DotGraph {

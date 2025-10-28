@@ -890,7 +890,7 @@ export function buildLoopForChain(
   for (const op of chain) {
     const handler = handlers[op.type];
     if (!handler) throw new Error(`Unsupported op: ${op.type}`);
-    
+
     const output = handler(op, body, ctx);
     if (coalesce && op.type === "MatMul") {
       indicesOut = ctx.flatU ?? ctx.unsqIdx!;
@@ -1042,7 +1042,6 @@ export function buildLoopForChain(
     cond = makeTensorConst(graph, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
     v_initial = makeTensorConst(graph, "init_carry", elemTy, "initializer", carryInit);
   }
-
 
   const loop = graph.addNode(uniq(graph, `Loop_${chain[0].id}`))
     .init(new OperationNode.Builder("Loop", [trip, cond, v_initial], {}, body))
