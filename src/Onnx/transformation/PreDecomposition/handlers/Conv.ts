@@ -185,7 +185,7 @@ export default function handleConv(g: OnnxGraph.Class, op: OperationNode.Class):
   const padsVec = constI64(g, "pads_pad", [0, 0, pt, pl, 0, 0, pb, pr]);
   const padVal = constF32(g, "pad_val", [0.0]);
   const padOp = g.addNode(uniq(g, "Pad_X"))
-    .init(new OperationNode.Builder("Pad", [X, padsVec, padVal], {})).as(OperationNode);
+    .init(new OperationNode.Builder("Pad", [X, padsVec, padVal], { mode: "constant" })).as(OperationNode);
   const Xpad = g.addNode(uniq(g, "Xpad"))
     .init(new TensorNode.Builder(dtype, [xShape[0], xShape[1], undefined, undefined], "intermediate")).as(TensorNode);
   addEdge(g, padOp, Xpad, dtype, toNumShape(Xpad.shape));
@@ -573,7 +573,7 @@ export default function handleConv(g: OnnxGraph.Class, op: OperationNode.Class):
     nhwc_b = nhwcBias;
   }
 
-  Y.setShape([xShape[0], M, undefined, undefined]);
+  //Y.setShape([xShape[0], M, undefined, undefined]);
   // NHWC -> NCHW
   const toNCHW = g.addNode(uniq(g, `T_to_NCHW_${op.id}`)).init(new OperationNode.Builder("Transpose", [nhwc_b], { perm: [0, 3, 1, 2] })).as(OperationNode);
   addEdge(g, toNCHW, Y, Y.literalType ?? dtype, toNumShape(Y.shape));

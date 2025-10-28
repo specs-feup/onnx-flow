@@ -6,7 +6,7 @@ import OperationNode from "./Onnx/OperationNode.js";
 import TensorNode from "./Onnx/TensorNode.js";
 
 const IR_VERSION = 9;
-const OPSET_IMPORT = 17;
+const OPSET_IMPORT = 13;
 
 /**
  * Returns the topologically sorted operation nodes.
@@ -29,17 +29,26 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
 
     function checkPred(n: TensorNode.Class | OperationNode.Class) {
       if (n.is(OperationNode)) {
-        for (const input of n.as(OperationNode).getInputs()) {
-          if (input.tryAs(TensorNode).type === "intermediate") checkPred(input.as(TensorNode));
+        for (const input of n.as(OperationNode).getInputs() ?? []) {
+          const t = input.tryAs?.(TensorNode);
+          if (t && t.type === "intermediate") {
+            checkPred(t);
+          }
         }
       }
 
-      for (const edge of n.incomers?.toArray() ?? []) {
-        const pred = edge.source.is(OperationNode) ? edge.source.as(OperationNode) : null;
-        if (pred) visit(pred);
-        else if (edge.source.is(TensorNode)) {
-          const tensorPred = edge.source.as(TensorNode);
-          if (tensorPred && tensorPred.type === "intermediate") checkPred(tensorPred);
+      for (const edge of n.incomers?.toArray?.() ?? []) {
+        const src = edge?.source;
+        if (!src) continue;
+
+        const pred = src.is?.(OperationNode) ? src.as(OperationNode) : null;
+        if (pred) {
+          visit(pred);
+        } else if (src.is?.(TensorNode)) {
+          const tensorPred = src.as(TensorNode);
+          if (tensorPred?.type === "intermediate") {
+            checkPred(tensorPred);
+          }
         }
       }
     }

@@ -1848,6 +1848,405 @@ export async function runPadDecompositionEquivalenceTest() {
   }
 }
 
+// === Conv (standard) → reconverted equivalence ===
+async function runConvNormalReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/conv_normal.onnx';
+  const reconvertedPath = getReconvertedPath(originalPath);
+  const base = originalPath.replace(/\.onnx$/, '');
+  const reconvertedJson = `${base}_reconverted.json`;
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted conv_normal model ===');
+    // Generate both ONNX and JSON so we can read the full input signature.
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+    if (!fs.existsSync(reconvertedJson)) {
+      console.error(`❌ Reconverted JSON not found: ${reconvertedJson}`);
+      return;
+    }
+
+    // Build feeds for ALL model inputs (Conv typically has X, W, and maybe B)
+    const j = JSON.parse(fs.readFileSync(reconvertedJson, 'utf-8'));
+    const g = j?.graph;
+    if (!g || !Array.isArray(g.input) || g.input.length === 0) {
+      throw new Error(`No inputs found in ${reconvertedJson}`);
+    }
+
+    const typeMap: Record<string, 'float32'|'float64'|'int32'|'int64'|'bool'> = {
+      'FLOAT': 'float32', '1': 'float32',
+      'DOUBLE': 'float64', '11': 'float64',
+      'INT32': 'int32',   '6': 'int32',
+      'INT64': 'int64',   '7': 'int64',
+      'BOOL':  'bool',    '9': 'bool',
+    };
+
+    const feeds: Record<string, Tensor> = {};
+    for (const inp of g.input) {
+      const name: string = inp.name || 'X';
+      const tt = inp.type?.tensorType || {};
+      const elem = tt.elemType ?? tt.elem_type ?? 'FLOAT';
+      const dtype = (typeMap[String(elem)] ?? 'float32') as 'float32'|'float64'|'int32'|'int64'|'bool';
+
+      // Use concrete dimValue if present; fallback to 1 for unknowns
+      const dims: number[] = (tt.shape?.dim ?? []).map((d: any) => {
+        if (typeof d?.dimValue === 'number') return d.dimValue;
+        if (typeof d?.dim_value === 'number') return d.dim_value;
+        return 1;
+      });
+      if (dims.length === 0) dims.push(1);
+
+      const size = dims.reduce((a: number, b: number) => a * b, 1);
+
+      let tensor: Tensor;
+      if (dtype === 'float64') {
+        const data = Float64Array.from({ length: size }, () => Math.random() * 2 - 1);
+        tensor = new Tensor('float64', data, dims);
+      } else if (dtype === 'float32') {
+        const data = Float32Array.from({ length: size }, () => Math.random() * 2 - 1);
+        tensor = new Tensor('float32', data, dims);
+      } else if (dtype === 'int32') {
+        const data = Int32Array.from({ length: size }, () => Math.floor(Math.random() * 7) - 3);
+        tensor = new Tensor('int32', data, dims);
+      } else if (dtype === 'int64') {
+        const data = Array.from({ length: size }, () => BigInt(Math.floor(Math.random() * 7) - 3));
+        tensor = new Tensor('int64', data as any, dims);
+      } else {
+        const data = Uint8Array.from({ length: size }, () => (Math.random() > 0.5 ? 1 : 0));
+        tensor = new Tensor('bool', data, dims);
+      }
+
+      feeds[name] = tensor;
+    }
+
+    console.log('\n=== Comparing conv_normal and reconverted ===');
+    printInputs('conv_normal', feeds);
+
+    // Run both models
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5; // float convs → small numeric tolerance
+    const eq = o.length === r.length && o.every((v, i) => Math.abs((v as number) - (r[i] as number)) <= tol);
+
+    if (!eq) {
+      console.log('→ original[0:16]:', o.slice(0, 16));
+      console.log('→ reconverted[0:16]:', r.slice(0, 16));
+      throw new Error('conv_normal vs reconverted not equivalent');
+    }
+    console.log('✅ conv_normal vs reconverted equivalent: true');
+  } catch (err) {
+    logErrorDetails('conv_normal reconversion test', err);
+  }
+}
+
+async function runConvSimpleReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/conv_simple.onnx';
+  const extIndex = originalPath.lastIndexOf('.');
+  const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+  const reconvertedPath = `${base}_reconverted.onnx`;
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted conv_simple model ===');
+    // Keep it consistent with other *decomposed* tests in this file
+    execSync(`node ./out/src/index.js ${originalPath} --format dot -vz 0 -v 0`, {
+      stdio: 'inherit',
+    });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // Same input shapes/values as the standard test
+    const X = Float32Array.from({ length: 1 * 1 * 4 * 4 }, () => Math.random() * 2 - 1);
+    const W = Float32Array.from({ length: 1 * 1 * 3 * 3 }, () => Math.random() * 2 - 1);
+    const B = new Float32Array([ (Math.random() * 2 - 1) ]);
+
+    const feeds = {
+      X: new Tensor('float32', X, [1, 1, 4, 4]),
+      W: new Tensor('float32', W, [1, 1, 3, 3]),
+      B: new Tensor('float32', B, [1]),
+    };
+
+    console.log('\n=== Comparing conv_simple and its reconverted version ===');
+    printInputs('conv_simple', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol);
+    console.log('✅ conv_simple outputs equivalent:', eq);
+  } catch (err) {
+    logErrorDetails('conv_simple reconversion test', err);
+  }
+}
+
+async function runGemmReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/gemm_standard.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted gemm_standard model ===');
+    // Standard models: JSON roundtrip (no --noLowLevel)
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const feeds = {
+      A: new Tensor('float32', Float32Array.from({ length: 6 }, () => Math.random() * 10), [2, 3]),
+      B: new Tensor('float32', Float32Array.from({ length: 12 }, () => Math.random() * 10), [3, 4]),
+      C: new Tensor('float32', Float32Array.from({ length: 8 }, () => Math.random() * 10), [2, 4]),
+    };
+
+    console.log('\n=== Comparing gemm_standard and its reconverted version ===');
+    printInputs('gemm_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-5;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (e) {
+    logErrorDetails('gemm_standard reconversion test', e);
+  }
+}
+
+async function runConcatReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/concat_standard.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted concat_standard model ===');
+    // Standard models: JSON roundtrip (no --noLowLevel)
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    const feeds = {
+      X0: new Tensor('float32', Float32Array.from({ length: 6 }, () => Math.random() * 10), [2, 3]), // [2,3]
+      X1: new Tensor('float32', Float32Array.from({ length: 8 }, () => Math.random() * 10), [2, 4]), // [2,4]
+      X2: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), [2, 2]), // [2,2]
+    };
+
+    console.log('\n=== Comparing concat_standard and its reconverted version ===');
+    printInputs('concat_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    // Concat should be an exact match
+    const eq = o.length === r.length && o.every((v, i) => v === r[i]);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (e) {
+    logErrorDetails('concat_standard reconversion test', e);
+  }
+}
+
+async function runDequantizeLinearReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/dequantize_standard.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted dequantize_standard model ===');
+    // Standard models: JSON roundtrip (no --noLowLevel)
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // Match the Python script: X uint8 [2,3,4], S float32 [3] (per-axis axis=1), Z uint8 [3]
+    const X = Uint8Array.from({ length: 2 * 3 * 4 }, () => Math.floor(Math.random() * 256));
+    const S = Float32Array.from({ length: 3 }, () => Math.random() * 0.05 + 0.01); // avoid zeros
+    const Z = Uint8Array.from({ length: 3 }, () => Math.floor(Math.random() * 256));
+
+    const feeds = {
+      X: new Tensor('uint8', X, [2, 3, 4]),
+      S: new Tensor('float32', S, [3]),
+      Z: new Tensor('uint8', Z, [3]),
+    };
+
+    console.log('\n=== Comparing dequantize_standard and its reconverted version ===');
+    printInputs('dequantize_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6; // float math tolerance
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (e) {
+    logErrorDetails('dequantize_standard reconversion test', e);
+  }
+}
+
+async function runAveragePoolReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/avgpool_standard.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted avgpool_standard model ===');
+    // Standard models: JSON roundtrip (no --noLowLevel)
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // Match the Python script defaults: N=1, C=2, H=5, W=6 (NCHW)
+    const N = 1, C = 2, H = 5, W = 6;
+    const X = Float32Array.from({ length: N * C * H * W }, () => Math.random() * 2 - 1);
+
+    const feeds = {
+      X: new Tensor('float32', X, [N, C, H, W]),
+    };
+
+    console.log('\n=== Comparing avgpool_standard and its reconverted version ===');
+    printInputs('avgpool_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (e) {
+    logErrorDetails('avgpool_standard reconversion test', e);
+  }
+}
+
+async function runReduceSumReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/reducesum_standard.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted reducesum_standard model ===');
+    // Standard models: JSON roundtrip (no --noLowLevel)
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // Match the Python script: X float32 [2,3,4], ReduceSum over axis=1 with keepdims=1
+    const X = Float32Array.from({ length: 2 * 3 * 4 }, () => Math.random() * 2 - 1);
+
+    const feeds = {
+      X: new Tensor('float32', X, [2, 3, 4]),
+    };
+
+    console.log('\n=== Comparing reducesum_standard and its reconverted version ===');
+    printInputs('reducesum_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6; // float tolerance
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (e) {
+    logErrorDetails('reducesum_standard reconversion test', e);
+  }
+}
+
+async function runReduceMaxReconversionEquivalenceTest() {
+  const originalPath = 'examples/onnx/reducemax_standard.onnx';
+  const reconvertedPath = originalPath.replace(/\.onnx$/, '_reconverted.onnx');
+
+  try {
+    console.log('\n=== Running CLI to generate reconverted reducemax_standard model ===');
+    // Standard models: JSON roundtrip (no --noLowLevel)
+    execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
+
+    if (!fs.existsSync(reconvertedPath)) {
+      console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
+      return;
+    }
+
+    // Match generator defaults: X float32 [2,3,4]
+    const X = Float32Array.from({ length: 2 * 3 * 4 }, () => Math.random() * 2 - 1);
+
+    const feeds = {
+      X: new Tensor('float32', X, [2, 3, 4]),
+    };
+
+    console.log('\n=== Comparing reducemax_standard and its reconverted version ===');
+    printInputs('reducemax_standard', feeds);
+
+    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+
+    const o = Array.from(Object.values(orig)[0].data as Float32Array);
+    const r = Array.from(Object.values(rec )[0].data as Float32Array);
+
+    console.log('→ original:', o);
+    console.log('→ reconverted:', r);
+
+    const tol = 1e-6;
+    const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
+    console.log('✅ Outputs equivalent:', eq);
+  } catch (e) {
+    logErrorDetails('reducemax_standard reconversion test', e);
+  }
+}
+
 
 
 
@@ -1914,4 +2313,15 @@ await runMatmulVMReconversionEquivalenceTest();
 await runSliceDecompositionReconversionEquivalenceTest();
 await runPadDecompositionEquivalenceTest();
 await runClipScalarReconversionEquivalenceTest();
+
+await runConvNormalReconversionEquivalenceTest();
+await runConvSimpleReconversionEquivalenceTest();
+
+await runGemmReconversionEquivalenceTest();
+await runConcatReconversionEquivalenceTest();
+await runDequantizeLinearReconversionEquivalenceTest();
+await runAveragePoolReconversionEquivalenceTest();
+
+//await runReduceSumReconversionEquivalenceTest();
+//await runReduceMaxReconversionEquivalenceTest();
 

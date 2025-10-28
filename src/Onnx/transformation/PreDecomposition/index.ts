@@ -1,6 +1,10 @@
 import OnnxGraph from "../../OnnxGraph.js";
+import dequantizeLinearHandler from "./handlers/DequantizeLinear.js";
+import averagePoolHandler from "./handlers/AveragePool.js";
 import clipHandler from "./handlers/Clip.js";
+import concatHandler from "./handlers/Concat.js";
 import convHandler from "./handlers/Conv.js";
+import gemmHandler from "./handlers/Gemm.js";
 import padHandler from "./handlers/Pad.js";
 import sliceHandler from "./handlers/Slice.js";
 import { HandlersRegistry, PreDecomposeOptions } from "./types.js";
@@ -13,6 +17,10 @@ function buildDefaultRegistry(): HandlersRegistry {
     Slice: sliceHandler,
     Pad: padHandler,
     Clip: clipHandler,
+    Gemm: gemmHandler,
+    Concat: concatHandler,
+    DequantizeLinear: dequantizeLinearHandler,
+    AveragePool: averagePoolHandler,
   };
 }
 
@@ -32,6 +40,15 @@ export default function applyPreDecomposition(
 
     // snapshot to avoid visiting newly inserted nodes in the same pass
     const ops = graph.getOperationNodes();
+
+    
+    console.log(
+      `PASS ${pass + 1} | OPS:`,
+      (Array.isArray(ops) ? ops : Array.from(ops ?? []))
+        .map(o => o?.type ?? o?.opType ?? '(unknown)')
+        .join(', ')
+    );
+    
 
     for (const op of ops) {
       const type = op.type;

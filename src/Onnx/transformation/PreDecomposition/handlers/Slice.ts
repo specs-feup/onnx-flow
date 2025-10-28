@@ -119,6 +119,8 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
   if (sl.type !== "Slice") return false;
 
   const ins = sl.getInputs?.() ?? [];
+  if (ins.length < 2) return false;
+  
   const Xn = ins[0];
   if (!Xn?.is?.(TensorNode)) return false;
 
