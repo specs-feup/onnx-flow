@@ -26,15 +26,15 @@ export default class OnnxDotFormatter<
 
         node.switch(
             Node.Case(TensorNode, node => {
-                attrs.address = node.address.toString();
+                // attrs.address = node.address.toString();
                 // attrs.stride = node.literalType.toString();
-                attrs.stride = '4';
-                attrs.size = node.shape[0]?.toString() ?? '1';
+                // attrs.stride = '4';
+                // attrs.size = node.shape[0]?.toString() ?? '1';
             }),
             Node.Case(VariableNode, node => {
                 attrs.label = node.name;
-                attrs.address = '0';
-                attrs.size = '1';
+                // attrs.address = '0';
+                // attrs.size = '1';
             }),
             Node.Case(ConstantNode, node => {
                 attrs.label = node.value.toString();
@@ -42,12 +42,12 @@ export default class OnnxDotFormatter<
             }),
             Node.Case(OperationNode, node => {
                 attrs.label = node.type;
-                attrs.feedback = '0';
-                attrs.constant = '0';
-                attrs.constant_fu_input = '0';
-                attrs.initial_value = '0';
-                attrs.initial_valid = '0';
-                attrs.delay_value = '0';
+                // attrs.feedback = '0';
+                // attrs.constant = '0';
+                // attrs.constant_fu_input = '0';
+                // attrs.initial_value = '0';
+                // attrs.initial_valid = '0';
+                // attrs.delay_value = '0';
             }),
         );
 
@@ -67,7 +67,7 @@ export default class OnnxDotFormatter<
 
     static defaultGetGraphAttrs(): Record<string, string> {
         const attrs = super.defaultGetGraphAttrs();
-        
+
         return attrs;
     }
 

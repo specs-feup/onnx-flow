@@ -214,6 +214,11 @@ const dotFormatter = argv.formatter === 'onnx-mod' ? new OnnxModDotFormatter() :
 
     // Step 3: Output the graph if requested
     if (outputFilePath) {
+      // TEMP
+      if(!argv.noLowLevel){
+        graph = createGraph(convertFlowGraphToOnnxJson(graph));
+      }
+
       if (outputFormat === 'json') {
         fs.writeFileSync(outputFilePath, JSON.stringify(graph.toCy().json(), null, 2));
       } else if (outputFormat === 'dot') {
