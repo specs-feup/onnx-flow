@@ -3,45 +3,9 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto } from "../../Utilities.js";
+import { toArrayLike, uniq, addEdge, scalarOfType } from "../../Utils.js";
 
-/* ------------------------------- utils -------------------------------- */
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-
-// dtype-aware scalar (rank-0) constant
-function scalarOfType(
-  g: OnnxGraph.Class,
-  name: string,
-  v: number,
-  dtype: DataType
-): TensorNode.Class {
-  const proto = makeTensorProto(dtype, [], [v]);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(dtype, [], "constant", proto))
-    .as(TensorNode);
-}
-
-function addEdge(
-  g: OnnxGraph.Class,
-  srcOp: OperationNode.Class,
-  dstTensor: TensorNode.Class,
-  dtype: DataType,
-  shape?: Array<number | string | undefined>
-) {
-  g.addEdge(srcOp, dstTensor)
-    .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
-    .as(OnnxEdge);
-}
-
-/* ------------------------------ handler ------------------------------- */
+/* ------------------------------ Handler ------------------------------- */
 export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
   if (op.type !== "Gemm") return false;
 

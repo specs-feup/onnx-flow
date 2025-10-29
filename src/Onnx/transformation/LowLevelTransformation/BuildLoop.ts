@@ -7,10 +7,10 @@ import TensorNode from "../../TensorNode.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import { DataType, TensorProto } from "../../OnnxTypes.js";
-import { bool, int64Vec, scalarInt64, zeroTensor } from "../Utilities.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import TransformChain from "./TransformChain.js";
 import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
+import { scalarInt64, uniq, int64Vec, zeroTensor, bool, getLargestRankShape, Shape, asStaticDims, makeTensorConst, computeStrides, isNum, toStaticShape } from "../Utils.js";
 
 const GRAPHS: OnnxGraph.Class[] = [];
 
@@ -32,32 +32,7 @@ type LoopCtx = {
   running?: TensorNode.Class | null,
 };
 
-// ---------- Broadcast + Index helpers ----------
-
-type Dim = number | String;
-type Shape = Dim[];
-
-function isNum(d: Dim): d is number {
-  return typeof d === "number" && Number.isFinite(d);
-}
-
-// Convert (number|string)[] → number[]; unknown/symbolic become -1
-function toStaticShape(shape: Shape): number[] {
-  return shape.map(d => (typeof d === "number" ? d : -1));
-}
-
-// Product of positive dims; treat -1 (unknown) as 1 for decoding purposes
-function prodSafe(dims: number[]): number {
-  return dims.reduce((a, b) => a * (b > 0 ? b : 1), 1);
-}
-
-// Compute strides for a fully-known numeric shape
-function computeStrides(shape: number[]): number[] {
-  const n = shape.length;
-  const s = Array(n).fill(1);
-  for (let i = n - 2; i >= 0; i--) s[i] = s[i + 1] * (shape[i + 1] > 0 ? shape[i + 1] : 1);
-  return s;
-}
+/* ------------------------------ Helpers ------------------------------ */
 
 // Mixed-radix decode of ctx.iter into digits along 'dims' (rightmost fastest)
 function decodeMixedRadix(
@@ -144,10 +119,6 @@ function broadcastShapes(shapes: number[][]): number[] {
   return out;
 }
 
-function asStaticDims(shape: (number | string)[]): number[] {
-  return shape.map(d => (typeof d === 'number' && d > 0) ? d : 1);
-}
-
 function getMatDims(aShape: (number|string)[], bShape: (number|string)[]) {
   // Accept [M,K]·[K,N], also rank-1 vector cases promoted by ONNX
   const a = asStaticDims(aShape);
@@ -162,47 +133,6 @@ function getMatDims(aShape: (number|string)[], bShape: (number|string)[]) {
   const KN = B[B.length - 2]; // must equal K
   const N = B[B.length - 1];
   return { M, K, KN, N, A2: A, B2: B, aWasVec: a.length === 1, bWasVec: b.length === 1 };
-}
-
-function getAttr<T = any>(op: any, key: string, dflt?: T): T | undefined {
-  if (typeof op.getAttributes === "function") {
-    const a = op.getAttributes(); if (a && key in a) return a[key];
-  }
-  if (typeof op.getAttribute === "function") {
-    const v = op.getAttribute(key); if (v !== undefined) return v;
-  }
-  if (op.attributes && key in op.attributes) return op.attributes[key];
-  return dflt;
-}
-
-function tryReadConstI64Vector(tn?: any): number[] | undefined {
-  if (!tn) return undefined;
-  const init = tn.initializer ?? tn.constantValue ?? tn.value ?? tn.data;
-  if (!init) return undefined;
-  const arr = Array.isArray(init) ? init : Array.from(init as any);
-  return arr.map((v: any) => Number(v));
-}
-
-function int64ShapeConst(g: OnnxGraph.Class, name: string, dims: number[]) {
-  return makeTensorConst(g, name, DataType.INT64, "constant", int64Vec(dims));
-}
-
-/* ------------------------------ Helpers ------------------------------ */
-
-export function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  // ensure uniqueness within the CURRENT graph and across others we’re tracking
-  const exists = () => g.hasNode(id) || GRAPHS.some(gr => gr.hasNode(id));
-  while (exists()) id = `${base}_${++i}`;
-  return id;
-}
-
-function makeTensorConst(
-  g: OnnxGraph.Class, id: string, dataType: DataType,
-  tensorKind: TensorNode.TensorKind, proto: TensorProto
-) {
-  const builder = tensorKind === "constant" ? new TensorNode.Builder(dataType, proto.dims!, tensorKind, proto) : new TensorNode.Builder(dataType, proto.dims!, tensorKind, undefined, proto);
-  return g.addNode(uniq(g, id)).init(builder).as(TensorNode);
 }
 
 function gatherFrom(
@@ -355,7 +285,6 @@ function gatherWithBroadcast(
   return gathered;
 }
 
-
 function squeezeIfLen1(g: OnnxGraph.Class, t: TensorNode.Class, axes: TensorNode.Class, tag: string) {
   if (t.shape.length === 1 && t.shape[0] === 1) {
     const sq = g.addNode(uniq(g, `sq_${tag}`))
@@ -398,7 +327,6 @@ function ensureFlatInput(
   return flat;
 }
 
-
 function divmod(
   g: OnnxGraph.Class, lhs: TensorNode.Class, rhs: TensorNode.Class,
   tag: string, op: "Div" | "Mod"
@@ -424,29 +352,6 @@ function unsqueezeIdx(
     .as(TensorNode);
   g.addEdge(unsq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
   return out;
-}
-
-function getSmallestRankShape(tensors: TensorNode.Class[]): Shape {
-  if (tensors.length === 0) return [];
-
-  let smallest = tensors[0].shape;
-  for (let i = 1; i < tensors.length; i++) {
-    if (tensors[i].shape.length < smallest.length) {
-      smallest = tensors[i].shape;
-    }
-  }
-  return smallest;
-}
-
-function getLargestRankShape(tensors: TensorNode.Class[]): Shape {
-  if (tensors.length === 0) return [];
-  let largest = tensors[0].shape;
-  for (let i = 1; i < tensors.length; i++) {
-    if (tensors[i].shape.length > largest.length) {
-      largest = tensors[i].shape;
-    }
-  }
-  return largest;
 }
 
 function gatherAndReshape(
@@ -1260,7 +1165,7 @@ export function buildLoopForChain(
     // --- STATIC BRANCH: use known trip_count and a zero initializer ---
     trip = makeTensorConst(graph, `trip_count_${chain[0].id}`, DataType.INT64, "constant", scalarInt64(totalIters));
     cond = makeTensorConst(graph, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
-    v_initial = makeTensorConst(graph, "init_carry", elemTy, "initializer", carryInit);
+    v_initial = makeTensorConst(graph, "init_carry", elemTy, "initializer", carryInit ? carryInit : zeroTensor(elemTy, [carryLen]));
   }
 
 

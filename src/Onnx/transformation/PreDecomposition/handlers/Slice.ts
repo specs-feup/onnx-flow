@@ -3,118 +3,9 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { scalarInt64 } from "../../Utilities.js";
+import { readConstIntegerVectorFromTensorNode, uniq, maybeRemoveOrphanConstant, scalarI64 } from "../../Utils.js";
 
-// ---------- small local utils ----------
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-
-function i64scalar(g: OnnxGraph.Class, name: string, v: number): TensorNode.Class {
-  // true 0-D INT64 constant
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(DataType.INT64, [], "constant", scalarInt64(v)))
-    .as(TensorNode);
-}
-
-/** Read an INT64 (or INT32/UINT64) vector from a TensorNode's constantValue/initializer/value. */
-function readConstIntegerVectorFromTensorNode(tn?: TensorNode.Class): number[] | undefined {
-  if (!tn) return undefined;
-  const tv: any =
-    (tn as any).constantValue ??
-    (tn as any).initializer ??
-    (tn as any).value ??
-    (tn as any).data;
-  if (!tv) return undefined;
-
-  // 1) direct int64Data
-  if (Array.isArray(tv.int64Data) && tv.int64Data.length) {
-    return tv.int64Data.map(Number);
-  }
-  // 2) common alternates
-  if (Array.isArray(tv.int32Data) && tv.int32Data.length) {
-    return tv.int32Data.map(Number);
-  }
-  if (Array.isArray(tv.uint64Data) && tv.uint64Data.length) {
-    return tv.uint64Data.map((x: any) => Number(x));
-  }
-
-  // 3) rawData (Node Buffer or Uint8Array), little-endian
-  const raw = (tv.rawData && (tv.rawData.data ?? tv.rawData)) as any;
-  if (raw) {
-    // Normalize to a Uint8Array view
-    let u8: Uint8Array;
-    if (raw instanceof Uint8Array) u8 = raw;
-    else if (Buffer.isBuffer(raw)) u8 = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-    else if (Array.isArray(raw)) u8 = Uint8Array.from(raw);
-    else return undefined;
-
-    // Decide element width: prefer INT64 (8 bytes) when dataType==7 (ONNX INT64)
-    const isI64 = tv.dataType === 7 /* TensorProto.DataType.INT64 */;
-    const elemBytes = isI64 ? 8 : 4;
-    const n =
-      (Array.isArray(tv.dims) && tv.dims.length
-        ? tv.dims.map((d: any) => Number(d)).reduce((a: number, b: number) => a * b, 1)
-        : Math.floor(u8.byteLength / elemBytes));
-
-    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-    const out: number[] = [];
-    for (let i = 0; i < n; i++) {
-      const off = i * elemBytes;
-      if (isI64) out.push(Number(dv.getBigInt64(off, true)));     // little-endian int64
-      else       out.push(dv.getInt32(off, true));                // fallback
-    }
-    return out;
-  }
-
-  return undefined;
-}
-
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-
-function maybeRemoveOrphanConstant(g: OnnxGraph.Class, tn?: TensorNode.Class) {
-  if (!tn) return;
-
-  // Only consider constants/initializers (don’t touch real inputs/intermediates)
-  const isConstLike = (tn as any).type === "constant" || (tn as any).constantValue != null;
-  if (!isConstLike) return;
-
-  // If the tensor has any consumers, keep it
-  const outOpsNC = tn.getOutgoers?.targets?.filterIs?.(OperationNode);
-  const outOps = toArrayLike<OperationNode.Class>(outOpsNC);
-  if (outOps.length > 0) return;
-
-  // Optionally remove an upstream Constant op that ONLY fed this tensor
-  const inOpsNC = tn.getIncomers?.sources?.filterIs?.(OperationNode);
-  const inOps = toArrayLike<OperationNode.Class>(inOpsNC);
-  for (const srcOp of inOps) {
-    if (srcOp.type !== "Constant") continue;
-
-    // If the Constant's outputs have no other consumers, remove it too
-    const constOutsNC = srcOp.getOutgoers?.targets?.filterIs?.(TensorNode);
-    const constOuts = toArrayLike<TensorNode.Class>(constOutsNC);
-    let anyOtherConsumers = false;
-    for (const outT of constOuts) {
-      const consumersNC = outT.getOutgoers?.targets?.filterIs?.(OperationNode);
-      const consumers = toArrayLike<OperationNode.Class>(consumersNC);
-      // Ignore the tensor we're about to delete
-      if (consumers.length > 0) { anyOtherConsumers = true; break; }
-    }
-    if (!anyOtherConsumers) {
-      srcOp.remove();
-    }
-  }
-
-  // Finally remove the tensor itself
-  tn.remove();
-}
-
-
-// ---------- main handler ----------
+// ---------- Handler ----------
 export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class): boolean {
   if (sl.type !== "Slice") return false;
 
@@ -206,9 +97,9 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     const s = fullStarts[ax], e = fullEnds[ax], stp = fullSteps[ax];
     const len = Math.max(0, Math.ceil((e - s) / stp));
 
-    const cS = i64scalar(g, `sl_s_${sl.id}_${ax}`, s);
-    const cE = i64scalar(g, `sl_e_${sl.id}_${ax}`, e);
-    const cT = i64scalar(g, `sl_t_${sl.id}_${ax}`, stp);
+    const cS = scalarI64(g, `sl_s_${sl.id}_${ax}`, s);
+    const cE = scalarI64(g, `sl_e_${sl.id}_${ax}`, e);
+    const cT = scalarI64(g, `sl_t_${sl.id}_${ax}`, stp);
 
     const range = g.addNode(uniq(g, `sl_range_${sl.id}_${ax}`))
       .init(new OperationNode.Builder("Range", [cS, cE, cT]))

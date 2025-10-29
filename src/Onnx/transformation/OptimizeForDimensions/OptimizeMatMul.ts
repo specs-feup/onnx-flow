@@ -1,12 +1,11 @@
-import { formatId } from "../Utilities.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import OnnxGraph from "../../OnnxGraph.js"
 import ConstantNode from "../../ConstantNode.js";
 import VariableNode from "../../VariableNode.js";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
-import { typeSizeMap } from "../Utilities.js";
 import OnnxInnerEdge from "../../OnnxInnerEdge.js";
+import { typeSizeMap, formatId } from "../Utils.js";
 
 
 export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGraph.Class): void {

@@ -3,45 +3,9 @@ import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { makeTensorProto } from "../../Utilities.js";
+import { toArrayLike, uniq, addEdge, scalarOfType, makeTensorProto } from "../../Utils.js";
 
-/* ------------------------------- utils -------------------------------- */
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-
-// rank-0 scalar constant of given dtype
-function scalarOfType(
-  g: OnnxGraph.Class,
-  name: string,
-  v: number,
-  dtype: DataType
-): TensorNode.Class {
-  const proto = makeTensorProto(dtype, [], [v]);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(dtype, [], "constant", proto))
-    .as(TensorNode);
-}
-
-function addEdge(
-  g: OnnxGraph.Class,
-  srcOp: OperationNode.Class,
-  dstTensor: TensorNode.Class,
-  dtype: DataType,
-  shape?: Array<number | String | undefined>
-) {
-  g.addEdge(srcOp, dstTensor)
-    .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
-    .as(OnnxEdge);
-}
-
-/* ------------------------------ handler ------------------------------- */
+/* ------------------------------ Handler ------------------------------- */
 /**
  * DequantizeLinear(x, scale[, zero_point], axis)
  *

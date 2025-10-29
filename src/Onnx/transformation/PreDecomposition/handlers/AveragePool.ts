@@ -3,56 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto } from "../../Utilities.js";
-
-/* ------------------------------- utils -------------------------------- */
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-
-function scalarOfType(
-  g: OnnxGraph.Class,
-  name: string,
-  v: number,
-  dtype: DataType
-): TensorNode.Class {
-  const proto = makeTensorProto(dtype, [], [v]);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(dtype, [], "constant", proto))
-    .as(TensorNode);
-}
-
-function tensorOnesConst(
-  g: OnnxGraph.Class,
-  name: string,
-  dtype: DataType,
-  shape: number[]
-): TensorNode.Class {
-  const size = shape.reduce((a, b) => a * b, 1);
-  const ones = new Array<number>(size).fill(1);
-  const proto = makeTensorProto(dtype, shape, ones);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(dtype, shape, "constant", proto))
-    .as(TensorNode);
-}
-
-function addEdge(
-  g: OnnxGraph.Class,
-  srcOp: OperationNode.Class,
-  dstTensor: TensorNode.Class,
-  dtype: DataType,
-  shape?: Array<number | String | undefined>
-) {
-  g.addEdge(srcOp, dstTensor)
-    .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
-    .as(OnnxEdge);
-}
+import { addEdge, makeTensorProto, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../Utils.js";
 
 /* ------------------------------ handler ------------------------------- */
 /**

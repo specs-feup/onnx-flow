@@ -1,4 +1,3 @@
-import { formatId } from "../Utilities.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import OnnxGraph from "../../OnnxGraph.js"
@@ -6,6 +5,7 @@ import ConstantNode from "../../ConstantNode.js";
 import VariableNode from "../../VariableNode.js";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "../../OnnxInnerEdge.js";
+import { formatId } from "../Utils.js";
 
 
 export default function optimizeSimpleLoopOperations(node: OperationNode.Class, graph: OnnxGraph.Class): void {

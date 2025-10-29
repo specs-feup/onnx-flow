@@ -3,58 +3,9 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto } from "../../Utilities.js";
+import { makeTensorProto, toArrayLike, uniq, maybeRemoveOrphanConstant } from "../../Utils.js";
 
-// --- small utils (local) ---
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-function getOnnxName(tn?: TensorNode.Class): string | undefined {
-  if (!tn) return undefined;
-  const a: any = tn as any;
-  return a.extraAttrs?.onnxName ?? a.name ?? a.id ?? a.getName?.();
-}
-function removeInitializerByName(g: OnnxGraph.Class, name?: string) {
-  if (!name) return;
-  const anyG: any = g as any;
-  const model = anyG?.rawModel ?? anyG?.model;
-  const graph = model?.graph ?? anyG?.graph;
-  if (!graph) return;
-  for (const f of ["initializer","sparse_initializer","input","value_info"]) {
-    if (Array.isArray(graph[f])) graph[f] = graph[f].filter((x: any) => x?.name !== name);
-  }
-}
-function maybeRemoveOrphanConstant(g: OnnxGraph.Class, tn?: TensorNode.Class) {
-  if (!tn) return;
-  const isConstLike =
-    (tn as any).type === "constant" ||
-    (tn as any).constantValue != null ||
-    (tn as any).originalInitializer != null ||
-    (tn as any).initializer != null;
-  if (!isConstLike) return;
-  const consumers = toArrayLike<OperationNode.Class>(tn.getOutgoers?.targets?.filterIs?.(OperationNode));
-  if (consumers.length > 0) return;
-
-  // remove upstream Constant op if it's now orphan
-  const srcOps = toArrayLike<OperationNode.Class>(tn.getIncomers?.sources?.filterIs?.(OperationNode));
-  for (const src of srcOps) {
-    if (src.type !== "Constant") continue;
-    const outs = toArrayLike<TensorNode.Class>(src.getOutgoers?.targets?.filterIs?.(TensorNode));
-    const stillUsed = outs.some(t => toArrayLike(src.getOutgoers?.targets?.filterIs?.(OperationNode)).length > 0);
-    if (!stillUsed) src.remove();
-  }
-
-  const onnxName = getOnnxName(tn);
-  tn.remove();
-  removeInitializerByName(g, onnxName);
-}
-
-// --- main handler ---
+// --- Handler ---
 export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
   if (op.type !== "Clip") return false;
 

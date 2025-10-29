@@ -1,72 +1,8 @@
 import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto } from "../../Utilities.js";
-
-/* ------------------------------- utils -------------------------------- */
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-
-// rank-0 INT64 scalar constant
-function scalarI64(g: OnnxGraph.Class, name: string, v: number): TensorNode.Class {
-  const proto = makeTensorProto(DataType.INT64, [], [v]);
-  return g
-    .addNode(uniq(g, name))
-    .init(new TensorNode.Builder(DataType.INT64, [], "constant", proto))
-    .as(TensorNode);
-}
-
-// rank-0 scalar of the given numeric dtype
-function scalarZeroOfType(
-  g: OnnxGraph.Class,
-  name: string,
-  dtype: DataType
-): TensorNode.Class {
-  const proto = makeTensorProto(dtype, [], [0]);
-  return g
-    .addNode(uniq(g, name))
-    .init(new TensorNode.Builder(dtype, [], "constant", proto))
-    .as(TensorNode);
-}
-
-// 1-D INT64 constant (axes helper too)
-function constI64(g: OnnxGraph.Class, name: string, vals: number[]): TensorNode.Class {
-  const proto = makeTensorProto(DataType.INT64, [vals.length], vals);
-  return g
-    .addNode(uniq(g, name))
-    .init(new TensorNode.Builder(DataType.INT64, [vals.length], "constant", proto))
-    .as(TensorNode);
-}
-
-function addEdge(
-  g: OnnxGraph.Class,
-  srcOp: OperationNode.Class,
-  dstTensor: TensorNode.Class,
-  dtype: DataType,
-  shape?: Array<number | String | undefined>
-) {
-  g
-    .addEdge(srcOp, dstTensor)
-    .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
-    .as(OnnxEdge);
-}
-
-function isNumeric(dtype: DataType): boolean {
-  // Guard: avoid STRING/BOOL tensors — this rewrite is numeric-only
-  return !(
-    dtype === (DataType as any).STRING ||
-    dtype === (DataType as any).BOOL
-  );
-}
+import { uniq, addEdge, toArrayLike, constI64, isNumeric, scalarI64, scalarZeroOfType } from "../../Utils.js";
 
 /* --------------------- opset13-friendly Squeeze/Unsqueeze -------------------- */
 // In opset >= 13, Squeeze/Unsqueeze take axes as **2nd input**, not attribute.
@@ -110,7 +46,7 @@ function makeUnsqueeze(
   return { out, op };
 }
 
-/* ------------------------------ handler ------------------------------- */
+/* ------------------------------ Handler ------------------------------- */
 /**
  * Concat → ScatterElements block copies (numeric dtypes)
  *

@@ -1,31 +1,8 @@
 import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto, AnyTensorProto, decodeIntegerVectorFromTensorProto } from "../../Utilities.js";
-
-/* ------------------------------- utils -------------------------------- */
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-
-function removeInitializerByName(g: OnnxGraph.Class, name?: string) {
-  if (!name) return;
-  const anyG: any = g as any;
-  const model = anyG?.rawModel ?? anyG?.model;
-  const graph = model?.graph ?? anyG?.graph;
-  if (!graph) return;
-  for (const f of ["initializer", "sparse_initializer", "input", "value_info"]) {
-    if (Array.isArray(graph[f])) graph[f] = graph[f].filter((x: any) => x?.name !== name);
-  }
-}
+import { AnyTensorProto, decodeIntegerVectorFromTensorProto, toArrayLike, shapeOf, makeI64ShapeConst, editShapeDim, makeValueScalar1, uniq, addEdge, scalarI64, readScalarFromTensorNode, maybeRemoveOrphanConstant } from "../../Utils.js";
 
 function readPadsVectorFromTensorInput(
   g: OnnxGraph.Class,
@@ -67,133 +44,6 @@ function readPadsVectorFromTensorInput(
     }
   }
   return undefined;
-}
-
-function readScalarFromTensorNode(tn?: TensorNode.Class): number | undefined {
-  if (!tn) return undefined;
-  const tv: any =
-    (tn as any).constantValue ??
-    (tn as any).originalInitializer ??
-    (tn as any).initializer ??
-    (tn as any).pads ??
-    (tn as any).data;
-  if (!tv) return undefined;
-
-  if (Array.isArray(tv.floatData) && tv.floatData.length) return Number(tv.floatData[0]);
-  if (Array.isArray(tv.doubleData) && tv.doubleData.length) return Number(tv.doubleData[0]);
-  if (Array.isArray(tv.int64Data) && tv.int64Data.length) return Number(tv.int64Data[0]);
-  if (Array.isArray(tv.int32Data) && tv.int32Data.length) return Number(tv.int32Data[0]);
-
-  const raw = (tv.rawData && (tv.rawData.data ?? tv.rawData)) as any;
-  if (raw) {
-    let u8: Uint8Array;
-    if (raw instanceof Uint8Array) u8 = raw;
-    else if ((globalThis as any).Buffer?.isBuffer(raw)) u8 = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-    else if (Array.isArray(raw)) u8 = Uint8Array.from(raw);
-    else return undefined;
-    if (u8.byteLength === 8) {
-      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-      try { return Number(dv.getFloat64(0, true)); } catch { /* noop */ }
-      try { return Number(dv.getBigInt64(0, true)); } catch { /* noop */ }
-    } else if (u8.byteLength === 4) {
-      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-      const f = dv.getFloat32(0, true);
-      if (Number.isFinite(f)) return Number(f);
-      return dv.getInt32(0, true);
-    }
-  }
-  return undefined;
-}
-
-function makeValueScalar1(g: OnnxGraph.Class, name: string, dtype: DataType, v: number): TensorNode.Class {
-  const proto = makeTensorProto(dtype, [1], [v]);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(dtype, [1], "constant", proto))
-    .as(TensorNode);
-}
-
-function makeI64ShapeConst(g: OnnxGraph.Class, name: string, vals: number[]): TensorNode.Class {
-  const proto = makeTensorProto(DataType.INT64, [vals.length], vals);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(DataType.INT64, [vals.length], "constant", proto))
-    .as(TensorNode);
-}
-
-function scalarI64(g: OnnxGraph.Class, name: string, v: number): TensorNode.Class {
-  const proto = makeTensorProto(DataType.INT64, [], [v]);
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(DataType.INT64, [], "constant", proto))
-    .as(TensorNode);
-}
-
-function maybeRemoveOrphanConstant(g: OnnxGraph.Class, tn?: TensorNode.Class) {
-  if (!tn) return;
-  const isConstLike =
-    (tn as any).type === "constant" ||
-    (tn as any).constantValue != null ||
-    (tn as any).originalInitializer != null ||
-    (tn as any).initializer != null;
-  if (!isConstLike) return;
-
-  const consumersNC = tn.getOutgoers?.targets?.filterIs?.(OperationNode);
-  const consumers = toArrayLike<OperationNode.Class>(consumersNC);
-  if (consumers.length > 0) return;
-
-  const srcOpsNC = tn.getIncomers?.sources?.filterIs?.(OperationNode);
-  const srcOps = toArrayLike<OperationNode.Class>(srcOpsNC);
-  for (const src of srcOps) {
-    if (src.type !== "Constant") continue;
-    const outsNC = src.getOutgoers?.targets?.filterIs?.(TensorNode);
-    const outs = toArrayLike<TensorNode.Class>(outsNC);
-    const stillUsed = outs.some(t => {
-      const consNC2 = t.getOutgoers?.targets?.filterIs?.(OperationNode);
-      const cons2 = toArrayLike<OperationNode.Class>(consNC2);
-      return cons2.length > 0;
-    });
-    if (!stillUsed) src.remove();
-  }
-
-  function getOnnxName(tn?: TensorNode.Class): string | undefined {
-    if (!tn) return undefined;
-    const a: any = tn as any;
-    return a.extraAttrs?.onnxName ?? a.name ?? a.id ?? a.getName?.();
-  }
-
-  const onnxName = getOnnxName(tn);
-  tn.remove();
-  removeInitializerByName(g, onnxName);
-}
-
-/* ------------------------------ helpers ------------------------------- */
-function addEdge(
-  g: OnnxGraph.Class,
-  srcOp: OperationNode.Class,
-  dstTensor: TensorNode.Class,
-  dtype: DataType,
-  shape?: Array<number | String | undefined>
-) {
-  g.addEdge(srcOp, dstTensor).init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape)).as(OnnxEdge);
-}
-
-function shapeOf(g: OnnxGraph.Class, x: TensorNode.Class, name: string): TensorNode.Class {
-  const sop = g.addNode(uniq(g, `${name}_op`)).init(new OperationNode.Builder("Shape", [x], {})).as(OperationNode);
-  const s = g.addNode(uniq(g, `${name}`)).init(new TensorNode.Builder(DataType.INT64, [x.shape.length], "intermediate")).as(TensorNode);
-  addEdge(g, sop, s, DataType.INT64, [x.shape.length]);
-  return s;
-}
-
-function editShapeDim(
-  g: OnnxGraph.Class,
-  baseShape: TensorNode.Class,
-  axis: number,
-  size1D: TensorNode.Class,
-  name: string
-): TensorNode.Class {
-  const idx = makeI64ShapeConst(g, `${name}_idx`, [axis]);
-  const sc = g.addNode(uniq(g, `${name}_sc`)).init(new OperationNode.Builder("ScatterElements", [baseShape, idx, size1D], { axis: 0 })).as(OperationNode);
-  const out = g.addNode(uniq(g, `${name}_out`)).init(new TensorNode.Builder(DataType.INT64, [baseShape.shape[0] as number], "intermediate")).as(TensorNode);
-  addEdge(g, sc, out, DataType.INT64, [baseShape.shape[0] as number]);
-  return out;
 }
 
 function ensurePadSlabConst(
@@ -315,7 +165,7 @@ function ensureReflectSlab(
   return slab;
 }
 
-/* ------------------------------ handler ------------------------------- */
+/* ------------------------------ Handler ------------------------------- */
 export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
   if (op.type !== "Pad") return false;
 

@@ -3,94 +3,13 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto } from "../../Utilities.js";
+import { uniq, toArrayLike, constI64, addEdge, constF32, findConstantProducerAsTensor, findTensorByOnnxName, toNum, toNumShape } from "../../Utils.js";
 
-/* --------------------------------- utils --------------------------------- */
-function uniq(g: OnnxGraph.Class, base: string): string {
-  let i = 0, id = base;
-  while (g.hasNode(id)) id = `${base}_${++i}`;
-  return id;
-}
-function toArrayLike<T = any>(nc: any): T[] {
-  return nc?.toArray?.() ?? nc ?? [];
-}
-function addEdge(
-  g: OnnxGraph.Class,
-  srcOp: OperationNode.Class,
-  dstTensor: TensorNode.Class,
-  dtype: DataType,
-  shape?: Array<number | string | undefined>
-) {
-  g.addEdge(srcOp, dstTensor)
-    .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
-    .as(OnnxEdge);
-}
-function constI64(g: OnnxGraph.Class, name: string, vals: number[]): TensorNode.Class {
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(
-      DataType.INT64,
-      [vals.length],
-      "constant",
-      makeTensorProto(DataType.INT64, [vals.length], vals))
-    ).as(TensorNode);
-}
-function constF32(g: OnnxGraph.Class, name: string, vals: number[]): TensorNode.Class {
-  return g.addNode(uniq(g, name))
-    .init(new TensorNode.Builder(
-      DataType.FLOAT,
-      [vals.length],
-      "constant",
-      makeTensorProto(DataType.FLOAT, [vals.length], vals))
-    ).as(TensorNode);
-}
-function toNum(x: number | String | undefined): number | undefined {
-  if (typeof x === "number") return x;
-  if (typeof x === "string" && /^[0-9]+$/.test(x)) return Number(x);
-  return undefined;
-}
-function toNumShape(s?: Array<number | String | undefined>): Array<number | undefined> | undefined {
-  if (!s) return undefined;
-  return s.map(toNum);
-}
 function normalizePads(padsAttr?: number[]): [number, number, number, number] {
   if (!padsAttr) return [0, 0, 0, 0];
   if (padsAttr.length === 4) return [padsAttr[0], padsAttr[1], padsAttr[2], padsAttr[3]];
   if (padsAttr.length === 8) return [padsAttr[2], padsAttr[3], padsAttr[6], padsAttr[7]];
   return [0, 0, 0, 0];
-}
-
-// Look up tensors by original ONNX name (initializer/constant/id)
-function findTensorByOnnxName(g: OnnxGraph.Class, name?: string): TensorNode.Class | undefined {
-  if (!name) return undefined;
-  const pool = (g.getTensorNodes?.().toArray?.() ?? []) as TensorNode.Class[];
-
-  let t = pool.find(n => (n as any).originalInitializer?.name === name);
-  if (t) return t;
-
-  t = pool.find(n => (n as any).constantValue?.name === name);
-  if (t) return t;
-
-  t = pool.find(n => n.id === name);
-  if (t) return t;
-
-  t = pool.find(n => (n as any).extraAttrs?.some?.((a: any) => a.name === "name" && a.s === name));
-  return t;
-}
-function findConstantProducerAsTensor(g: OnnxGraph.Class, onnxName?: string): TensorNode.Class | undefined {
-  if (!onnxName) return undefined;
-  const allOps = (g.getOperationNodes?.().toArray?.() ?? []) as OperationNode.Class[];
-  for (const c of allOps) {
-    if (c.type !== "Constant") continue;
-    const outs: string[] =
-      (c as any).outputs ??
-      (c as any).output ??
-      (c as any).getOutputNames?.() ?? [];
-    if (outs[0] === onnxName) {
-      const t = findTensorByOnnxName(g, onnxName);
-      if (t) return t;
-    }
-  }
-  return undefined;
 }
 
 /* ============================== HANDLER ================================== */
