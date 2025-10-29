@@ -3,8 +3,8 @@
 import express, { Request, Response } from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
-import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
-import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
+import OnnxGraphTransformer from './Onnx/transformation/loop-lowering/index.js';
+import OnnxGraphOptimizer from './Onnx/transformation/shape-optimization/index.js';
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';

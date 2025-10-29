@@ -13,7 +13,7 @@ export type Handler = (graph: OnnxGraph.Class, op: OperationNode.Class) => boole
 // Registry by op type
 export type HandlersRegistry = Record<string, Handler>;
 
-export interface PreDecomposeOptions {
+export interface CanonicalizationOptions {
   maxPasses?: number;
   handlers?: HandlersRegistry;
 }
@@ -32,11 +32,11 @@ function buildDefaultRegistry(): HandlersRegistry {
   };
 }
 
-export default function applyPreDecomposition(
+export default function applyCanonicalization(
   graph: OnnxGraph.Class,
-  options?: PreDecomposeOptions
+  options?: CanonicalizationOptions
 ): OnnxGraph.Class {
-  const opts: PreDecomposeOptions = {
+  const opts: CanonicalizationOptions = {
     maxPasses: 10,         // a couple passes are usually enough
     handlers: buildDefaultRegistry(),
     ...options,
