@@ -3,9 +3,9 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { addEdge, makeTensorProto, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../../Utils.js";
+import { addEdge, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../../Utils.js";
 
-/* ------------------------------ handler ------------------------------- */
+/* ------------------------------ Handler ------------------------------- */
 /**
  * AveragePool(N,C,H,W) →
  *   Wones = Constant [C,1,kH,kW] of ones (dtype=X)
