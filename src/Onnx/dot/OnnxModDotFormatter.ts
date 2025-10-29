@@ -104,7 +104,7 @@ export default class OnnxDotFormatter<
         if (sourceId in this.clusterInfos) {
             const sourceCluster = this.clusterInfos[sourceId];
 
-            attrs.ltail = sourceCluster.subgraphLabel;
+            // attrs.ltail = sourceCluster.subgraphLabel;
             // source = sourceCluster.idPrefix + source;
 
             // Map all references to the cluster to an appropriate inner node
@@ -119,7 +119,7 @@ export default class OnnxDotFormatter<
         if (targetId in this.clusterInfos) {
             const targetCluster = this.clusterInfos[targetId];
 
-            attrs.lhead = targetCluster.subgraphLabel;
+            // attrs.lhead = targetCluster.subgraphLabel;
             // target = targetCluster.idPrefix + target;
 
             // Map all references to the cluster to an appropriate inner node
@@ -159,7 +159,7 @@ export default class OnnxDotFormatter<
             const bodySubdot = new DotSubgraph(`cluster_loop_${node.id}`, bodyDot.statementList)
                 .graphAttr('label', `Loop ${node.id}`);
 
-            statements.push(bodySubdot);
+            statements.push(...bodySubdot.statementList.filter(s => s instanceof DotNode || s instanceof DotEdge));
 
             const carry = body.nodes.filter((node, _, __) => node.id.startsWith('carry')).first();
             const carryOut = body.nodes.filter((node, _, __) => node.id.startsWith('carry_out')).first();
