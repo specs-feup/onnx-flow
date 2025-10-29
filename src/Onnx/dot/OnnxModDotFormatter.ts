@@ -43,7 +43,11 @@ export default class OnnxDotFormatter<
                 // attrs.size = node;
             }),
             Node.Case(OperationNode, node => {
-                attrs.label = node.type;
+                // attrs.label = node.type;
+
+                // TODO(Process-ing): Improve on this
+                attrs.label = node.type != 'ReduceSum' ? node.type : 'Add';
+
                 // attrs.feedback = '0';
                 // attrs.constant = '0';
                 // attrs.constant_fu_input = '0';
