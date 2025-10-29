@@ -163,10 +163,13 @@ export default class OnnxDotFormatter<
             const bodySubdot = new DotSubgraph(`cluster_loop_${node.id}`, bodyDot.statementList)
                 .graphAttr('label', `Loop ${node.id}`);
 
-            statements.push(...bodySubdot.statementList.filter(s => s instanceof DotNode || s instanceof DotEdge));
-
             const carry = body.nodes.filter((node, _, __) => node.id.startsWith('carry')).first();
             const carryOut = body.nodes.filter((node, _, __) => node.id.startsWith('carry_out')).first();
+
+            statements.push(...bodySubdot.statementList.filter(s => s instanceof DotNode || s instanceof DotEdge));
+
+            // TODO(Process-ing): Only for demonstration, remove/improve later
+            statements.push(this.createDotEdge(idPrefix + carryOut.id, idPrefix + carry.id));
 
             this.clusterInfos[node.id] = {
                 idPrefix,
@@ -347,6 +350,11 @@ export default class OnnxDotFormatter<
         const id = node.id as string;
         const label = node.attrList.label as string;
         if (id.startsWith('loop') && (id.includes('_cond_in') || id.includes('_cond_out') || label === 'Identity')) {
+            return true;
+        }
+
+        // TODO(Process-ing): Only for demonstration, remove/improve later
+        if (label.startsWith('init_carry')) {
             return true;
         }
 
