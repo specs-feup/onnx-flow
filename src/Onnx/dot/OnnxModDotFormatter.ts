@@ -107,6 +107,7 @@ export default class OnnxDotFormatter<
             attrs.ltail = sourceCluster.subgraphLabel;
             // source = sourceCluster.idPrefix + source;
 
+            // Map all references to the cluster to an appropriate inner node
             for (const [prefix, newSource] of Object.entries(sourceCluster.sourceMapping)) {
                 if (target.startsWith(prefix)) {
                     source = sourceCluster.idPrefix + newSource;
@@ -121,6 +122,7 @@ export default class OnnxDotFormatter<
             attrs.lhead = targetCluster.subgraphLabel;
             // target = targetCluster.idPrefix + target;
 
+            // Map all references to the cluster to an appropriate inner node
             for (const [prefix, newTarget] of Object.entries(targetCluster.targetMapping)) {
                 if (source.startsWith(prefix)) {
                     target = targetCluster.idPrefix + newTarget;
@@ -144,6 +146,7 @@ export default class OnnxDotFormatter<
         const idPrefix = `loop${node.id}_`;
         const statements = [];
 
+        // Uncomment this if you need the loop as a node as well in the DOT
         // const loopNode = this.nodeToDot(node);
         // loopNode.attr('label', `Loop ${node.id}`);
         // statements.push(loopNode);
