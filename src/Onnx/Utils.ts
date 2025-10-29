@@ -1,8 +1,9 @@
-import OnnxEdge from "../OnnxEdge.js";
-import OnnxGraph from "../OnnxGraph.js";
-import { DataType, TensorProto } from "../OnnxTypes.js";
-import OperationNode from "../OperationNode.js";
-import TensorNode from "../TensorNode.js";
+import OnnxEdge from "./OnnxEdge.js";
+import OnnxGraph from "./OnnxGraph.js";
+import { TensorProto, DataType } from "./OnnxTypes.js";
+import OperationNode from "./OperationNode.js";
+import TensorNode from "./TensorNode.js";
+
 
 export type Dim = number | String;
 export type Shape = Dim[];
@@ -536,3 +537,113 @@ export function computeStrides(shape: number[]): number[] {
 
 export function swap<A>(a: A[], i: number, j: number) { const x=a[i]; a[i]=a[j]; a[j]=x; return a; }
 
+/**
+ * Returns the topologically sorted operation nodes.
+ */
+export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
+  const sorted: OperationNode.Class[] = [];
+  const visited = new Set<string>();
+  const temp = new Set<string>();
+
+  const opNodes = graph.getOperationNodes();
+
+  const visit = (node: OperationNode.Class) => {
+    if (visited.has(node.id) || !graph.hasNode(node.id)) return;
+    if (temp.has(node.id)) {
+      console.warn(`[TopoSort] Cycle or back-edge detected at node: ${node.id}`);
+      return;
+    }
+
+    temp.add(node.id);
+
+    function checkPred(n: TensorNode.Class | OperationNode.Class) {
+      if (n.is(OperationNode)) {
+        for (const input of n.as(OperationNode).getInputs() ?? []) {
+          const t = input.tryAs?.(TensorNode);
+          if (t && t.type === "intermediate") {
+            checkPred(t);
+          }
+        }
+      }
+
+      for (const edge of n.incomers?.toArray?.() ?? []) {
+        const src = edge?.source;
+        if (!src) continue;
+
+        const pred = src.is?.(OperationNode) ? src.as(OperationNode) : null;
+        if (pred) {
+          visit(pred);
+        } else if (src.is?.(TensorNode)) {
+          const tensorPred = src.as(TensorNode);
+          if (tensorPred?.type === "intermediate") {
+            checkPred(tensorPred);
+          }
+        }
+      }
+    }
+
+    checkPred(node);
+
+    temp.delete(node.id);
+    visited.add(node.id);
+    sorted.push(node);
+  };
+
+  for (const node of opNodes) {
+    visit(node);
+  }
+
+  //Optional debug
+  /*
+  console.log("=== [topologicalSortOperationNodes] Final OPERATION node order ===");
+  sorted.forEach((node, i) => {
+    console.log(`[${i}] id: ${node.id}`);
+  });
+  */
+
+  return sorted;
+}
+
+export function normalizeAxis(axis: number, rank: number): number {
+  if (rank <= 0) return axis;
+  return ((axis % rank) + rank) % rank;
+}
+
+export function broadcastTwoShapes(a: number[], b: number[]): number[] {
+  const ra = a.length, rb = b.length;
+  const r = Math.max(ra, rb);
+  const out = new Array<number>(r);
+  for (let i = 0; i < r; i++) {
+    const da = a[ra - 1 - i] ?? 1;
+    const db = b[rb - 1 - i] ?? 1;
+    if (da === 1) out[r - 1 - i] = db;
+    else if (db === 1) out[r - 1 - i] = da;
+    else if (da === db) out[r - 1 - i] = da;
+    else {
+      // Keep your lax behavior
+      console.warn(`Broadcast mismatch at dim ${r - 1 - i}: ${da} vs ${db}. Guessing max.`);
+      out[r - 1 - i] = Math.max(da, db);
+    }
+  }
+  return out;
+}
+
+export function broadcastShapes(...shapes: number[][]): number[] {
+  return shapes.reduce((acc, s) => broadcastTwoShapes(acc, s), []);
+}
+
+export function getAttr(node: any, name: string, def?: any) {
+  const v = node.getAttributes?.[name];
+  return v === undefined ? def : v;
+}
+
+export function inferPoolDim(inDim: number, k: number, stride: number, padHead: number, padTail: number, dil: number) {
+  // ONNX: floor((in + padHead + padTail - dil*(k-1) - 1)/stride + 1)
+  const effectiveK = dil * (k - 1) + 1;
+  return Math.floor((inDim + padHead + padTail - effectiveK) / stride + 1);
+}
+
+export function inferConvDim(inDim: number, k: number, stride: number, padHead: number, padTail: number, dil: number) {
+  // Same as pooling
+  return inferPoolDim(inDim, k, stride, padHead, padTail, dil);
+}

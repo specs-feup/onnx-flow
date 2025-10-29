@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+import fs from 'fs';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import express, { Request, Response } from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
@@ -10,11 +15,7 @@ import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
+
 
 export async function parseOnnxFile(inputFilePath: string){
   return await onnx2json(inputFilePath);

@@ -10,7 +10,7 @@ import { DataType, TensorProto } from "../../OnnxTypes.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import TransformChain from "./TransformChain.js";
 import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
-import { scalarInt64, uniq, int64Vec, zeroTensor, bool, getLargestRankShape, Shape, asStaticDims, makeTensorConst, computeStrides, isNum, toStaticShape } from "../Utils.js";
+import { scalarInt64, uniq, int64Vec, zeroTensor, bool, getLargestRankShape, Shape, asStaticDims, makeTensorConst, computeStrides, isNum, toStaticShape } from "../../Utils.js";
 
 const GRAPHS: OnnxGraph.Class[] = [];
 

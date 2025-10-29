@@ -3,7 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { toArrayLike, uniq, addEdge, scalarOfType } from "../../Utils.js";
+import { toArrayLike, uniq, addEdge, scalarOfType } from "../../../Utils.js";
 
 /* ------------------------------ Handler ------------------------------- */
 export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {

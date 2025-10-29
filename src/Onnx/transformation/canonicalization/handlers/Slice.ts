@@ -3,7 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { readConstIntegerVectorFromTensorNode, uniq, maybeRemoveOrphanConstant, scalarI64 } from "../../Utils.js";
+import { readConstIntegerVectorFromTensorNode, uniq, maybeRemoveOrphanConstant, scalarI64 } from "../../../Utils.js";
 
 // ---------- Handler ----------
 export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class): boolean {

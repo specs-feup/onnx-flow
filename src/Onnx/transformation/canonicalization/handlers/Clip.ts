@@ -3,7 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto, toArrayLike, uniq, maybeRemoveOrphanConstant } from "../../Utils.js";
+import { makeTensorProto, toArrayLike, uniq, maybeRemoveOrphanConstant } from "../../../Utils.js";
 
 // --- Handler ---
 export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {

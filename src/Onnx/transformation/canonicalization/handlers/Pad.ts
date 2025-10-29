@@ -2,7 +2,7 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { AnyTensorProto, decodeIntegerVectorFromTensorProto, toArrayLike, shapeOf, makeI64ShapeConst, editShapeDim, makeValueScalar1, uniq, addEdge, scalarI64, readScalarFromTensorNode, maybeRemoveOrphanConstant } from "../../Utils.js";
+import { AnyTensorProto, decodeIntegerVectorFromTensorProto, toArrayLike, shapeOf, makeI64ShapeConst, editShapeDim, makeValueScalar1, uniq, addEdge, scalarI64, readScalarFromTensorNode, maybeRemoveOrphanConstant } from "../../../Utils.js";
 
 function readPadsVectorFromTensorInput(
   g: OnnxGraph.Class,

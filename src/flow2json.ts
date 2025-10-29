@@ -1,79 +1,12 @@
-import { inferShapes } from "./initGraph.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
-import OperationNode from "./Onnx/OperationNode.js";
 import TensorNode from "./Onnx/TensorNode.js";
+import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
 
 const IR_VERSION = 9;
 const OPSET_IMPORT = 13;
 
-/**
- * Returns the topologically sorted operation nodes.
- */
-export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
-  const sorted: OperationNode.Class[] = [];
-  const visited = new Set<string>();
-  const temp = new Set<string>();
-
-  const opNodes = graph.getOperationNodes();
-
-  const visit = (node: OperationNode.Class) => {
-    if (visited.has(node.id) || !graph.hasNode(node.id)) return;
-    if (temp.has(node.id)) {
-      console.warn(`[TopoSort] Cycle or back-edge detected at node: ${node.id}`);
-      return;
-    }
-
-    temp.add(node.id);
-
-    function checkPred(n: TensorNode.Class | OperationNode.Class) {
-      if (n.is(OperationNode)) {
-        for (const input of n.as(OperationNode).getInputs() ?? []) {
-          const t = input.tryAs?.(TensorNode);
-          if (t && t.type === "intermediate") {
-            checkPred(t);
-          }
-        }
-      }
-
-      for (const edge of n.incomers?.toArray?.() ?? []) {
-        const src = edge?.source;
-        if (!src) continue;
-
-        const pred = src.is?.(OperationNode) ? src.as(OperationNode) : null;
-        if (pred) {
-          visit(pred);
-        } else if (src.is?.(TensorNode)) {
-          const tensorPred = src.as(TensorNode);
-          if (tensorPred?.type === "intermediate") {
-            checkPred(tensorPred);
-          }
-        }
-      }
-    }
-
-    checkPred(node);
-
-    temp.delete(node.id);
-    visited.add(node.id);
-    sorted.push(node);
-  };
-
-  for (const node of opNodes) {
-    visit(node);
-  }
-
-  //Optional debug
-  /*
-  console.log("=== [topologicalSortOperationNodes] Final OPERATION node order ===");
-  sorted.forEach((node, i) => {
-    console.log(`[${i}] id: ${node.id}`);
-  });
-  */
-
-  return sorted;
-}
 
 export function prepareGraphForExport(graph: OnnxGraph.Class): void {
   const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];

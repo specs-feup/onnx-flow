@@ -3,7 +3,7 @@ import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { toArrayLike, uniq, addEdge, scalarOfType, makeTensorProto } from "../../Utils.js";
+import { toArrayLike, uniq, addEdge, scalarOfType, makeTensorProto } from "../../../Utils.js";
 
 /* ------------------------------ Handler ------------------------------- */
 /**

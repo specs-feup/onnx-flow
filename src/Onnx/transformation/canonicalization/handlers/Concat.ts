@@ -2,7 +2,7 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, addEdge, toArrayLike, constI64, isNumeric, scalarI64, scalarZeroOfType } from "../../Utils.js";
+import { uniq, addEdge, toArrayLike, constI64, isNumeric, scalarI64, scalarZeroOfType } from "../../../Utils.js";
 
 /* --------------------- opset13-friendly Squeeze/Unsqueeze -------------------- */
 // In opset >= 13, Squeeze/Unsqueeze take axes as **2nd input**, not attribute.

@@ -3,7 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, toArrayLike, constI64, addEdge, constF32, findConstantProducerAsTensor, findTensorByOnnxName, toNum, toNumShape } from "../../Utils.js";
+import { uniq, toArrayLike, constI64, addEdge, constF32, findConstantProducerAsTensor, findTensorByOnnxName, toNum, toNumShape } from "../../../Utils.js";
 
 function normalizePads(padsAttr?: number[]): [number, number, number, number] {
   if (!padsAttr) return [0, 0, 0, 0];

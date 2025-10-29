@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import protobuf from 'protobufjs';
-import { fileURLToPath } from 'url';
 import Long from 'long';
+import { fileURLToPath } from 'url';
 
 /**
  * Toggle strict behavior for Reshape shape constants:
