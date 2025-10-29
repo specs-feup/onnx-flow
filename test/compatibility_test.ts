@@ -1,10 +1,22 @@
-import { InferenceSession, Tensor } from 'onnxruntime-web';
+import * as ort from 'onnxruntime-web';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { performance } from 'perf_hooks';
 
 
-function printInputs(label: string, inputs: Record<string, Tensor>) {
+const RUN_TOTAL = { passed: 0, failed: 0 };
+const CURRENT = { test: '', reconverted: '' } as { test: string; reconverted: string };
+
+// Failure buckets we’ll print at the end
+const FAILURES = {
+  warn: [] as Array<{ test: string; path: string }>,
+  error: [] as Array<{ test: string; path: string }>,
+};
+
+/* ============================== HELPERS ================================== */
+
+function printInputs(label: string, inputs: Record<string, ort.Tensor>) {
   console.log(`Inputs for ${label}:`);
   for (const [key, tensor] of Object.entries(inputs)) {
     const dataArray = Array.from(tensor.data as Iterable<number>);
@@ -25,6 +37,73 @@ function logErrorDetails(context: string, e: any) {
   }
 }
 
+function reportOutcome(status: 'pass' | 'warn' | 'error', label = 'Outputs equivalent', value?: boolean) {
+  const icon = status === 'pass' ? '✅' : status === 'warn' ? '⚠️' : '❌';
+  console.log(`${icon} ${label}:`, value ?? (status === 'pass'));
+  if (status === 'pass') RUN_TOTAL.passed++; else RUN_TOTAL.failed++;
+
+  // NEW: capture failing reconverted models for the final summary
+  if (status === 'warn') recordFailure('warn');
+  if (status === 'error') recordFailure('error');
+
+  if (status !== 'pass') {
+    if (CURRENT.test)        console.log(`   test: ${CURRENT.test}`);
+    if (CURRENT.reconverted) console.log(`   reconverted: ${CURRENT.reconverted}`);
+  }
+}
+
+type SafeTimedRun<T = Record<string, ort.Tensor>> = {
+  out: T | undefined;
+  ms: number;
+  error?: unknown;
+};
+
+async function safeTimedRun(
+  session: ort.InferenceSession,
+  feeds: Record<string, ort.Tensor>
+): Promise<SafeTimedRun> {
+  try {
+    const r = await timedRun(session, feeds);
+    return { out: r.out, ms: r.ms };          // success: no error field
+  } catch (error) {
+    return { out: undefined, ms: 0, error };  // failure: include error
+  }
+}
+
+async function timedRun(session: ort.InferenceSession, feeds: Record<string, ort.Tensor>) {
+  const t0 = performance.now();
+  const out = await session.run(feeds);
+  const ms = performance.now() - t0;
+  return { out, ms };
+}
+
+// Re-run the RECONVERTED model at max verbosity if a test fails.
+async function rerunVerboseIfFailed(reconvertedPath: string, feeds: Record<string, ort.Tensor>) {
+  try {
+    const prev = ort.env.logLevel;
+    ort.env.logLevel = 'verbose';
+    const verbose = await ort.InferenceSession.create(reconvertedPath);
+    console.log('🔁 Re-running reconverted model with ORT verbose logging…');
+    await verbose.run(feeds);
+    ort.env.logLevel = prev;
+  } catch (e) {
+    console.error('❌ Verbose re-run failed:', e);
+  }
+}
+
+// Helper to record a reconverted-path failure once
+function recordFailure(kind: 'warn' | 'error') {
+  if (!CURRENT.reconverted) return; // skip non-reconversion tests
+  const arr = FAILURES[kind];
+  // dedup by path+test to avoid spam across retries
+  if (!arr.some(e => e.path === CURRENT.reconverted && e.test === CURRENT.test)) {
+    arr.push({ test: CURRENT.test || '(unnamed test)', path: CURRENT.reconverted });
+  }
+}
+
+
+/* ============================== TESTS ================================== */
+
 async function runVectorAddEquivalenceTest() {
   const shape = [4];
 
@@ -33,18 +112,19 @@ async function runVectorAddEquivalenceTest() {
   const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
 
   const feeds = {
-    A: new Tensor('float32', A, shape),
-    B: new Tensor('float32', B, shape),
-    trip_count: new Tensor('int64', [BigInt(4)], []),
-    cond: new Tensor('bool', [true], []),
+    A: new ort.Tensor('float32', A, shape),
+    B: new ort.Tensor('float32', B, shape),
+    trip_count: new ort.Tensor('int64', [BigInt(4)], []),
+    cond: new ort.Tensor('bool', [true], []),
   };
 
   console.log('\n=== Running vector add model comparison ===');
   printInputs('Both Models', feeds);
+    CURRENT.test = 'Both Models';
 
   try {
     // Load and run standard model
-    const stdSession = await InferenceSession.create('examples/onnx/vector_add_standard.onnx');
+    const stdSession = await ort.InferenceSession.create('examples/onnx/vector_add_standard.onnx');
     const stdOutput = await stdSession.run({ A: feeds.A, B: feeds.B });
     const stdKey = Object.keys(stdOutput)[0];
     const stdResult = Array.from(stdOutput[stdKey].data as Float32Array);
@@ -52,7 +132,7 @@ async function runVectorAddEquivalenceTest() {
     console.log(`standard_vector_add.onnx → Output (${stdKey}):`, stdResult);
 
     // Load and run scalar-loop model
-    const loopSession = await InferenceSession.create('examples/onnx/vector_add_decomposed.onnx');
+    const loopSession = await ort.InferenceSession.create('examples/onnx/vector_add_decomposed.onnx');
     const loopOutput = await loopSession.run({
       A: feeds.A,
       B: feeds.B,
@@ -70,7 +150,7 @@ async function runVectorAddEquivalenceTest() {
       stdResult.length === loopResult.length &&
       stdResult.every((v, i) => Math.abs(v - loopResult[i]) < tolerance);
 
-    console.log('✅ Vector outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn');}
   } catch (err) {
     logErrorDetails('vector add model comparison', err);
   }
@@ -86,20 +166,21 @@ async function runAddChainEquivalenceTest() {
   const D = Float32Array.from({ length: 4 }, () => Math.random() * 10);
 
   const feeds = {
-    A: new Tensor('float32', A, shape),
-    B: new Tensor('float32', B, shape),
-    C: new Tensor('float32', C, shape),
-    D: new Tensor('float32', D, shape),
-    trip_count: new Tensor('int64', [BigInt(4)], []),
-    cond: new Tensor('bool', [true], []),
+    A: new ort.Tensor('float32', A, shape),
+    B: new ort.Tensor('float32', B, shape),
+    C: new ort.Tensor('float32', C, shape),
+    D: new ort.Tensor('float32', D, shape),
+    trip_count: new ort.Tensor('int64', [BigInt(4)], []),
+    cond: new ort.Tensor('bool', [true], []),
   };
 
   console.log('\n=== Running Add(Add(A, B), Add(C, D)) model comparison ===');
   printInputs('AddChain Models', feeds);
+    CURRENT.test = 'AddChain Models';
 
   try {
     // Run standard add chain model
-    const stdSession = await InferenceSession.create('examples/onnx/add_chain_standard.onnx');
+    const stdSession = await ort.InferenceSession.create('examples/onnx/add_chain_standard.onnx');
     const stdOutput = await stdSession.run({
       A: feeds.A,
       B: feeds.B,
@@ -112,7 +193,7 @@ async function runAddChainEquivalenceTest() {
     console.log(`add_chain_standard.onnx → Output (${stdKey}):`, stdResult);
 
     // Run decomposed scalar loop version
-    const loopSession = await InferenceSession.create('examples/onnx/add_chain_decomposed.onnx');
+    const loopSession = await ort.InferenceSession.create('examples/onnx/add_chain_decomposed.onnx');
     const loopOutput = await loopSession.run(feeds);
     const loopKey = Object.keys(loopOutput)[0];
     const loopResult = Array.from(loopOutput[loopKey].data as Float32Array);
@@ -125,7 +206,7 @@ async function runAddChainEquivalenceTest() {
       stdResult.length === loopResult.length &&
       stdResult.every((v, i) => Math.abs(v - loopResult[i]) < tolerance);
 
-    console.log('✅ Add-chain model outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn')}
   } catch (err) {
     logErrorDetails('add-chain model comparison', err);
   }
@@ -138,24 +219,25 @@ async function runMatmulEquivalenceTest() {
   const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
 
   const feeds = {
-    A: new Tensor('float32', A, shape),
-    B: new Tensor('float32', B, shape),
-    trip_count: new Tensor('int64', [BigInt(4)], []),
-    cond: new Tensor('bool', [true], []),
+    A: new ort.Tensor('float32', A, shape),
+    B: new ort.Tensor('float32', B, shape),
+    trip_count: new ort.Tensor('int64', [BigInt(4)], []),
+    cond: new ort.Tensor('bool', [true], []),
   };
 
   console.log('\n=== Running MatMul model comparison ===');
   printInputs('MatMul Models', feeds);
+    CURRENT.test = 'MatMul Models';
 
   try {
-    const stdSession = await InferenceSession.create('examples/onnx/matmul_standard.onnx');
+    const stdSession = await ort.InferenceSession.create('examples/onnx/matmul_standard.onnx');
     const stdOutput = await stdSession.run({ A: feeds.A, B: feeds.B });
     const stdKey = Object.keys(stdOutput)[0];
     const stdResult = Array.from(stdOutput[stdKey].data as Float32Array);
 
     console.log(`matmul_standard.onnx → Output (${stdKey}):`, stdResult);
 
-    const loopSession = await InferenceSession.create('examples/onnx/matmul_decomposed.onnx');
+    const loopSession = await ort.InferenceSession.create('examples/onnx/matmul_decomposed.onnx');
     const loopOutput = await loopSession.run({
       A: feeds.A,
       B: feeds.B,
@@ -172,7 +254,7 @@ async function runMatmulEquivalenceTest() {
       stdResult.length === loopResult.length &&
       stdResult.every((v, i) => Math.abs(v - loopResult[i]) < tolerance);
 
-    console.log('✅ MatMul outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn')}
   } catch (err) {
     logErrorDetails('MatMul model comparison', err);
   }
@@ -184,24 +266,25 @@ async function runMatmulAddEquivalenceTest() {
   const B = Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10));
 
   const feeds = {
-    X: new Tensor('int32', X, [3, 1]),
-    A: new Tensor('int32', A, [1, 3]),
-    B: new Tensor('int32', B, [3, 3]),
-    trip_count: new Tensor('int64', [BigInt(9)], []),
-    cond: new Tensor('bool', [true], []),
+    X: new ort.Tensor('int32', X, [3, 1]),
+    A: new ort.Tensor('int32', A, [1, 3]),
+    B: new ort.Tensor('int32', B, [3, 3]),
+    trip_count: new ort.Tensor('int64', [BigInt(9)], []),
+    cond: new ort.Tensor('bool', [true], []),
   };
 
   console.log('\n=== Running MatMul+Add model comparison ===');
   printInputs('MatMulAdd Models', feeds);
+    CURRENT.test = 'MatMulAdd Models';
 
   try {
-    const stdSession = await InferenceSession.create('examples/onnx/matmul_add_standard.onnx');
+    const stdSession = await ort.InferenceSession.create('examples/onnx/matmul_add_standard.onnx');
     const stdOut = await stdSession.run({ X: feeds.X, A: feeds.A, B: feeds.B });
     const stdResult = Array.from(Object.values(stdOut)[0].data as Int32Array);
 
     console.log(`matmul_add_standard.onnx → Output:`, stdResult);
 
-    const decSession = await InferenceSession.create('examples/onnx/matmul_add_decomposed.onnx');
+    const decSession = await ort.InferenceSession.create('examples/onnx/matmul_add_decomposed.onnx');
     const decOut = await decSession.run(feeds);
     const decResult = Array.from(Object.values(decOut)[0].data as Int32Array);
 
@@ -210,7 +293,7 @@ async function runMatmulAddEquivalenceTest() {
     const equivalent = stdResult.length === decResult.length &&
       stdResult.every((v, i) => v === decResult[i]);
 
-    console.log('✅ MatMul+Add outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn')}
   } catch (err) {
     logErrorDetails('MatMul+Add comparison', err);
   }
@@ -226,6 +309,7 @@ function getReconvertedPath(originalPath: string): string {
 async function runVectorAddStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/vector_add_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted vector_add_standard model ===');
@@ -242,19 +326,20 @@ async function runVectorAddStandardReconversionEquivalenceTest() {
     const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
     const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
     const feeds = {
-      A: new Tensor('float32', A, shape),
-      B: new Tensor('float32', B, shape),
+      A: new ort.Tensor('float32', A, shape),
+      B: new ort.Tensor('float32', B, shape),
     };
 
     console.log('\n=== Comparing vector_add_standard and its reconverted version ===');
     printInputs('vector_add_standard', feeds);
+    CURRENT.test = 'vector_add_standard';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -265,7 +350,7 @@ async function runVectorAddStandardReconversionEquivalenceTest() {
       originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('vector_add_standard reconversion test', err);
   }
@@ -275,6 +360,7 @@ async function runVectorAddStandardReconversionEquivalenceTest() {
 async function runAddChainStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/add_chain_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted model ===');
@@ -296,23 +382,24 @@ async function runAddChainStandardReconversionEquivalenceTest() {
     const D = Float32Array.from({ length: 4 }, () => Math.random() * 10);
 
     const feeds = {
-      A: new Tensor('float32', A, shape),
-      B: new Tensor('float32', B, shape),
-      C: new Tensor('float32', C, shape),
-      D: new Tensor('float32', D, shape),
+      A: new ort.Tensor('float32', A, shape),
+      B: new ort.Tensor('float32', B, shape),
+      C: new ort.Tensor('float32', C, shape),
+      D: new ort.Tensor('float32', D, shape),
     };
 
     console.log('\n=== Comparing original and reconverted AddAddAdd model ===');
     printInputs('AddAddAdd', feeds);
+    CURRENT.test = 'AddAddAdd';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOutput = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOutput, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalKey = Object.keys(originalOutput)[0];
     const originalResult = Array.from(originalOutput[originalKey].data as Float32Array);
     console.log(`${path.basename(originalPath)} → Output (${originalKey}):`, originalResult);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOutput, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedKey = Object.keys(reconvertedOutput)[0];
     const reconvertedResult = Array.from(reconvertedOutput[reconvertedKey].data as Float32Array);
     console.log(`${path.basename(reconvertedPath)} → Output (${reconvertedKey}):`, reconvertedResult);
@@ -322,7 +409,7 @@ async function runAddChainStandardReconversionEquivalenceTest() {
       originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
 
-    console.log('✅ AddAddAdd outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('AddAddAdd reconversion test', err);
   }
@@ -331,6 +418,7 @@ async function runAddChainStandardReconversionEquivalenceTest() {
 async function runMatmulStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/matmul_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_standard model ===');
@@ -347,19 +435,20 @@ async function runMatmulStandardReconversionEquivalenceTest() {
     const A = Float32Array.from({ length: 4 }, () => Math.random() * 10);
     const B = Float32Array.from({ length: 4 }, () => Math.random() * 10);
     const feeds = {
-      A: new Tensor('float32', A, shape),
-      B: new Tensor('float32', B, shape),
+      A: new ort.Tensor('float32', A, shape),
+      B: new ort.Tensor('float32', B, shape),
     };
 
     console.log('\n=== Comparing matmul_standard and its reconverted version ===');
     printInputs('matmul_standard', feeds);
+    CURRENT.test = 'matmul_standard';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -370,7 +459,7 @@ async function runMatmulStandardReconversionEquivalenceTest() {
       originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmul_standard reconversion test', err);
   }
@@ -379,6 +468,7 @@ async function runMatmulStandardReconversionEquivalenceTest() {
 async function runMatmulAddStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/matmul_add_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_add_standard model ===');
@@ -392,20 +482,21 @@ async function runMatmulAddStandardReconversionEquivalenceTest() {
     }
 
     const feeds = {
-      X: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [3, 1]),
-      A: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [1, 3]),
-      B: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+      X: new ort.Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [3, 1]),
+      A: new ort.Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [1, 3]),
+      B: new ort.Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
     };
 
     console.log('\n=== Comparing matmul_add_standard and its reconverted version ===');
     printInputs('matmul_add_standard', feeds);
+    CURRENT.test = 'matmul_add_standard';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Int32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Int32Array);
 
     console.log(`→ original:`, originalResult);
@@ -414,7 +505,7 @@ async function runMatmulAddStandardReconversionEquivalenceTest() {
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => v === reconvertedResult[i]);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmul_add_standard reconversion test', err);
   }
@@ -425,6 +516,7 @@ async function runVectorAddDecomposedReconversionEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted vector_add_decomposed model ===');
@@ -439,21 +531,22 @@ async function runVectorAddDecomposedReconversionEquivalenceTest() {
 
     const shape = [4];
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      trip_count: new Tensor('int64', [BigInt(4)], []),
-      cond: new Tensor('bool', [true], []),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      trip_count: new ort.Tensor('int64', [BigInt(4)], []),
+      cond: new ort.Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing vector_add_decomposed and its reconverted version ===');
     printInputs('vector_add_decomposed', feeds);
+    CURRENT.test = 'vector_add_decomposed';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -464,7 +557,7 @@ async function runVectorAddDecomposedReconversionEquivalenceTest() {
       originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('vector_add_decomposed reconversion test', err);
   }
@@ -475,6 +568,7 @@ async function runAddChainDecomposedReconversionEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted add_chain_decomposed model ===');
@@ -489,23 +583,24 @@ async function runAddChainDecomposedReconversionEquivalenceTest() {
 
     const shape = [4];
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      C: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      D: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      trip_count: new Tensor('int64', [BigInt(4)], []),
-      cond: new Tensor('bool', [true], []),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      C: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      D: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      trip_count: new ort.Tensor('int64', [BigInt(4)], []),
+      cond: new ort.Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing add_chain_decomposed and its reconverted version ===');
     printInputs('add_chain_decomposed', feeds);
+    CURRENT.test = 'add_chain_decomposed';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOutput = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOutput, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOutput)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOutput, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOutput)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -514,7 +609,7 @@ async function runAddChainDecomposedReconversionEquivalenceTest() {
     const tolerance = 1e-5;
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('add_chain_decomposed reconversion test', err);
   }
@@ -526,6 +621,7 @@ async function runMatmulDecomposedReconversionEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_decomposed model ===');
@@ -540,21 +636,22 @@ async function runMatmulDecomposedReconversionEquivalenceTest() {
 
     const shape = [2, 2];
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      trip_count: new Tensor('int64', [BigInt(4)], []),
-      cond: new Tensor('bool', [true], []),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      trip_count: new ort.Tensor('int64', [BigInt(4)], []),
+      cond: new ort.Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing matmul_decomposed and its reconverted version ===');
     printInputs('matmul_decomposed', feeds);
+    CURRENT.test = 'matmul_decomposed';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOutput = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOutput, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOutput)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOutput, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOutput)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -563,7 +660,7 @@ async function runMatmulDecomposedReconversionEquivalenceTest() {
     const tolerance = 1e-5;
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmul_decomposed reconversion test', err);
   }
@@ -574,6 +671,7 @@ async function runMatmulAddDecomposedReconversionEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_add_decomposed model ===');
@@ -587,22 +685,23 @@ async function runMatmulAddDecomposedReconversionEquivalenceTest() {
     }
 
     const feeds = {
-      X: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [3, 1]),
-      A: new Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [1, 3]),
-      B: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
-      trip_count: new Tensor('int64', [BigInt(9)], []),
-      cond: new Tensor('bool', [true], []),
+      X: new ort.Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [3, 1]),
+      A: new ort.Tensor('int32', Int32Array.from({ length: 3 }, () => Math.floor(Math.random() * 10)), [1, 3]),
+      B: new ort.Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+      trip_count: new ort.Tensor('int64', [BigInt(9)], []),
+      cond: new ort.Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing matmul_add_decomposed and its reconverted version ===');
     printInputs('matmul_add_decomposed', feeds);
+    CURRENT.test = 'matmul_add_decomposed';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run(feeds);
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Int32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Int32Array);
 
     console.log(`→ original:`, originalResult);
@@ -611,7 +710,7 @@ async function runMatmulAddDecomposedReconversionEquivalenceTest() {
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => v === reconvertedResult[i]);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmul_add_decomposed reconversion test', err);
   }
@@ -622,6 +721,7 @@ async function runVectorAddCompleteEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted vectoradd_test model ===');
@@ -636,24 +736,25 @@ async function runVectorAddCompleteEquivalenceTest() {
 
     const shape = [4];
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       //trip_count_0: new Tensor('int64', [BigInt(4)], []),
       //cond_0: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing vectoradd_test and its decomposed reconverted version ===');
     printInputs('vectoradd_test', feeds);
+    CURRENT.test = 'vectoradd_test';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run({
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, {
       A: feeds.A,
       B: feeds.B,
-    });
+    }); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -664,7 +765,7 @@ async function runVectorAddCompleteEquivalenceTest() {
       originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('vectoradd_test reconversion test', err);
   }
@@ -675,6 +776,7 @@ async function runAddChainCompleteEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted addchain_test model ===');
@@ -689,18 +791,19 @@ async function runAddChainCompleteEquivalenceTest() {
 
     const shape = [4];
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      C: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      D: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      C: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      D: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       //trip_count_1: new Tensor('int64', [BigInt(4)], []),
       //cond_1: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing addchain_test and its decomposed reconverted version ===');
     printInputs('addchain_test', feeds);
+    CURRENT.test = 'addchain_test';
 
-    const originalSession = await InferenceSession.create(originalPath);
+    const originalSession = await ort.InferenceSession.create(originalPath);
     const originalOutput = await originalSession.run(({
       A: feeds.A,
       B: feeds.B,
@@ -709,8 +812,8 @@ async function runAddChainCompleteEquivalenceTest() {
     }));
     const originalResult = Array.from(Object.values(originalOutput)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOutput, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOutput)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -719,7 +822,7 @@ async function runAddChainCompleteEquivalenceTest() {
     const tolerance = 1e-5;
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('addchain_test reconversion test', err);
   }
@@ -731,6 +834,7 @@ async function runMatmulCompleteEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_test model ===');
@@ -745,24 +849,25 @@ async function runMatmulCompleteEquivalenceTest() {
 
     const shape = [2, 2];
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
-      B: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), shape),
       //trip_count_0: new Tensor('int64', [BigInt(4)], []),
       //cond_0: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing matmul_test and its decomposed reconverted version ===');
     printInputs('matmul_test', feeds);
+    CURRENT.test = 'matmul_test';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOutput = await originalSession.run({
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOutput, ms: __origMs } = await timedRun(originalSession, {
       A: feeds.A,
       B: feeds.B,
-    });
+    }); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOutput)[0].data as Float32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOutput = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOutput, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOutput)[0].data as Float32Array);
 
     console.log(`→ original:`, originalResult);
@@ -771,7 +876,7 @@ async function runMatmulCompleteEquivalenceTest() {
     const tolerance = 1e-5;
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => Math.abs(v - reconvertedResult[i]) < tolerance);
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmul_test reconversion test', err);
   }
@@ -782,6 +887,7 @@ async function runMatmulAddCompleteEquivalenceTest() {
   const extIndex = originalPath.lastIndexOf('.');
   const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted matmuladd_test model ===');
@@ -795,26 +901,27 @@ async function runMatmulAddCompleteEquivalenceTest() {
     }
 
     const feeds = {
-      X: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
-      A: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
-      B: new Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+      X: new ort.Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+      A: new ort.Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
+      B: new ort.Tensor('int32', Int32Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)), [3, 3]),
       //trip_count_0: new Tensor('int64', [BigInt(9)], []),
       //cond_0: new Tensor('bool', [true], []),
     };
 
     console.log('\n=== Comparing matmuladd_test and its decomposed reconverted version ===');
     printInputs('matmuladd_test', feeds);
+    CURRENT.test = 'matmuladd_test';
 
-    const originalSession = await InferenceSession.create(originalPath);
-    const originalOut = await originalSession.run({
+    const originalSession = await ort.InferenceSession.create(originalPath);
+    const { out: originalOut, ms: __origMs } = await timedRun(originalSession, {
       X: feeds.X,
       A: feeds.A,
       B: feeds.B,
-    });
+    }); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const originalResult = Array.from(Object.values(originalOut)[0].data as Int32Array);
 
-    const reconvertedSession = await InferenceSession.create(reconvertedPath);
-    const reconvertedOut = await reconvertedSession.run(feeds);
+    const reconvertedSession = await ort.InferenceSession.create(reconvertedPath);
+    const { out: reconvertedOut, ms: __recMs } = await timedRun(reconvertedSession, feeds); console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const reconvertedResult = Array.from(Object.values(reconvertedOut)[0].data as Int32Array);
 
     console.log(`→ original:`, originalResult);
@@ -823,7 +930,7 @@ async function runMatmulAddCompleteEquivalenceTest() {
     const equivalent = originalResult.length === reconvertedResult.length &&
       originalResult.every((v, i) => v === reconvertedResult[i]);
 
-    console.log('✅ Outputs equivalent:', equivalent);
+    if (equivalent) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmuladd_test reconversion test', err);
   }
@@ -832,6 +939,7 @@ async function runMatmulAddCompleteEquivalenceTest() {
 async function runRangeStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/range_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted range_standard model ===');
@@ -842,16 +950,23 @@ async function runRangeStandardReconversionEquivalenceTest() {
     }
 
     // Choose a clean set so length is known: start=0, limit=5, delta=1 => len=5
-    const start = new Tensor('float32', new Float32Array([0]), []);
-    const limit = new Tensor('float32', new Float32Array([5]), []);
-    const delta = new Tensor('float32', new Float32Array([1]), []);
+    const start = new ort.Tensor('float32', new Float32Array([0]), []);
+    const limit = new ort.Tensor('float32', new Float32Array([5]), []);
+    const delta = new ort.Tensor('float32', new Float32Array([1]), []);
     const feeds = { start, limit, delta };
 
     console.log('\n=== Comparing range_standard and its reconverted version ===');
     printInputs('range_standard', feeds);
+    CURRENT.test = 'range_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -861,7 +976,7 @@ async function runRangeStandardReconversionEquivalenceTest() {
 
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('range_standard reconversion test', err);
   }
@@ -870,6 +985,7 @@ async function runRangeStandardReconversionEquivalenceTest() {
 async function runRangeAddStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/range_add_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted range_add_standard model ===');
@@ -882,17 +998,24 @@ async function runRangeAddStandardReconversionEquivalenceTest() {
     const L = Math.max(0, Math.ceil((limit - start) / delta));
 
     const feeds = {
-      start: new Tensor('float32', new Float32Array([start]), []),
-      limit: new Tensor('float32', new Float32Array([limit]), []),
-      delta: new Tensor('float32', new Float32Array([delta]), []),
-      V:     new Tensor('float32', Float32Array.from({ length: L }, () => Math.random() * 10), [L]),
+      start: new ort.Tensor('float32', new Float32Array([start]), []),
+      limit: new ort.Tensor('float32', new Float32Array([limit]), []),
+      delta: new ort.Tensor('float32', new Float32Array([delta]), []),
+      V:     new ort.Tensor('float32', Float32Array.from({ length: L }, () => Math.random() * 10), [L]),
     };
 
     console.log('\n=== Comparing range_add_standard and reconverted ===');
     printInputs('range_add_standard', feeds);
+    CURRENT.test = 'range_add_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -902,7 +1025,7 @@ async function runRangeAddStandardReconversionEquivalenceTest() {
 
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('range_add_standard reconversion test', err);
   }
@@ -911,6 +1034,7 @@ async function runRangeAddStandardReconversionEquivalenceTest() {
 async function runTransposeStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/transpose_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted transpose_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -918,13 +1042,20 @@ async function runTransposeStandardReconversionEquivalenceTest() {
     if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
 
     const X = Float32Array.from({ length: 6 }, () => Math.random() * 10);
-    const feeds = { X: new Tensor('float32', X, [2, 3]) };
+    const feeds = { X: new ort.Tensor('float32', X, [2, 3]) };
 
     console.log('\n=== Comparing transpose_standard and reconverted ===');
     printInputs('transpose_standard', feeds);
+    CURRENT.test = 'transpose_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -933,7 +1064,7 @@ async function runTransposeStandardReconversionEquivalenceTest() {
     console.log('→ reconverted:', r);
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('transpose_standard reconversion test', err);
   }
@@ -942,6 +1073,7 @@ async function runTransposeStandardReconversionEquivalenceTest() {
 async function runTransposeAddStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/transpose_add_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted transpose_add_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -951,15 +1083,22 @@ async function runTransposeAddStandardReconversionEquivalenceTest() {
     const X = Float32Array.from({ length: 6 }, () => Math.random() * 10); // [2,3]
     const Y = Float32Array.from({ length: 6 }, () => Math.random() * 10); // [3,2]
     const feeds = {
-      X: new Tensor('float32', X, [2, 3]),
-      Y: new Tensor('float32', Y, [3, 2]),
+      X: new ort.Tensor('float32', X, [2, 3]),
+      Y: new ort.Tensor('float32', Y, [3, 2]),
     };
 
     console.log('\n=== Comparing transpose_add_standard and reconverted ===');
     printInputs('transpose_add_standard', feeds);
+    CURRENT.test = 'transpose_add_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -968,7 +1107,7 @@ async function runTransposeAddStandardReconversionEquivalenceTest() {
     console.log('→ reconverted:', r);
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('transpose_add_standard reconversion test', err);
   }
@@ -977,6 +1116,7 @@ async function runTransposeAddStandardReconversionEquivalenceTest() {
 async function runMatmulTransposeStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/matmul_transpose_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted matmul_transpose_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -986,15 +1126,22 @@ async function runMatmulTransposeStandardReconversionEquivalenceTest() {
     const A = Float32Array.from({ length: 6 }, () => Math.random() * 10); // [2,3]
     const B = Float32Array.from({ length: 12 }, () => Math.random() * 10); // [3,4]
     const feeds = {
-      A: new Tensor('float32', A, [2, 3]),
-      B: new Tensor('float32', B, [3, 4]),
+      A: new ort.Tensor('float32', A, [2, 3]),
+      B: new ort.Tensor('float32', B, [3, 4]),
     };
 
     console.log('\n=== Comparing matmul_transpose_standard and reconverted ===');
     printInputs('matmul_transpose_standard', feeds);
+    CURRENT.test = 'matmul_transpose_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1003,7 +1150,7 @@ async function runMatmulTransposeStandardReconversionEquivalenceTest() {
     console.log('→ reconverted:', r);
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('matmul_transpose_standard reconversion test', err);
   }
@@ -1012,6 +1159,7 @@ async function runMatmulTransposeStandardReconversionEquivalenceTest() {
 async function runReluStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/relu_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted relu_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -1019,13 +1167,20 @@ async function runReluStandardReconversionEquivalenceTest() {
 
     // Mix negatives/positives to exercise thresholding
     const X = Float32Array.from([-3.2, -0.01, 0, 0.25, 5.5, -7.3]);
-    const feeds = { X: new Tensor('float32', X, [6]) };
+    const feeds = { X: new ort.Tensor('float32', X, [6]) };
 
     console.log('\n=== Comparing relu_standard and reconverted ===');
     printInputs('relu_standard', feeds);
+    CURRENT.test = 'relu_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1033,7 +1188,7 @@ async function runReluStandardReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('relu_standard reconversion test', err);
   }
@@ -1042,19 +1197,27 @@ async function runReluStandardReconversionEquivalenceTest() {
 async function runSigmoidStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/sigmoid_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted sigmoid_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
     if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
 
     const X = Float32Array.from([-6, -1, 0, 1, 2, 6]);
-    const feeds = { X: new Tensor('float32', X, [6]) };
+    const feeds = { X: new ort.Tensor('float32', X, [6]) };
 
     console.log('\n=== Comparing sigmoid_standard and reconverted ===');
     printInputs('sigmoid_standard', feeds);
+    CURRENT.test = 'sigmoid_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1062,7 +1225,7 @@ async function runSigmoidStandardReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('sigmoid_standard reconversion test', err);
   }
@@ -1071,19 +1234,27 @@ async function runSigmoidStandardReconversionEquivalenceTest() {
 async function runTanhStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/tanh_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted tanh_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
     if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
 
     const X = Float32Array.from([-3, -0.5, 0, 0.5, 1.25, 3]);
-    const feeds = { X: new Tensor('float32', X, [6]) };
+    const feeds = { X: new ort.Tensor('float32', X, [6]) };
 
     console.log('\n=== Comparing tanh_standard and reconverted ===');
     printInputs('tanh_standard', feeds);
+    CURRENT.test = 'tanh_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1091,7 +1262,7 @@ async function runTanhStandardReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('tanh_standard reconversion test', err);
   }
@@ -1100,19 +1271,27 @@ async function runTanhStandardReconversionEquivalenceTest() {
 async function runExpStandardReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/exp_standard.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted exp_standard model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
     if (!fs.existsSync(reconvertedPath)) { console.error(`❌ Not found: ${reconvertedPath}`); return; }
 
     const X = Float32Array.from([-2, -1, 0, 0.5, 1, 2]); // keep values tame to avoid overflow in fp32
-    const feeds = { X: new Tensor('float32', X, [6]) };
+    const feeds = { X: new ort.Tensor('float32', X, [6]) };
 
     console.log('\n=== Comparing exp_standard and reconverted ===');
     printInputs('exp_standard', feeds);
+    CURRENT.test = 'exp_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1120,7 +1299,7 @@ async function runExpStandardReconversionEquivalenceTest() {
 
     const tol = 1e-5; // slightly looser due to potential tiny numeric drift
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('exp_standard reconversion test', err);
   }
@@ -1129,6 +1308,7 @@ async function runExpStandardReconversionEquivalenceTest() {
 async function runUnaryBinaryComboReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/unary_binary_combo.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     console.log('\n=== Running CLI to generate reconverted unary_binary_combo model ===');
@@ -1146,18 +1326,25 @@ async function runUnaryBinaryComboReconversionEquivalenceTest() {
     const S = Float32Array.from([ 4.0,  0.2, 2.5,  0.1,  -1.0,  -3.1]);
 
     const feeds = {
-      X: new Tensor('float32', X, [6]),
-      A: new Tensor('float32', A, [6]),
-      B: new Tensor('float32', B, [6]),
-      Y: new Tensor('float32', Y, [6]),
-      S: new Tensor('float32', S, [6]),
+      X: new ort.Tensor('float32', X, [6]),
+      A: new ort.Tensor('float32', A, [6]),
+      B: new ort.Tensor('float32', B, [6]),
+      Y: new ort.Tensor('float32', Y, [6]),
+      S: new ort.Tensor('float32', S, [6]),
     };
 
     console.log('\n=== Comparing unary_binary_combo and reconverted ===');
     printInputs('unary_binary_combo', feeds);
+    CURRENT.test = 'unary_binary_combo';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1167,7 +1354,7 @@ async function runUnaryBinaryComboReconversionEquivalenceTest() {
 
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('unary_binary_combo reconversion test', err);
   }
@@ -1177,6 +1364,7 @@ export async function runClipScalarReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/clip_scalar.onnx';
   const decomposedPath = 'examples/onnx/clip_scalar_decomposed.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     if (!fs.existsSync(originalPath) || !fs.existsSync(decomposedPath)) {
@@ -1188,14 +1376,17 @@ export async function runClipScalarReconversionEquivalenceTest() {
     const Max = new Float32Array([2.0]); // []
 
     const feeds = {
-      X: new Tensor('float32', X, [2, 3]),
-      Min: new Tensor('float32', Min, []),
-      Max: new Tensor('float32', Max, []),
+      X: new ort.Tensor('float32', X, [2, 3]),
+      Min: new ort.Tensor('float32', Min, []),
+      Max: new ort.Tensor('float32', Max, []),
     };
 
     printInputs('clip_scalar', feeds);
+    CURRENT.test = 'clip_scalar';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
 
     const tol = 1e-6;
@@ -1208,13 +1399,17 @@ export async function runClipScalarReconversionEquivalenceTest() {
     }
 
     console.log('\n=== Comparing clip_scalar and reconverted ===');
-    const rec = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
     const r = Array.from(Object.values(rec)[0].data as Float32Array);
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
 
     console.log('→ original:', o);
     console.log('→ reconverted:', r);
-    console.log('✅ clip_scalar vs reconverted equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
 
     if (!eq) throw new Error('Clip scalar equivalence failed.');
   } catch (err) {
@@ -1225,6 +1420,7 @@ export async function runClipScalarReconversionEquivalenceTest() {
 async function runAddScalarVectorBroadcastTest() {
   const originalPath = 'examples/onnx/add_scalar_vector.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted add_scalar_vector model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -1232,14 +1428,21 @@ async function runAddScalarVectorBroadcastTest() {
 
     const X = Float32Array.from([-2.0, -0.5, 0.0, 0.25, 1.5, 3.0]); // [6]
     const S = new Float32Array([1.25]);                              // []
-    const feeds = { X: new Tensor('float32', X, [6]),
-                    S: new Tensor('float32', S, []) };
+    const feeds = { X: new ort.Tensor('float32', X, [6]),
+                    S: new ort.Tensor('float32', S, []) };
 
     console.log('\n=== Comparing add_scalar_vector and reconverted ===');
     printInputs('add_scalar_vector', feeds);
+    CURRENT.test = 'add_scalar_vector';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1247,7 +1450,7 @@ async function runAddScalarVectorBroadcastTest() {
     console.log('→ reconverted:', r);
 
     const tol = 1e-6;
-    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+    { const __eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol); if (__eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} } }
   } catch (err) {
     logErrorDetails('add_scalar_vector reconversion test', err);
   }
@@ -1256,6 +1459,7 @@ async function runAddScalarVectorBroadcastTest() {
 async function runAddRowVectorToMatrixBroadcastTest() {
   const originalPath = 'examples/onnx/add_row_vector_to_matrix.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted add_row_vector_to_matrix model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -1264,15 +1468,22 @@ async function runAddRowVectorToMatrixBroadcastTest() {
     const A = Float32Array.from([ 1, 2, 3,  4, 5, 6 ]); // [2,3]
     const B = Float32Array.from([ 10, -1, 0.5 ]);       // [3]
     const feeds = {
-      A: new Tensor('float32', A, [2,3]),
-      B: new Tensor('float32', B, [3]),
+      A: new ort.Tensor('float32', A, [2,3]),
+      B: new ort.Tensor('float32', B, [3]),
     };
 
     console.log('\n=== Comparing add_row_vector_to_matrix and reconverted ===');
     printInputs('add_row_vector_to_matrix', feeds);
+    CURRENT.test = 'add_row_vector_to_matrix';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1280,7 +1491,7 @@ async function runAddRowVectorToMatrixBroadcastTest() {
     console.log('→ reconverted:', r);
 
     const tol = 1e-6;
-    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+    { const __eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol); if (__eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} } }
   } catch (err) {
     logErrorDetails('add_row_vector_to_matrix reconversion test', err);
   }
@@ -1289,6 +1500,7 @@ async function runAddRowVectorToMatrixBroadcastTest() {
 async function runAddColVectorToMatrixBroadcastTest() {
   const originalPath = 'examples/onnx/add_col_vector_to_matrix.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted add_col_vector_to_matrix model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -1297,15 +1509,22 @@ async function runAddColVectorToMatrixBroadcastTest() {
     const A = Float32Array.from([ 1, 2, 3,  4, 5, 6 ]); // [2,3]
     const C = Float32Array.from([ 100,  200 ]);         // [2,1]
     const feeds = {
-      A: new Tensor('float32', A, [2,3]),
-      C: new Tensor('float32', C, [2,1]),
+      A: new ort.Tensor('float32', A, [2,3]),
+      C: new ort.Tensor('float32', C, [2,1]),
     };
 
     console.log('\n=== Comparing add_col_vector_to_matrix and reconverted ===');
     printInputs('add_col_vector_to_matrix', feeds);
+    CURRENT.test = 'add_col_vector_to_matrix';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1313,7 +1532,7 @@ async function runAddColVectorToMatrixBroadcastTest() {
     console.log('→ reconverted:', r);
 
     const tol = 1e-6;
-    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+    { const __eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol); if (__eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} } }
   } catch (err) {
     logErrorDetails('add_col_vector_to_matrix reconversion test', err);
   }
@@ -1322,6 +1541,7 @@ async function runAddColVectorToMatrixBroadcastTest() {
 async function runMul3DChannelBroadcastTest() {
   const originalPath = 'examples/onnx/mul_3d_channel.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted mul_3d_channel model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -1338,15 +1558,22 @@ async function runMul3DChannelBroadcastTest() {
     const W = Float32Array.from([0.5, 2.0, -1.0]);
 
     const feeds = {
-      X: new Tensor('float32', X, [2,3,4]),
-      W: new Tensor('float32', W, [1,3,1]),
+      X: new ort.Tensor('float32', X, [2,3,4]),
+      W: new ort.Tensor('float32', W, [1,3,1]),
     };
 
     console.log('\n=== Comparing mul_3d_channel and reconverted ===');
     printInputs('mul_3d_channel', feeds);
+    CURRENT.test = 'mul_3d_channel';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1354,7 +1581,7 @@ async function runMul3DChannelBroadcastTest() {
     console.log('→ reconverted:', r.slice(0,12), '...');
 
     const tol = 1e-6;
-    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+    { const __eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol); if (__eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} } }
   } catch (err) {
     logErrorDetails('mul_3d_channel reconversion test', err);
   }
@@ -1363,6 +1590,7 @@ async function runMul3DChannelBroadcastTest() {
 async function runChainBroadcastTest() {
   const originalPath = 'examples/onnx/chain_broadcast.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   try {
     console.log('\n=== Running CLI to generate reconverted chain_broadcast model ===');
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
@@ -1375,18 +1603,25 @@ async function runChainBroadcastTest() {
     const s_div = new Float32Array([1.25]);                  // [] > 0
 
     const feeds = {
-      A:     new Tensor('float32', A,     [2,3]),
-      b_row: new Tensor('float32', b_row, [3]),
-      s_sub: new Tensor('float32', s_sub, []),
-      c_col: new Tensor('float32', c_col, [2,1]),
-      s_div: new Tensor('float32', s_div, []),
+      A:     new ort.Tensor('float32', A,     [2,3]),
+      b_row: new ort.Tensor('float32', b_row, [3]),
+      s_sub: new ort.Tensor('float32', s_sub, []),
+      c_col: new ort.Tensor('float32', c_col, [2,1]),
+      s_div: new ort.Tensor('float32', s_div, []),
     };
 
     console.log('\n=== Comparing chain_broadcast and reconverted ===');
     printInputs('chain_broadcast', feeds);
+    CURRENT.test = 'chain_broadcast';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1394,7 +1629,7 @@ async function runChainBroadcastTest() {
     console.log('→ reconverted:', r);
 
     const tol = 1e-6;
-    console.log('✅ Outputs equivalent:', o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol));
+    { const __eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol); if (__eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} } }
   } catch (err) {
     logErrorDetails('chain_broadcast reconversion test', err);
   }
@@ -1421,15 +1656,22 @@ async function runTransposeBroadcast2DReconversionEquivalenceTest() {
     const X = new Float32Array([1, 2, 3]);
     const Y = new Float32Array([10, 20, 30]);
     const feeds = {
-      X: new Tensor('float32', X, [1, 3]),
-      Y: new Tensor('float32', Y, [3]),
+      X: new ort.Tensor('float32', X, [1, 3]),
+      Y: new ort.Tensor('float32', Y, [3]),
     };
 
     console.log('\n=== Comparing transpose_broadcast_2d and reconverted ===');
     printInputs('transpose_broadcast_2d', feeds);
+    CURRENT.test = 'transpose_broadcast_2d';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1439,11 +1681,7 @@ async function runTransposeBroadcast2DReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    if (!eq) {
-      console.error('❌ Outputs differ beyond tolerance.');
-    } else {
-      console.log('✅ Outputs equivalent:', eq);
-    }
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('transpose_broadcast_2d reconversion test', err);
   }
@@ -1469,15 +1707,22 @@ async function runTransposeBroadcast3DReconversionEquivalenceTest() {
     const X = Float32Array.from([0,1,2,  3,4,5]); // shaped to [2,1,3]
     const Zin = Float32Array.from([100,200,300]);  // shaped to [1,3,1]
     const feeds = {
-      X:   new Tensor('float32', X,   [2, 1, 3]),
-      Zin: new Tensor('float32', Zin, [1, 3, 1]),
+      X:   new ort.Tensor('float32', X,   [2, 1, 3]),
+      Zin: new ort.Tensor('float32', Zin, [1, 3, 1]),
     };
 
     console.log('\n=== Comparing transpose_broadcast_3d and reconverted ===');
     printInputs('transpose_broadcast_3d', feeds);
+    CURRENT.test = 'transpose_broadcast_3d';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1487,7 +1732,7 @@ async function runTransposeBroadcast3DReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('transpose_broadcast_3d reconversion test', err);
   }
@@ -1513,15 +1758,22 @@ async function runTransposeBroadcast4DReconversionEquivalenceTest() {
     const B = Float32Array.from([100,200,300]);  // [3,1,1,1]
 
     const feeds = {
-      X: new Tensor('float32', X, [2, 1, 3, 1]),
-      B: new Tensor('float32', B, [3, 1, 1, 1]),
+      X: new ort.Tensor('float32', X, [2, 1, 3, 1]),
+      B: new ort.Tensor('float32', B, [3, 1, 1, 1]),
     };
 
     console.log('\n=== Comparing transpose_broadcast_4d and reconverted ===');
     printInputs('transpose_broadcast_4d', feeds);
+    CURRENT.test = 'transpose_broadcast_4d';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1531,8 +1783,7 @@ async function runTransposeBroadcast4DReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    if (!eq) console.error('❌ Outputs differ beyond tolerance.');
-    else console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('transpose_broadcast_4d reconversion test', err);
   }
@@ -1559,15 +1810,22 @@ async function runTransposeBroadcast5DReconversionEquivalenceTest() {
     const C = Float32Array.from([100,200,300]);
 
     const feeds = {
-      X: new Tensor('float32', X, [1, 2, 1, 3, 1]),
-      C: new Tensor('float32', C, [1, 3, 1, 1, 1]),
+      X: new ort.Tensor('float32', X, [1, 2, 1, 3, 1]),
+      C: new ort.Tensor('float32', C, [1, 3, 1, 1, 1]),
     };
 
     console.log('\n=== Comparing transpose_broadcast_5d and reconverted ===');
     printInputs('transpose_broadcast_5d', feeds);
+    CURRENT.test = 'transpose_broadcast_5d';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1577,8 +1835,7 @@ async function runTransposeBroadcast5DReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    if (!eq) console.error('❌ Outputs differ beyond tolerance.');
-    else console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('transpose_broadcast_5d reconversion test', err);
   }
@@ -1593,20 +1850,27 @@ async function runMatmulRectReconversionEquivalenceTest() {
 
     const A = Float32Array.from({ length: 2*3 }, () => Math.random()*5);
     const B = Float32Array.from({ length: 3*4 }, () => Math.random()*5);
-    const feeds = { A: new Tensor('float32', A, [2,3]), B: new Tensor('float32', B, [3,4]) };
+    const feeds = { A: new ort.Tensor('float32', A, [2,3]), B: new ort.Tensor('float32', B, [3,4]) };
 
     console.log('\n=== Comparing matmul_rect_2x3_3x4 and reconverted ===');
     printInputs('matmul_rect_2x3_3x4', feeds);
+    CURRENT.test = 'matmul_rect_2x3_3x4';
 
-    const o = await (await InferenceSession.create(originalPath)).run(feeds);
-    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: o, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: r, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const O = Array.from(Object.values(o)[0].data as Float32Array);
     const R = Array.from(Object.values(r)[0].data as Float32Array);
 
     const tol = 1e-5;
     const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
-    console.log('✅ Rectangular MatMul outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) { logErrorDetails('matmul_rect_2x3_3x4 reconversion test', err); }
 }
 
@@ -1621,23 +1885,30 @@ async function runMatmulBiasReconversionEquivalenceTest() {
     const B = Float32Array.from({ length: 2*5 }, () => Math.random()*5);
     const Bias = Float32Array.from({ length: 1*5 }, () => Math.random()*2);
     const feeds = {
-      A: new Tensor('float32', A, [3,2]),
-      B: new Tensor('float32', B, [2,5]),
-      Bias: new Tensor('float32', Bias, [1,5]),
+      A: new ort.Tensor('float32', A, [3,2]),
+      B: new ort.Tensor('float32', B, [2,5]),
+      Bias: new ort.Tensor('float32', Bias, [1,5]),
     };
 
     console.log('\n=== Comparing matmul_bias_3x2_2x5 and reconverted ===');
     printInputs('matmul_bias_3x2_2x5', feeds);
+    CURRENT.test = 'matmul_bias_3x2_2x5';
 
-    const o = await (await InferenceSession.create(originalPath)).run(feeds);
-    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: o, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: r, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const O = Array.from(Object.values(o)[0].data as Float32Array);
     const R = Array.from(Object.values(r)[0].data as Float32Array);
 
     const tol = 1e-5;
     const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
-    console.log('✅ MatMul+Bias outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) { logErrorDetails('matmul_bias_3x2_2x5 reconversion test', err); }
 }
 
@@ -1652,23 +1923,30 @@ async function runMatmulChainRightReconversionEquivalenceTest() {
     const B = Float32Array.from({ length: 3*2 }, () => Math.random()*5);
     const C = Float32Array.from({ length: 2*2 }, () => Math.random()*5);
     const feeds = {
-      A: new Tensor('float32', A, [2,3]),
-      B: new Tensor('float32', B, [3,2]),
-      C: new Tensor('float32', C, [2,2]),
+      A: new ort.Tensor('float32', A, [2,3]),
+      B: new ort.Tensor('float32', B, [3,2]),
+      C: new ort.Tensor('float32', C, [2,2]),
     };
 
     console.log('\n=== Comparing matmul_chain_right and reconverted ===');
     printInputs('matmul_chain_right', feeds);
+    CURRENT.test = 'matmul_chain_right';
 
-    const o = await (await InferenceSession.create(originalPath)).run(feeds);
-    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: o, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: r, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const O = Array.from(Object.values(o)[0].data as Float32Array);
     const R = Array.from(Object.values(r)[0].data as Float32Array);
 
     const tol = 1e-5;
     const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
-    console.log('✅ (A·B)·C outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) { logErrorDetails('matmul_chain_right reconversion test', err); }
 }
 
@@ -1681,20 +1959,27 @@ async function runMatmulMVReconversionEquivalenceTest() {
 
     const A = Float32Array.from({ length: 4*3 }, () => Math.random()*5);
     const v = Float32Array.from({ length: 3 }, () => Math.random()*5);
-    const feeds = { A: new Tensor('float32', A, [4,3]), v: new Tensor('float32', v, [3]) };
+    const feeds = { A: new ort.Tensor('float32', A, [4,3]), v: new ort.Tensor('float32', v, [3]) };
 
     console.log('\n=== Comparing matmul_mv_4x3_k3 and reconverted ===');
     printInputs('matmul_mv_4x3_k3', feeds);
+    CURRENT.test = 'matmul_mv_4x3_k3';
 
-    const o = await (await InferenceSession.create(originalPath)).run(feeds);
-    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: o, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: r, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const O = Array.from(Object.values(o)[0].data as Float32Array);
     const R = Array.from(Object.values(r)[0].data as Float32Array);
 
     const tol = 1e-5;
     const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
-    console.log('✅ Matrix–Vector outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) { logErrorDetails('matmul_mv_4x3_k3 reconversion test', err); }
 }
 
@@ -1707,20 +1992,27 @@ async function runMatmulVMReconversionEquivalenceTest() {
 
     const v = Float32Array.from({ length: 3 }, () => Math.random()*5);
     const B = Float32Array.from({ length: 3*5 }, () => Math.random()*5);
-    const feeds = { v: new Tensor('float32', v, [3]), B: new Tensor('float32', B, [3,5]) };
+    const feeds = { v: new ort.Tensor('float32', v, [3]), B: new ort.Tensor('float32', B, [3,5]) };
 
     console.log('\n=== Comparing matmul_vm_k3_3x5 and reconverted ===');
     printInputs('matmul_vm_k3_3x5', feeds);
+    CURRENT.test = 'matmul_vm_k3_3x5';
 
-    const o = await (await InferenceSession.create(originalPath)).run(feeds);
-    const r = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: o, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: r, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const O = Array.from(Object.values(o)[0].data as Float32Array);
     const R = Array.from(Object.values(r)[0].data as Float32Array);
 
     const tol = 1e-5;
     const eq = O.length===R.length && O.every((v,i)=>Math.abs(v-R[i])<tol);
-    console.log('✅ Vector–Matrix outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) { logErrorDetails('matmul_vm_k3_3x5 reconversion test', err); }
 }
 
@@ -1734,13 +2026,20 @@ async function runSliceDecompositionReconversionEquivalenceTest() {
     execSync(`node ./out/src/index.js ${originalPath} --format json -vz 0 -v 0`, { stdio: 'inherit' });
 
     const X = Float32Array.from({ length: 1*2*5*6 }, (_, i) => i / 10); // deterministic values
-    const feeds = { X: new Tensor('float32', X, [1, 2, 5, 6]) };
+    const feeds = { X: new ort.Tensor('float32', X, [1, 2, 5, 6]) };
 
     console.log('\n=== Comparing slice and reconverted ===');
     printInputs('slice', feeds);
+    CURRENT.test = 'slice';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1750,8 +2049,7 @@ async function runSliceDecompositionReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    if (!eq) console.error('❌ Slice outputs differ beyond tolerance.');
-    else console.log('✅ Slice outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('slice reconversion test', err);
   }
@@ -1772,16 +2070,23 @@ async function runSumDecompositionReconversionEquivalenceTest() {
     const C = Float32Array.from([ 0.5 ]);                     // scalar []
 
     const feeds = {
-      A: new Tensor('float32', A, [2, 3]),
-      B: new Tensor('float32', B, [1, 3]),
-      C: new Tensor('float32', C, []),
+      A: new ort.Tensor('float32', A, [2, 3]),
+      B: new ort.Tensor('float32', B, [1, 3]),
+      C: new ort.Tensor('float32', C, []),
     };
 
     console.log('\n=== Comparing sum_variadic and reconverted ===');
     printInputs('sum_variadic', feeds);
+    CURRENT.test = 'sum_variadic';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1791,8 +2096,7 @@ async function runSumDecompositionReconversionEquivalenceTest() {
 
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    if (!eq) console.error('❌ Sum outputs differ beyond tolerance.');
-    else console.log('✅ Sum outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('sum_variadic reconversion test', err);
   }
@@ -1802,6 +2106,7 @@ export async function runPadDecompositionEquivalenceTest() {
   const originalPath = 'examples/onnx/pad_normal.onnx';
   const decomposedPath = 'examples/onnx/pad_decomposed.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
 
   try {
     // Sanity: models created by python script
@@ -1811,13 +2116,14 @@ export async function runPadDecompositionEquivalenceTest() {
 
     // Input matches the python script (N=1,C=2,H=3,W=4); values = i/10
     const X = Float32Array.from({ length: 1*2*3*4 }, (_, i) => i / 10);
-    const feeds = { X: new Tensor('float32', X, [1, 2, 3, 4]) };
+    const feeds = { X: new ort.Tensor('float32', X, [1, 2, 3, 4]) };
 
     console.log('\n=== Comparing pad_normal and pad_decomposed ===');
     printInputs('pad', feeds);
+    CURRENT.test = 'pad';
 
-    const origSession = await InferenceSession.create(originalPath);
-    const origOut = await origSession.run(feeds);
+    const origSession = await ort.InferenceSession.create(originalPath);
+    const { out: origOut, ms: __origMs } = await timedRun(origSession, feeds); console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
     const o = Array.from(Object.values(origOut)[0].data as Float32Array);
 
     const tol = 1e-6;
@@ -1832,7 +2138,7 @@ export async function runPadDecompositionEquivalenceTest() {
     }
 
     console.log('\n=== Comparing pad_normal and reconverted ===');
-    const recSession = await InferenceSession.create(reconvertedPath);
+    const recSession = await ort.InferenceSession.create(reconvertedPath);
     const recOut = await recSession.run(feeds);
     const r = Array.from(Object.values(recOut)[0].data as Float32Array);
 
@@ -1840,7 +2146,7 @@ export async function runPadDecompositionEquivalenceTest() {
     console.log('→ reconverted[0:16]:', r.slice(0, 16));
 
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
-    console.log('✅ pad_normal vs reconverted equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
 
     if (!eq) throw new Error('Pad decomposition/reconversion equivalence failed.');
   } catch (err) {
@@ -1852,6 +2158,7 @@ export async function runPadDecompositionEquivalenceTest() {
 async function runConvNormalReconversionEquivalenceTest() {
   const originalPath = 'examples/onnx/conv_normal.onnx';
   const reconvertedPath = getReconvertedPath(originalPath);
+  CURRENT.reconverted = reconvertedPath;
   const base = originalPath.replace(/\.onnx$/, '');
   const reconvertedJson = `${base}_reconverted.json`;
 
@@ -1884,7 +2191,7 @@ async function runConvNormalReconversionEquivalenceTest() {
       'BOOL':  'bool',    '9': 'bool',
     };
 
-    const feeds: Record<string, Tensor> = {};
+    const feeds: Record<string, ort.Tensor> = {};
     for (const inp of g.input) {
       const name: string = inp.name || 'X';
       const tt = inp.type?.tensorType || {};
@@ -1901,22 +2208,22 @@ async function runConvNormalReconversionEquivalenceTest() {
 
       const size = dims.reduce((a: number, b: number) => a * b, 1);
 
-      let tensor: Tensor;
+      let tensor: ort.Tensor;
       if (dtype === 'float64') {
         const data = Float64Array.from({ length: size }, () => Math.random() * 2 - 1);
-        tensor = new Tensor('float64', data, dims);
+        tensor = new ort.Tensor('float64', data, dims);
       } else if (dtype === 'float32') {
         const data = Float32Array.from({ length: size }, () => Math.random() * 2 - 1);
-        tensor = new Tensor('float32', data, dims);
+        tensor = new ort.Tensor('float32', data, dims);
       } else if (dtype === 'int32') {
         const data = Int32Array.from({ length: size }, () => Math.floor(Math.random() * 7) - 3);
-        tensor = new Tensor('int32', data, dims);
+        tensor = new ort.Tensor('int32', data, dims);
       } else if (dtype === 'int64') {
         const data = Array.from({ length: size }, () => BigInt(Math.floor(Math.random() * 7) - 3));
-        tensor = new Tensor('int64', data as any, dims);
+        tensor = new ort.Tensor('int64', data as any, dims);
       } else {
         const data = Uint8Array.from({ length: size }, () => (Math.random() > 0.5 ? 1 : 0));
-        tensor = new Tensor('bool', data, dims);
+        tensor = new ort.Tensor('bool', data, dims);
       }
 
       feeds[name] = tensor;
@@ -1924,10 +2231,17 @@ async function runConvNormalReconversionEquivalenceTest() {
 
     console.log('\n=== Comparing conv_normal and reconverted ===');
     printInputs('conv_normal', feeds);
+    CURRENT.test = 'conv_normal';
 
     // Run both models
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1938,12 +2252,7 @@ async function runConvNormalReconversionEquivalenceTest() {
     const tol = 1e-5; // float convs → small numeric tolerance
     const eq = o.length === r.length && o.every((v, i) => Math.abs((v as number) - (r[i] as number)) <= tol);
 
-    if (!eq) {
-      console.log('→ original[0:16]:', o.slice(0, 16));
-      console.log('→ reconverted[0:16]:', r.slice(0, 16));
-      throw new Error('conv_normal vs reconverted not equivalent');
-    }
-    console.log('✅ conv_normal vs reconverted equivalent: true');
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('conv_normal reconversion test', err);
   }
@@ -1973,16 +2282,23 @@ async function runConvSimpleReconversionEquivalenceTest() {
     const B = new Float32Array([ (Math.random() * 2 - 1) ]);
 
     const feeds = {
-      X: new Tensor('float32', X, [1, 1, 4, 4]),
-      W: new Tensor('float32', W, [1, 1, 3, 3]),
-      B: new Tensor('float32', B, [1]),
+      X: new ort.Tensor('float32', X, [1, 1, 4, 4]),
+      W: new ort.Tensor('float32', W, [1, 1, 3, 3]),
+      B: new ort.Tensor('float32', B, [1]),
     };
 
     console.log('\n=== Comparing conv_simple and its reconverted version ===');
     printInputs('conv_simple', feeds);
+    CURRENT.test = 'conv_simple';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -1992,7 +2308,7 @@ async function runConvSimpleReconversionEquivalenceTest() {
 
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v,i)=>Math.abs(v-r[i])<tol);
-    console.log('✅ conv_simple outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (err) {
     logErrorDetails('conv_simple reconversion test', err);
   }
@@ -2013,16 +2329,23 @@ async function runGemmReconversionEquivalenceTest() {
     }
 
     const feeds = {
-      A: new Tensor('float32', Float32Array.from({ length: 6 }, () => Math.random() * 10), [2, 3]),
-      B: new Tensor('float32', Float32Array.from({ length: 12 }, () => Math.random() * 10), [3, 4]),
-      C: new Tensor('float32', Float32Array.from({ length: 8 }, () => Math.random() * 10), [2, 4]),
+      A: new ort.Tensor('float32', Float32Array.from({ length: 6 }, () => Math.random() * 10), [2, 3]),
+      B: new ort.Tensor('float32', Float32Array.from({ length: 12 }, () => Math.random() * 10), [3, 4]),
+      C: new ort.Tensor('float32', Float32Array.from({ length: 8 }, () => Math.random() * 10), [2, 4]),
     };
 
     console.log('\n=== Comparing gemm_standard and its reconverted version ===');
     printInputs('gemm_standard', feeds);
+    CURRENT.test = 'gemm_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -2032,7 +2355,7 @@ async function runGemmReconversionEquivalenceTest() {
 
     const tol = 1e-5;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) < tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (e) {
     logErrorDetails('gemm_standard reconversion test', e);
   }
@@ -2053,16 +2376,23 @@ async function runConcatReconversionEquivalenceTest() {
     }
 
     const feeds = {
-      X0: new Tensor('float32', Float32Array.from({ length: 6 }, () => Math.random() * 10), [2, 3]), // [2,3]
-      X1: new Tensor('float32', Float32Array.from({ length: 8 }, () => Math.random() * 10), [2, 4]), // [2,4]
-      X2: new Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), [2, 2]), // [2,2]
+      X0: new ort.Tensor('float32', Float32Array.from({ length: 6 }, () => Math.random() * 10), [2, 3]), // [2,3]
+      X1: new ort.Tensor('float32', Float32Array.from({ length: 8 }, () => Math.random() * 10), [2, 4]), // [2,4]
+      X2: new ort.Tensor('float32', Float32Array.from({ length: 4 }, () => Math.random() * 10), [2, 2]), // [2,2]
     };
 
     console.log('\n=== Comparing concat_standard and its reconverted version ===');
     printInputs('concat_standard', feeds);
+    CURRENT.test = 'concat_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -2072,7 +2402,7 @@ async function runConcatReconversionEquivalenceTest() {
 
     // Concat should be an exact match
     const eq = o.length === r.length && o.every((v, i) => v === r[i]);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (e) {
     logErrorDetails('concat_standard reconversion test', e);
   }
@@ -2098,16 +2428,23 @@ async function runDequantizeLinearReconversionEquivalenceTest() {
     const Z = Uint8Array.from({ length: 3 }, () => Math.floor(Math.random() * 256));
 
     const feeds = {
-      X: new Tensor('uint8', X, [2, 3, 4]),
-      S: new Tensor('float32', S, [3]),
-      Z: new Tensor('uint8', Z, [3]),
+      X: new ort.Tensor('uint8', X, [2, 3, 4]),
+      S: new ort.Tensor('float32', S, [3]),
+      Z: new ort.Tensor('uint8', Z, [3]),
     };
 
     console.log('\n=== Comparing dequantize_standard and its reconverted version ===');
     printInputs('dequantize_standard', feeds);
+    CURRENT.test = 'dequantize_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -2117,7 +2454,7 @@ async function runDequantizeLinearReconversionEquivalenceTest() {
 
     const tol = 1e-6; // float math tolerance
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (e) {
     logErrorDetails('dequantize_standard reconversion test', e);
   }
@@ -2142,14 +2479,21 @@ async function runAveragePoolReconversionEquivalenceTest() {
     const X = Float32Array.from({ length: N * C * H * W }, () => Math.random() * 2 - 1);
 
     const feeds = {
-      X: new Tensor('float32', X, [N, C, H, W]),
+      X: new ort.Tensor('float32', X, [N, C, H, W]),
     };
 
     console.log('\n=== Comparing avgpool_standard and its reconverted version ===');
     printInputs('avgpool_standard', feeds);
+    CURRENT.test = 'avgpool_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -2159,7 +2503,7 @@ async function runAveragePoolReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (e) {
     logErrorDetails('avgpool_standard reconversion test', e);
   }
@@ -2183,14 +2527,21 @@ async function runReduceSumReconversionEquivalenceTest() {
     const X = Float32Array.from({ length: 2 * 3 * 4 }, () => Math.random() * 2 - 1);
 
     const feeds = {
-      X: new Tensor('float32', X, [2, 3, 4]),
+      X: new ort.Tensor('float32', X, [2, 3, 4]),
     };
 
     console.log('\n=== Comparing reducesum_standard and its reconverted version ===');
     printInputs('reducesum_standard', feeds);
+    CURRENT.test = 'reducesum_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -2200,7 +2551,7 @@ async function runReduceSumReconversionEquivalenceTest() {
 
     const tol = 1e-6; // float tolerance
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (e) {
     logErrorDetails('reducesum_standard reconversion test', e);
   }
@@ -2224,14 +2575,21 @@ async function runReduceMaxReconversionEquivalenceTest() {
     const X = Float32Array.from({ length: 2 * 3 * 4 }, () => Math.random() * 2 - 1);
 
     const feeds = {
-      X: new Tensor('float32', X, [2, 3, 4]),
+      X: new ort.Tensor('float32', X, [2, 3, 4]),
     };
 
     console.log('\n=== Comparing reducemax_standard and its reconverted version ===');
     printInputs('reducemax_standard', feeds);
+    CURRENT.test = 'reducemax_standard';
 
-    const orig = await (await InferenceSession.create(originalPath)).run(feeds);
-    const rec  = await (await InferenceSession.create(reconvertedPath)).run(feeds);
+    const __origSess = await ort.InferenceSession.create(originalPath);
+    const { out: orig, ms: __origMs } = await timedRun(__origSess, feeds);
+    console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
+    const __recSess = await ort.InferenceSession.create(reconvertedPath);
+    const __recRun = await safeTimedRun(__recSess, feeds);
+    if (__recRun.error) { logErrorDetails('reconverted run', __recRun.error); reportOutcome('error', 'Reconverted run failed'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} return; }
+    const { out: rec, ms: __recMs } = __recRun;
+    console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
     const o = Array.from(Object.values(orig)[0].data as Float32Array);
     const r = Array.from(Object.values(rec )[0].data as Float32Array);
@@ -2241,7 +2599,7 @@ async function runReduceMaxReconversionEquivalenceTest() {
 
     const tol = 1e-6;
     const eq = o.length === r.length && o.every((v, i) => Math.abs(v - r[i]) <= tol);
-    console.log('✅ Outputs equivalent:', eq);
+    if (eq) { reportOutcome('pass'); } else { reportOutcome('warn'); try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {} }
   } catch (e) {
     logErrorDetails('reducemax_standard reconversion test', e);
   }
@@ -2302,13 +2660,12 @@ await runTransposeBroadcast3DReconversionEquivalenceTest();
 await runTransposeBroadcast4DReconversionEquivalenceTest();
 await runTransposeBroadcast5DReconversionEquivalenceTest();
 
-/*
+
 await runMatmulRectReconversionEquivalenceTest();
 await runMatmulBiasReconversionEquivalenceTest();
 await runMatmulChainRightReconversionEquivalenceTest();
 await runMatmulMVReconversionEquivalenceTest();
 await runMatmulVMReconversionEquivalenceTest();
-*/
 
 await runSliceDecompositionReconversionEquivalenceTest();
 await runPadDecompositionEquivalenceTest();
@@ -2324,4 +2681,21 @@ await runAveragePoolReconversionEquivalenceTest();
 
 //await runReduceSumReconversionEquivalenceTest();
 //await runReduceMaxReconversionEquivalenceTest();
+
+
+// TOTAL
+process.on('beforeExit', () => {
+  console.log(`\n=== TOTAL ===\nPassed: ${RUN_TOTAL.passed}\nFailed: ${RUN_TOTAL.failed}`);
+
+  const printList = (title: string, items: Array<{test: string; path: string}>) => {
+    if (!items.length) return;
+    console.log(`\n${title} (${items.length})`);
+    for (const { test, path } of items) {
+      console.log(`  • ${test}  —  ${path}`);
+    }
+  };
+
+  printList('❌ Reconverted models that FAILED to run', FAILURES.error);
+  printList('⚠️ Reconverted models with NON-EQUIVALENT outputs', FAILURES.warn);
+});
 
