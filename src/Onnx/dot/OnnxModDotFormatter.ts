@@ -11,7 +11,9 @@ import OperationNode from "../OperationNode.js";
 
 type ClusterInfo = {
     idPrefix: string;
-    subgraphLabels: string[];
+    subgraphLabel: string;
+    sourceMapping: Record<string, string>,
+    targetMapping: Record<string, string>,
 };
 
 export default class OnnxDotFormatter<
@@ -102,15 +104,29 @@ export default class OnnxDotFormatter<
         if (sourceId in this.clusterInfos) {
             const sourceCluster = this.clusterInfos[sourceId];
 
-            attrs.ltail = sourceCluster.subgraphLabels[0];  // TODO(Process-ing): See if this is correct
-            source = sourceCluster.idPrefix + source;
+            attrs.ltail = sourceCluster.subgraphLabel;
+            // source = sourceCluster.idPrefix + source;
+
+            for (const [prefix, newSource] of Object.entries(sourceCluster.sourceMapping)) {
+                if (target.startsWith(prefix)) {
+                    source = sourceCluster.idPrefix + newSource;
+                    break;
+                }
+            }
         }
 
         if (targetId in this.clusterInfos) {
             const targetCluster = this.clusterInfos[targetId];
 
-            attrs.lhead = targetCluster.subgraphLabels[0];  // TODO(Process-ing): See if this is correct
-            target = targetCluster.idPrefix + target;
+            attrs.lhead = targetCluster.subgraphLabel;
+            // target = targetCluster.idPrefix + target;
+
+            for (const [prefix, newTarget] of Object.entries(targetCluster.targetMapping)) {
+                if (source.startsWith(prefix)) {
+                    target = targetCluster.idPrefix + newTarget;
+                    break;
+                }
+            }
         }
 
         return Dot.edge(source, target, attrs);
@@ -128,6 +144,10 @@ export default class OnnxDotFormatter<
         const idPrefix = `loop${node.id}_`;
         const statements = [];
 
+        // const loopNode = this.nodeToDot(node);
+        // loopNode.attr('label', `Loop ${node.id}`);
+        // statements.push(loopNode);
+
         const body = node.getBodySubgraph();
         if (body !== undefined) {
             const subFormatter = new OnnxDotFormatter(idPrefix);
@@ -138,9 +158,14 @@ export default class OnnxDotFormatter<
 
             statements.push(bodySubdot);
 
+            const carry = body.nodes.filter((node, _, __) => node.id.startsWith('carry')).first();
+            const carryOut = body.nodes.filter((node, _, __) => node.id.startsWith('carry_out')).first();
+
             this.clusterInfos[node.id] = {
                 idPrefix,
-                subgraphLabels: [bodySubdot.label],
+                subgraphLabel: bodySubdot.label,
+                targetMapping: { 'init_carry': carry.id },
+                sourceMapping: { '': carryOut.id },
             };
         }
 
@@ -149,51 +174,44 @@ export default class OnnxDotFormatter<
 
     ifToDot(node: OperationNode.Class): DotStatement[] {
         const idPrefix = `if${node.id}_`;
-
         const statements = [];
-        const subgraphLabels = [];
 
         const ifDot = this.nodeToDot(node);
         statements.push(ifDot);
 
         const thenBranch = node.getThenBranch();
         if (thenBranch !== undefined) {
-            const thenFormatter = new OnnxDotFormatter(`${idPrefix}then_`);
+            const thenIdPrefix = `${idPrefix}then_`;
+            const thenFormatter = new OnnxDotFormatter(thenIdPrefix);
             const thenDot = thenFormatter.toDot(thenBranch);
 
             const thenGraph = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
                 .graphAttr('label', `If-Then ${node.id}`);
 
-            const thenEdge = Dot.edge(this.idPrefix + node.id, `${idPrefix}then_condition`)
+            const thenEdge = Dot.edge(this.idPrefix + node.id, thenIdPrefix + '0')  // Linked to first node in subgraph
+                .attr('lhead', thenGraph.label)
                 .attr('label', 'then');
 
             statements.push(thenGraph);
             statements.push(thenEdge);
-
-            subgraphLabels.push(thenGraph.label);
         }
 
         const elseBranch = node.getElseBranch();
         if (elseBranch !== undefined) {
-            const elseFormatter = new OnnxDotFormatter(`${idPrefix}else_`);
+            const elseIdPrefix = `${idPrefix}else_`;
+            const elseFormatter = new OnnxDotFormatter(elseIdPrefix);
             const elseDot = elseFormatter.toDot(elseBranch);
 
             const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
                 .graphAttr('label', `If-Else ${node.id}`);
 
-            const elseEdge = Dot.edge(this.idPrefix + node.id, `${idPrefix}else_condition`)
+            const elseEdge = Dot.edge(this.idPrefix + node.id, elseIdPrefix + '0')  // Linked to first node in subgraph
+                .attr('lhead', elseGraph.label)
                 .attr('label', 'else');
 
             statements.push(elseGraph);
             statements.push(elseEdge);
-
-            subgraphLabels.push(elseGraph.label);
         }
-
-        this.clusterInfos[node.id] = {
-            idPrefix,
-            subgraphLabels,
-        };
 
         return statements;
     }
