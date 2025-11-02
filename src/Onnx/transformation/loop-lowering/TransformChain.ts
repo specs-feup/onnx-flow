@@ -8,59 +8,44 @@ import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 
-const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose", "Range", "Relu", "Sigmoid", "Tanh", "Exp", "Sum", "Min", "Max"]);
+const SUP = new Set([
+  "Add","Sub","Mul","Div","MatMul","Transpose","Range",
+  "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max",
+  "ReduceSum","ReduceMax"
+]);
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
-  if (!SUP.has(op.type)) {
-    //console.log(`[${op.id}] ❌ Not in SUP`);
-    return false;
-  }
-
-  // Range is a generator: even with scalar inputs it produces a vector.
+  if (!SUP.has(op.type)) return false;
   if (op.type === "Range") return true;
 
   const incs = op.getIncomers ?? [];
 
-  // 1. First check edge shapes directly
-  const edgeHasShape = incs.some(edge => edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1)));
-  if (edgeHasShape) {
-    //console.log(`[${op.id}] ✅ Edge has shape`);
-    return true;
-  }
+  const edgeHasShape = incs.some(edge =>
+    edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1))
+  );
+  if (edgeHasShape) return true;
 
-  
-  // 2. Check tensor input shapes
   const tensorInputs = op.getInputs()
     ?.filter(n => n.is(TensorNode))
     .map(n => n.as(TensorNode)) ?? [];
 
-  
-  // Reject ops whose input is a [1] tensor coming from a Gather
   for (const t of tensorInputs) {
     if (t.shape.length === 1) {
       const producer = t.getIncomers?.[0]?.source;
       if (producer?.is(OperationNode) && producer.as(OperationNode).type === "Gather") {
-        //console.log(`[${op.id}] ❌ Skipping due to [1] input from Gather (${producer.id})`);
         return false;
       }
     }
   }
-  
-  
-  const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
-  if (inputHasShape) {
-    //console.log(`[${op.id}] ✅ Tensor input has shape`, tensorInputs[0].shape);
-    return true;
-  }
- 
 
-  // 3. Recursively check intermediates' producers
+  const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
+  if (inputHasShape) return true;
+
   for (const t of tensorInputs) {
     if (t.type !== "intermediate") continue;
     const interIncs = t.getIncomers ?? [];
     for (const edge of interIncs) {
       if (edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1))) {
-        //console.log(`[${op.id}] ✅ Found shape in intermediate edge from ${edge.source.id}`, edge.shape);
         return true;
       }
       const prod = edge.source;
@@ -68,41 +53,28 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
         const outEdges = prod.getOutgoers ?? [];
         for (const outEdge of outEdges) {
           if (outEdge.shape && (outEdge.shape.length > 1 || (outEdge.shape.length == 1 && outEdge.shape[0] > 1))) {
-            //console.log(`[${op.id}] ✅ Found shape in producer ${prod.id}'s output`);
             return true;
           }
         }
       }
     }
   }
-
-  // Optional debug
-  
-  /* console.log(`[${op.id}] ❌ No shape info found`);
-  console.log("  Incoming edge count:", incs.length);
-  console.log("  Tensor input ids:", tensorInputs.map(t => t.id).join(", ") || "none");
-  tensorInputs.forEach(t => {
-    console.log(`  Tensor ${t.id} shape:, t.shape, "type:", t.type`);
-    const incs = t.getIncomers ?? [];
-    incs.forEach(e => console.log(`    → from ${e.source.id} with shape, e.shape`));
-  });
- 
-
-  console.log(`[${op.id}] ❌ No shape found`); */
   return false;
 }
 
 export default class TransformChain implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class> {
-  constructor(private fuse: boolean = true, private recurse: boolean = true, private coalesce: boolean = true) {}
+  constructor(
+    private fuse: boolean = true,
+    private recurse: boolean = true,
+    private coalesce: boolean = true
+  ) {}
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
-
     if (!this.fuse) {
       const supported = new Set<string>();
       g.getOperationNodes().forEach(op => {
-        if(isSupportedNonScalarOp(op)) supported.add(op.id);
+        if (isSupportedNonScalarOp(op)) supported.add(op.id);
       });
-      // Fusion disabled: decompose one op at a time
       g.getOperationNodes().forEach(op => {
         if (!supported.has(op.id)) return;
         buildLoopForChain([op], g, this.fuse, this.recurse, this.coalesce);
@@ -110,7 +82,6 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       return g;
     }
 
-    // Fusion enabled: collect and fuse full chains
     const chains = new Map<OperationNode.Class, OperationNode.Class[]>();
 
     function collectChain(op: OperationNode.Class, visited = new Set<OperationNode.Class>()): OperationNode.Class[] {
@@ -139,7 +110,6 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       return chain;
     }
 
-    // Step 1: build candidate chains
     g.getOperationNodes().forEach(op => {
       if (!chains.has(op)) {
         const visited = new Set<OperationNode.Class>();
@@ -151,43 +121,25 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       }
     });
 
-    // Step 2: remove chains whose root is included in another chain
     const innerNodes = new Set<string>();
     chains.forEach((chainOps, key) => {
-      chainOps.forEach(op => {
-        if (op !== key) innerNodes.add(op.id);
-      });
+      chainOps.forEach(op => { if (op !== key) innerNodes.add(op.id); });
     });
     for (const key of [...chains.keys()]) {
-      if (innerNodes.has(key.id)) {
-        chains.delete(key);
-      }
+      if (innerNodes.has(key.id)) chains.delete(key);
     }
 
-    // Optional debug output
-    /*
-    console.log("CHAINS");
-    chains.forEach((chain, key) => {
-      console.log(key.id, chain.map(op => op.id).join(", "));
-    });
-    */
-
-    // Step 3: Apply transformation
     for (const chain of chains.values()) {
-      const chainOps = chain.reverse(); // producers first
+      const chainOps = chain.reverse();
 
       if (this.coalesce) {
         const matmuls = chainOps.filter(op => op.type === "MatMul");
         const hasMultipleMatMuls = matmuls.length > 1;
 
-        // Find the (single) MatMul if present
         const mm = matmuls[0];
-
-        // Detect if the chain includes any *producers* of that MatMul
         let hasPreOpsForMatMul = false;
         if (mm) {
           const matmulAncestors = new Set<string>();
-          // collect ancestors inside chainOps
           const idToOp = new Map(chainOps.map(op => [op.id, op]));
           const stack = [mm];
 
@@ -214,20 +166,17 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
             });
           }
 
-          // Any ancestors present means there are ops "before" MatMul in this fused set
           hasPreOpsForMatMul = matmulAncestors.size > 0;
         }
 
         if (hasMultipleMatMuls || hasPreOpsForMatMul) {
-          // Do NOT fuse this chain. Decompose one op at a time.
           for (const op of chainOps) {
             buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
           }
-          continue; // move to next chain
+          continue;
         }
       }
 
-      // --- block fusion when a layout-changing op appears after MatMul ---
       if (this.coalesce) {
         const matmuls = chainOps.filter(op => op.type === "MatMul");
         const mm = matmuls[0];
@@ -235,10 +184,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
           const mmIdx = chainOps.indexOf(mm);
           const afterMM = chainOps.slice(mmIdx + 1);
           const hasLayoutChangingAfter = afterMM.some(op => op.type === "Transpose");
-          // You can add more here later if needed (e.g. reshape-like index changes)
-
           if (hasLayoutChangingAfter) {
-            // Decompose one-by-one to keep indices correct
             for (const op of chainOps) {
               buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
             }
@@ -247,7 +193,6 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
         }
       }
 
-      // Safe to fuse
       buildLoopForChain(chainOps, g, this.fuse, this.recurse, this.coalesce);
     }
 
