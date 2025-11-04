@@ -108,40 +108,77 @@ export default function handleReduceElem(
     }
 
     case "ReduceLogSum": {
-      // 1) normal running sum for the recurrence
-      const sumNow = bin("Add", accScalar, xScalar, "logsum_accum");
+      // Carry meaning: log(sum_so_far)
+      // Recurrence: acc' = log( exp(acc) + x )
+      // Edge case: at first step acc==0 and if x==1 then log(1)=0 -> stays 0 forever.
+      // Fix: inject a tiny epsilon into "sumPrev" only when (acc==0 && x==1).
 
-      // 2) log of the final sum
-      const logNow = unary("Log", sumNow, "logsum_log");
+      const zeroF = makeTensorConst(
+        g, `f0_${op.id}`, DataType.FLOAT, "constant",
+        { dataType: DataType.FLOAT, dims: [], floatData: [0] }
+      );
+      const oneF = makeTensorConst(
+        g, `f1_${op.id}`, DataType.FLOAT, "constant",
+        { dataType: DataType.FLOAT, dims: [], floatData: [1] }
+      );
+      const tinyF = makeTensorConst(
+        g, `feps_${op.id}`, DataType.FLOAT, "constant",
+        { dataType: DataType.FLOAT, dims: [], floatData: [1e-7] }
+      );
 
-      // 3) detect last iteration without changing BuildLoop:
-      // Prefer a ready-made boolean from ctx (if your BuildLoop already exposes one),
-      // else derive it from the loop index and the trip count.
-      let isLast: TensorNode.Class | null = null;
+      // eq0: acc == 0  (only guaranteed true on the very first loop step)
+      const eq0Node = g.addNode(uniq(g, `ls_eq0_${op.id}`))
+        .init(new OperationNode.Builder("Equal", [accScalar, zeroF], {}))
+        .as(OperationNode);
+      const eq0 = g.addNode(uniq(g, `ls_eq0_out_${op.id}`))
+        .init(new TensorNode.Builder(DataType.BOOL, [], "intermediate"))
+        .as(TensorNode);
+      g.addEdge(eq0Node, eq0).init(new OnnxEdge.Builder(eq0.literalType, eq0.shape)).as(OnnxEdge);
 
-      if ((ctx as any).isFinalIter) {
-        // boolean [] provided by BuildLoop subgraph
-        isLast = (ctx as any).isFinalIter;
-      } else if ((ctx as any).iterScalar && (ctx as any).reduceLenScalar) {
-        // derive: iter == reduceLen-1
-        const one = makeTensorConst(
-          g,
-          `one_${op.id}`,
-          DataType.INT64,
-          "constant",
-          { dataType: DataType.INT64, dims: [], int64Data: [1n] }
-        );
-        const lastIdx = bin("Sub", (ctx as any).reduceLenScalar, one, "logsum_last_idx"); // reduceLen - 1
-        isLast = bin("Equal", (ctx as any).iterScalar, lastIdx, "logsum_is_last"); // BOOL []
-      } else {
-        // Conservative fallback: behave like running sum (won't be exact for log-sum)
-        return sumNow;
-      }
+      // eq1x: x == 1
+      const eq1Node = g.addNode(uniq(g, `ls_eq1x_${op.id}`))
+        .init(new OperationNode.Builder("Equal", [xScalar, oneF], {}))
+        .as(OperationNode);
+      const eq1x = g.addNode(uniq(g, `ls_eq1x_out_${op.id}`))
+        .init(new TensorNode.Builder(DataType.BOOL, [], "intermediate"))
+        .as(TensorNode);
+      g.addEdge(eq1Node, eq1x).init(new OnnxEdge.Builder(eq1x.literalType, eq1x.shape)).as(OnnxEdge);
 
-      // 4) write sum during iterations, log(sum) only at the final one
-      return where(isLast, logNow, sumNow, "logsum_select");
+      // first_and_one = (acc==0 && x==1)
+      const andNode = g.addNode(uniq(g, `ls_and_${op.id}`))
+        .init(new OperationNode.Builder("And", [eq0, eq1x], {}))
+        .as(OperationNode);
+      const firstAndOne = g.addNode(uniq(g, `ls_and_out_${op.id}`))
+        .init(new TensorNode.Builder(DataType.BOOL, [], "intermediate"))
+        .as(TensorNode);
+      g.addEdge(andNode, firstAndOne).init(new OnnxEdge.Builder(firstAndOne.literalType, firstAndOne.shape)).as(OnnxEdge);
+
+      // basePrev = exp(acc)
+      const expAcc = unary("Exp", accScalar, "logsum_exp_acc");
+
+      // sumPrev = first_and_one ? tiny : (eq0 ? 0 : exp(acc))
+      const prevIfEq0Node = g.addNode(uniq(g, `ls_prev_if_eq0_${op.id}`))
+        .init(new OperationNode.Builder("Where", [eq0, zeroF, expAcc], {}))
+        .as(OperationNode);
+      const prevIfEq0 = g.addNode(uniq(g, `ls_prev_if_eq0_out_${op.id}`))
+        .init(new TensorNode.Builder(elemTy, [], "intermediate"))
+        .as(TensorNode);
+      g.addEdge(prevIfEq0Node, prevIfEq0).init(new OnnxEdge.Builder(prevIfEq0.literalType, prevIfEq0.shape)).as(OnnxEdge);
+
+      const prevNode = g.addNode(uniq(g, `ls_prev_${op.id}`))
+        .init(new OperationNode.Builder("Where", [firstAndOne, tinyF, prevIfEq0], {}))
+        .as(OperationNode);
+      const sumPrev = g.addNode(uniq(g, `ls_prev_out_${op.id}`))
+        .init(new TensorNode.Builder(elemTy, [], "intermediate"))
+        .as(TensorNode);
+      g.addEdge(prevNode, sumPrev).init(new OnnxEdge.Builder(sumPrev.literalType, sumPrev.shape)).as(OnnxEdge);
+
+      // sumNow = sumPrev + x
+      const sumNow = bin("Add", sumPrev, xScalar, "logsum_add");
+
+      // acc' = log(sumNow)
+      return unary("Log", sumNow, "logsum_log");
     }
-
 
     case "ReduceLogSumExp": {
       // carry keeps log(sum_exp); start acc==0 meaning "no sum yet"
