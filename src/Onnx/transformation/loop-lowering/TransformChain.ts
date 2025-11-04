@@ -11,7 +11,8 @@ import TensorNode from "../../TensorNode.js";
 const SUP = new Set([
   "Add","Sub","Mul","Div","MatMul","Transpose","Range",
   "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max",
-  "ReduceSum","ReduceMax"
+  "ReduceSum","ReduceMax", "ReduceMin", "ReduceProd", "ReduceMean", "ReduceSumSquare",
+  "ReduceL1", "ReduceL2", "ReduceLogSum", "ReduceLogSumExp"
 ]);
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {

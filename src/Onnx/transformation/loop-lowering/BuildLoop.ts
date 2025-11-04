@@ -35,6 +35,9 @@ export type LoopCtx = {
   kM1?: TensorNode.Class | null,
   gateByK?: boolean,
   running?: TensorNode.Class | null,
+
+  // Optional for Reduce
+  meanScale?: TensorNode.Class,
 };
 
 /* ------------------------------------------------------------------ */
@@ -454,8 +457,10 @@ export interface LoopBuilder {
 import DefaultBuilder from "./builders/Default.js";
 import GenerativeBuilder from "./builders/Generative.js";
 import MatMulBuilder from "./builders/MatMul.js";
+import ReducesBuilder from "./builders/Reduces.js";
 
 const BUILDERS: LoopBuilder[] = [
+  new ReducesBuilder(),
   new MatMulBuilder(),      // must come before Default (it also handles trailing elemwise)
   new GenerativeBuilder(),  // Range (may also have trailing elemwise)
   new DefaultBuilder(),     // pure elemwise/transpose/etc.

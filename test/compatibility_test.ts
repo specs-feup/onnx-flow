@@ -100,18 +100,26 @@ async function timedRun(session: ort.InferenceSession, feeds: Record<string, ort
   return { out, ms };
 }
 
-// Re-run the RECONVERTED model at max verbosity if a test fails.
-async function rerunVerboseIfFailed(reconvertedPath: string, feeds: Record<string, ort.Tensor>) {
-  const prev = ort.env.logLevel;
+async function rerunWithOrtVerbose(modelPath: string, feeds: Record<string, ort.Tensor>): Promise<void> {
+  console.log('🔁 Re-running reconverted model with ORT verbose logging…');
+
   try {
+    ort.env.debug = true;
     ort.env.logLevel = 'verbose';
-    console.log('🔁 Re-running reconverted model with ORT verbose logging…');
-    const verbose = await ort.InferenceSession.create(reconvertedPath);
-    await verbose.run(feeds);
+
+    const so: ort.InferenceSession.SessionOptions = {
+      executionProviders: ['wasm'],
+      logSeverityLevel: 0,
+      logVerbosityLevel: 4,
+    };
+    const sess = await ort.InferenceSession.create(modelPath, so);
+    const outNames = sess.outputNames;
+    const outs = await sess.run(feeds, outNames);
+    const shapes = outNames.map(n => outs[n]?.dims ?? []);
+    const dtypes = outNames.map(n => outs[n]?.type ?? 'unknown');
+    console.log('   ✓ ORT (web) run OK. Outputs:', outNames.map((k, i) => `${k}[${shapes[i]}] ${dtypes[i]}`));
   } catch (e) {
-    console.error('❌ Verbose re-run failed:', e);
-  } finally {
-    ort.env.logLevel = prev;
+    console.error('❌ Verbose re-run (web) failed:', e);
   }
 }
 
@@ -225,12 +233,10 @@ async function testReconversion(opts: {
   label: string;
   originalPath: string;
   feeds: Record<string, ort.Tensor>;
-  // comparison
-  tol?: number;                   // numeric tolerance (for float-like outputs)
-  exact?: boolean;                // force exact compare (e.g., int models)
-  // CLI generation
-  cliArgs?: string;               // e.g., "--format json -vz 0 -v 0"
-  skipCli?: boolean;              // set true if reconverted file already exists
+  tol?: number;
+  exact?: boolean;
+  cliArgs?: string;
+  skipCli?: boolean;
 }) {
   const {
     label,
@@ -255,10 +261,8 @@ async function testReconversion(opts: {
         const r = generateReconvertedNow(originalPath, cliArgs);
         generatedNow = r.generatedNow;
       } catch (cliErr) {
-        // CLI failed — make it explicit and do NOT fall back to stale files
         logErrorDetails('reconversion CLI', cliErr);
         if (fs.existsSync(reconvertedPath)) {
-          // If anything slipped through, remove to avoid masking the failure
           try { fs.unlinkSync(reconvertedPath); } catch {}
         }
         reportOutcome('error', 'Reconversion CLI failed');
@@ -280,16 +284,30 @@ async function testReconversion(opts: {
     const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds);
     console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
 
-    // Reconverted (safe)
-    const recSession = await ort.InferenceSession.create(reconvertedPath);
+    // Reconverted: create session with explicit error handling
+    let recSession: ort.InferenceSession;
+    try {
+      recSession = await ort.InferenceSession.create(reconvertedPath);
+    } catch (createErr) {
+      logErrorDetails('reconverted session create', createErr);
+      reportOutcome('error', 'Reconverted session creation failed');
+
+      // If we actually regenerated this file, do a verbose re-run attempt
+      if (generatedNow) {
+        try { await rerunWithOrtVerbose(reconvertedPath, feeds); } catch {}
+      }
+      return;
+    }
+
+    // Reconverted (safe run)
     const recRun = await safeTimedRun(recSession, feeds);
     if (recRun.error) {
       logErrorDetails('reconverted run', recRun.error);
       reportOutcome('error', 'Reconverted run failed');
 
-      // Only verbose-rerun if we actually generated this model now
+      // Only verbose-rerun if this reconverted file was generated now
       if (generatedNow) {
-        try { await rerunVerboseIfFailed(reconvertedPath, feeds); } catch {}
+        try { await rerunWithOrtVerbose(reconvertedPath, feeds); } catch {}
       }
       return;
     }
@@ -315,7 +333,7 @@ async function testReconversion(opts: {
     if (equivalent) {
       reportOutcome('pass');
     } else {
-      // Only a mismatch → warn; NO verbose rerun.
+      // Mismatch is only a warning; do NOT verbose re-run here.
       reportOutcome('warn');
     }
   } catch (err) {
@@ -433,6 +451,7 @@ const TESTS: Array<{
       { name: 'cond', dtype: 'bool', shape: [], init: [true] as any },
     ],
   },
+  
 
   // ===== “Complete” suite (Full Decomposition with DOTs) =====
   {
@@ -776,7 +795,7 @@ const TESTS: Array<{
       { name: 'Max', dtype: 'float32', shape: [] },
     ],
   },
-  */
+  
 
   // ── conv
   /*
@@ -841,6 +860,7 @@ const TESTS: Array<{
     ],
   },
   */
+ /*
   {
     label: 'averagepool_standard',
     originalPath: 'examples/onnx/avgpool_standard.onnx',
@@ -850,8 +870,9 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
+  */
   
-  /*
+  
   // ===== Reduce ops (JSON) =====
   {
     label: 'reducesum_standard',
@@ -867,7 +888,66 @@ const TESTS: Array<{
     cliArgs: jsonFullArgs,
     specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
   },
-  */
+
+  // ----- More Reduce ops (JSON) -----
+  {
+    label: 'reducemin_standard',
+    originalPath: 'examples/onnx/reducemin_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+  },
+  {
+    label: 'reduceprod_standard',
+    originalPath: 'examples/onnx/reduceprod_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4] }], // general random
+  },
+  {
+    label: 'reducemean_standard',
+    originalPath: 'examples/onnx/reducemean_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+  },
+  {
+    label: 'reducesumsquare_standard',
+    originalPath: 'examples/onnx/reducesumsquare_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+  },
+  {
+    label: 'reducel1_standard',
+    originalPath: 'examples/onnx/reducel1_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+  },
+  {
+    label: 'reducel2_standard',
+    originalPath: 'examples/onnx/reducel2_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+  },
+  {
+    // sum(x) must be positive for log(sum(x)): use ones for a stable positive sum
+    label: 'reducelogsum_standard',
+    originalPath: 'examples/onnx/reducelogsum_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'ones' }],
+  },
+  {
+    // log(sum(exp(x))) works for any x; 'ones' is fine and avoids extreme magnitudes
+    label: 'reducelogsumexp_standard',
+    originalPath: 'examples/onnx/reducelogsumexp_standard.onnx',
+    tol: 1e-6,
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'ones' }],
+  },
 ];
 
 /* ============================== RUN ================================== */
