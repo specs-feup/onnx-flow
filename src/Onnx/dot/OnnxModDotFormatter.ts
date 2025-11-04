@@ -8,6 +8,7 @@ import TensorNode from "../TensorNode.js";
 import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
+import { typeSizeMap } from "../transformation/Utilities.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -32,6 +33,14 @@ export default class OnnxDotFormatter<
                 // attrs.stride = node.literalType.toString();
                 // attrs.stride = '4';
                 // attrs.size = node.shape[0]?.toString() ?? '1';
+
+                const size = (node.shape[0] as number) ?? 1;
+                if (size > 1) {
+                    attrs.size = size.toString();
+                    attrs.stride = typeSizeMap[node.literalType as number]!.toString();
+                } else {
+                    attrs.size = '1';
+                }
             }),
             Node.Case(VariableNode, node => {
                 attrs.label = node.name;
