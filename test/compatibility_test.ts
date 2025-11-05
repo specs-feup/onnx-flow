@@ -353,6 +353,7 @@ const TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
+  
   // ===== Standard Reconversions (JSON, noLowLevel) =====
   {
     label: 'vector_add_standard',
@@ -796,6 +797,7 @@ const TESTS: Array<{
     ],
   },
 
+  
   // ── gemm/concat/dequantize/avgpool
   {
     label: 'gemm_standard',
@@ -808,6 +810,7 @@ const TESTS: Array<{
       { name: 'C', dtype: 'float32', shape: [2, 4] }, // 8
     ],
   },
+  
   {
     label: 'concat_standard',
     originalPath: 'examples/onnx/concat_standard.onnx',
@@ -918,13 +921,63 @@ const TESTS: Array<{
     specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
   
+  // ----- Softmax -----
   {
     label: "softmax_standard",
     originalPath: "examples/onnx/softmax_standard.onnx",
     cliArgs: jsonFullArgs,
     specs: [{ name: 'X', dtype: 'float32', shape: [8, 3], gen: 'random' }],
     tol: 1e-4
-  }
+  },
+  
+  // ----- Expand -----
+  {
+    label: 'expand_scalar_to_2x3',
+    originalPath: 'examples/onnx/expand_scalar_to_2x3.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    // Only X is fed; 'shape' is Constant in the graph
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [], gen: 'random' },
+    ],
+  },
+  {
+    label: 'expand_vec_to_2x3',
+    originalPath: 'examples/onnx/expand_vec_to_2x3.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [3], gen: 'random' },
+    ],
+  },
+  {
+    label: 'expand_batch',
+    originalPath: 'examples/onnx/expand_batch.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [1, 4, 5], gen: 'random' },
+    ],
+  },
+  {
+    label: 'expand_middle_dim',
+    originalPath: 'examples/onnx/expand_middle_dim.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [2, 1, 4], gen: 'random' },
+    ],
+  },
+  {
+    label: 'expand_highrank',
+    originalPath: 'examples/onnx/expand_highrank.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [1, 3, 1, 5], gen: 'random' },
+    ],
+  },
+
 ];
 
 /* ============================== RUN ================================== */
