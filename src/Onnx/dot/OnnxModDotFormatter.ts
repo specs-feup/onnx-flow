@@ -29,17 +29,13 @@ export default class OnnxDotFormatter<
 
         node.switch(
             Node.Case(TensorNode, node => {
-                // attrs.address = node.address.toString();
-                // attrs.stride = node.literalType.toString();
-                // attrs.stride = '4';
-                // attrs.size = node.shape[0]?.toString() ?? '1';
-
                 const size = (node.shape[0] as number) ?? 1;
-                if (size > 1) {
+
+                if (node.type === 'input') {
                     attrs.size = size.toString();
                     attrs.stride = typeSizeMap[node.literalType as number]!.toString();
-                } else {
-                    attrs.size = '1';
+                } else if (node.type === 'output') {
+                    attrs.size = size.toString();
                 }
             }),
             Node.Case(VariableNode, node => {
