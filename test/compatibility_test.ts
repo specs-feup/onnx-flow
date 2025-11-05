@@ -354,7 +354,6 @@ const TESTS: Array<{
   specs: FeedSpec[];
 }> = [
   // ===== Standard Reconversions (JSON, noLowLevel) =====
-  /*
   {
     label: 'vector_add_standard',
     originalPath: 'examples/onnx/vector_add_standard.onnx',
@@ -708,64 +707,40 @@ const TESTS: Array<{
     ],
   },
 
-  /*
-  // ── matmul variants
+  // ── matmul broadcast
   {
-    label: 'matmul_rect',
-    originalPath: 'examples/onnx/matmul_rect_standard.onnx',
+    label: 'matmul_bcast_left_unbatched',
+    originalPath: 'examples/onnx/matmul_bcast_left_unbatched.onnx',
     tol: 1e-5,
     cliArgs: jsonFullArgs,
     specs: [
-      { name: 'A', dtype: 'float32', shape: [2, 3] },
-      { name: 'B', dtype: 'float32', shape: [3, 4] },
+      { name: 'A', dtype: 'float32', shape: [2, 3, 4] },
+      { name: 'B', dtype: 'float32', shape: [4, 5] },
     ],
   },
   {
-    label: 'matmul_bias',
-    originalPath: 'examples/onnx/matmul_bias_standard.onnx',
+    label: 'matmul_bcast_both_sides',
+    originalPath: 'examples/onnx/matmul_bcast_both_sides.onnx',
     tol: 1e-5,
     cliArgs: jsonFullArgs,
     specs: [
-      { name: 'A', dtype: 'float32', shape: [2, 3] },
-      { name: 'B', dtype: 'float32', shape: [3, 4] },
-      { name: 'C', dtype: 'float32', shape: [4] },  // bias
+      { name: 'A', dtype: 'float32', shape: [1, 3, 4] },
+      { name: 'B', dtype: 'float32', shape: [2, 4, 5] },
     ],
   },
   {
-    label: 'matmul_chain_right',
-    originalPath: 'examples/onnx/matmul_chain_right_standard.onnx',
+    label: 'matmul_bcast_highrank',
+    originalPath: 'examples/onnx/matmul_bcast_highrank.onnx',
     tol: 1e-5,
     cliArgs: jsonFullArgs,
     specs: [
-      { name: 'A', dtype: 'float32', shape: [2, 3] },
-      { name: 'B', dtype: 'float32', shape: [3, 4] },
-      { name: 'C', dtype: 'float32', shape: [4, 5] },
+      { name: 'A', dtype: 'float32', shape: [2, 1, 3, 4] },
+      { name: 'B', dtype: 'float32', shape: [1, 5, 4, 6] },
     ],
   },
-  {
-    label: 'matmul_mv_v1',
-    originalPath: 'examples/onnx/matmul_mv_standard.onnx',
-    tol: 1e-5,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'A', dtype: 'float32', shape: [2, 3] },
-      { name: 'v', dtype: 'float32', shape: [3] },
-    ],
-  },
-  {
-    label: 'matmul_vm_v2',
-    originalPath: 'examples/onnx/matmul_vm_standard.onnx',
-    tol: 1e-5,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'v', dtype: 'float32', shape: [3] },
-      { name: 'B', dtype: 'float32', shape: [3, 2] },
-    ],
-  },
-  */
 
+  
   // ── slice/pad/clip
-  /*
   {
     label: 'slice_decomposition',
     originalPath: 'examples/onnx/slice.onnx',
@@ -798,7 +773,6 @@ const TESTS: Array<{
   
 
   // ── conv
-  /*
   {
     label: 'conv_normal',
     originalPath: 'examples/onnx/conv_normal.onnx',
@@ -810,7 +784,6 @@ const TESTS: Array<{
       { name: 'B', dtype: 'float32', shape: [1] },
     ],
   },
-  /*
   {
     label: 'conv_simple',
     originalPath: 'examples/onnx/conv_simple.onnx',
@@ -822,10 +795,8 @@ const TESTS: Array<{
       { name: 'B', dtype: 'float32', shape: [1] },
     ],
   },
-  */
 
   // ── gemm/concat/dequantize/avgpool
-  /*
   {
     label: 'gemm_standard',
     originalPath: 'examples/onnx/gemm_standard.onnx',
@@ -859,8 +830,7 @@ const TESTS: Array<{
       { name: 'Z', dtype: 'uint8',   shape: [3] },      // per-channel zero-points
     ],
   },
-  */
- /*
+
   {
     label: 'averagepool_standard',
     originalPath: 'examples/onnx/avgpool_standard.onnx',
@@ -870,7 +840,6 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
-  */
   
   
   // ===== Reduce ops (JSON) =====
@@ -909,28 +878,28 @@ const TESTS: Array<{
     originalPath: 'examples/onnx/reducemean_standard.onnx',
     tol: 1e-6,
     cliArgs: jsonFullArgs,
-    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
   {
     label: 'reducesumsquare_standard',
     originalPath: 'examples/onnx/reducesumsquare_standard.onnx',
     tol: 1e-6,
     cliArgs: jsonFullArgs,
-    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
   {
     label: 'reducel1_standard',
     originalPath: 'examples/onnx/reducel1_standard.onnx',
     tol: 1e-6,
     cliArgs: jsonFullArgs,
-    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
   {
     label: 'reducel2_standard',
     originalPath: 'examples/onnx/reducel2_standard.onnx',
     tol: 1e-6,
     cliArgs: jsonFullArgs,
-    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'negmix' }],
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
   {
     // sum(x) must be positive for log(sum(x)): use ones for a stable positive sum
@@ -938,7 +907,7 @@ const TESTS: Array<{
     originalPath: 'examples/onnx/reducelogsum_standard.onnx',
     tol: 1e-6,
     cliArgs: jsonFullArgs,
-    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'ones' }],
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
   {
     // log(sum(exp(x))) works for any x; 'ones' is fine and avoids extreme magnitudes
@@ -946,8 +915,16 @@ const TESTS: Array<{
     originalPath: 'examples/onnx/reducelogsumexp_standard.onnx',
     tol: 1e-6,
     cliArgs: jsonFullArgs,
-    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'ones' }],
+    specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
+  
+  {
+    label: "softmax_standard",
+    originalPath: "examples/onnx/softmax_standard.onnx",
+    cliArgs: jsonFullArgs,
+    specs: [{ name: 'X', dtype: 'float32', shape: [8, 3], gen: 'random' }],
+    tol: 1e-4
+  }
 ];
 
 /* ============================== RUN ================================== */

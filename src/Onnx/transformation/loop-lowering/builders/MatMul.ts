@@ -8,7 +8,8 @@ import {
   uniq, int64Vec, zeroTensor, bool, makeTensorConst, scalarInt64
 } from "../../../Utils.js";
 import {
-  LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx
+  LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx,
+  broadcastShapes
 } from "../BuildLoop.js";
 
 // Handlers needed here
@@ -39,9 +40,14 @@ export default class MatMulBuilder implements LoopBuilder {
     const K = Number(lhs.shape.at(-1)!);
     const N = Number(rhs.shape.at(-1)!);
 
-    const totalIters = M * K * N;
-    const carryLen = M * N;
-    const finalOutShape = [M, N];
+    const aBatch = (lhs.shape as number[]).slice(0, -2);
+    const bBatch = (rhs.shape as number[]).slice(0, -2);
+    const batch  = broadcastShapes([aBatch, bBatch]);
+    const batchProd = batch.reduce((p, d) => p * (d > 0 ? d : 1), 1);
+
+    const totalIters = batchProd * M * K * N;
+    const carryLen   = batchProd * M * N;
+    const finalOutShape = [...batch, M, N];
 
     const inputs = new Map<string, TensorNode.Class>();
     chain.forEach(op => op.getInputs()?.filter(n => n.is(TensorNode)).forEach(t => inputs.set(t.id, t.as(TensorNode))));
@@ -70,6 +76,8 @@ export default class MatMulBuilder implements LoopBuilder {
         op.type === "Add" || op.type === "Sub" || op.type === "Mul" || op.type === "Div"),
       running: null,
     };
+
+    ctx.outShape = finalOutShape;
 
     const handlers: Record<string, (op: OperationNode.Class, g: OnnxGraph.Class, ctx: LoopCtx) => TensorNode.Class> = {
       MatMul: handleMatMul,
