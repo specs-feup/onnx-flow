@@ -259,25 +259,35 @@ export function inferShapes(graph: OnnxGraph.Class): void {
       case "ReduceMax": {
         const inShape = infos[0]?.shape ?? [];
         const keepdims = !!getAttr(node, "keepdims", 1);
-        let axes = getAttr(node, "axes", undefined) as number[] | undefined;
+
+        // 1) try attribute first (covers opset ≥13 attr style and some exports)
+        let axesAttr = getAttr(node, "axes", undefined) as number[] | number | undefined;
+        let axes: number[] | undefined =
+          Array.isArray(axesAttr) ? axesAttr.map(Number)
+          : (typeof axesAttr === "number" ? [Number(axesAttr)] : undefined);
+
+        // 2) fall back to 2nd input tensor (covers opset 18-style or exporters that use input)
         if (!axes) {
-          // axes may come as a second input in some models
           const axesNode = inputs[1]?.tryAs(TensorNode);
-          axes = axesNode?.constantValue?.int64Data?.map(Number);
+          const cv: any = axesNode?.constantValue;
+          // accept int64, int32, or .ints (some tools use this)
+          const raw = cv?.int64Data ?? cv?.int32Data ?? cv?.ints;
+          if (raw && raw.length !== undefined) {
+            axes = Array.from(raw).map((v: any) => Number(v));
+          }
         }
+
+        // 3) compute output shape
         if (!axes || axes.length === 0) {
-          // reduce all
+          // reduce-all
           outShape = keepdims ? inShape.map(_ => 1) : [];
         } else {
           const rank = inShape.length;
           const norm = new Set(axes.map(a => normalizeAxis(a, rank)));
-          if (keepdims) {
-            outShape = inShape.map((d, i) => (norm.has(i) ? 1 : d));
-          } else {
-            outShape = inShape.filter((_, i) => !norm.has(i));
-          }
+          outShape = keepdims
+            ? inShape.map((d, i) => (norm.has(i) ? 1 : d))
+            : inShape.filter((_, i) => !norm.has(i));
         }
-        // dtype follows input (except special ops like ArgMax, not here)
         outDtype = infos[0]?.dtype ?? outDtype;
         break;
       }

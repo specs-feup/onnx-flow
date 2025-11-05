@@ -10,10 +10,59 @@ import TensorNode from "../../TensorNode.js";
 
 const SUP = new Set([
   "Add","Sub","Mul","Div","MatMul","Transpose","Range",
-  "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max",
+  "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max", "Softmax",
   "ReduceSum","ReduceMax", "ReduceMin", "ReduceProd", "ReduceMean", "ReduceSumSquare",
   "ReduceL1", "ReduceL2", "ReduceLogSum", "ReduceLogSumExp"
 ]);
+
+const REDUCE_SET = new Set([
+  "ReduceSum","ReduceMax","ReduceMin","ReduceProd","ReduceMean",
+  "ReduceSumSquare","ReduceL1","ReduceL2","ReduceLogSum","ReduceLogSumExp"
+]);
+
+function isReduce(op: OperationNode.Class) {
+  return REDUCE_SET.has(op.type);
+}
+
+function isElementwiseUnary(op: OperationNode.Class) {
+  return new Set(["Relu","Sigmoid","Tanh","Exp","Log","Clip"]).has(op.type);
+}
+
+function isElementwiseBinary(op: OperationNode.Class) {
+  return new Set(["Add","Sub","Mul","Div","Min","Max","Sum"]).has(op.type);
+}
+
+function isAllowedNonReduce(op: OperationNode.Class) {
+  // Any op your default/elemwise builders can already handle.
+  // Keep this aligned with SUP (minus reduces).
+  return SUP.has(op.type) && !isReduce(op);
+}
+
+function sameOrBroadcastsTo(shapeA: (number|String) [], shapeB: (number|String)[]): boolean {
+  // shapeA is the op output; shapeB is the reduced tensor shape
+  // strict match or standard numpy/onnx broadcast to shapeB
+  if(typeof shapeA == "string" || typeof shapeB == "string") return false;
+  if (shapeA.length > shapeB.length) return false;
+  // right-align and check each dim is either 1 or equal
+  let i = shapeA.length - 1, j = shapeB.length - 1;
+  for (; i >= 0; --i, --j) {
+    const a = shapeA[i], b = shapeB[j];
+    if (!(a === 1 || a === b)) return false;
+  }
+  // any leading dims in shapeB are fine (they’re target dims)
+  return true;
+}
+
+function canBeEpilogue(op: OperationNode.Class, reducedOutShape: (number|String)[]): boolean {
+  if (isElementwiseUnary(op)) return true;
+  if (isElementwiseBinary(op)) {
+    // Check output shape is broadcast-compatible with reducedOutShape
+    const outT = op.getOutgoers.targets?.filter(n => n.is(TensorNode)).first()?.as(TensorNode);
+    if (!outT) return false;
+    return sameOrBroadcastsTo(outT.shape, reducedOutShape);
+  }
+  return false;
+}
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) return false;
@@ -34,7 +83,9 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     if (t.shape.length === 1) {
       const producer = t.getIncomers?.[0]?.source;
       if (producer?.is(OperationNode) && producer.as(OperationNode).type === "Gather") {
-        return false;
+        if (!(isReduce(op) || SUP.has(op.type))) {
+          return false;
+        }
       }
     }
   }
@@ -71,6 +122,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
   ) {}
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
+    // Fast path: no fusion — build one Loop per supported op
     if (!this.fuse) {
       const supported = new Set<string>();
       g.getOperationNodes().forEach(op => {
@@ -78,33 +130,36 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       });
       g.getOperationNodes().forEach(op => {
         if (!supported.has(op.id)) return;
-        buildLoopForChain([op], g, this.fuse, this.recurse, this.coalesce);
+        buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
       });
       return g;
     }
 
+    // 1) Collect candidate chains (DAG backwalk), one chain per "root" op.
     const chains = new Map<OperationNode.Class, OperationNode.Class[]>();
 
-    function collectChain(op: OperationNode.Class, visited = new Set<OperationNode.Class>()): OperationNode.Class[] {
+    function collectChain(
+      op: OperationNode.Class,
+      visited = new Set<OperationNode.Class>()
+    ): OperationNode.Class[] {
       if (!isSupportedNonScalarOp(op) || visited.has(op)) return [];
       visited.add(op);
 
-      const chain = [op];
+      const chain: OperationNode.Class[] = [op];
 
       op.getInputs()?.forEach(inp => {
         if (inp.is(TensorNode)) {
           const t = inp.as(TensorNode);
-          if (["constant", "input", "initializer", "index", "index_aux"].includes(t.type)) return;
-
+          // stop at non-intermediate sources
+          if (["constant","input","initializer","index","index_aux"].includes(t.type)) return;
           if (t.getIncomers.length === 0) return;
-          const producer = t.getIncomers[0].source;
-          if (!producer.is(OperationNode)) return;
 
-          const subchain = collectChain(producer.as(OperationNode), visited);
-          chain.push(...subchain);
+          const prod = t.getIncomers[0].source;
+          if (!prod.is(OperationNode)) return;
+          chain.push(...collectChain(prod.as(OperationNode), visited));
+
         } else if (inp.is(OperationNode)) {
-          const subchain = collectChain(inp.as(OperationNode), visited);
-          chain.push(...subchain);
+          chain.push(...collectChain(inp.as(OperationNode), visited));
         }
       });
 
@@ -112,80 +167,50 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
     }
 
     g.getOperationNodes().forEach(op => {
-      if (!chains.has(op)) {
-        const visited = new Set<OperationNode.Class>();
-        const chain = collectChain(op, visited);
-        if (chain.length > 0) {
-          const unique = Array.from(new Set(chain));
-          chains.set(op, unique);
-        }
-      }
+      if (chains.has(op)) return;
+      const visited = new Set<OperationNode.Class>();
+      const ch = collectChain(op, visited);
+      if (ch.length > 0) chains.set(op, Array.from(new Set(ch))); // de-dup
     });
 
-    const innerNodes = new Set<string>();
-    chains.forEach((chainOps, key) => {
-      chainOps.forEach(op => { if (op !== key) innerNodes.add(op.id); });
+    // Keep only roots (remove chains whose key is inside another chain)
+    const innerIds = new Set<string>();
+    chains.forEach((ops, key) => {
+      ops.forEach(o => { if (o !== key) innerIds.add(o.id); });
     });
     for (const key of [...chains.keys()]) {
-      if (innerNodes.has(key.id)) chains.delete(key);
+      if (innerIds.has(key.id)) chains.delete(key);
     }
 
+    // 2) Transform each chain (topo-ish order: producers -> consumers)
     for (const chain of chains.values()) {
-      const chainOps = chain.reverse();
+      const chainOps = chain.slice().reverse(); // inputs first
 
-      if (this.coalesce) {
-        const matmuls = chainOps.filter(op => op.type === "MatMul");
-        const hasMultipleMatMuls = matmuls.length > 1;
-
-        const mm = matmuls[0];
-        let hasPreOpsForMatMul = false;
-        if (mm) {
-          const matmulAncestors = new Set<string>();
-          const idToOp = new Map(chainOps.map(op => [op.id, op]));
-          const stack = [mm];
-
-          while (stack.length) {
-            const cur = stack.pop()!;
-            cur.getInputs()?.forEach(inp => {
-              if (inp.is(OperationNode)) {
-                const prod = inp.as(OperationNode);
-                if (idToOp.has(prod.id) && prod.id !== mm.id && !matmulAncestors.has(prod.id)) {
-                  matmulAncestors.add(prod.id);
-                  stack.push(prod);
-                }
-              } else if (inp.is(TensorNode)) {
-                const t = inp.as(TensorNode);
-                const e = t.getIncomers?.[0];
-                if (e?.source?.is(OperationNode)) {
-                  const prod = e.source.as(OperationNode);
-                  if (idToOp.has(prod.id) && prod.id !== mm.id && !matmulAncestors.has(prod.id)) {
-                    matmulAncestors.add(prod.id);
-                    stack.push(prod);
-                  }
-                }
-              }
-            });
-          }
-
-          hasPreOpsForMatMul = matmulAncestors.size > 0;
-        }
-
-        if (hasMultipleMatMuls || hasPreOpsForMatMul) {
-          for (const op of chainOps) {
-            buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
-          }
-          continue;
+      // --- Reduce-aware segmentation ---
+      // split on reduces; non-reduce stretches are fused normally;
+      // each reduce is built as its own loop segment.
+      const segments: OperationNode.Class[][] = [];
+      let cur: OperationNode.Class[] = [];
+      for (const node of chainOps) {
+        if (isReduce(node)) {
+          if (cur.length) segments.push(cur), (cur = []);
+          segments.push([node]); // a single-reduce segment
+        } else {
+          cur.push(node);
         }
       }
+      if (cur.length) segments.push(cur);
 
+      // Optional: coalescing / special-casing MatMul layout barriers
       if (this.coalesce) {
         const matmuls = chainOps.filter(op => op.type === "MatMul");
         const mm = matmuls[0];
         if (mm) {
           const mmIdx = chainOps.indexOf(mm);
           const afterMM = chainOps.slice(mmIdx + 1);
-          const hasLayoutChangingAfter = afterMM.some(op => op.type === "Transpose");
-          if (hasLayoutChangingAfter) {
+          const hasLayoutChangeAfter = afterMM.some(op => op.type === "Transpose");
+          if (hasLayoutChangeAfter) {
+            // bail to per-op lowering if layout changes after MatMul
             for (const op of chainOps) {
               buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
             }
@@ -194,7 +219,26 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
         }
       }
 
-      buildLoopForChain(chainOps, g, this.fuse, this.recurse, this.coalesce);
+      // 3) Build each segment in order (reduce-aware)
+      for (const seg0 of segments) {
+        // Re-hydrate after prior mutations:
+        const seg = seg0
+          .map(op => g.getNodeById(op.id))
+          .filter(n => n && n.is(OperationNode))
+          .map(n => n!.as(OperationNode));
+
+        if (seg.length === 0) continue;
+
+        const isSingleReduce = seg.length === 1 && REDUCE_SET.has(seg[0].type);
+
+        buildLoopForChain(
+          seg,
+          g,
+          /* fuse = */ !isSingleReduce,   // no fusion inside reduce segment
+          this.recurse,
+          this.coalesce
+        );
+      }
     }
 
     return g;

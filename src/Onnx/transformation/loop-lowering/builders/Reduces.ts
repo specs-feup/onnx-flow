@@ -92,9 +92,16 @@ const SUPPORTED = new Set([
   "ReduceLogSumExp",
 ]);
 
+const REDUCE_SET = new Set([
+  "ReduceSum","ReduceMax","ReduceMin","ReduceProd","ReduceMean",
+  "ReduceSumSquare","ReduceL1","ReduceL2","ReduceLogSum","ReduceLogSumExp"
+]);
+
 export default class ReducesBuilder implements LoopBuilder {
   canHandle(chain: OperationNode.Class[]): boolean {
-    return chain.length === 1 && SUPPORTED.has(chain[0].type);
+    // Only handle if the FIRST node is a Reduce op.
+    if (!chain.length) return false;
+    return REDUCE_SET.has(chain[0].type);
   }
 
   build(
@@ -102,72 +109,53 @@ export default class ReducesBuilder implements LoopBuilder {
     outer: OnnxGraph.Class,
     _opts: { fuse: boolean; recurse: boolean; coalesce: boolean }
   ): BuildResult {
-    const op = chain[0]; // single reduce
+    const ridx = chain.findIndex(n => REDUCE_SET.has(n.type));
+    if (ridx < 0) throw new Error("[Reduces] no Reduce op in chain");
+    const op = chain[ridx]; // anchor reduce node
+
     const xInput = op.getInputs()![0].as(TensorNode);
     const allInputs = op.getInputs()!.filter(n => n.is(TensorNode)).map(n => n.as(TensorNode));
 
-    // Prefer axes from a 2nd input tensor (if present & 1-D INT64)
-    let axesFromInput: number[] | undefined = undefined;
-    if (allInputs.length > 1) {
-      const ax = allInputs[1];
-      const raw = ax.constantValue?.int64Data ?? [1];
-      if (raw && (ax.shape?.length ?? 0) <= 1) axesFromInput = raw.map(v => Number(v));
-    }
+    inferShapes(outer);
 
-    const outTensor = op.getOutgoers.targets.filterIs(TensorNode).first();
+    let elemTy = xInput.literalType ?? DataType.FLOAT;
+    if (elemTy === DataType.UNDEFINED) elemTy = DataType.FLOAT;
 
-    // dtype: prefer input, else output, else FLOAT
-    let elemTy = xInput.literalType !== DataType.UNDEFINED ? xInput.literalType : outTensor.literalType;
-    if (elemTy === DataType.UNDEFINED || elemTy == null) elemTy = DataType.FLOAT;
-
-    // static shape
+    // Static input shape is mandatory for this lowering
     const inShape = toStaticShape(xInput.shape as Shape);
     if (!inShape || inShape.some(d => d === -1)) {
       throw new Error(`[ReducesBuilder] dynamic input shapes not supported for ${op.id}`);
     }
     const rank = inShape.length;
 
-    // Read attributes (may be missing)
+    // Parse axes from input (opset >= 13) or attribute (older), with default=all axes
+    let axesFromInput: number[] | undefined;
+    if (allInputs.length > 1) {
+      const ax = allInputs[1];
+      const rawI64 = ax?.constantValue?.int64Data as (bigint[] | undefined);
+      if (rawI64 && (ax.shape?.length ?? 0) <= 1) axesFromInput = rawI64.map(v => Number(v));
+    }
     const atts = op.getAttributes?.() ?? (op as any).attributes ?? {};
-    let axesAttr: number[] | undefined = axesFromInput ?? (Array.isArray(atts.axes) ? atts.axes.map(Number)
-                              : (typeof atts.axes === "number" ? [Number(atts.axes)] : undefined));
-
+    let axesAttr: number[] | undefined =
+      axesFromInput ??
+      (Array.isArray(atts.axes) ? atts.axes.map(Number)
+      : (typeof atts.axes === "number" ? [Number(atts.axes)] : undefined));
     let keepAttr = atts.keepdims;
-    // Normalize keepdims to 0|1 numerically
     let keep01: 0 | 1 = keepAttr === undefined ? 1 : (Number(keepAttr) === 1 ? 1 : 0);
 
-    // If axes/keepdims both missing, infer from original out shape.
-    const outOrig = toStaticShape(outTensor.shape as Shape); // original Reduce’s output
-    const hasKeep = keepAttr !== undefined;
-    if ((!axesAttr || axesAttr.length === 0) && !hasKeep) {
-      if (!outOrig) throw new Error("[Reduces] cannot infer axes: missing original out shape");
-
-      if (outOrig.length < inShape.length) {
-        keep01 = 0;
-        const red: number[] = [];
-        let j = 0;
-        for (let i = 0; i < inShape.length; i++) {
-          if (j < outOrig.length && inShape[i] === outOrig[j]) j++;
-          else red.push(i);
-        }
-        axesAttr = red;
-      } else {
-        keep01 = 1;
-        const red: number[] = [];
-        for (let i = 0; i < inShape.length; i++) {
-          const oi = outOrig[i] ?? 1;
-          if ((inShape[i] ?? 1) > 1 && oi === 1) red.push(i);
-        }
-        axesAttr = red.length ? red : Array.from({ length: inShape.length }, (_, k) => k);
-      }
-    }
-
-    // Normalize axes
+    // If axes/keepdims both missing, infer from the input vs *expected* out shape later;
+    // we’ll compute the out shape ourselves, so we don’t need the op’s outgoer at all.
     const redAxes = normalizeAxes(axesAttr ?? [], rank);
-    const keptAxes = Array.from({ length: rank }, (_, a) => a).filter(a => !redAxes.includes(a));
 
-    // Final out shape
-    const outStatic = makeOutShape(inShape, redAxes, keep01);
+    // If axes were empty, ONNX default is "reduce over all axes"
+    const effAxes = (redAxes.length ? redAxes : [...Array(rank).keys()]);
+    const keptAxes = [...Array(rank).keys()].filter(a => !effAxes.includes(a));
+
+    // Compute final static output shape from inShape/axes/keepdims
+    const outStatic = makeOutShape(inShape, effAxes, keep01);
+
+    // We no longer read the reduce op's outgoer here (it can be absent in a chain)
+    const outTensor = op.getOutgoers?.targets?.filterIs?.(TensorNode)?.first?.(); // optional
 
     // Trip count & carry length
     const totalIters = inShape.reduce((a, b) => a * (b > 0 ? b : 1), 1);
@@ -242,7 +230,7 @@ export default class ReducesBuilder implements LoopBuilder {
 
     // x scalar: GatherElements(Xflat, inLinU) → [1] → squeeze → []
     const gX = body.addNode(uniq(body, `gather_x_${op.id}`))
-      .init(new OperationNode.Builder("GatherElements", [Xflat, inLinU], { axis: 0 }))
+      .init(new OperationNode.Builder("Gather", [Xflat, inLinU], { axis: 0 }))
       .as(OperationNode);
     const gXOut = body.addNode(uniq(body, `gather_x_out_${op.id}`))
       .init(new TensorNode.Builder(elemTy, [1], "intermediate"))
@@ -274,7 +262,7 @@ export default class ReducesBuilder implements LoopBuilder {
 
     // acc scalar: GatherElements(carry, outLinU) → [1] → squeeze → []
     const gAcc = body.addNode(uniq(body, `acc_prev_${op.id}`))
-      .init(new OperationNode.Builder("GatherElements", [carry, outLinU], { axis: 0 }))
+      .init(new OperationNode.Builder("Gather", [carry, outLinU], { axis: 0 }))
       .as(OperationNode);
     const gAccOut = body.addNode(uniq(body, `acc_prev_out_${op.id}`))
       .init(new TensorNode.Builder(elemTy, [1], "intermediate"))

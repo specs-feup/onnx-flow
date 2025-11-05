@@ -8,6 +8,7 @@ import gemmHandler from "./handlers/Gemm.js";
 import padHandler from "./handlers/Pad.js";
 import sliceHandler from "./handlers/Slice.js";
 import OperationNode from "../../OperationNode.js";
+import softmaxHandler from "./handlers/Softmax.js";
 
 export type Handler = (graph: OnnxGraph.Class, op: OperationNode.Class) => boolean;
 // Registry by op type
@@ -29,6 +30,7 @@ function buildDefaultRegistry(): HandlersRegistry {
     Concat: concatHandler,
     DequantizeLinear: dequantizeLinearHandler,
     AveragePool: averagePoolHandler,
+    Softmax: softmaxHandler,
   };
 }
 

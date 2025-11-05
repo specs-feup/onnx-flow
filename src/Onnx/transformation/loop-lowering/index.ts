@@ -13,10 +13,10 @@ export default class OnnxGraphTransformer
   ) {}
 
   apply(graph: OnnxGraph.Class): OnnxGraph.Class {
-    // 1) Pre-decompose high-level ops (Slice now; Conv later)
+    // 1) Canonical version of high-level operations (no explicit Loop needed)
     const canon = applyCanonicalization(graph);
 
-    // 2) Your existing LL path (TransformChain) -> BuildLoop, etc.
+    // 2) Loop-lowering (creating explicit loop and applying some Loop optimizations)
     return new TransformChain(this.fuse, this.recurse, this.coalesce).apply(canon);
   }
 }

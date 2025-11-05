@@ -508,6 +508,24 @@ export function buildLoopForChain(
     .as(TensorNode);
   body.addEdge(scatter, carryOut).init(new OnnxEdge.Builder(carryOut.literalType, carryOut.shape));
 
+  const bodyInputsAll = body.getInputTensorNodes();
+  const bodyCapturedInputs = bodyInputsAll.filter(t =>
+    !t.id.includes("iter") &&
+    !t.id.includes("cond_in") &&
+    !t.id.includes("carry")
+  );
+
+  bodyCapturedInputs.forEach((tin, i) => {
+    const id = body.addNode(uniq(body, `id_cap_${i}`))
+      .init(new OperationNode.Builder("Identity", [tin]))
+      .as(OperationNode);
+    const tout = body.addNode(uniq(body, `cap_out_${i}`))
+      .init(new TensorNode.Builder(tin.literalType, tin.shape, "output"))
+      .as(TensorNode);
+    body.addEdge(tin, id).init(new OnnxEdge.Builder(tin.literalType, tin.shape));
+    body.addEdge(id, tout).init(new OnnxEdge.Builder(tout.literalType, tout.shape));
+  });
+
   inferShapes(graph);
   inferShapes(body);
 
@@ -524,13 +542,15 @@ export function buildLoopForChain(
   graph.addEdge(trip, loop).init(new OnnxEdge.Builder(trip.literalType, trip.shape)).as(OnnxEdge);
   graph.addEdge(cond, loop).init(new OnnxEdge.Builder(cond.literalType, cond.shape)).as(OnnxEdge);
 
-  inputs.forEach(t => {
-    graph.addEdge(t, loop).init(new OnnxEdge.Builder(t.literalType, t.shape)).as(OnnxEdge);
+  bodyCapturedInputs.forEach((tin) => {
+    const outerT = inputs.get(tin.id);
+    if (!outerT) throw new Error(`[Loop wiring] Missing captured input binding for ${tin.id}`);
+    graph.addEdge(outerT, loop).init(new OnnxEdge.Builder(outerT.literalType, outerT.shape)).as(OnnxEdge);
   });
 
   chain[chain.length - 1].getOutgoers.forEach(e => e.remove());
 
-  const isGlobalOutput = graph.getOutputTensorNodes().contains(outTensor);
+  const isGlobalOutput = outTensor && graph.getOutputTensorNodes().contains(outTensor);
   graph.getNodeById(outTensor.id).remove();
   graph.addNode(outTensor.id)
     .init(new TensorNode.Builder(elemTy, outShape, isGlobalOutput ? "output" : "intermediate"))
