@@ -528,27 +528,102 @@ export function prodSafe(dims: number[]): number {
 }
 
 // Compute strides for a fully-known numeric shape
-export function computeStrides(shape: number[]): number[] {
-  const n = shape.length;
-  const s = Array(n).fill(1);
-  for (let i = n - 2; i >= 0; i--) s[i] = s[i + 1] * (shape[i + 1] > 0 ? shape[i + 1] : 1);
-  return s;
+export function computeStrides(dims: number[]): number[] {
+  const n = dims.length;
+  const strides = new Array(n);
+  let acc = 1;
+  for (let i = n - 1; i >= 0; --i) {
+    const d = dims[i] > 0 ? dims[i] : 1;  // unknown/0 -> 1
+    strides[i] = acc;
+    acc *= d;
+  }
+  return strides;
 }
 
 export function swap<A>(a: A[], i: number, j: number) { const x=a[i]; a[i]=a[j]; a[j]=x; return a; }
 
 /**
- * Returns the topologically sorted operation nodes.
+ * Topologically sorts OperationNodes of a graph.
+ *
+ * Extended to account for implicit dependencies coming from subgraphs:
+ * if an op's body/subgraph uses a tensor defined in the parent graph,
+ * we treat the producer of that tensor as a predecessor of the op.
+ *
+ * This lets us correctly order Loops/Ifs whose bodies read outer values
+ * (implicit inputs), without requiring extra wiring changes in the
+ * lowering passes.
  */
-export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
+export function topologicalSortOperationNodes(
+  graph: OnnxGraph.Class
+): OperationNode.Class[] {
   const sorted: OperationNode.Class[] = [];
   const visited = new Set<string>();
   const temp = new Set<string>();
 
-  const opNodes = graph.getOperationNodes();
+  const opNodes = graph.getOperationNodes().toArray();
+
+  // Map tensor id -> producing op (in this graph)
+  const tensorProducers = new Map<string, OperationNode.Class>();
+  for (const op of opNodes) {
+    const outTensors =
+      op.getOutgoers?.targets?.filter(n => n.is(TensorNode)).toArray?.() ?? [];
+    for (const t of outTensors as TensorNode.Class[]) {
+      tensorProducers.set(t.id, op);
+    }
+  }
+
+  // Extra deps: op.id -> set of predecessor ops (from subgraph implicit inputs)
+  const extraDeps = new Map<string, Set<OperationNode.Class>>();
+
+  // Discover implicit dependencies from subgraphs (Loop/If/etc bodies)
+  for (const op of opNodes) {
+    const subgraphs: Record<string, OnnxGraph.Class> = {
+      ...(op.getSubgraphs?.() ?? {}),
+    };
+
+    const body = op.getBodySubgraph?.();
+    if (body) {
+      subgraphs["__body"] = body;
+    }
+
+    for (const key of Object.keys(subgraphs)) {
+      const sg = subgraphs[key];
+      if (!sg) continue;
+
+      const sgOps = sg.getOperationNodes().toArray();
+
+      for (const bOp of sgOps) {
+        // Use getInputs() if available; fallback to incomers if needed
+        const inputs = (bOp.getInputs?.() ?? []) as any[];
+
+        for (const inp of inputs) {
+          const t = inp?.tryAs?.(TensorNode);
+          if (!t) continue;
+
+          // If tensor lives in parent graph but not in this subgraph,
+          // it's an implicit/outer value for this op.
+          const isFromParent = graph.hasNode(t.id);
+          const isInSubgraph = sg.hasNode(t.id);
+
+          if (isFromParent && !isInSubgraph) {
+            const prod = tensorProducers.get(t.id);
+            if (!prod || prod.id === op.id) continue;
+
+            let deps = extraDeps.get(op.id);
+            if (!deps) {
+              deps = new Set<OperationNode.Class>();
+              extraDeps.set(op.id, deps);
+            }
+            deps.add(prod);
+          }
+        }
+      }
+    }
+  }
 
   const visit = (node: OperationNode.Class) => {
     if (visited.has(node.id) || !graph.hasNode(node.id)) return;
+
     if (temp.has(node.id)) {
       console.warn(`[TopoSort] Cycle or back-edge detected at node: ${node.id}`);
       return;
@@ -556,9 +631,21 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
 
     temp.add(node.id);
 
-    function checkPred(n: TensorNode.Class | OperationNode.Class) {
+    // 1) Enforce extra deps from subgraphs (implicit inputs)
+    const implicitPreds = extraDeps.get(node.id);
+    if (implicitPreds) {
+      for (const pred of implicitPreds) {
+        visit(pred);
+      }
+    }
+
+    // 2) Existing predecessor logic (within this graph)
+    const checkPred = (n: TensorNode.Class | OperationNode.Class) => {
       if (n.is(OperationNode)) {
-        for (const input of n.as(OperationNode).getInputs() ?? []) {
+        const op = n.as(OperationNode);
+        // Follow intermediate inputs
+        for (const input of op.getInputs?.() ?? []) {
+          if (!input) continue;
           const t = input.tryAs?.(TensorNode);
           if (t && t.type === "intermediate") {
             checkPred(t);
@@ -566,12 +653,13 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
       }
 
-      for (const edge of n.incomers?.toArray?.() ?? []) {
+      const incomers = n.incomers?.toArray?.() ?? [];
+      for (const edge of incomers) {
         const src = edge?.source;
         if (!src) continue;
 
-        const pred = src.is?.(OperationNode) ? src.as(OperationNode) : null;
-        if (pred) {
+        if (src.is?.(OperationNode)) {
+          const pred = src.as(OperationNode);
           visit(pred);
         } else if (src.is?.(TensorNode)) {
           const tensorPred = src.as(TensorNode);
@@ -580,7 +668,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
           }
         }
       }
-    }
+    };
 
     checkPred(node);
 
@@ -592,14 +680,6 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
   for (const node of opNodes) {
     visit(node);
   }
-
-  //Optional debug
-  /*
-  console.log("=== [topologicalSortOperationNodes] Final OPERATION node order ===");
-  sorted.forEach((node, i) => {
-    console.log(`[${i}] id: ${node.id}`);
-  });
-  */
 
   return sorted;
 }
@@ -646,4 +726,18 @@ export function inferPoolDim(inDim: number, k: number, stride: number, padHead: 
 export function inferConvDim(inDim: number, k: number, stride: number, padHead: number, padTail: number, dil: number) {
   // Same as pooling
   return inferPoolDim(inDim, k, stride, padHead, padTail, dil);
+}
+
+export function dbg(...args: any[]): void {
+  console.log("[loop-debug]", ...args);
+}
+
+export function dbgTensor(label: string, t: TensorNode.Class | null | undefined): void {
+  if (!t) return;
+  dbg(label, {
+    id: t.id,
+    kind: t.type,
+    elemType: t.literalType,
+    shape: t.shape,
+  });
 }
