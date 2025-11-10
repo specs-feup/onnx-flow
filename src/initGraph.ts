@@ -256,6 +256,10 @@ export function inferShapes(graph: OnnxGraph.Class): void {
   for (const node of ops) {
     const inputs = node.getInputs?.() ?? [];
     const infos = inputs.map(inp => {
+      if(!inp) return {
+        shape: [],
+        dtype: AttributeType.UNDEFINED
+      }
       const tns = inp.tryAs(TensorNode);
 
       let interEdge = null;
@@ -418,7 +422,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         // Optional sanity warnings (do not block inference)
         if (indicesShape.length && updatesShape.length) {
           if (indicesShape.length !== rankData || updatesShape.length !== rankData) {
-            console.warn(`ScatterElements: rank mismatch (data=${rankData}, indices=${indicesShape.length}, updates=${updatesShape.length}).`);
+            //console.warn(`ScatterElements: rank mismatch (data=${rankData}, indices=${indicesShape.length}, updates=${updatesShape.length}).`);
           }
           // Light check for axis dim agreement when shapes are known
           const axOk =
@@ -426,7 +430,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
             updatesShape[axis] === undefined ||
             indicesShape[axis] === updatesShape[axis];
           if (!axOk) {
-            console.warn(`ScatterElements: indices.shape[axis] != updates.shape[axis] at axis=${axis}.`);
+            //console.warn(`ScatterElements: indices.shape[axis] != updates.shape[axis] at axis=${axis}.`);
           }
         }
 

@@ -33,7 +33,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
 
   if (!starts || !ends) {
     // dynamic Slice → leave as-is (handler returns false so TransformChain will process normally)
-    console.log("Unable to read attributes of the Slice", sl.id);
+    //console.log("Unable to read attributes of the Slice", sl.id);
     return false;
   }
 

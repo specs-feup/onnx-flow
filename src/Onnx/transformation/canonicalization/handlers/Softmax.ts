@@ -2,7 +2,6 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { DataType } from "../../../OnnxTypes.js";
 import { uniq, addEdge, toArrayLike, makeI64ShapeConst } from "../../../Utils.js";
 
 /**
@@ -35,7 +34,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
   const rank = inShape.length;
 
   // axis attribute (default -1 per opset >= 13)
-  const attrs = (op as any).getAttributes?.() ?? (op as any).attributes ?? {};
+  const attrs = op.getAttributes?.() ?? op.attributes ?? {};
   let axis = Number(attrs.axis ?? -1);
   if (rank > 0 && axis < 0) axis = (axis + rank) % rank;
 
@@ -55,36 +54,36 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
     .init(new OperationNode.Builder("ReduceMax", [X], { keepdims: 1, axes: [axis] }))
     .as(OperationNode);
   const M = g.addNode(uniq(g, `sm_maxT_${op.id}`))
-    .init(new TensorNode.Builder(X.literalType as DataType, redShape, "intermediate"))
+    .init(new TensorNode.Builder(X.literalType, redShape, "intermediate"))
     .as(TensorNode);
-  addEdge(g, rmax, M, X.literalType as DataType, M.shape);
+  addEdge(g, rmax, M, X.literalType, M.shape);
 
   // ---- sh = Sub(X, m)
   const sub = g.addNode(uniq(g, `sm_sub_${op.id}`))
     .init(new OperationNode.Builder("Sub", [X, M], {}))
     .as(OperationNode);
   const SH = g.addNode(uniq(g, `sm_shT_${op.id}`))
-    .init(new TensorNode.Builder(X.literalType as DataType, xShape, "intermediate"))
+    .init(new TensorNode.Builder(X.literalType, xShape, "intermediate"))
     .as(TensorNode);
-  addEdge(g, sub, SH, X.literalType as DataType, SH.shape);
+  addEdge(g, sub, SH, X.literalType, SH.shape);
 
   // ---- ex = Exp(sh)
   const exp = g.addNode(uniq(g, `sm_exp_${op.id}`))
     .init(new OperationNode.Builder("Exp", [SH], {}))
     .as(OperationNode);
   const EX = g.addNode(uniq(g, `sm_exT_${op.id}`))
-    .init(new TensorNode.Builder(X.literalType as DataType, xShape, "intermediate"))
+    .init(new TensorNode.Builder(X.literalType, xShape, "intermediate"))
     .as(TensorNode);
-  addEdge(g, exp, EX, X.literalType as DataType, EX.shape);
+  addEdge(g, exp, EX, X.literalType, EX.shape);
 
   // ---- den = ReduceSum(ex, axes=[axis], keepdims=1)
   const rsum = g.addNode(uniq(g, `sm_rsum_${op.id}`))
     .init(new OperationNode.Builder("ReduceSum", [EX, makeI64ShapeConst(g, `sm_axes_${op.id}`, [axis])], { keepdims: 1 }))
     .as(OperationNode);
   const DEN = g.addNode(uniq(g, `sm_denT_${op.id}`))
-    .init(new TensorNode.Builder(X.literalType as DataType, redShape, "intermediate"))
+    .init(new TensorNode.Builder(X.literalType, redShape, "intermediate"))
     .as(TensorNode);
-  addEdge(g, rsum, DEN, X.literalType as DataType, DEN.shape);
+  addEdge(g, rsum, DEN, X.literalType, DEN.shape);
 
   // ---- Y = Div(ex, den)
   const div = g.addNode(uniq(g, `sm_div_${op.id}`))

@@ -80,7 +80,7 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     .map(n => n.as(TensorNode)) ?? [];
 
   for (const t of tensorInputs) {
-    if (t.shape.length === 1) {
+    if (t.shape && t.shape.length === 1) {
       const producer = t.getIncomers?.[0]?.source;
       if (producer?.is(OperationNode) && producer.as(OperationNode).type === "Gather") {
         if (!(isReduce(op) || SUP.has(op.type))) {
@@ -90,7 +90,7 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     }
   }
 
-  const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
+  const inputHasShape = tensorInputs.some(t => t.shape && t.shape.length >= 1);
   if (inputHasShape) return true;
 
   for (const t of tensorInputs) {

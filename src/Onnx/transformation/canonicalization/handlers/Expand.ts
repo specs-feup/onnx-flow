@@ -11,11 +11,14 @@ export default function expandHandler(
   if (op.type !== "Expand") return false;
 
   const ins = op.getInputs?.() ?? [];
-  if (ins.length < 2) return false;
+  if (ins.length !== 2) return false;
 
-  const data = ins[0]?.is?.(TensorNode) ? ins[0].as(TensorNode) : undefined;
-  const shape = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-  if (!data || !shape) return false;
+  const xIn = ins[0];
+  const shapeIn = ins[1];
+  if (!xIn?.is?.(TensorNode) || !shapeIn?.is?.(TensorNode)) return false;
+
+  const X = xIn.as(TensorNode);
+  const shape = shapeIn.as(TensorNode);
 
   const outs = toArrayLike<TensorNode.Class>(
     op.getOutgoers?.targets?.filterIs?.(TensorNode)
@@ -23,48 +26,89 @@ export default function expandHandler(
   if (outs.length !== 1) return false;
   const Y = outs[0];
 
-  const inDtype = (data.literalType ?? DataType.FLOAT) as DataType;
+  // Expand preserves X's dtype.
+  const dt = (X.literalType as DataType | undefined)
+          ?? (Y.literalType as DataType | undefined);
+  if (dt == null) {
+    // If we don't know the dtype, don't touch this node.
+    return false;
+  }
 
-  // --- ConstantOfShape with NO 'value' attribute (defaults to 0.0 float)
+  // Only handle numeric / bool-ish types we know how to zero-fill.
+  switch (dt) {
+    case DataType.FLOAT:
+    case DataType.FLOAT16:
+    case DataType.BFLOAT16:
+    case DataType.DOUBLE:
+    case DataType.INT8:
+    case DataType.UINT8:
+    case DataType.INT16:
+    case DataType.UINT16:
+    case DataType.INT32:
+    case DataType.UINT32:
+    case DataType.INT64:
+    case DataType.UINT64:
+    case DataType.BOOL:
+      break;
+    default:
+      return false;
+  }
+
+  // Pick a reasonable meta-shape for the zeros/add result.
+  // This is for graph typing only; runtime shape still comes from ConstantOfShape(shape).
+  let outShape: Array<number | String> | undefined;
+
+  if (Array.isArray(Y.shape) && Y.shape.length > 0) {
+    outShape = [...Y.shape];
+  } else if (Array.isArray(X.shape) && X.shape.length > 0) {
+    // We at least know the rank; dims may be unknown.
+    outShape = new Array(X.shape.length).fill(undefined);
+  } else {
+    // Fallback: leave shape unknown; ONNX IR allows this.
+    outShape = undefined;
+  }
+
+  // 1) zeros_f = ConstantOfShape(shape)  (defaults to FLOAT 0.0)
   const cosOp = g
-    .addNode(uniq(g, `Expand_fill_${op.id}`))
+    .addNode(uniq(g, `${op.id}_expand_fill`))
     .init(new OperationNode.Builder("ConstantOfShape", [shape], {}))
     .as(OperationNode);
 
-  const cosOut = g
-    .addNode(uniq(g, `Expand_fill_out_${op.id}`))
-    .init(new TensorNode.Builder(DataType.FLOAT, Array.isArray(Y.shape) ? [...Y.shape] : [], "intermediate"))
+  const zerosF = g
+    .addNode(uniq(g, `${op.id}_expand_fill_out`))
+    .init(new TensorNode.Builder(DataType.FLOAT, outShape as any, "intermediate"))
     .as(TensorNode);
 
-  addEdge(g, cosOp, cosOut, DataType.FLOAT, cosOut.shape);
+  addEdge(g, cosOp, zerosF, DataType.FLOAT, outShape);
 
-  // --- If needed, Cast fill to input dtype
-  const fillForAdd =
-    inDtype === DataType.FLOAT
-      ? cosOut
-      : (() => {
-          const castOp = g
-            .addNode(uniq(g, `Expand_cast_${op.id}`))
-            .init(new OperationNode.Builder("Cast", [cosOut], { to: inDtype }))
-            .as(OperationNode);
+  // 2) If needed, Cast zeros to X's dtype
+  let zeros = zerosF;
+  if (dt !== DataType.FLOAT) {
+    const castOp = g
+      .addNode(uniq(g, `${op.id}_expand_cast`))
+      .init(new OperationNode.Builder("Cast", [zerosF], { to: dt }))
+      .as(OperationNode);
 
-          const castOut = g
-            .addNode(uniq(g, `Expand_cast_out_${op.id}`))
-            .init(new TensorNode.Builder(inDtype, Array.isArray(Y.shape) ? [...Y.shape] : [], "intermediate"))
-            .as(TensorNode);
+    const zerosCast = g
+      .addNode(uniq(g, `${op.id}_expand_cast_out`))
+      .init(new TensorNode.Builder(dt, outShape as any, "intermediate"))
+      .as(TensorNode);
 
-          addEdge(g, castOp, castOut, inDtype, castOut.shape);
-          return castOut;
-        })();
+    addEdge(g, castOp, zerosCast, dt, outShape);
+    zeros = zerosCast;
+  }
 
-  // Add(data, fill) => Y (broadcast = expand)
+  // 3) Y = Add(X, zeros)  (broadcast does the Expand)
   const addOp = g
-    .addNode(uniq(g, `Expand_add_${op.id}`))
-    .init(new OperationNode.Builder("Add", [data, fillForAdd], {}))
+    .addNode(uniq(g, `${op.id}_expand_add`))
+    .init(new OperationNode.Builder("Add", [X, zeros], {}))
     .as(OperationNode);
 
-  addEdge(g, addOp, Y, Y.literalType as DataType, Y.shape);
+  // CRUCIAL: use `dt` (from X), not `Y.literalType` which may be unset.
+  addEdge(g, addOp, Y, dt, outShape ?? Y.shape);
 
+  // Remove original Expand
   g.getNodeById(op.id)?.remove();
+
   return true;
 }
