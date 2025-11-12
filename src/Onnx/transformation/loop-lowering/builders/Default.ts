@@ -10,7 +10,8 @@ import {
   scalarInt64
 } from "../../../Utils.js";
 import {
-  LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx, resolveFusedInput
+  LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx, resolveFusedInput,
+  broadcastShapes
 } from "../BuildLoop.js";
 
 // Handlers needed by the default builder only
@@ -19,8 +20,8 @@ import handleTranspose from "../handlers/Transpose.js";
 
 export default class DefaultBuilder implements LoopBuilder {
   canHandle(chain: OperationNode.Class[]) {
-    // No MatMul, no Range → handled here
-    return !chain.some(op => op.type === "MatMul" || op.type === "Range");
+    // No Slice, no Range → handled here
+    return !chain.some(op => op.type === "Slice" || op.type === "Range");
   }
 
   build(
@@ -35,10 +36,24 @@ export default class DefaultBuilder implements LoopBuilder {
       : outTensor.literalType;
 
     // infer output shape statically (no Range here)
-    const rawOutShape = outTensor.shape.length === 0
-      ? lastOp.getOutgoers.first().shape
-      : outTensor.shape;
-    const staticOut = toStaticShape(rawOutShape as Shape);
+    const rawOutShape = Array.isArray(outTensor?.shape) ? outTensor.shape : [undefined];
+    let staticOut = toStaticShape(rawOutShape as Shape);
+
+    if (!staticOut || staticOut.length === 0 || staticOut.some(d => d === -1 || d === undefined)) {
+      const inputShapes = [...new Map(
+        chain.flatMap(op => (op.getInputs()?.filter(n => n.is(TensorNode)) ?? [])
+          .map(t => [t.id, t.as(TensorNode)]))
+      ).values()]
+        .map(t => toStaticShape(t.shape as Shape))
+        .filter(s => Array.isArray(s) && s.length > 0); // ignore scalars
+
+      if (inputShapes.length > 0) {
+        staticOut = broadcastShapes(inputShapes);
+      } else {
+        staticOut = []; // truly scalar as last resort
+      }
+    }
+
     const totalIters = staticOut.length <= 1 ? (staticOut[0] ?? 1) : staticOut.reduce((a, b) => a * b, 1);
     const carryLen = totalIters;
 
@@ -114,7 +129,7 @@ export default class DefaultBuilder implements LoopBuilder {
       lastOut,
       indicesOut,
       elemTy,
-      outShape: rawOutShape,
+      outShape: staticOut,
       inputs,
       outTensor,
       trip,
