@@ -88,6 +88,8 @@ export function buildLinearIndex(
       .as(TensorNode);
     g.addEdge(mulN, mulOut).init(new OnnxEdge.Builder(mulOut.literalType, mulOut.shape)).as(OnnxEdge);
 
+    //console.log("N:", idx[i].id,"STRIDES:", strides, " | Mul:", mulOut.id);
+
     const addN = g.addNode(uniq(g, `lin_add_${tag}_${i}`))
       .init(new OperationNode.Builder("Add", [acc, mulOut]))
       .as(OperationNode);
@@ -189,13 +191,64 @@ export function gatherAt2DPoint(
   return [g1, out];
 }
 
+export function isBroadcastableTo(
+  inShape: (number | string)[],
+  outShape: (number | string)[]
+): boolean {
+  const inDims = toStaticShape(inShape as Shape);
+  const outDims = toStaticShape(outShape as Shape);
+
+  let i = inDims.length - 1;
+  let j = outDims.length - 1;
+
+  while (j >= 0) {
+    const od = outDims[j];
+    const id = i >= 0 ? inDims[i] : 1;
+
+    const idKnown = id > 0;
+    const odKnown = od > 0;
+
+    if (idKnown && odKnown) {
+      if (id !== od && id !== 1) return false;
+    } else if (idKnown && !odKnown) {
+      if (id !== 1) return false;
+    }
+    // if !idKnown && odKnown: ok, input can broadcast later
+    // if both unknown: also ok
+
+    i--; j--;
+  }
+
+  // leftover leading input dims must be 1 or unknown
+  while (i >= 0) {
+    const id = inDims[i];
+    if (id > 1) return false;
+    i--;
+  }
+
+  return true;
+}
+
+export function assertBroadcastableTo(
+  inShape: (number | string)[],
+  outShape: (number | string)[],
+  tag: string
+): void {
+  if (!isBroadcastableTo(inShape, outShape)) {
+    throw new Error(
+      `Broadcast error in ${tag}: shape ${JSON.stringify(inShape)} not broadcastable to ${JSON.stringify(outShape)}`
+    );
+  }
+}
+
 export function gatherWithBroadcast(
   g: OnnxGraph.Class, t: TensorNode.Class, ctx: LoopCtx, tag: string
 ): TensorNode.Class {
   if (t.shape.length === 0) return t;
 
   const outDimsStatic = toStaticShape(ctx.outShape as Shape);
-  const inDims = toStaticShape(t.shape as Shape).map(d => (d > 0 ? d : 1));
+  const inDimsRaw = toStaticShape(t.shape as Shape)
+  const inDims = inDimsRaw.map(d => (d > 0 ? d : 1));
 
   if (inDims.length === 1 && outDimsStatic.length === 1 && outDimsStatic[0] <= 0) {
     const idx = ctx.unsqIdx ?? unsqueezeIdx(g, ctx.iter, ctx.axes, `unsq_idx_${tag}`);
@@ -572,6 +625,7 @@ export function buildLoopForChain(
 
     graph.addEdge(loop_out, reshape).init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape)).as(OnnxEdge);
     graph.addEdge(shapeNode, reshape).init(new OnnxEdge.Builder(shapeNode.literalType, shapeNode.shape)).as(OnnxEdge);
+    outTensor.setShape(outShape);
     graph.addEdge(reshape, outTensor).init(new OnnxEdge.Builder(elemTy, outShape)).as(OnnxEdge);
   } else {
     graph.addEdge(loop, outTensor).init(new OnnxEdge.Builder(elemTy, outShape)).as(OnnxEdge);
