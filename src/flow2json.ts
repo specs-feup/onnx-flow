@@ -32,7 +32,7 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
     const opNode = graph.getNodeById(nodeId);
     for (const inputId of inputs) {
       const inputNode = graph.getNodeById(inputId)?.tryAs(TensorNode);
-      if (inputNode && inputNode.type == "intermediate") {
+      if (inputNode && (inputNode.type === "intermediate" || inputNode.type === "output")) {
         const alreadyConnected = inputNode.getOutgoers?.some(e =>
           e.target.id === opNode.id
         );

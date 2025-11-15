@@ -263,7 +263,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
       const tns = inp.tryAs(TensorNode);
 
       let interEdge = null;
-      if (tns.type === "intermediate") interEdge = tns.getIncomers.first;
+      if (tns && tns.type === "intermediate") interEdge = tns.getIncomers.first;
 
       const directEdge = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
 

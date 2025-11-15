@@ -48,18 +48,21 @@ function fixBuffers(obj: any): any {
  * - We only touch Constant-fed shapes with explicit int64Data arrays (not rawData).
  * - This keeps within ONNX Reshape semantics: one -1 allowed, 0 means "copy from input".
  */
-function fixSingleNullReshapeShapes(model: any): void {
-  const graph = model?.graph;
+function fixSingleNullReshapeShapesInGraph(graph: any): void {
   if (!graph) return;
 
   const nodes: any[] = graph.node ?? [];
   // Map output name → producer node
   const byOutput: Record<string, any> = {};
-  for (const n of nodes) {
-    for (const o of n.output ?? []) byOutput[o] = n;
-  }
+  for (const n of nodes) for (const o of n.output ?? []) byOutput[o] = n;
 
   for (const n of nodes) {
+    // --- Recurse into subgraphs first
+    for (const a of n.attribute ?? []) {
+      if (a?.g) fixSingleNullReshapeShapesInGraph(a.g);
+      if (Array.isArray(a?.graphs)) for (const sg of a.graphs) fixSingleNullReshapeShapesInGraph(sg);
+    }
+
     if (n.opType !== 'Reshape') continue;
 
     const shapeInput = n.input?.[1];
@@ -68,16 +71,15 @@ function fixSingleNullReshapeShapes(model: any): void {
     const shapeProducer = byOutput[shapeInput];
     if (!shapeProducer || shapeProducer.opType !== 'Constant') continue;
 
-    // Find a tensor attribute on the Constant (usually 'value' or unnamed)
+    // Find Constant’s tensor attribute (commonly "value" or unnamed)
     const attrs = shapeProducer.attribute ?? [];
     const tensorAttr = attrs.find((a: any) => a?.t && a.t.dataType === /* INT64 */ 7);
     const t = tensorAttr?.t;
     if (!t) continue;
 
-    // Only handle explicit int64Data (we won't decode rawData here)
+    // Only handle explicit int64Data
     if (!Array.isArray(t.int64Data)) continue;
 
-    // Normalize "null"/undefined to null for counting
     const data = t.int64Data.map((v: any) => (v === 'null' || v === undefined) ? null : v);
     const nullIdxs: number[] = [];
     for (let i = 0; i < data.length; i++) if (data[i] == null) nullIdxs.push(i);
@@ -85,28 +87,24 @@ function fixSingleNullReshapeShapes(model: any): void {
     if (nullIdxs.length === 0) continue;
 
     if (nullIdxs.length === 1) {
-      // Exactly one unknown -> infer (-1)
       const out = data.slice();
-      out[nullIdxs[0]] = -1;
+      out[nullIdxs[0]] = -1;       // ONNX Reshape: one unknown → -1
       t.int64Data = out;
       continue;
     }
 
-    // 2+ nulls
     if (STRICT_RESHAPE_NULLS) {
       const cname = shapeProducer.name || shapeInput;
       throw new Error(
         `Reshape shape Constant(${cname}) has ${nullIdxs.length} unknown dims. ` +
-        `ONNX allows only one -1. Build the shape dynamically with Shape/Gather/Concat.`
+        `ONNX allows only one -1. Build shape dynamically with Shape/Gather/Concat.`
       );
     } else {
-      // Heuristic fallback: first -> -1, rest -> 0 (copy from input)
+      // Heuristic: first unknown → -1, the rest → 0 (copy-dim)
       const out = data.slice();
       out[nullIdxs[0]] = -1;
       for (let k = 1; k < nullIdxs.length; k++) out[nullIdxs[k]] = 0;
-      // Optional: warn (non-fatal)
       const cname = shapeProducer.name || shapeInput;
-      // eslint-disable-next-line no-console
       console.warn(
         `[json2onnx] Reshape(${n.name || ''}) shape Constant(${cname}) had ${nullIdxs.length} unknown dims; ` +
         `converted first -> -1, others -> 0 (copy dim).`
@@ -115,6 +113,14 @@ function fixSingleNullReshapeShapes(model: any): void {
     }
   }
 }
+
+// OLD entry point now delegates to the recursive walker
+function fixSingleNullReshapeShapes(model: any): void {
+  const graph = model?.graph;
+  if (!graph) return;
+  fixSingleNullReshapeShapesInGraph(graph);
+}
+
 
 // Coerce numeric-like strings to numbers for fields protobuf expects as ints/floats.
 // Also normalizes common ONNX numeric array fields (ints, floats, dims, etc.).
@@ -138,17 +144,34 @@ export function coerceNumericFields(obj: any): any {
 
   // Helpers
   const toInt = (x: any) => {
-    if (typeof x === 'string') return x.trim() === '' ? 0 : parseInt(x, 10);
+    if (x == null) return 0;
+    if (typeof x === 'string') {
+      const s = x.trim().toLowerCase();
+      if (s === '' || s === 'null' || s === 'nan' || s === 'undefined') return 0;
+      const n = parseInt(x, 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+    if (typeof x === 'number') {
+      return Number.isFinite(x) ? Math.trunc(x) : 0;
+    }
     if (typeof x === 'bigint') {
       const n = Number(x);
       return Number.isFinite(n) ? n : parseInt(x.toString(), 10);
     }
-    return x;
+    return 0;
   };
+
   const toFloat = (x: any) => {
-    if (typeof x === 'string') return x.trim() === '' ? 0 : parseFloat(x);
+    if (x == null) return 0;
+    if (typeof x === 'string') {
+      const s = x.trim().toLowerCase();
+      if (s === '' || s === 'null' || s === 'nan' || s === 'undefined') return 0;
+      const n = parseFloat(x);
+      return Number.isFinite(n) ? n : 0;
+    }
+    if (typeof x === 'number') return Number.isFinite(x) ? x : 0;
     if (typeof x === 'bigint') return Number(x);
-    return x;
+    return 0;
   };
 
   // Normalize scalar → array for tensor payloads
