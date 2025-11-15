@@ -7,6 +7,7 @@ import OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
+import lowerLSTM from "./builders/LSTM.js";
 
 const SUP = new Set([
   "Add","Sub","Mul","Div","MatMul","Transpose","Range",
@@ -53,6 +54,33 @@ function sameOrBroadcastsTo(shapeA: (number|String) [], shapeB: (number|String)[
   return true;
 }
 
+function splitByMatMul(seg: OperationNode.Class[]): OperationNode.Class[][] {
+  const out: OperationNode.Class[][] = [];
+  let cur: OperationNode.Class[] = [];
+  let curHasMatMul = false;
+
+  const flush = () => {
+    if (cur.length) out.push(cur);
+    cur = [];
+    curHasMatMul = false;
+  };
+
+  for (const op of seg) {
+    if (op.type === "MatMul") {
+      if (curHasMatMul) {
+        // Close current group before starting a new MatMul group
+        flush();
+      }
+      cur.push(op);
+      curHasMatMul = true;
+    } else {
+      cur.push(op);
+    }
+  }
+  flush();
+  return out;
+}
+
 function canBeEpilogue(op: OperationNode.Class, reducedOutShape: (number|String)[]): boolean {
   if (isElementwiseUnary(op)) return true;
   if (isElementwiseBinary(op)) {
@@ -79,16 +107,16 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     ?.filter(n => n.is(TensorNode))
     .map(n => n.as(TensorNode)) ?? [];
 
+  /*
   for (const t of tensorInputs) {
     if (t.shape && t.shape.length === 1) {
       const producer = t.getIncomers?.[0]?.source;
       if (producer?.is(OperationNode) && producer.as(OperationNode).type === "Gather") {
-        if (!(isReduce(op) || SUP.has(op.type))) {
-          return false;
-        }
+        return false;
       }
     }
   }
+  */
 
   const inputHasShape = tensorInputs.some(t => t.shape && t.shape.length >= 1);
   if (inputHasShape) return true;
@@ -122,6 +150,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
   ) {}
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
+    //lowerLSTM(g);
     // Fast path: no fusion — build one Loop per supported op
     if (!this.fuse) {
       const supported = new Set<string>();
@@ -219,25 +248,30 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
         }
       }
 
-      // 3) Build each segment in order (reduce-aware)
+      // 3) Build each segment in order (reduce-aware, plus MatMul splitting)
       for (const seg0 of segments) {
-        // Re-hydrate after prior mutations:
-        const seg = seg0
-          .map(op => g.getNodeById(op.id))
-          .filter(n => n && n.is(OperationNode))
-          .map(n => n!.as(OperationNode));
+        // First, split so each subsegment has at most one MatMul
+        const mmSegments = splitByMatMul(seg0);
 
-        if (seg.length === 0) continue;
+        for (const mmSeg0 of mmSegments) {
+          // Re-hydrate after prior mutations:
+          const seg = mmSeg0
+            .map(op => g.getNodeById(op.id))
+            .filter(n => n && n.is(OperationNode))
+            .map(n => n!.as(OperationNode));
 
-        const isSingleReduce = seg.length === 1 && REDUCE_SET.has(seg[0].type);
+          if (seg.length === 0) continue;
 
-        buildLoopForChain(
-          seg,
-          g,
-          /* fuse = */ !isSingleReduce,   // no fusion inside reduce segment
-          this.recurse,
-          this.coalesce
-        );
+          const isSingleReduce = seg.length === 1 && REDUCE_SET.has(seg[0].type);
+
+          buildLoopForChain(
+            seg,
+            g,
+            /* fuse = */ this.fuse && !isSingleReduce,
+            this.recurse,
+            this.coalesce
+          );
+        }
       }
     }
 

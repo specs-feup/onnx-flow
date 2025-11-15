@@ -548,13 +548,27 @@ export function buildLoopForChain(
   body.addEdge(condIn, idCond).init(new OnnxEdge.Builder(condIn.literalType, condIn.shape));
   body.addEdge(idCond, condOut).init(new OnnxEdge.Builder(condOut.literalType, condOut.shape));
 
+  // --- ensure updates dtype == carry dtype ---
+  let updates = lastOut;
+  if (updates.literalType !== elemTy) {
+    const castU = body.addNode(uniq(body, `cast_updates_${updates.id}`))
+      .init(new OperationNode.Builder("Cast", [updates], { to: elemTy }))
+      .as(OperationNode);
+    const castUOut = body.addNode(uniq(body, `cast_updates_out_${updates.id}`))
+      .init(new TensorNode.Builder(elemTy, updates.shape, "intermediate"))
+      .as(TensorNode);
+    body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(elemTy, updates.shape));
+    updates = castUOut;
+  }
+
   // Scatter update
   const scatter = body.addNode(uniq(body, "scatter"))
-    .init(new OperationNode.Builder("ScatterElements", [ctx.carry, indicesOut, lastOut], { axis: 0 }))
+    .init(new OperationNode.Builder("ScatterElements", [ctx.carry, indicesOut, updates], { axis: 0 }))
     .as(OperationNode);
+
   body.addEdge(ctx.carry, scatter).init(new OnnxEdge.Builder(ctx.carry.literalType, ctx.carry.shape));
   body.addEdge(indicesOut, scatter).init(new OnnxEdge.Builder(indicesOut.literalType, indicesOut.shape));
-  body.addEdge(lastOut, scatter).init(new OnnxEdge.Builder(lastOut.literalType, lastOut.shape));
+  body.addEdge(updates, scatter).init(new OnnxEdge.Builder(updates.literalType, updates.shape));
 
   const carryOut = body.addNode(uniq(body, "carry_out"))
     .init(new TensorNode.Builder(elemTy, ctx.carry.shape, "output"))
@@ -614,7 +628,7 @@ export function buildLoopForChain(
       .init(new TensorNode.Builder(elemTy, ctx.carry.shape, 'intermediate')).as(TensorNode);
     graph.addEdge(loop, loop_out).init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape)).as(OnnxEdge);
 
-    const shapeVec = int64Vec(outShape as number[]);
+    const shapeVec = int64Vec((outShape as number[]).includes(-1) ? [-1] : outShape as number[]);
     const shapeNode = graph.addNode(uniq(graph, `reshape_shape_${chain[0].id}`))
       .init(new TensorNode.Builder(DataType.INT64, [outShape.length], "constant", shapeVec))
       .as(TensorNode);

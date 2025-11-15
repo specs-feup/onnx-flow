@@ -26,8 +26,8 @@ function sliceBatchThenReshape2D(
   batch: number[],
   batchDigits: TensorNode.Class[],
   axesConst: TensorNode.Class,
-  M: number,
-  K_or_N: number,
+  M: TensorNode.Class,
+  K_or_N: TensorNode.Class,
   tag: string
 ): TensorNode.Class {
   let cur = t;
@@ -57,12 +57,64 @@ function sliceBatchThenReshape2D(
     }
   }
 
-  const shape2 = makeTensorConst(g, `shape2_${tag}`, DataType.INT64, "constant", int64Vec([M, K_or_N]));
-  const resh = g.addNode(uniq(g, `reshape2D_${tag}`)).init(new OperationNode.Builder("Reshape", [cur, shape2])).as(OperationNode);
-  const out2d = g.addNode(uniq(g, `reshape2D_out_${tag}`)).init(new TensorNode.Builder(cur.literalType, [M, K_or_N], "intermediate")).as(TensorNode);
+  const shape2 = shapeVec2(g, `shape2_${tag}`, M, K_or_N);
+  const resh = g.addNode(uniq(g, `reshape2D_${tag}`))
+    .init(new OperationNode.Builder("Reshape", [cur, shape2])).as(OperationNode);
+  const out2d = g.addNode(uniq(g, `reshape2D_out_${tag}`)).init(new TensorNode.Builder(cur.literalType, shape2.shape, "intermediate")).as(TensorNode);
   g.addEdge(resh, out2d).init(new OnnxEdge.Builder(out2d.literalType, out2d.shape)).as(OnnxEdge);
 
   return out2d;
+}
+
+function isKnownDim(d: number | undefined) {
+  return typeof d === 'number' && Number.isFinite(d) && d > 0;
+}
+
+function scalarI64(g: OnnxGraph.Class, name: string, v: number) {
+  return makeTensorConst(g, name, DataType.INT64, "constant", scalarInt64(v));
+}
+
+function gatherDim(
+  g: OnnxGraph.Class,
+  tag: string,
+  src: TensorNode.Class,   // e.g., A2D or B2D
+  negAxis: -2 | -1         // which trailing dim to read
+): TensorNode.Class {
+  const shape = g.addNode(uniq(g, `shape_${tag}`))
+    .init(new OperationNode.Builder("Shape", [src]))
+    .as(OperationNode);
+  const idx = makeTensorConst(g, `idx_${tag}`, DataType.INT64, "constant", int64Vec([negAxis]));
+  const gather = g.addNode(uniq(g, `g_${tag}`))
+    .init(new OperationNode.Builder("Gather", [shape, idx], { axis: 0 }))
+    .as(OperationNode);
+  const out = g.addNode(uniq(g, `g_out_${tag}`))
+    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+    .as(TensorNode);
+  g.addEdge(gather, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+  return out;
+}
+
+function as1D(g: OnnxGraph.Class, name: string, scalarI64T: TensorNode.Class) {
+  const axes = makeTensorConst(g, `axes_${name}`, DataType.INT64, "constant", int64Vec([0]));
+  return unsqueezeIdx(g, scalarI64T, axes, `${name}_u`); // 1-D [1] from scalar
+}
+
+function shapeVec2(
+  g: OnnxGraph.Class,
+  name: string,
+  d0: TensorNode.Class,  // INT64 scalar
+  d1: TensorNode.Class   // INT64 scalar
+) {
+  const d0v = as1D(g, `${name}_d0`, d0);
+  const d1v = as1D(g, `${name}_d1`, d1);
+  const cat = g.addNode(uniq(g, `concat_${name}`))
+    .init(new OperationNode.Builder("Concat", [d0v, d1v], { axis: 0 }))
+    .as(OperationNode);
+  const out = g.addNode(uniq(g, `concat_out_${name}`))
+    .init(new TensorNode.Builder(DataType.INT64, [2], "intermediate"))
+    .as(TensorNode);
+  g.addEdge(cat, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+  return out;
 }
 
 
@@ -94,9 +146,12 @@ export default function handleMatMul(
   const elemTy = lhsTensor.literalType;
 
   // Common constants
-  const M_c  = makeTensorConst(g, `M_${op.id}`,  DataType.INT64, "constant", scalarInt64(M));
-  const K_c  = makeTensorConst(g, `K_${op.id}`,  DataType.INT64, "constant", scalarInt64(K));
-  const N_c  = makeTensorConst(g, `N_${op.id}`,  DataType.INT64, "constant", scalarInt64(N));
+  const M_c = isKnownDim(M) ? scalarI64(g, `M_${op.id}`, Number(M))
+                            : gatherDim(g, `M_${op.id}`, lhsTensor, -2);
+  const K_c = isKnownDim(K) ? scalarI64(g, `K_${op.id}`, Number(K))
+                            : gatherDim(g, `K_${op.id}`, lhsTensor, -1);
+  const N_c = isKnownDim(N) ? scalarI64(g, `N_${op.id}`, Number(N))
+                            : gatherDim(g, `N_${op.id}`, rhsTensor, -1);
 
   // KN = K*N
   const KN_node = g
@@ -154,8 +209,8 @@ export default function handleMatMul(
       batch,
       bDigits,
       axesConst,
-      M,
-      K,
+      M_c,
+      K_c,
       `A_${op.id}`
     );
     B2D = sliceBatchThenReshape2D(
@@ -165,15 +220,17 @@ export default function handleMatMul(
       batch,
       bDigits,
       axesConst,
-      K,
-      N,
+      K_c,
+      N_c,
       `B_${op.id}`
     );
   } else {
     // no batch: t_in = t
     tIn = ctx.iter;
-    A2D = targetReshape(g, lhsTensor, [M, K], `A2D_${op.id}`);
-    B2D = targetReshape(g, rhsTensor, [K, N], `B2D_${op.id}`);
+    const shapeA2D = shapeVec2(g, `shape2_A_${op.id}`, M_c, K_c);
+    A2D = reshapeTensor(g, lhsTensor, shapeA2D, `reshape2D_A_${op.id}`); 
+    const shapeB2D = shapeVec2(g, `shape2_B_${op.id}`, K_c, N_c);
+    B2D = reshapeTensor(g, rhsTensor, shapeB2D, `reshape2D_A_${op.id}`); 
   }
 
   // ---------------- decode i,j,k from t_in (NOT from full t) ----------------
@@ -317,7 +374,9 @@ export default function handleMatMul(
       .init(new TensorNode.Builder(elemTy, [1, K], "intermediate"))
       .as(TensorNode);
     g.addEdge(a_row_node, a_row).init(new OnnxEdge.Builder(a_row.literalType, a_row.shape)).as(OnnxEdge);
-    const a_vec = targetReshape(g, a_row, [K], `a_vec_${op.id}`); // [K]
+
+    //const Kv1 = as1D(g, `fixshape_a_vec_${op.id}`, K_c);
+    const a_vec = targetReshape(g, a_row, [K], `a_vec_${op.id}`);
 
     const a_pick_node = g
       .addNode(uniq(g, `a_pick_${op.id}`))
@@ -337,10 +396,13 @@ export default function handleMatMul(
       .as(OperationNode);
     const b_col = g
       .addNode(uniq(g, `b_col_out_${op.id}`))
-      .init(new TensorNode.Builder(elemTy, [K, 1], "intermediate"))
+      .init(new TensorNode.Builder(elemTy, [1, K], "intermediate"))
       .as(TensorNode);
     g.addEdge(b_col_node, b_col).init(new OnnxEdge.Builder(b_col.literalType, b_col.shape)).as(OnnxEdge);
-    const b_vec = targetReshape(g, b_col, [K], `b_vec_${op.id}`); // [K]
+
+
+    //const Kv1b = as1D(g, `fixshape_b_vec_${op.id}`, K_c);
+    const b_vec = targetReshape(g, b_col, [K], `b_vec_${op.id}`);
 
     const b_pick_node = g
       .addNode(uniq(g, `b_pick_${op.id}`))
@@ -388,14 +450,14 @@ export default function handleMatMul(
     g.addEdge(add_node, acc).init(new OnnxEdge.Builder(acc.literalType, acc.shape)).as(OnnxEdge);
 
     if (ctx.gateByK) {
-      const KM1_const = makeTensorConst(
-        g,
-        `Km1_${op.id}`,
-        DataType.INT64,
-        "constant",
-        scalarInt64(K - 1)
-      );
-      ctx.kM1 = KM1_const;
+      const one = scalarI64(g, `one_${op.id}`, 1);
+      const Km1  = g.addNode(uniq(g, `Km1_${op.id}`))
+        .init(new OperationNode.Builder("Sub", [K_c, one]))
+        .as(OperationNode);
+      const Km1_out = g.addNode(uniq(g, `Km1_out_${op.id}`))
+        .init(new TensorNode.Builder(DataType.INT64, [undefined], "intermediate")).as(TensorNode);
+      g.addEdge(Km1, Km1_out).init(new OnnxEdge.Builder(Km1_out.literalType, Km1_out.shape)).as(OnnxEdge);
+      ctx.kM1 = Km1_out;
     }
 
     ctx.running = acc;

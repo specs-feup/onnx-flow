@@ -145,7 +145,7 @@ export function isInt64Type(dt: number | string | undefined): boolean {
 }
 
 /** Decode an integer vector (pref INT64, else INT32) from a TensorProto-like object. */
-export function decodeIntegerVectorFromTensorProto(tv: AnyTensorProto | undefined): number[] | undefined {
+export function decodeIntegerVectorFromTensorProto(tv: AnyTensorProto): number[] | undefined {
   if (!tv) return undefined;
 
   // fast paths
@@ -217,12 +217,6 @@ export function addEdge(
     .as(OnnxEdge);
 }
 
-export function getOnnxName(tn?: TensorNode.Class): string | undefined {
-  if (!tn) return undefined;
-  const a: any = tn as any;
-  return a.extraAttrs?.onnxName ?? a.name ?? a.id ?? a.getName?.();
-}
-
 export function removeInitializerByName(g: OnnxGraph.Class, name?: string) {
   if (!name) return;
   const anyG: any = g as any;
@@ -254,7 +248,7 @@ export function maybeRemoveOrphanConstant(g: OnnxGraph.Class, tn?: TensorNode.Cl
     if (!stillUsed) src.remove();
   }
 
-  const onnxName = getOnnxName(tn);
+  const onnxName = tn.id;
   tn.remove();
   removeInitializerByName(g, onnxName);
 }

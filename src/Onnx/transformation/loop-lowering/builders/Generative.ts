@@ -29,11 +29,13 @@ export default class GenerativeBuilder implements LoopBuilder {
   ): BuildResult {
     const lastOp = chain.at(-1)!;
     const outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
-    const elemTy = outTensor.literalType === DataType.UNDEFINED
-      ? lastOp.getOutgoers.first().literalType
-      : outTensor.literalType;
 
-    // out shape is unknown-length 1D (Range defines its length at runtime)
+    const rangeOp = chain.find(op => op.type === "Range")!;
+
+    // Compute trip_count, cond, v_initial for Range at OUTER graph level
+    const [startT, limitT, deltaT] = rangeOp.getInputs()!.map(n => n.as(TensorNode));
+    const elemTy = startT.literalType;       // <- anchor carry type to Range dtype
+
     const outShape: (number | string)[] = [undefined];
 
     const inputs = new Map<string, TensorNode.Class>();
@@ -95,12 +97,20 @@ export default class GenerativeBuilder implements LoopBuilder {
       lastOut = unsqueezeIdx(body, lastOut, ctx.axes, "updateUnsq");
     }
 
+    // Cast the update to elemTy if needed (guards against float tails)
+    if (lastOut.literalType !== elemTy) {
+      const castU = body.addNode(uniq(body, `gen_cast_update_${lastOp.id}`))
+        .init(new OperationNode.Builder("Cast", [lastOut], { to: elemTy }))
+        .as(OperationNode);
+      const castUOut = body.addNode(uniq(body, `gen_cast_update_out_${lastOp.id}`))
+        .init(new TensorNode.Builder(elemTy, lastOut.shape, "intermediate"))
+        .as(TensorNode);
+      body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(elemTy, lastOut.shape)).as(OnnxEdge);
+      lastOut = castUOut;
+    }
+
     inferShapes(outer);
     inferShapes(body);
-
-    // Compute trip_count, cond, v_initial for Range at OUTER graph level
-    const rangeOp = chain.find(op => op.type === "Range")!;
-    const [startT, limitT, deltaT] = rangeOp.getInputs()!.map(n => n.as(TensorNode));
 
     const subN = outer.addNode(uniq(outer, `range_sub_${chain[0].id}`))
       .init(new OperationNode.Builder("Sub", [limitT, startT])).as(OperationNode);
