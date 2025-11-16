@@ -30,12 +30,17 @@ export default class GenerativeBuilder implements LoopBuilder {
     const lastOp = chain.at(-1)!;
     const outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
-    const rangeOp = chain.find(op => op.type === "Range")!;
+    // Find the Range op in the chain
+    const rangeOp = chain.find(op => op.type === "Range");
+    if (!rangeOp) {
+      throw new Error("GenerativeBuilder: expected a Range op in the chain");
+    }
 
-    // Compute trip_count, cond, v_initial for Range at OUTER graph level
-    const [startT, limitT, deltaT] = rangeOp.getInputs()!.map(n => n.as(TensorNode));
-    const elemTy = startT.literalType;       // <- anchor carry type to Range dtype
+    // Use the Range's start input to define the element type
+    const [start] = rangeOp.getInputs()!.map(n => n.as(TensorNode));
+    const elemTy = start.literalType;
 
+    // out shape is unknown-length 1D (Range defines its length at runtime)
     const outShape: (number | string)[] = [undefined];
 
     const inputs = new Map<string, TensorNode.Class>();
@@ -97,20 +102,11 @@ export default class GenerativeBuilder implements LoopBuilder {
       lastOut = unsqueezeIdx(body, lastOut, ctx.axes, "updateUnsq");
     }
 
-    // Cast the update to elemTy if needed (guards against float tails)
-    if (lastOut.literalType !== elemTy) {
-      const castU = body.addNode(uniq(body, `gen_cast_update_${lastOp.id}`))
-        .init(new OperationNode.Builder("Cast", [lastOut], { to: elemTy }))
-        .as(OperationNode);
-      const castUOut = body.addNode(uniq(body, `gen_cast_update_out_${lastOp.id}`))
-        .init(new TensorNode.Builder(elemTy, lastOut.shape, "intermediate"))
-        .as(TensorNode);
-      body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(elemTy, lastOut.shape)).as(OnnxEdge);
-      lastOut = castUOut;
-    }
-
     inferShapes(outer);
     inferShapes(body);
+
+    // Compute trip_count, cond, v_initial for Range at OUTER graph level
+    const [startT, limitT, deltaT] = rangeOp.getInputs()!.map(n => n.as(TensorNode));
 
     const subN = outer.addNode(uniq(outer, `range_sub_${chain[0].id}`))
       .init(new OperationNode.Builder("Sub", [limitT, startT])).as(OperationNode);
@@ -166,15 +162,35 @@ export default class GenerativeBuilder implements LoopBuilder {
       .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate")).as(TensorNode);
     outer.addEdge(tripUnsq, tripVec).init(new OnnxEdge.Builder(tripVec.literalType, tripVec.shape)).as(OnnxEdge);
 
-    const init = outer.addNode(uniq(outer, `range_init_${chain[0].id}`))
-      .init(new OperationNode.Builder("ConstantOfShape", [tripVec], {
-        value: { type: "TENSOR", ...zeroTensor(elemTy, [1]) }
-      }))
+    // 1) ConstantOfShape -> float zeros (no 'value' attr; ONNX default)
+    const cos = outer.addNode(uniq(outer, `range_init_${chain[0].id}`))
+      .init(new OperationNode.Builder("ConstantOfShape", [tripVec], {}))
       .as(OperationNode);
-    const v_initial = outer.addNode(uniq(outer, `range_init_out_${chain[0].id}`))
-      .init(new TensorNode.Builder(elemTy, [undefined], "intermediate"))
+
+    const zerosF = outer.addNode(uniq(outer, `range_initF_out_${chain[0].id}`))
+      .init(new TensorNode.Builder(DataType.FLOAT, [undefined], "intermediate"))
       .as(TensorNode);
-    outer.addEdge(init, v_initial).init(new OnnxEdge.Builder(v_initial.literalType, v_initial.shape)).as(OnnxEdge);
+    outer.addEdge(cos, zerosF)
+      .init(new OnnxEdge.Builder(zerosF.literalType, zerosF.shape))
+      .as(OnnxEdge);
+
+    // 2) Cast zeros to elemTy if needed
+    let v_initial: TensorNode.Class;
+    if (elemTy === DataType.FLOAT) {
+      v_initial = zerosF;
+    } else {
+      const castInit = outer.addNode(uniq(outer, `range_init_cast_${chain[0].id}`))
+        .init(new OperationNode.Builder("Cast", [zerosF], { to: elemTy }))
+        .as(OperationNode);
+
+      v_initial = outer.addNode(uniq(outer, `range_init_out_${chain[0].id}`))
+        .init(new TensorNode.Builder(elemTy, [undefined], "intermediate"))
+        .as(TensorNode);
+
+      outer.addEdge(castInit, v_initial)
+        .init(new OnnxEdge.Builder(v_initial.literalType, v_initial.shape))
+        .as(OnnxEdge);
+    }
 
     const trip = tripScalar; // scalar
     const cond = makeTensorConst(outer, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
