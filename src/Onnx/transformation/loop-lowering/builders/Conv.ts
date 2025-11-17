@@ -87,38 +87,186 @@ export default class ConvBuilder implements LoopBuilder {
     const xShape = resolveShape(X);
     const wShape = resolveShape(W);
 
-    if (xShape.length !== 4 || wShape.length !== 4) {
+    const is2D = xShape.length === 4 && wShape.length === 4;
+    const is1D = xShape.length === 3 && wShape.length === 3;
+
+    if (!is1D && !is2D) {
       throw new Error(
-        `ConvBuilder: only 2D Conv with NCHW layout is supported; got X=${xShape}, W=${wShape}`
+        `ConvBuilder: only 1D or 2D Conv with NCW/NCHW layout is supported; got X=${xShape}, W=${wShape}`
       );
     }
 
-    const [N, C, H, Win] = xShape;
-    const [M, Cw, kH, kW] = wShape;
+    let N: number;
+    let C: number;
+    let H: number;
+    let Win: number;
+    let M: number;
+    let Cw: number;
+    let kH: number;
+    let kW: number;
+
+    if (is2D) {
+      [N, C, H, Win] = xShape;
+      [M, Cw, kH, kW] = wShape;
+    } else {
+      // 1D Conv: X [N, C, W], W [M, C/group, kW]
+      const [N1, C1, W1] = xShape;
+      const [M1, Cw1, kW1] = wShape;
+
+      N = N1;
+      C = C1;
+      H = 1;          // fake spatial H dimension
+      Win = W1;
+
+      M = M1;
+      Cw = Cw1;
+      kH = 1;         // kernel height = 1
+      kW = kW1;
+    }
 
     // Bias shape: allow scalar [1] or per-output-channel [M]
+    // Also accept common "expanded" forms like [1, M, 1, 1] or [M, 1, 1].
     const bShape = B ? resolveShape(B) : [];
 
-    if (B && !(bShape.length === 1 && (bShape[0] === 1 || bShape[0] === M))) {
+    function classifyBiasShape(shape: number[]): "none" | "scalar" | "perChannel1D" | "perChannel4D" {
+      if (!B) return "none";
+      if (shape.length === 1 && shape[0] === 1) return "scalar";
+      if (shape.length === 1 && shape[0] === M) return "perChannel1D";
+      if (
+        shape.length === 4 &&
+        shape[0] === 1 &&
+        shape[1] === M &&
+        shape[2] === 1 &&
+        shape[3] === 1
+      ) {
+        return "perChannel4D";
+      }
+      // You can easily add more forms here later (e.g., [M,1,1]) if needed.
+      return "none";
+    }
+
+    const biasKind = B ? classifyBiasShape(bShape) : "none";
+
+    if (B && biasKind === "none") {
       throw new Error(
-        `ConvBuilder: only bias shapes [1] or [M] are supported for now; got B=${bShape}, M=${M}`
+        `ConvBuilder: unsupported bias shape; expected [1], [M] or [1,M,1,1]; got B=${bShape}, M=${M}`
       );
     }
 
     // ---- Attribute sanity + current restrictions -----------------------------
     const a = conv.getAttributes?.() ?? conv.attributes ?? {};
 
-    // Strides & dilations: normalise to [2] array of numbers
-    let strides: number[] = Array.isArray(a.strides) ? a.strides.map(Number) : [1, 1];
-    let dilations: number[] = Array.isArray(a.dilations) ? a.dilations.map(Number) : [1, 1];
-    if (strides.length === 1) strides = [strides[0], strides[0]];
-    if (dilations.length === 1) dilations = [dilations[0], dilations[0]];
+    // Strides & dilations
+    let strides: number[] = Array.isArray(a.strides)
+      ? a.strides.map(Number)
+      : is1D
+      ? [1]          // Conv1D default: [strideW]
+      : [1, 1];
 
-    // Pads: either explicit pads or VALID→[0,0,0,0]
+    let dilations: number[] = Array.isArray(a.dilations)
+      ? a.dilations.map(Number)
+      : is1D
+      ? [1]          // Conv1D default: [dilW]
+      : [1, 1];
+
+    let strideH: number;
+    let strideW: number;
+    let dilH: number;
+    let dilW: number;
+
+    if (is1D) {
+      // Only W dimension is “real”; H is the fake dimension = 1
+      const sW = strides[0] ?? 1;
+      const dW = dilations[0] ?? 1;
+
+      strideH = 1;
+      strideW = sW;
+      dilH = 1;
+      dilW = dW;
+
+      // Keep these as 2D-style arrays for later logs/debug if needed
+      strides = [strideH, strideW];
+      dilations = [dilH, dilW];
+    } else {
+      // 2D Conv
+      if (strides.length === 1) strides = [strides[0], strides[0]];
+      if (dilations.length === 1) dilations = [dilations[0], dilations[0]];
+
+      strideH = strides[0];
+      strideW = strides[1];
+      dilH = dilations[0];
+      dilW = dilations[1];
+    }
+
+    // Effective kernel sizes (for SAME_* padding computation)
+    const kEffH = dilH * (kH - 1) + 1;
+    const kEffW = dilW * (kW - 1) + 1;
+
     const auto_pad = (a.auto_pad ?? "NOTSET") as string;
-    let pads: number[] =
-    Array.isArray(a.pads) ? a.pads.map(Number) :
-    (auto_pad === "VALID" ? [0, 0, 0, 0] : [0, 0, 0, 0]); // for conv_simple
+
+    // Helper to compute SAME_* pads for one spatial dimension
+    function computeSamePads(
+      inSize: number,
+      effKernel: number,
+      stride: number,
+      isLower: boolean
+    ): [number, number] {
+      const out = Math.ceil(inSize / stride);
+      const totalPad = Math.max((out - 1) * stride + effKernel - inSize, 0);
+      // UPPER: more padding at the end; LOWER: more padding at the beginning
+      const padHead = isLower ? Math.ceil(totalPad / 2) : Math.floor(totalPad / 2);
+      const padTail = totalPad - padHead;
+      return [padHead, padTail];
+    }
+
+    let pads: number[];
+
+    if (Array.isArray(a.pads) && a.pads.length > 0) {
+      if (is1D) {
+        if (a.pads.length !== 2 && a.pads.length !== 4) {
+          throw new Error(
+            `ConvBuilder: Conv1D expects pads of length 2 or [0,pl,0,pr]; got pads=${a.pads}`
+          );
+        }
+        if (a.pads.length === 2) {
+          const [padLeft, padRight] = a.pads.map(Number);
+          pads = [0, padLeft, 0, padRight];
+        } else {
+          pads = a.pads.map(Number);
+        }
+      } else {
+        // 2D Conv
+        if (a.pads.length !== 4) {
+          throw new Error(
+            `ConvBuilder: Conv2D expects pads of length 4; got pads=${a.pads}`
+          );
+        }
+        pads = a.pads.map(Number);
+      }
+    } else if (auto_pad === "VALID" || auto_pad === "NOTSET" || !auto_pad) {
+      pads = [0, 0, 0, 0];
+    } else if (auto_pad === "SAME_UPPER" || auto_pad === "SAME_LOWER") {
+      const isLower = auto_pad === "SAME_LOWER";
+
+      let padTop = 0;
+      let padBottom = 0;
+      let padLeft = 0;
+      let padRight = 0;
+
+      if (!is1D) {
+        const pb = computeSamePads(H, kEffH, strideH, isLower);
+        padTop = pb[0];
+        padBottom = pb[1];
+      }
+
+      const plr = computeSamePads(Win, kEffW, strideW, isLower);
+      padLeft = plr[0];
+      padRight = plr[1];
+
+      pads = [padTop, padLeft, padBottom, padRight];
+    } else {
+      throw new Error(`ConvBuilder: unsupported auto_pad=${auto_pad}`);
+    }
 
     const group = Number(a.group ?? 1);
 
@@ -143,16 +291,8 @@ export default class ConvBuilder implements LoopBuilder {
     const padBottom = pads[2] ?? 0;
     const padRight = pads[3] ?? 0;
 
-    const strideH = strides[0];
-    const strideW = strides[1];
-    const dilH = dilations[0];
-    const dilW = dilations[1];
-
     const H_padded = H + padTop + padBottom;
     const W_padded = Win + padLeft + padRight;
-
-    const kEffH = dilH * (kH - 1) + 1;
-    const kEffW = dilW * (kW - 1) + 1;
 
     const H_out = Math.floor((H_padded - kEffH) / strideH + 1);
     const W_out = Math.floor((W_padded - kEffW) / strideW + 1);
@@ -1031,17 +1171,18 @@ export default class ConvBuilder implements LoopBuilder {
     }
 
     // Add bias if present.
-    //  - If B is [1], treat it as a scalar bias and just Add(accVec, B_in)
-    //  - If B is [M], use mIdx to pick B[mIdx] and add that scalar.
+    //  - "scalar": B is [1], just Add(accVec, B_in)
+    //  - "perChannel1D": B is [M], gather B[mIdx]
+    //  - "perChannel4D": B is [1,M,1,1], gather along axis=1 and squeeze.
     let yVec = accVec;
-    if (B_in) {
-      let biasScalar: TensorNode.Class | undefined;
+    if (B_in && biasKind !== "none") {
+      let biasScalar: TensorNode.Class;
 
-      if (bShape.length === 1 && bShape[0] === 1) {
-        // Original simple case: B is [1], already scalar-shaped.
+      if (biasKind === "scalar") {
+        // B is effectively a scalar.
         biasScalar = B_in;
-      } else if (bShape.length === 1 && bShape[0] === M) {
-        // Per-output-channel bias: B has shape [M]. Use mIdx to gather B[mIdx].
+      } else {
+        // We need to index with mIdx (output channel)
         const mIdxUnsq = unsqueezeIdx(
           body,
           mIdx,
@@ -1049,11 +1190,16 @@ export default class ConvBuilder implements LoopBuilder {
           `conv_mIdx_unsq_${conv.id}`
         );
 
+        const axisForB = biasKind === "perChannel1D" ? 0 : 1;
+
         const gatherBOp = body
           .addNode(uniq(body, `conv_gatherB_${conv.id}`))
-          .init(new OperationNode.Builder("Gather", [B_in, mIdxUnsq], { axis: 0 }))
+          .init(
+            new OperationNode.Builder("Gather", [B_in, mIdxUnsq], { axis: axisForB })
+          )
           .as(OperationNode);
 
+        // Result still has a singleton dimension; normalise to shape [1]
         const bVec = body
           .addNode(uniq(body, `conv_bVec_${conv.id}`))
           .init(new TensorNode.Builder(elemTy, [1], "intermediate"))
@@ -1073,10 +1219,6 @@ export default class ConvBuilder implements LoopBuilder {
           .as(OnnxEdge);
 
         biasScalar = bVec;
-      } else {
-        throw new Error(
-          `ConvBuilder: internal error, unsupported bias shape in body: B=${bShape}, M=${M}`
-        );
       }
 
       const addBiasOp = body
