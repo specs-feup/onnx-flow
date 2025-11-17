@@ -251,6 +251,16 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 
 // Infer Intermediate Shapes
 export function inferShapes(graph: OnnxGraph.Class): void {
+  function resolveTensorShape(t: TensorNode.Class): number[] {
+    if (t.shape && t.shape.length) return t.shape as number[];
+
+    const interEdge : OnnxEdge.Class = t.getIncomers?.first();
+    if (interEdge?.shape && interEdge.shape.length) {
+      return interEdge.shape as number[];
+    }
+    return [];
+  }
+  
   const ops = topologicalSortOperationNodes(graph);
   
   for (const node of ops) {
@@ -449,16 +459,132 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         break;
       }
 
-      case "Reshape":
-        // Input 0 = tensor, Input 1 = target shape
+      case "Reshape": {
+        const inputShape = infos[0].shape ?? [];
         const shapeInput = inputs[1]?.tryAs(TensorNode);
-        const shapeProto = shapeInput?.constantValue;
-        //console.log("Reshape shapeProto:", shapeProto);
-        //console.log("Reshape outShape:", shapeProto?.int64Data ? shapeProto.int64Data : "NO DATA");
-        if (shapeProto?.int64Data) {
-          outShape = Array.from(shapeProto.int64Data.map(n => Number(n)));
+        const cv = shapeInput?.constantValue;
+
+        let target: number[] | undefined;
+
+        if (cv?.int64Data?.length) {
+          target = Array.from(cv.int64Data, n => Number(n));
+        } else if (cv?.int32Data?.length) {
+          target = Array.from(cv.int32Data, n => Number(n));
         }
+
+        if (target && target.length > 0 && inputShape.length > 0) {
+          // Apply ONNX reshape rules: -1 and 0
+          const prodIn = inputShape.reduce((a, b) => a * (b || 1), 1) || 1;
+
+          let knownProd = 1;
+          let inferIndex = -1;
+
+          const resolved = target.map((d, i) => {
+            if (d === 0) {
+              // copy dim from input
+              const v = inputShape[i] ?? 1;
+              knownProd *= v;
+              return v;
+            } else if (d === -1) {
+              if (inferIndex !== -1) {
+                console.warn("Reshape: more than one -1 in target shape", target);
+              }
+              inferIndex = i;
+              return -1;
+            } else {
+              knownProd *= d;
+              return d;
+            }
+          });
+
+          if (inferIndex !== -1) {
+            const missing = prodIn / (knownProd || 1);
+            resolved[inferIndex] = missing;
+          }
+
+          outShape = resolved;
+        } else {
+          // Fallback: keep input shape
+          outShape = inputShape.slice();
+        }
+
         break;
+      }
+
+      case "Shape": {
+        const inputShape = infos[0]?.shape ?? [];
+        const rank = inputShape.length;
+
+        // ONNX Shape-15+: optional start / end attrs
+        let start = (node.getAttributes["start"] ?? 0) as number;
+        let end = (node.getAttributes["end"] ?? rank) as number;
+
+        // Normalize negatives
+        const norm = (idx: number, r: number) =>
+          r > 0 ? ((idx % r) + r) % r : 0;
+
+        start = norm(start, rank);
+        end = norm(end, rank);
+
+        // Clamp to [0, rank]
+        start = Math.max(0, Math.min(start, rank));
+        end = Math.max(0, Math.min(end, rank));
+
+        const length = Math.max(0, end - start);
+
+        // Shape's output is 1D: [length]
+        outShape = [length];
+
+        // ONNX: output dtype is INT64 by default, can be overridden by "to"
+        const toAttr = node.getAttributes["to"];
+        if (typeof toAttr === "number") {
+          // assuming your DataType enum is used elsewhere already
+          outDtype = toAttr as number;
+        } else {
+          outDtype = DataType.INT64;
+        }
+
+        break;
+      }
+
+      case "ConstantOfShape": {
+        const shapeTensor = inputs[0]?.tryAs(TensorNode);
+        let shape: number[] = [];
+
+        if (shapeTensor) {
+          const cv = shapeTensor.constantValue;
+
+          // 1) Prefer truly constant shape tensors
+          if (cv?.int64Data?.length) {
+            shape = Array.from(cv.int64Data, n => Number(n));
+          } else if (cv?.int32Data?.length) {
+            shape = Array.from(cv.int32Data, n => Number(n));
+          }
+
+          // 2) Fallback: recognise ConstantOfShape(Shape(X)) pattern
+          if (!shape.length) {
+            const producers = shapeTensor.getIncomers?.sources ?? graph.emptyCollection(BaseNode);
+            const shapeOp = producers.filterIs(OperationNode).filter(op => op.type === "Shape").first();
+
+            if (shapeOp) {
+              const shapeInputs = shapeOp.getInputs?.() ?? [];
+              const xTensor = shapeInputs[0]?.tryAs(TensorNode);
+
+              if (xTensor) {
+                const xShape = resolveTensorShape(xTensor);
+                if (xShape.length) {
+                  // Output of ConstantOfShape(Shape(X)) has same shape as X
+                  shape = xShape.slice();
+                }
+              }
+            }
+          }
+        }
+
+        outShape = shape;
+        // dtype comes from 'value' attr; leaving outDtype as-is is fine for now
+        break;
+      }
 
       case "Transpose": {
         const inputShape = infos[0].shape;
@@ -489,11 +615,52 @@ export function inferShapes(graph: OnnxGraph.Class): void {
       }
 
       case "Expand": {
+        const dataShape = infos[0]?.shape ?? [];
         const shapeInput = inputs[1]?.tryAs(TensorNode);
-        const targetShape = shapeInput?.constantValue?.int64Data?.map(Number);
+        let targetShape: number[] | undefined;
+
+        if (shapeInput) {
+          const cv = shapeInput.constantValue;
+
+          // 1) If the "shape" tensor is truly constant, use its payload
+          if (cv?.int64Data?.length) {
+            targetShape = Array.from(cv.int64Data, n => Number(n));
+          } else if (cv?.int32Data?.length) {
+            targetShape = Array.from(cv.int32Data, n => Number(n));
+          }
+
+          // 2) Fallback: recognise Expand(x, Shape(X)) pattern
+          if (!targetShape?.length) {
+            const producers = shapeInput.getIncomers?.sources ?? graph.emptyCollection(BaseNode);
+            const shapeOp = producers
+              .filterIs(OperationNode)
+              .filter(op => op.type === "Shape")
+              .first();
+
+            if (shapeOp) {
+              const shapeInputs = shapeOp.getInputs?.() ?? [];
+              const xTensor = shapeInputs[0]?.tryAs(TensorNode);
+
+              if (xTensor) {
+                const xShape = resolveTensorShape(xTensor);
+                if (xShape.length) {
+                  // Expand(x, Shape(X)) → output shape = shape of X
+                  targetShape = xShape.slice();
+                }
+              }
+            }
+          }
+        }
+
         if (targetShape && targetShape.length > 0) {
           outShape = targetShape;
+        } else if (dataShape.length > 0) {
+          // Fallback: keep the data shape if we couldn't infer better
+          outShape = dataShape.slice();
+        } else {
+          outShape = [];
         }
+
         break;
       }
 
@@ -553,6 +720,18 @@ export function inferShapes(graph: OnnxGraph.Class): void {
           outDtype = first.dtype;
         }
         //console.log(node.type, "outshape:", outShape);
+    }
+
+    // After the switch(node.type) { ... } block, just before reconnecting edges:
+
+    if (["Shape", "ConstantOfShape", "Expand", "Conv"].includes(node.type)) {
+      console.log(
+        `[inferShapes] node=${node.type} id=${node.id}`,
+        "inputShapes=",
+        infos.map(i => i.shape),
+        "outShape=",
+        outShape
+      );
     }
 
     // Get current output TensorNodes
