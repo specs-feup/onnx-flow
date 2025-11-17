@@ -511,8 +511,10 @@ import DefaultBuilder from "./builders/Default.js";
 import GenerativeBuilder from "./builders/Generative.js";
 import MatMulBuilder from "./builders/MatMul.js";
 import ReducesBuilder from "./builders/Reduces.js";
+import ConvBuilder from "./builders/Conv.js";
 
 const BUILDERS: LoopBuilder[] = [
+  new ConvBuilder(),
   new ReducesBuilder(),
   new MatMulBuilder(),      // must come before Default (it also handles trailing elemwise)
   new GenerativeBuilder(),  // Range (may also have trailing elemwise)
@@ -531,11 +533,24 @@ export function buildLoopForChain(
 ): void {
   const builder = BUILDERS.find(b => b.canHandle(chain));
   if (!builder) throw new Error(`No builder can handle chain starting at ${chain[0].type}`);
+  console.log("CHAIN:");
+  chain.forEach(op => console.log(op.type));
 
   const {
     body, ctx, lastOut, indicesOut, elemTy,
     outShape, inputs, outTensor, trip, cond, v_initial
   } = builder.build(chain, graph, { fuse, recurse, coalesce });
+
+  // New: derive authoritative element type from carry
+  const carryTy = ctx.carry.literalType;
+
+  // Optional but recommended sanity check:
+  if (v_initial.literalType !== carryTy) {
+    throw new Error(
+      `[Loop lowering] v_initial type (${v_initial.literalType}) `
+      + `does not match carry type (${carryTy}) for chain starting at ${chain[0].id}`
+    );
+  }
 
   // cond passthrough
   const condIn = body.getInputTensorNodes().filter(t => t.id.includes("cond_in")).first();
@@ -550,14 +565,14 @@ export function buildLoopForChain(
 
   // --- ensure updates dtype == carry dtype ---
   let updates = lastOut;
-  if (updates.literalType !== elemTy) {
+  if (updates.literalType !== carryTy) {
     const castU = body.addNode(uniq(body, `cast_updates_${updates.id}`))
-      .init(new OperationNode.Builder("Cast", [updates], { to: elemTy }))
+      .init(new OperationNode.Builder("Cast", [updates], { to: carryTy }))
       .as(OperationNode);
     const castUOut = body.addNode(uniq(body, `cast_updates_out_${updates.id}`))
-      .init(new TensorNode.Builder(elemTy, updates.shape, "intermediate"))
+      .init(new TensorNode.Builder(carryTy, updates.shape, "intermediate"))
       .as(TensorNode);
-    body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(elemTy, updates.shape));
+    body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(carryTy, updates.shape));
     updates = castUOut;
   }
 
@@ -571,7 +586,7 @@ export function buildLoopForChain(
   body.addEdge(updates, scatter).init(new OnnxEdge.Builder(updates.literalType, updates.shape));
 
   const carryOut = body.addNode(uniq(body, "carry_out"))
-    .init(new TensorNode.Builder(elemTy, ctx.carry.shape, "output"))
+    .init(new TensorNode.Builder(carryTy, ctx.carry.shape, "output"))
     .as(TensorNode);
   body.addEdge(scatter, carryOut).init(new OnnxEdge.Builder(carryOut.literalType, carryOut.shape));
 
@@ -602,8 +617,18 @@ export function buildLoopForChain(
   }
 
   /* ---------- Outer Loop node + wiring -------------------------------- */
+  const loopInputs: TensorNode.Class[] = [trip, cond, v_initial];
+
+  bodyCapturedInputs.forEach((tin) => {
+    const outerT = inputs.get(tin.id);
+    if (!outerT) {
+      throw new Error(`[Loop wiring] Missing captured input binding for ${tin.id}`);
+    }
+    loopInputs.push(outerT);
+  });
+
   const loop = graph.addNode(uniq(graph, `Loop_${chain[0].id}`))
-    .init(new OperationNode.Builder("Loop", [trip, cond, v_initial], {}, body))
+    .init(new OperationNode.Builder("Loop", loopInputs, {}, body))
     .as(OperationNode);
 
   graph.addEdge(trip, loop).init(new OnnxEdge.Builder(trip.literalType, trip.shape)).as(OnnxEdge);
@@ -620,12 +645,12 @@ export function buildLoopForChain(
   const isGlobalOutput = outTensor && graph.getOutputTensorNodes().contains(outTensor);
   graph.getNodeById(outTensor.id).remove();
   graph.addNode(outTensor.id)
-    .init(new TensorNode.Builder(elemTy, outShape, isGlobalOutput ? "output" : "intermediate"))
+    .init(new TensorNode.Builder(carryTy, outShape, isGlobalOutput ? "output" : "intermediate"))
     .as(TensorNode);
 
   if (outShape.length > 1) {
     const loop_out = graph.addNode(uniq(graph, "loop_out"))
-      .init(new TensorNode.Builder(elemTy, ctx.carry.shape, 'intermediate')).as(TensorNode);
+      .init(new TensorNode.Builder(carryTy, ctx.carry.shape, 'intermediate')).as(TensorNode);
     graph.addEdge(loop, loop_out).init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape)).as(OnnxEdge);
 
     const shapeVec = int64Vec((outShape as number[]).includes(-1) ? [-1] : outShape as number[]);

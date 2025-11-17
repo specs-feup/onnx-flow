@@ -10,10 +10,11 @@ import TensorNode from "../../TensorNode.js";
 import lowerLSTM from "./builders/LSTM.js";
 
 const SUP = new Set([
-  "Add","Sub","Mul","Div","MatMul","Transpose","Range",
+  "Add","Sub","Mul","Div","MatMul", "Range", "Transpose",
   "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max", "Softmax",
   "ReduceSum","ReduceMax", "ReduceMin", "ReduceProd", "ReduceMean", "ReduceSumSquare",
-  "ReduceL1", "ReduceL2", "ReduceLogSum", "ReduceLogSumExp"
+  "ReduceL1", "ReduceL2", "ReduceLogSum", "ReduceLogSumExp",
+  "Conv"
 ]);
 
 const REDUCE_SET = new Set([
@@ -94,7 +95,7 @@ function canBeEpilogue(op: OperationNode.Class, reducedOutShape: (number|String)
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) return false;
-  if (op.type === "Range") return true;
+  if (op.type === "Range" || op.type === "Conv") return true;
 
   const incs = op.getIncomers ?? [];
 
@@ -174,6 +175,10 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       if (!isSupportedNonScalarOp(op) || visited.has(op)) return [];
       visited.add(op);
 
+      if (op.type === "Conv") {
+        return [op];
+      }
+
       const chain: OperationNode.Class[] = [op];
 
       op.getInputs()?.forEach(inp => {
@@ -185,9 +190,15 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
 
           const prod = t.getIncomers[0].source;
           if (!prod.is(OperationNode)) return;
+          if (prod.as(OperationNode).type === "Conv") {
+            return;
+          }
           chain.push(...collectChain(prod.as(OperationNode), visited));
 
         } else if (inp.is(OperationNode)) {
+          if (inp.as(OperationNode).type === "Conv") {
+            return;
+          }
           chain.push(...collectChain(inp.as(OperationNode), visited));
         }
       });
