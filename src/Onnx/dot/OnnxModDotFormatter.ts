@@ -48,10 +48,7 @@ export default class OnnxDotFormatter<
                 // attrs.size = node;
             }),
             Node.Case(OperationNode, node => {
-                // attrs.label = node.type;
-
-                // TODO(Process-ing): Improve on this
-                attrs.label = node.type != 'ReduceSum' ? node.type : 'Add';
+                attrs.label = node.type;
 
                 // attrs.feedback = '0';
                 // attrs.constant = '0';
@@ -302,6 +299,19 @@ export default class OnnxDotFormatter<
         return statements;
     }
 
+    reduceSumToDot(node: OperationNode.Class): DotStatement[] {
+        const dotNode = this.nodeToDot(node);
+        dotNode.attr('label', 'Add');
+
+        const loopEdge = this.createDotEdge(
+            node.id,
+            node.id,
+            {}
+        );
+
+        return [dotNode, loopEdge];
+    }
+
     /**
      * @brief Handles special cases in the conversion from node to DOT.
      *
@@ -324,6 +334,8 @@ export default class OnnxDotFormatter<
                 case 'Gather':
                 case 'Scatter':
                     return [this.nodeToDot(opNode), ...this.externalInputsToDot(opNode)];
+                case 'ReduceSum':
+                    return this.reduceSumToDot(opNode);
             }
         }
 
