@@ -33,52 +33,77 @@ function divideMatMul(
 ): boolean {
     const [input1, input2] = node.getInputs().map(inp => inp.as(TensorNode));
 
-    if (input1.shape.length != 2 || input1.shape[0] === 1) return false;
+    const canDivideFirst = input1.shape.length == 2 && input1.shape[0] as number > 1;
+    const canDivideSecond = input2.shape.length == 2 && input2.shape[0] as number > 1;
+    if (!canDivideFirst && !canDivideSecond) {
+        return false;
+    }
 
-    // Create new input nodes
+    // Create new input1 nodes
     const numRows = input1.shape[0] as number;
-    const newInputs: TensorNode.Class[] = [];
+    const newInputs1: TensorNode.Class[] = [];
+    const input1Builder = new TensorNode.Builder(
+        input1.literalType,
+        [1, input1.shape[1]],
+        input1.type,
+    );
 
     for (let i = 0; i < numRows; i++) {
-        const tensorBuilder = new TensorNode.Builder(
-            input1.literalType,
-            [1, input1.shape[1]],
-            input1.type,
-        );
-        const newInput = g.addNode(input1.id + i.toString(), input1.parent).init(tensorBuilder).as(TensorNode);
-        newInputs.push(newInput);
+        const newInput = g.addNode(input1.id + i.toString(), input1.parent).init(input1Builder).as(TensorNode);
+        newInputs1.push(newInput);
+    }
+
+    // Create new input2 nodes
+    const numCols = input2.shape[1] as number;
+    const newInputs2: TensorNode.Class[] = [];
+    const input2Builder = new TensorNode.Builder(
+        input2.literalType,
+        [input2.shape[0], 1],
+        input2.type,
+    );
+
+    for (let i = 0; i < numCols; i++) {
+        const newInput = g.addNode(input2.id + i.toString(), input2.parent).init(input2Builder).as(TensorNode);
+        newInputs2.push(newInput);
     }
 
     // Create new MatMul nodes
     const newMatMuls: OperationNode.Class[] = [];
 
-    for (let i = 0; i < numRows; i++) {
-        const matMulBuilder = new OperationNode.Builder("MatMul", [newInputs[i], input2]);
-        const newMatMul = g.addNode(node.id + i.toString(), node.parent).init(matMulBuilder).as(OperationNode);
-        newMatMuls.push(newMatMul);
+    for (let row = 0; row < numRows; row++) {
+        for (let col = 0; col < numCols; col++) {
+            const matMulBuilder = new OperationNode.Builder("MatMul", [newInputs1[row], newInputs2[col]]);
+            const newMatMul = g.addNode(node.id + row.toString() + col.toString(), node.parent).init(matMulBuilder).as(OperationNode);
+            newMatMuls.push(newMatMul);
+        }
     }
 
     // Create new output tensor nodes
     const output = node.outgoers.at(0).target.as(TensorNode);
     const newOutputs: TensorNode.Class[] = [];
+    const outputBuilder = new TensorNode.Builder(
+        output.literalType,
+        [1, 1],
+        output.type,
+    );
+    const edgeBuilder = new OnnxEdge.Builder();
 
-    for (let i = 0; i < numRows; i++) {
-        const outputTensorBuilder = new TensorNode.Builder(
-            output.literalType,
-            [1, output.shape[1]],
-            output.type,
-        );
-        const edgeBuilder = new OnnxEdge.Builder();
+    for (let row = 0; row < numRows; row++) {
+        for (let col = 0; col < numCols; col++) {
+            const newOutput = g.addNode(output.id + row.toString() + col.toString()).init(outputBuilder).as(TensorNode);
+            newOutputs.push(newOutput);
 
-        const newOutput = g.addNode(output.id + i.toString(), output.parent).init(outputTensorBuilder).as(TensorNode);
-        g.addEdge(newMatMuls[i], newOutput).init(edgeBuilder);
-        newOutputs.push(newOutput);
+            // Connect new MatMul to new output
+            const correspondingMatMul = newMatMuls[row * numCols + col];
+            g.addEdge(correspondingMatMul, newOutput).init(edgeBuilder);
+        }
     }
 
-    // Remove original node, first input and output
+    // Remove original node, input and output
     output.remove();
     node.remove();
     input1.remove();
+    input2.remove();
 
     return true;
 }
