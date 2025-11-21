@@ -97,7 +97,9 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
   constructor(private fuse: boolean = true, private recurse: boolean = true, private coalesce: boolean = true) { }
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
+    // TODO(Process-ing): Allow englobing the transformation chain with partitioning
     partitionInput(g);
+    return g;
 
     if (!this.fuse) {
       const supported = new Set<string>();
