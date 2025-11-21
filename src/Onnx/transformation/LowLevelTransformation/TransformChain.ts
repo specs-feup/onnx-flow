@@ -7,6 +7,7 @@ import OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
+import partitionInput from "./DivideInputs.js";
 
 const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose", "Range"]);
 
@@ -28,13 +29,13 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     return true;
   }
 
-  
+
   // 2. Check tensor input shapes
   const tensorInputs = op.getInputs()
     ?.filter(n => n.is(TensorNode))
     .map(n => n.as(TensorNode)) ?? [];
 
-  
+
   // Reject ops whose input is a [1] tensor coming from a Gather
   for (const t of tensorInputs) {
     if (t.shape.length === 1) {
@@ -45,14 +46,14 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
       }
     }
   }
-  
-  
+
+
   const inputHasShape = tensorInputs.some(t => t.shape.length >= 1);
   if (inputHasShape) {
     //console.log(`[${op.id}] ✅ Tensor input has shape`, tensorInputs[0].shape);
     return true;
   }
- 
+
 
   // 3. Recursively check intermediates' producers
   for (const t of tensorInputs) {
@@ -77,7 +78,7 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   }
 
   // Optional debug
-  
+
   /* console.log(`[${op.id}] ❌ No shape info found`);
   console.log("  Incoming edge count:", incs.length);
   console.log("  Tensor input ids:", tensorInputs.map(t => t.id).join(", ") || "none");
@@ -86,21 +87,22 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     const incs = t.getIncomers ?? [];
     incs.forEach(e => console.log(`    → from ${e.source.id} with shape, e.shape`));
   });
- 
+
 
   console.log(`[${op.id}] ❌ No shape found`); */
   return false;
 }
 
 export default class TransformChain implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class> {
-  constructor(private fuse: boolean = true, private recurse: boolean = true, private coalesce: boolean = true) {}
+  constructor(private fuse: boolean = true, private recurse: boolean = true, private coalesce: boolean = true) { }
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
+    partitionInput(g);
 
     if (!this.fuse) {
       const supported = new Set<string>();
       g.getOperationNodes().forEach(op => {
-        if(isSupportedNonScalarOp(op)) supported.add(op.id);
+        if (isSupportedNonScalarOp(op)) supported.add(op.id);
       });
       // Fusion disabled: decompose one op at a time
       g.getOperationNodes().forEach(op => {
