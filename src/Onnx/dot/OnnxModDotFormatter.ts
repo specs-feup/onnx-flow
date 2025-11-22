@@ -29,7 +29,7 @@ export default class OnnxDotFormatter<
 
         node.switch(
             Node.Case(TensorNode, node => {
-                const size = (node.shape[0] as number) ?? 1;
+                const size = (node.shape as number[]).reduce((a, b) => a * b, 1);
 
                 if (node.type === 'input') {
                     attrs.size = size.toString();
