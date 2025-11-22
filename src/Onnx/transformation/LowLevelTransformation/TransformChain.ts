@@ -7,7 +7,7 @@ import OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
-import partitionInput from "./DivideInputs.js";
+import divideInputs from "./DivideInputs.js";
 
 const SUP = new Set(["Add", "Sub", "Mul", "Div", "MatMul", "Transpose", "Range"]);
 
@@ -98,7 +98,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
     // TODO(Process-ing): Allow englobing the transformation chain with partitioning
-    partitionInput(g);
+    divideInputs(g);
     return g;
 
     if (!this.fuse) {

@@ -2,6 +2,8 @@ import OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
+import { DataType } from "../../OnnxTypes.js";
+import { int64Vec } from "../Utilities.js";
 
 // function getTopologicalOrder(g: OnnxGraph.Class): OperationNode.Class[] {
 //     const visited = new Set<OperationNode.Class>();
@@ -27,78 +29,154 @@ import OnnxEdge from "../../OnnxEdge.js";
 //     return order.reverse();
 // }
 
+function splitInput(input: TensorNode.Class, g: OnnxGraph.Class, rowWise: boolean): TensorNode.Class[] {
+    const literalType = input.literalType;
+    const edgeBuilder = new OnnxEdge.Builder();
+    const newInputs: TensorNode.Class[] = [];
+
+    const numDivs = rowWise ? (input.shape[0] as number) : (input.shape[1] as number);
+    const newShape = rowWise ? [input.shape[1]] : [input.shape[0]];
+
+    const inputBuilder = new TensorNode.Builder(
+        literalType,
+        newShape,
+        "intermediate",
+    );
+
+    if (numDivs > 1) {  // Need to split input into multiple parts
+        const splitBuilder = new OperationNode.Builder(
+            "Split",
+            [input],
+            { 'axis': rowWise ? 0 : 1 }
+        );
+        const split = g.addNode(
+            `${input.id}_split`,
+        ).init(splitBuilder).as(OperationNode);
+
+        const splitOutBuilder = new TensorNode.Builder(
+            literalType,
+            rowWise ? [1, input.shape[1]] : [input.shape[0], 1],
+            "intermediate",
+        );
+
+        for (let i = 0; i < numDivs; i++) {
+            const splitOutput = g.addNode(
+                `${input.id}${i}_unsqz`,
+            ).init(splitOutBuilder).as(TensorNode);
+            g.addEdge(split, splitOutput).init(edgeBuilder);
+
+            const squeezeBuilder = new OperationNode.Builder("Squeeze", [splitOutput]);
+            const squeeze = g.addNode(
+                `${input.id}${i}_squeeze`,
+            ).init(squeezeBuilder).as(OperationNode);
+
+            const newInput = g.addNode(input.id + i.toString()).init(inputBuilder).as(TensorNode);
+            g.addEdge(squeeze, newInput).init(edgeBuilder);
+            newInputs.push(newInput);
+        }
+
+    } else {  // Just needs to squeeze
+        const squeezeBuilder = new OperationNode.Builder("Squeeze", [input]);
+        const squeeze = g.addNode(
+            `${input.id}_squeeze`,
+        ).init(squeezeBuilder).as(OperationNode);
+
+        const newInput = g.addNode(input.id + '0').init(inputBuilder).as(TensorNode);
+        g.addEdge(squeeze, newInput).init(edgeBuilder);
+        newInputs.push(newInput);
+    }
+
+    return newInputs;
+}
+
+function mergeOutputs(
+    outputs: TensorNode.Class[],
+    originalOutput: TensorNode.Class,
+    g: OnnxGraph.Class
+) {
+    const literalType = originalOutput.literalType;
+    const edgeBuilder = new OnnxEdge.Builder();
+
+    const oneConstBuilder = new TensorNode.Builder(DataType.INT64, [1], "constant", int64Vec([1]));
+    const oneConst = g.addNode(
+        `${originalOutput.id}_one`,
+    ).init(oneConstBuilder).as(TensorNode);
+
+    const shapeBuilder = new TensorNode.Builder(DataType.INT64, [2], "constant", int64Vec(originalOutput.shape as number[]));
+    const shapeConst = g.addNode(
+        `${originalOutput.id}_shape`,
+    ).init(shapeBuilder).as(TensorNode);
+
+    // Add Unsqueeze nodes
+    const unsqOuts: TensorNode.Class[] = [];
+    for (let i = 0; i < outputs.length; i++) {
+        const unsqueezeBuilder = new OperationNode.Builder("Unsqueeze", [outputs[i], oneConst]);
+        const unsqueeze = g.addNode(
+            `${outputs[i].id}_unsqueeze`,
+        ).init(unsqueezeBuilder).as(OperationNode);
+
+        const unsqOutBuilder = new TensorNode.Builder(
+            literalType,
+            [1, 1],
+            "intermediate",
+        );
+        const unsqOut = g.addNode(
+            `${outputs[i].id}_unsq_out`,
+        ).init(unsqOutBuilder).as(TensorNode);
+        g.addEdge(unsqueeze, unsqOut).init(edgeBuilder);
+
+        unsqOuts.push(unsqOut);
+    }
+
+    // Add Concat node
+    const concatBuilder = new OperationNode.Builder(
+        "Concat",
+        unsqOuts,
+        { 'axis': 0 }
+    );
+    const concat = g.addNode(
+        `${originalOutput.id}_concat`,
+    ).init(concatBuilder).as(OperationNode);
+
+    // Add Concat output node
+    const concatOutBuilder = new TensorNode.Builder(
+        literalType,
+        [outputs.length],
+        "intermediate",
+    );
+    const concatOut = g.addNode(`${originalOutput.id}_concat_out`).init(concatOutBuilder).as(TensorNode);
+    g.addEdge(concat, concatOut).init(edgeBuilder);
+
+    // Add Reshape node to get original output shape
+    const reshapeBuilder = new OperationNode.Builder("Reshape", [concatOut, shapeConst]);
+    const reshape = g.addNode(
+        `${originalOutput.id}_reshape`,
+    ).init(reshapeBuilder).as(OperationNode);
+
+    g.addEdge(reshape, originalOutput).init(edgeBuilder);
+}
+
 function divideMatMul(
     node: OperationNode.Class,
     g: OnnxGraph.Class
 ): boolean {
     const [input1, input2] = node.getInputs().map(inp => inp.as(TensorNode));
     const literalType = input1.literalType;
+    const edgeBuilder = new OnnxEdge.Builder();
 
-    const canDivideFirst = input1.shape.length == 2 && input1.shape[0] as number > 1;
-    const canDivideSecond = input2.shape.length == 2 && input2.shape[0] as number > 1;
+    const canDivideFirst = input1.shape.length == 2;
+    const canDivideSecond = input2.shape.length == 2;
     if (!canDivideFirst && !canDivideSecond) {
         return false;
     }
 
     // Create new input1 nodes
-    const numRows = input1.shape[0] as number;
-    const newInputs1: TensorNode.Class[] = [];
-    const input1Builder = new TensorNode.Builder(
-        literalType,
-        [input1.shape[1]],
-        input1.type,
-    );
-
-    for (let i = 0; i < numRows; i++) {
-        const newInput = g.addNode(input1.id + i.toString(), input1.parent).init(input1Builder).as(TensorNode);
-        newInputs1.push(newInput);
-    }
+    const newInputs1: TensorNode.Class[] = splitInput(input1, g, true);
+    const numRows = newInputs1.length;
 
     // Create new input2 nodes
-    const numCols = input2.shape[1] as number;
-    const newInputs2: TensorNode.Class[] = [];
-    const input2Builder = new TensorNode.Builder(
-        literalType,
-        [input2.shape[0]],
-        input2.type,
-    );
-
-    for (let i = 0; i < numCols; i++) {
-        const newInput = g.addNode(input2.id + i.toString(), input2.parent).init(input2Builder).as(TensorNode);
-        newInputs2.push(newInput);
-    }
-
-    // // Create new MatMul nodes
-    // const newMatMuls: OperationNode.Class[] = [];
-
-    // for (let row = 0; row < numRows; row++) {
-    //     for (let col = 0; col < numCols; col++) {
-    //         const matMulBuilder = new OperationNode.Builder("MatMul", [newInputs1[row], newInputs2[col]]);
-    //         const newMatMul = g.addNode(node.id + row.toString() + col.toString(), node.parent).init(matMulBuilder).as(OperationNode);
-    //         newMatMuls.push(newMatMul);
-    //     }
-    // }
-
-    // // Create new output tensor nodes
-    // const output = node.outgoers.at(0).target.as(TensorNode);
-    // const newOutputs: TensorNode.Class[] = [];
-    // const outputBuilder = new TensorNode.Builder(
-    //     output.literalType,
-    //     [],
-    //     output.type,
-    // );
-    // const edgeBuilder = new OnnxEdge.Builder();
-
-    // for (let row = 0; row < numRows; row++) {
-    //     for (let col = 0; col < numCols; col++) {
-    //         const newOutput = g.addNode(output.id + row.toString() + col.toString()).init(outputBuilder).as(TensorNode);
-    //         newOutputs.push(newOutput);
-
-    //         // Connect new MatMul to new output
-    //         const correspondingMatMul = newMatMuls[row * numCols + col];
-    //         g.addEdge(correspondingMatMul, newOutput).init(edgeBuilder);
-    //     }
-    // }
+    const newInputs2: TensorNode.Class[] = splitInput(input2, g, false);
+    const numCols = newInputs2.length;
 
     // Create new operation nodes and outputs
     const muls: OperationNode.Class[] = [];
@@ -110,9 +188,8 @@ function divideMatMul(
     const outputBuilder = new TensorNode.Builder(
         output.literalType,
         [],
-        output.type,
+        "intermediate",
     );
-    const edgeBuilder = new OnnxEdge.Builder();
 
     for (let row = 0; row < numRows; row++) {
         for (let col = 0; col < numCols; col++) {
@@ -158,11 +235,20 @@ function divideMatMul(
         }
     }
 
-    // Remove original node, input and output
-    output.remove();
+    // Merge outputs back to original output
+    mergeOutputs(newOutputs, output, g);
+
+    // // Remove original node, input and output
+    // output.remove();
+    // node.remove();
+    // input1.remove();
+    // input2.remove();
+
+    // Remove original MatMul node and its edges
+    for (const edge of [...node.incomers, ...node.outgoers]) {
+        edge.remove();
+    }
     node.remove();
-    input1.remove();
-    input2.remove();
 
     return true;
 }
