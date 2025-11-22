@@ -78,7 +78,7 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
     for (const nodeIndex of nodesToAdd) {
       const node = data.graph.node[nodeIndex];
       const allInputsDefined = node.input.every((input: string) => definedVars.includes(input));
-    
+
     
     if (node.opType === "Constant" && node.output?.length > 0) {
         const name = node.output[0];
@@ -252,7 +252,7 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 // Infer Intermediate Shapes
 export function inferShapes(graph: OnnxGraph.Class): void {
   const ops = topologicalSortOperationNodes(graph);
-  
+
   for (const node of ops) {
     const inputs = node.getInputs?.() ?? [];
     const infos = inputs.map(inp => {
@@ -537,6 +537,26 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         if (infos[0]?.dtype !== DataType.BOOL) {
           console.warn("Where: condition input is not BOOL (dtype:", infos[0]?.dtype, ")");
         }
+        break;
+      }
+
+      case "ReduceSum": {
+        outShape = Array.from(infos[0].shape) as number[];
+
+        // TODO(Process-ing): This assumes axes input is not specified, otherwise shape cannot be assumed here
+        const noopWithEmptyAxes = node.getAttributes['noop_with_empty_axes'] ?? 0;
+        const axes = noopWithEmptyAxes ? [] : Array.from(outShape.keys());
+
+        // When present, reduced dimensions are set to 1 instead of being removed
+        const keepdims = node.getAttributes()["keepdims"] != 0;  // Default is true
+
+        if (keepdims) {
+          axes.forEach(axis => outShape[axis] = 1)
+        } else {
+          axes.forEach(axis => outShape[axis] = 0);
+          outShape = Array.from(outShape.filter(dim => dim > 0))
+        }
+
         break;
       }
 
