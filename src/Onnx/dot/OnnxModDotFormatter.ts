@@ -29,6 +29,8 @@ export default class OnnxDotFormatter<
 
         node.switch(
             Node.Case(TensorNode, node => {
+                // In case the node has more than one dimension (which it
+                // shouldn't!), use the combined element count as the size
                 const size = (node.shape as number[]).reduce((a, b) => a * b, 1);
 
                 if (node.type === 'input') {
