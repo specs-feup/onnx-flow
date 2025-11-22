@@ -1,4 +1,3 @@
-import { inferShapes } from "./initGraph.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";

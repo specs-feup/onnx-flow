@@ -171,7 +171,7 @@ export default class OnnxDotFormatter<
             statements.push(...bodySubdot.statementList.filter(s => s instanceof DotNode || s instanceof DotEdge));
 
             // TODO(Process-ing): Only for demonstration, remove/improve later
-            statements.push(this.createDotEdge(idPrefix + carryOut.id, idPrefix + carry.id));
+            // statements.push(this.createDotEdge(idPrefix + carryOut.id, idPrefix + carry.id));
 
             this.clusterInfos[node.id] = {
                 idPrefix,
@@ -360,7 +360,7 @@ export default class OnnxDotFormatter<
 
     toIgnore(node: DotNode): boolean {
         // TODO(Process-ing): Make these conditions robust to weird input names
-        if (['Gather', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze'].includes(node.attrList.label)) {
+        if (['Gather', 'GatherElements', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze', 'Reshape'].includes(node.attrList.label)) {
             return true;
         }
 

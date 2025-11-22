@@ -149,11 +149,6 @@ function divideMatMul(
 
             // Connect ReduceSum to output
             const output = node.outgoers.at(0).target.as(TensorNode);
-            const outputBuilder = new TensorNode.Builder(
-                output.literalType,
-                [],
-                output.type,
-            );
             const newOutput = g.addNode(
                 `${output.id}${row}${col}`,
             ).init(outputBuilder).as(TensorNode);
