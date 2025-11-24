@@ -7,14 +7,92 @@ import OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
-import lowerLSTM from "./builders/LSTM.js";
+import { toStaticShape } from "../../Utils.js";
+
+function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
+  const rI = inDims.length;
+  const rO = outDims.length;
+  const maxRank = Math.max(rI, rO);
+
+  for (let i = 0; i < maxRank; i++) {
+    const inDimRaw = inDims[rI - 1 - i] ?? 1;
+    const outDimRaw = outDims[rO - 1 - i] ?? 1;
+
+    const inDim  = inDimRaw  > 0 ? inDimRaw  : 0; // 0 = dynamic/unknown
+    const outDim = outDimRaw > 0 ? outDimRaw : 0;
+
+    // If either side is dynamic (0), assume it's okay.
+    if (inDim === 0 || outDim === 0) continue;
+
+    // ONNX broadcasting rule:
+    // dimensions are compatible if they are equal, or one of them is 1.
+    if (inDim !== 1 && outDim !== 1 && inDim !== outDim) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function getSegmentOutShape(seg: OperationNode.Class[]): (number | String)[] | null {
+  if (!seg.length) return null;
+
+  const root = seg[seg.length - 1]; // last op = segment root
+  const outT = root.getOutgoers.targets
+    ?.filter((n) => n.is(TensorNode))
+    .first()
+    ?.as(TensorNode);
+
+  return outT?.shape ?? null;
+}
+
+/**
+ * A segment is "broadcast-safe" iff every tensor input that will be
+ * scalarised inside the loop is broadcastable to the segment's final
+ * output shape.
+ *
+ * We are intentionally conservative:
+ *  - If we don't know the segment's out shape, we say "unsafe".
+ *  - We skip obvious index tensors (type === "index"/"index_aux").
+ *  - Scalars (shape length 0) are always considered fine.
+ *
+ * Unsafe segments fall back to per-op loop lowering.
+ */
+function isBroadcastSafeSegment(seg: OperationNode.Class[]): boolean {
+  const outShape = getSegmentOutShape(seg);
+  if (!outShape || !outShape.length) {
+    // No reliable shape => don't risk fusion
+    return false;
+  }
+
+  for (const op of seg) {
+    const tensorInputs =
+      op.getInputs()?.filter((n) => n.is(TensorNode)).map((n) => n.as(TensorNode)) ?? [];
+
+    for (const t of tensorInputs) {
+      // Index helpers never go through gatherWithBroadcast
+      if (t.type === "index" || t.type === "index_aux") continue;
+
+      const s = t.shape ?? [];
+      if (!s.length) continue; // scalar or unknown, fine
+
+      // If any non-scalar input cannot broadcast to the final outShape,
+      // then this segment is not safe to fuse into a single loop.
+      if (!isBroadcastableTo(toStaticShape(s), toStaticShape(outShape))) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 
 const SUP = new Set([
-  "Add","Sub","Mul","Div","MatMul", "Range", "Transpose",
+  "Add","Sub","Mul","Div", "MatMul", "Range", "Transpose",
   "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max", "Softmax",
   "ReduceSum","ReduceMax", "ReduceMin", "ReduceProd", "ReduceMean", "ReduceSumSquare",
   "ReduceL1", "ReduceL2", "ReduceLogSum", "ReduceLogSumExp",
-  "Conv"
+  "Conv", "AveragePool"
 ]);
 
 const REDUCE_SET = new Set([
@@ -95,7 +173,7 @@ function canBeEpilogue(op: OperationNode.Class, reducedOutShape: (number|String)
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) return false;
-  if (op.type === "Range" || op.type === "Conv") return true;
+  if (op.type === "Range" || op.type === "Conv" || op.type === "AveragePool") return true;
 
   const incs = op.getIncomers ?? [];
 
@@ -175,7 +253,7 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
       if (!isSupportedNonScalarOp(op) || visited.has(op)) return [];
       visited.add(op);
 
-      if (op.type === "Conv") {
+      if (op.type === "Conv" || op.type === "AveragePool") {
         return [op];
       }
 
@@ -190,13 +268,13 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
 
           const prod = t.getIncomers[0].source;
           if (!prod.is(OperationNode)) return;
-          if (prod.as(OperationNode).type === "Conv") {
+          if (prod.as(OperationNode).type === "Conv" || op.type === "AveragePool") {
             return;
           }
           chain.push(...collectChain(prod.as(OperationNode), visited));
 
         } else if (inp.is(OperationNode)) {
-          if (inp.as(OperationNode).type === "Conv") {
+          if (inp.as(OperationNode).type === "Conv" || op.type === "AveragePool") {
             return;
           }
           chain.push(...collectChain(inp.as(OperationNode), visited));
@@ -252,7 +330,16 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
           if (hasLayoutChangeAfter) {
             // bail to per-op lowering if layout changes after MatMul
             for (const op of chainOps) {
-              buildLoopForChain([op], g, /*fuse=*/false, this.recurse, this.coalesce);
+              // Re-hydrate from the *current* graph and skip if it was already removed
+              const cur = g.getNodeById(op.id);
+              if (!cur || !cur.is(OperationNode)) continue;
+              buildLoopForChain(
+                [cur.as(OperationNode)],
+                g,
+                /* fuse = */ false,
+                this.recurse,
+                this.coalesce
+              );
             }
             continue;
           }
@@ -274,6 +361,21 @@ export default class TransformChain implements Graph.Transformation<OnnxGraph.Cl
           if (seg.length === 0) continue;
 
           const isSingleReduce = seg.length === 1 && REDUCE_SET.has(seg[0].type);
+
+          // If this is not a singleton reduce and shapes are not
+          // broadcast-safe, fall back to per-op loop lowering.
+          if (!isSingleReduce && !isBroadcastSafeSegment(seg)) {
+            for (const op of seg) {
+              buildLoopForChain(
+                [op],
+                g,
+                /* fuse = */ false,
+                this.recurse,
+                this.coalesce
+              );
+            }
+            continue;
+          }
 
           buildLoopForChain(
             seg,

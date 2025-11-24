@@ -49,7 +49,7 @@ export default function handleTranspose(
 
   // Compute output shape (allow unknowns)
   const outShape = perm.map(p => inShapeNum[p]);
-  ctx.outShape = outShape;
+  //ctx.outShape = outShape;
 
   // Mixed–radix decode in output space (unknown → 1 to keep arithmetic valid)
   const decodeDims = outShape.map(d => (d > 0 ? d : 1));
