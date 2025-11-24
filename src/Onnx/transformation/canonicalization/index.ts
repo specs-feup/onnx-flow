@@ -3,7 +3,6 @@ import dequantizeLinearHandler from "./handlers/DequantizeLinear.js";
 import averagePoolHandler from "./handlers/AveragePool.js";
 import clipHandler from "./handlers/Clip.js";
 import concatHandler from "./handlers/Concat.js";
-import convHandler from "./handlers/Conv.js";
 import gemmHandler from "./handlers/Gemm.js";
 import padHandler from "./handlers/Pad.js";
 import sliceHandler from "./handlers/Slice.js";
@@ -23,13 +22,12 @@ export interface CanonicalizationOptions {
 function buildDefaultRegistry(): HandlersRegistry {
   return {
     // Register handlers here. Keys are op types.
-    Conv: convHandler,
     Slice: sliceHandler,
     Pad: padHandler,
     Clip: clipHandler,
     Gemm: gemmHandler,
     Concat: concatHandler,
-    DequantizeLinear: dequantizeLinearHandler,
+    //DequantizeLinear: dequantizeLinearHandler,
     AveragePool: averagePoolHandler,
     Softmax: softmaxHandler,
     Expand: expandHandler,

@@ -19,7 +19,7 @@ function makeSqueeze(
     .as(OperationNode);
   const out = g
     .addNode(uniq(g, `${name}_out`))
-    .init(new TensorNode.Builder(DataType.INT64, axes.length === 1 ? [] : undefined as any, "intermediate"))
+    .init(new TensorNode.Builder(DataType.INT64, axes.length === 1 ? [] : undefined, "intermediate"))
     .as(TensorNode);
   addEdge(g, op, out, DataType.INT64);
   return { out, op };
@@ -40,7 +40,7 @@ function makeUnsqueeze(
     .as(OperationNode);
   const out = g
     .addNode(uniq(g, `${name}_out`))
-    .init(new TensorNode.Builder(outDtype, outShape as any, "intermediate"))
+    .init(new TensorNode.Builder(outDtype, outShape, "intermediate"))
     .as(TensorNode);
   addEdge(g, op, out, outDtype, outShape);
   return { out, op };
@@ -70,7 +70,7 @@ export default function concatHandler(
   if (rawIns.length < 2) return false;
 
   const inputs = rawIns
-    .map((n: any) => (n?.is?.(TensorNode) ? n.as(TensorNode) : undefined))
+    .map((n) => (n?.is?.(TensorNode) ? n.as(TensorNode) : undefined))
     .filter(Boolean) as TensorNode.Class[];
   if (inputs.length < 2) return false;
 
@@ -80,7 +80,7 @@ export default function concatHandler(
   if (outs.length !== 1) return false;
   const Y = outs[0];
 
-  const a = (op as any).getAttributes?.() ?? (op as any).attributes ?? {};
+  const a = op.getAttributes?.() ?? op.attributes ?? {};
   const axisAttr = Number(a.axis ?? 0);
 
   const rank = inputs[0].shape?.length;
@@ -164,16 +164,6 @@ export default function concatHandler(
     sumAxis = out;
   }
 
-  // Unsqueeze sum to [1] to be a shape piece
-  const { out: sumAxis1D } = makeUnsqueeze(
-    g,
-    sumAxis,
-    [0],
-    DataType.INT64,
-    [1],
-    `Concat_unsq_sum_${op.id}`
-  );
-
   // Build OutShape by editing `shape0` at position `axis` using ScatterElements (no Concat)
   // indices = [axis]
   const axisIdxVec = constI64(g, `Concat_shape_axis_${op.id}`, [axis]);
@@ -227,28 +217,46 @@ export default function concatHandler(
       .as(TensorNode);
     addEdge(g, endOp, endSc, DataType.INT64, []);
 
-    // Range(offset, end, 1) → [Si]
-    const rangeOp = g
-      .addNode(uniq(g, `Concat_range_${i}_${op.id}`))
-      .init(new OperationNode.Builder("Range", [offsetSc, endSc, oneSc], {}))
+    // Range(offset, end, 1) → [Si] 
+    const rangeOp = g.addNode(uniq(g, `Concat_range_${i}_${op.id}`))
+      .init(new OperationNode.Builder("Range", [offsetSc, endSc, oneSc]))
       .as(OperationNode);
-    const range1D = g
-      .addNode(uniq(g, `Concat_range1D_${i}_${op.id}`))
-      .init(new TensorNode.Builder(DataType.INT64, [undefined as any], "intermediate"))
+
+    // shape [size] along the concat axis
+    const axisDim = Array.isArray(Xi.shape) ? Xi.shape[axis] : undefined;
+    const rangeShape: (number | string | undefined)[] =
+      [typeof axisDim === "number" ? axisDim : undefined];
+
+    const range1D = g.addNode(uniq(g, `Concat_range1D_${i}_${op.id}`))
+      .init(new TensorNode.Builder(DataType.INT64, rangeShape, "intermediate"))
       .as(TensorNode);
-    addEdge(g, rangeOp, range1D, DataType.INT64);
+    addEdge(g, rangeOp, range1D, DataType.INT64, rangeShape);
+
 
     // Unsqueeze to rank r at all axes except `axis` so that the index dimension lands at `axis`
     const axesToUnsq: number[] = [];
     for (let d = 0; d < rank; d++) if (d !== axis) axesToUnsq.push(d);
-    const { out: idxRanked } = makeUnsqueeze(
-      g,
-      range1D,
-      axesToUnsq,
-      DataType.INT64,
-      new Array(rank).fill(undefined) as any,
-      `Concat_unsq_idx_${i}_${op.id}`
-    );
+    let idxRanked: TensorNode.Class;
+    if (axesToUnsq.length === 0) {
+      idxRanked = range1D;
+    } else {
+      const idxShape: (number | string | undefined)[] =
+        Array.isArray(Xi.shape) ? [...Xi.shape] : new Array(rank).fill(undefined);
+
+      // axesToUnsq are the non-concat dims → those should be 1 in the index tensor
+      for (const d of axesToUnsq) {
+        idxShape[d] = 1;
+      }
+
+      ({ out: idxRanked } = makeUnsqueeze(
+        g,
+        range1D,
+        axesToUnsq,
+        DataType.INT64,
+        idxShape,
+        `Concat_unsq_idx_${i}_${op.id}`
+      ));
+    }
 
     // Expand indices to match Shape(Xi)
     const shapeIop = g

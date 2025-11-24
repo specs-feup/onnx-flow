@@ -115,7 +115,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
 
     const isLast = (i === changingAxes.length - 1);
     if (isLast) {
-      // ✅ final producer → Y (no Identity, no shape mutation)
+      // final producer → Y (no Identity, no shape mutation)
       g.addEdge(gather, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     } else {
       // intermediate hop

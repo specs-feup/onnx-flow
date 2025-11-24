@@ -23,21 +23,21 @@ function readPadsVectorFromTensorInput(
   const constOp = srcOps.find(op => op.type === "Constant");
   if (constOp) {
     const valueAttr: AnyTensorProto | undefined =
-      (constOp as any).getAttribute?.("value") ??
-      ((constOp as any).getAttributes?.() ?? {})["value"];
+      constOp.attributes["value"] ??
+      constOp.getAttributes?.() ?? {}["value"];
     vec = decodeIntegerVectorFromTensorProto(valueAttr);
     if (vec && vec.length) return vec;
   }
 
-  const name = (tn as any).extraAttrs?.onnxName ?? (tn as any).name ?? (tn as any).id ?? (tn as any).getName?.();
-  const anyG: any = g as any;
+  const name = tn.id;
+  const anyG = g as any;
   const initLists: any[][] = [
     anyG?.rawModel?.graph?.initializer,
     anyG?.model?.graph?.initializer,
     anyG?.graph?.initializer,
   ].filter(Boolean);
   for (const list of initLists) {
-    const found = Array.isArray(list) ? list.find((t: any) => t?.name === name) : undefined;
+    const found = Array.isArray(list) ? list.find((t) => t?.name === name) : undefined;
     if (found) {
       vec = decodeIntegerVectorFromTensorProto(found);
       if (vec && vec.length) return vec;
@@ -100,15 +100,32 @@ function ensureEdgeSlab(
   }
 
   const sliceOp = g.addNode(uniq(g, `edge_slice_${tag}`)).init(new OperationNode.Builder("Slice", [cur, starts, ends, axes1], {})).as(OperationNode);
-  const oneSlice = g.addNode(uniq(g, `edge_oneSlice_${tag}`)).init(new TensorNode.Builder(cur.literalType as DataType, Array(rank).fill(undefined), "intermediate")).as(TensorNode);
+  const sliceShape: (number | String | undefined)[] =
+  Array.isArray(cur.shape) ? [...cur.shape] : new Array(rank).fill(undefined);
+  if (rank > 0) {
+    sliceShape[axis] = 1;
+  }
+
+  const oneSlice = g.addNode(uniq(g, `edge_oneSlice_${tag}`))
+    .init(new TensorNode.Builder(cur.literalType as DataType, sliceShape, "intermediate"))
+    .as(TensorNode);
+  addEdge(g, sliceOp, oneSlice, cur.literalType as DataType, sliceShape);
   addEdge(g, sliceOp, oneSlice, cur.literalType as DataType, oneSlice.shape);
 
   // Expand to desired size along axis
   const size1D = makeI64ShapeConst(g, `edge_size_${tag}`, [size]);
   const newShape = editShapeDim(g, shp, axis, size1D, `edge_shape_edit_${tag}`);
   const exp = g.addNode(uniq(g, `edge_expand_${tag}`)).init(new OperationNode.Builder("Expand", [oneSlice, newShape], {})).as(OperationNode);
-  const slab = g.addNode(uniq(g, `edge_slab_${tag}`)).init(new TensorNode.Builder(cur.literalType as DataType, Array(rank).fill(undefined), "intermediate")).as(TensorNode);
-  addEdge(g, exp, slab, cur.literalType as DataType, slab.shape);
+  const slabShape: (number | String | undefined)[] =
+    Array.isArray(cur.shape) ? [...cur.shape] : new Array(rank).fill(undefined);
+  if (rank > 0) {
+    slabShape[axis] = size;
+  }
+
+  const slab = g.addNode(uniq(g, `edge_slab_${tag}`))
+    .init(new TensorNode.Builder(cur.literalType as DataType, slabShape, "intermediate"))
+    .as(TensorNode);
+  addEdge(g, exp, slab, cur.literalType as DataType, slabShape);
   return slab;
 }
 
@@ -146,22 +163,46 @@ function ensureReflectSlab(
     const start2T = g.addNode(uniq(g, `refl_r_s2T_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [1], "intermediate")).as(TensorNode);
     addEdge(g, start2, start2T, DataType.INT64, [1]);
 
+    const start2T_squeezed = g
+      .addNode(uniq(g, `refl_r_s2T_sq_${tag}`))
+      .init(new OperationNode.Builder("Squeeze", [start2T, makeI64ShapeConst(g, `refl_r_s2T_axes_${tag}`, [0])], {}))
+      .as(OperationNode);
+    const start2T_scalar = g
+      .addNode(uniq(g, `refl_r_s2T_scalar_${tag}`))
+      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+      .as(TensorNode);
+    addEdge(g, start2T_squeezed, start2T_scalar, DataType.INT64, []);
+
     const size1Sc = scalarI64(g, `refl_r_size_${tag}`, size);
-    const endOp = g.addNode(uniq(g, `refl_r_end_${tag}`)).init(new OperationNode.Builder("Sub", [start2T, size1Sc], {})).as(OperationNode);
+    const endOp = g.addNode(uniq(g, `refl_r_end_${tag}`)).init(new OperationNode.Builder("Sub", [start2T_scalar, size1Sc], {})).as(OperationNode);
     const endT = g.addNode(uniq(g, `refl_r_endT_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [], "intermediate")).as(TensorNode);
     addEdge(g, endOp, endT, DataType.INT64, []);
-
-    startSc = start2T; // scalar in [1] actually, but Range allows scalars
-    endSc = endT;      // scalar
+    
+    startSc = start2T_scalar; // []
+    endSc   = endT;           // []
   }
 
   const rangeOp = g.addNode(uniq(g, `refl_range_${tag}`)).init(new OperationNode.Builder("Range", [startSc, endSc, stepNeg1], {})).as(OperationNode);
-  const idx = g.addNode(uniq(g, `refl_idx_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [undefined as any], "intermediate")).as(TensorNode);
-  addEdge(g, rangeOp, idx, DataType.INT64);
+  // 1D index vector of length = size
+  const idxShape: (number | String | undefined)[] = [size];
+
+  const idx = g.addNode(uniq(g, `refl_idx_${tag}`))
+    .init(new TensorNode.Builder(DataType.INT64, idxShape, "intermediate"))
+    .as(TensorNode);
+  addEdge(g, rangeOp, idx, DataType.INT64, idxShape);
 
   const gatherOp = g.addNode(uniq(g, `refl_gather_data_${tag}`)).init(new OperationNode.Builder("Gather", [cur, idx], { axis })).as(OperationNode);
-  const slab = g.addNode(uniq(g, `refl_slab_${tag}`)).init(new TensorNode.Builder(cur.literalType as DataType, Array(rank).fill(undefined), "intermediate")).as(TensorNode);
-  addEdge(g, gatherOp, slab, cur.literalType as DataType, slab.shape);
+  // slab has same rank as cur, but axis dim = size
+  const reflSlabShape: (number | String | undefined)[] =
+    Array.isArray(cur.shape) ? [...cur.shape] : new Array(rank).fill(undefined);
+  if (rank > 0) {
+    reflSlabShape[axis] = size;
+  }
+
+  const slab = g.addNode(uniq(g, `refl_slab_${tag}`))
+    .init(new TensorNode.Builder(cur.literalType as DataType, reflSlabShape, "intermediate"))
+    .as(TensorNode);
+  addEdge(g, gatherOp, slab, cur.literalType as DataType, reflSlabShape);
   return slab;
 }
 
@@ -181,15 +222,15 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
   const padsNode = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
   if (padsNode) pads = readPadsVectorFromTensorInput(g, padsNode);
   if (!pads) {
-    const a = (op as any).getAttributes?.() ?? (op as any)["attributes"] ?? {};
-    if (Array.isArray(a.pads)) pads = a.pads.map((x: any) => Number(x));
+    const a = op.getAttributes?.() ?? op.attributes ?? {};
+    if (Array.isArray(a.pads)) pads = a.pads.map((x) => Number(x));
   }
   if (!pads || pads.length !== 2 * rank) return false;
 
   // mode
-  const attr = (op as any).getAttributes?.() ?? (op as any)["attributes"] ?? {};
+  const attr = op.getAttributes?.() ?? op.attributes ?? {};
   const modeRaw = String(attr.mode ?? "constant").toLowerCase();
-  const mode: "constant" | "edge" | "reflect" = (modeRaw === "edge" || modeRaw === "reflect") ? (modeRaw as any) : "constant";
+  const mode: "constant" | "edge" | "reflect" = (modeRaw === "edge" || modeRaw === "reflect") ? (modeRaw) : "constant";
 
   // pad value (only used in constant)
   let padValue = 0;
