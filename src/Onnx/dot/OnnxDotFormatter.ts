@@ -275,7 +275,7 @@ export default class OnnxDotFormatter<
 
         // Extra: Add missing edges for operations like Gather, Scatter with external inputs
         for (const opNode of graph.getOperationNodes()) {
-            if (["Gather", "Scatter"].includes(opNode.type)) {
+            if (["Reshape", "Gather", "GatherElements", "Scatter", "ScatterElements"].includes(opNode.type)) {
                 const inputTensors = opNode.getInputs().filter(n => !graph.hasNode(n.id));
                 for (const ext of inputTensors) {
                     dot.statements(Dot.edge(
