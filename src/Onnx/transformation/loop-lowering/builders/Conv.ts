@@ -1,5 +1,4 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
@@ -7,6 +6,7 @@ import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import { uniq, makeTensorConst, int64Vec, scalarInt64, bool, zeroTensor } from "@specs-feup/onnx-flow/Onnx/Utils";
 import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
+import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 
 function resolveShape(t: TensorNode.Class): number[] {
   // If the tensor already has a shape, just use it.
@@ -18,9 +18,10 @@ function resolveShape(t: TensorNode.Class): number[] {
   const incs = t.getIncomers ?? [];
   for (const e of incs) {
     if (e.shape && e.shape.length) {
+      const s = e.shape.slice();
       // Cache it on the tensor so later passes see it as well
-      //t.shape = e.shape.slice();
-      return t.shape as number[];
+      t.setShape(s);
+      return s;
     }
   }
 
@@ -28,8 +29,10 @@ function resolveShape(t: TensorNode.Class): number[] {
   const outs = t.getOutgoers ?? [];
   for (const e of outs) {
     if (e.shape && e.shape.length) {
-      //t.shape = e.shape.slice();
-      return t.shape as number[];
+      const s = e.shape.slice();
+
+      t.setShape(s);
+      return s;
     }
   }
 
@@ -76,16 +79,18 @@ export default class ConvBuilder implements LoopBuilder {
     const W = inputsArr[1];
     const B = inputsArr.length >= 3 ? inputsArr[2] : undefined;
 
-    const outTensor = conv.getOutgoers.targets.filterIs(TensorNode).first();
+    let outTensor = conv.getOutgoers.targets.filterIs(TensorNode).first();
 
+    const fallbackElemTy = conv.getOutgoers.first()?.literalType ?? X.literalType;
     const elemTy =
-      outTensor.literalType === DataType.UNDEFINED
-        ? conv.getOutgoers.first().literalType
-        : outTensor.literalType;
+      outTensor && outTensor.literalType !== DataType.UNDEFINED
+        ? outTensor.literalType
+        : fallbackElemTy;
 
-    console.log("XSHAPE:", X.shape);
+    console.log("XSHAPE raw:", X.shape);
     const xShape = resolveShape(X);
     const wShape = resolveShape(W);
+    console.log("XSHAPE resolved:", xShape, "WSHAPE resolved:", wShape);
 
     const is2D = xShape.length === 4 && wShape.length === 4;
     const is1D = xShape.length === 3 && wShape.length === 3;
@@ -156,18 +161,33 @@ export default class ConvBuilder implements LoopBuilder {
     // ---- Attribute sanity + current restrictions -----------------------------
     const a = conv.getAttributes?.() ?? conv.attributes ?? {};
 
-    // Strides & dilations
-    let strides: number[] = Array.isArray(a.strides)
-      ? a.strides.map(Number)
-      : is1D
-      ? [1]          // Conv1D default: [strideW]
-      : [1, 1];
+        // Helper: normalise ONNX-style INT[] attributes to number[]
+    const attrs = a;
+    const getIntsAttr = (name: string): number[] | undefined => {
+      const v = attrs[name];
+      if (!v) return undefined;
 
-    let dilations: number[] = Array.isArray(a.dilations)
-      ? a.dilations.map(Number)
-      : is1D
-      ? [1]          // Conv1D default: [dilW]
-      : [1, 1];
+      // Already a plain JS array?
+      if (Array.isArray(v)) {
+        return v.map(Number);
+      }
+
+      // ONNX-style attribute object: { ints: [...] }
+      if (Array.isArray(v.ints)) {
+        return v.ints.map((x) => Number(x));
+      }
+
+      return undefined;
+    };
+
+    // Strides & dilations
+    let strides: number[] =
+      getIntsAttr("strides") ??
+      (is1D ? [1] : [1, 1]);   // defaults if no attribute
+
+    let dilations: number[] =
+      getIntsAttr("dilations") ??
+      (is1D ? [1] : [1, 1]);
 
     let strideH: number;
     let strideW: number;
@@ -220,31 +240,30 @@ export default class ConvBuilder implements LoopBuilder {
     }
 
     let pads: number[];
+    const padsAttr = getIntsAttr("pads");
 
-    if (Array.isArray(a.pads) && a.pads.length > 0) {
+    if (padsAttr && padsAttr.length > 0) {
       if (is1D) {
-        if (a.pads.length !== 2 && a.pads.length !== 4) {
+        if (padsAttr.length !== 2 && padsAttr.length !== 4) {
           throw new Error(
-            `ConvBuilder: Conv1D expects pads of length 2 or [0,pl,0,pr]; got pads=${a.pads}`
+            `ConvBuilder: Conv1D expects pads of length 2 or [0,pl,0,pr]; got pads=${padsAttr}`
           );
         }
-        if (a.pads.length === 2) {
-          const [padLeft, padRight] = a.pads.map(Number);
+        if (padsAttr.length === 2) {
+          const [padLeft, padRight] = padsAttr;
           pads = [0, padLeft, 0, padRight];
         } else {
-          pads = a.pads.map(Number);
+          pads = padsAttr;
         }
       } else {
         // 2D Conv
-        if (a.pads.length !== 4) {
+        if (padsAttr.length !== 4) {
           throw new Error(
-            `ConvBuilder: Conv2D expects pads of length 4; got pads=${a.pads}`
+            `ConvBuilder: Conv2D expects pads of length 4; got pads=${padsAttr}`
           );
         }
-        pads = a.pads.map(Number);
+        pads = padsAttr;
       }
-    } else if (auto_pad === "VALID" || auto_pad === "NOTSET" || !auto_pad) {
-      pads = [0, 0, 0, 0];
     } else if (auto_pad === "SAME_UPPER" || auto_pad === "SAME_LOWER") {
       const isLower = auto_pad === "SAME_LOWER";
 
@@ -265,7 +284,8 @@ export default class ConvBuilder implements LoopBuilder {
 
       pads = [padTop, padLeft, padBottom, padRight];
     } else {
-      throw new Error(`ConvBuilder: unsupported auto_pad=${auto_pad}`);
+      // VALID, NOTSET with no explicit pads, or auto_pad unset → no padding
+      pads = [0, 0, 0, 0];
     }
 
     const group = Number(a.group ?? 1);
@@ -309,8 +329,19 @@ export default class ConvBuilder implements LoopBuilder {
     // Conv output shape: [N, M, H_out, W_out]
     const outShape = [N, M, H_out, W_out];
 
-    // Make sure the graph tensor reflects this shape
-    outTensor.setShape(outShape);
+    // Make sure there is an outer tensor for the Conv output and that it reflects this shape
+    if (!outTensor) {
+      outTensor = outer
+        .addNode(uniq(outer, `out_${conv.id}`))
+        .init(new TensorNode.Builder(elemTy, outShape, "intermediate"))
+        .as(TensorNode);
+
+      outer.addEdge(conv, outTensor)
+        .init(new OnnxEdge.Builder(elemTy, outShape))
+        .as(OnnxEdge);
+    } else {
+      outTensor.setShape(outShape);
+    }
 
     // `inputs` map used by BuildLoop for captured outer inputs
     const inputs = new Map<string, TensorNode.Class>();
