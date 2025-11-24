@@ -11,6 +11,8 @@ import { fileURLToPath } from 'url';
  */
 const STRICT_RESHAPE_NULLS = false;
 
+const OPSET = 19;
+
 /**
  * Recursively traverses an object and converts any { type: 'Buffer', data: [...] }
  * back into actual Node.js Buffers for protobuf compatibility.
@@ -246,7 +248,7 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
 
     const defaultFields = {
       ir_version: 9,
-      opset_import: [{ domain: '', version: 17 }],
+      opset_import: [{ domain: '', version: OPSET }],
       producer_name: 'onnx-flow',
       producer_version: '0.1.0',
       model_version: 1,
