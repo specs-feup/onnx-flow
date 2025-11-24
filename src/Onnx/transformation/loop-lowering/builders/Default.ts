@@ -4,10 +4,11 @@ import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
 import {
   uniq, int64Vec, zeroTensor, bool, toStaticShape, Shape, makeTensorConst,
-  scalarInt64
+  scalarInt64,
+  asStaticDims,
+  getAttr
 } from "../../../Utils.js";
 import {
   LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx, resolveFusedInput,
@@ -17,11 +18,12 @@ import {
 // Handlers needed by the default builder only
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleTranspose from "../handlers/Transpose.js";
+import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 
 export default class DefaultBuilder implements LoopBuilder {
   canHandle(chain: OperationNode.Class[]) {
     // No Slice, no Range → handled here
-    return !chain.some(op => op.type === "Slice" || op.type === "Range");
+    return !chain.some(op => op.type === "Slice" || op.type === "Range" || op.type === "MatMul");
   }
 
   build(
@@ -30,10 +32,38 @@ export default class DefaultBuilder implements LoopBuilder {
     opts: { fuse: boolean; recurse: boolean; coalesce: boolean }
   ): BuildResult {
     const lastOp = chain.at(-1)!;
-    const outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
-    const elemTy = outTensor.literalType === DataType.UNDEFINED
-      ? lastOp.getOutgoers.first().literalType
-      : outTensor.literalType;
+    let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
+
+    // Prefer a floating-point element type when available (important for DQL)
+    const floatSet = new Set<DataType>([
+      DataType.FLOAT,
+      DataType.FLOAT16,
+      DataType.BFLOAT16,
+      DataType.DOUBLE,
+    ]);
+
+    let elemTy: DataType =
+      outTensor
+        ? (outTensor.literalType === DataType.UNDEFINED
+            ? (lastOp.getOutgoers.first()?.literalType ?? DataType.UNDEFINED)
+            : outTensor.literalType)
+        : DataType.UNDEFINED;
+
+    // If the chosen elemTy is not a float, try to upgrade to a float
+    if (!floatSet.has(elemTy)) {
+      for (const op of chain) {
+        const t = op.getOutgoers.targets.filterIs(TensorNode).first();
+        if (t && floatSet.has(t.literalType)) {
+          elemTy = t.literalType;
+          break;
+        }
+      }
+    }
+
+    // Last fallback: default to FLOAT instead of INT64
+    if (elemTy === DataType.UNDEFINED) {
+      elemTy = DataType.FLOAT;
+    }
 
     // infer output shape statically (no Range here)
     const rawOutShape = Array.isArray(outTensor?.shape) ? outTensor.shape : [undefined];
@@ -54,7 +84,22 @@ export default class DefaultBuilder implements LoopBuilder {
       }
     }
 
-    const totalIters = staticOut.length <= 1 ? (staticOut[0] ?? 1) : staticOut.reduce((a, b) => a * b, 1);
+    // Ensure we always have an outer output tensor node for this chain
+    if (!outTensor) {
+      const fallbackShape = staticOut && staticOut.length ? staticOut : [];
+      outTensor = outer
+        .addNode(uniq(outer, `out_${lastOp.id}`))
+        .init(new TensorNode.Builder(elemTy, fallbackShape, "intermediate"))
+        .as(TensorNode);
+
+      outer.addEdge(lastOp, outTensor)
+        .init(new OnnxEdge.Builder(elemTy, fallbackShape))
+        .as(OnnxEdge);
+    }
+
+    // Clamp non-positive / unknown dims to 1 for loop trip count
+    const safeOut = asStaticDims(staticOut);
+    const totalIters = safeOut.length <= 1 ? (safeOut[0] ?? 1) : safeOut.reduce((a, b) => a * b, 1);
     const carryLen = totalIters;
 
     const inputs = new Map<string, TensorNode.Class>();
@@ -83,7 +128,7 @@ export default class DefaultBuilder implements LoopBuilder {
       unsqIdx: unsqOut,
       carry,
       axes,
-      outShape: rawOutShape,
+      outShape: staticOut,
       coalesce: opts.coalesce,
     };
 

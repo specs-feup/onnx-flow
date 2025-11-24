@@ -3,7 +3,7 @@ import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { makeTensorConst, scalarInt64, uniq, int64Vec } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { makeTensorConst, scalarInt64, uniq, int64Vec, toStaticShape } from "@specs-feup/onnx-flow/Onnx/Utils";
 import { unsqueezeIdx, LoopCtx, resolveFusedInput, divmod, targetReshape, gatherFrom, reshapeTensor, squeezeIfLen1, broadcastShapes, decodeMixedRadix } from "../BuildLoop.js";
 
 
@@ -83,9 +83,21 @@ function gatherDim(
   const shape = g.addNode(uniq(g, `shape_${tag}`))
     .init(new OperationNode.Builder("Shape", [src]))
     .as(OperationNode);
+  // Create tensor for Shape's output (the shape vector)
+  const shapeO = g.addNode(`shape_O_${tag}`)
+    .init(new TensorNode.Builder(
+      DataType.INT64,         // Shape outputs int64
+      [src.shape.length], 
+      "intermediate"
+    ))
+    .as(TensorNode);
+
+  // Wire op → tensor
+  g.addEdge(shape, shapeO).init(new OnnxEdge.Builder(shapeO.literalType, shapeO.shape)).as(OnnxEdge);
+
   const idx = makeTensorConst(g, `idx_${tag}`, DataType.INT64, "constant", int64Vec([negAxis]));
   const gather = g.addNode(uniq(g, `g_${tag}`))
-    .init(new OperationNode.Builder("Gather", [shape, idx], { axis: 0 }))
+    .init(new OperationNode.Builder("Gather", [shapeO, idx], { axis: 0 }))
     .as(OperationNode);
   const out = g.addNode(uniq(g, `g_out_${tag}`))
     .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
@@ -125,6 +137,12 @@ export default function handleMatMul(
   g: OnnxGraph.Class,
   ctx: LoopCtx
 ): TensorNode.Class {
+  // Pull trusted dims from the builder
+  const dims = ctx.matmulDims;
+  if (!dims) {
+    throw new Error(`handleMatMul: ctx.matmulDims is missing for ${op.id}`);
+  }
+
   const lhsInput = op.getInputs()![0];
   const rhsInput = op.getInputs()![1];
 
@@ -134,14 +152,12 @@ export default function handleMatMul(
   const aShape = lhsTensor.shape as number[];
   const bShape = rhsTensor.shape as number[];
 
-  const K = aShape.at(-1)!;
-  const M = aShape.at(-2)!;
-  const N = bShape.at(-1)!;
+  const { M, K, N } = dims;
 
   const aBatch = aShape.slice(0, -2);
   const bBatch = bShape.slice(0, -2);
-  const batch = broadcastShapes([aBatch, bBatch]);
-  const batchProd = prod(batch);
+  const batch = toStaticShape(dims.batchDims);
+  const batchProd = dims.batchProd;
 
   const elemTy = lhsTensor.literalType;
 

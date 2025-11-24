@@ -1,7 +1,6 @@
 // ---- helpers --------------------------------------------------------------
 
 import Graph from "@specs-feup/flow/graph/Graph";
-import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType, TensorProto } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
@@ -16,6 +15,7 @@ import {
   decodeMixedRadix, buildLinearIndex, unsqueezeIdx, squeezeIfLen1
 } from "../BuildLoop.js";
 import handleReduceElem from "../handlers/Reduces.js";
+import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 
 function normalizeAxes(axes: number[] | undefined, rank: number): number[] {
   if (!axes || axes.length === 0) return Array.from({ length: rank }, (_, i) => i);
@@ -155,7 +155,7 @@ export default class ReducesBuilder implements LoopBuilder {
     const outStatic = makeOutShape(inShape, effAxes, keep01);
 
     // We no longer read the reduce op's outgoer here (it can be absent in a chain)
-    const outTensor = op.getOutgoers?.targets?.filterIs?.(TensorNode)?.first?.(); // optional
+    let outTensor = op.getOutgoers?.targets?.filterIs?.(TensorNode)?.first?.(); // optional
 
     // Trip count & carry length
     const totalIters = inShape.reduce((a, b) => a * (b > 0 ? b : 1), 1);
@@ -330,6 +330,19 @@ export default class ReducesBuilder implements LoopBuilder {
     inferShapes(outer);
     inferShapes(body);
     const finalShape = outStatic.length ? outStatic : [];
+
+    // Ensure we always have an outer output tensor node for this reduce chain
+    if (!outTensor) {
+      const shapeForOut = finalShape;
+      outTensor = outer
+        .addNode(uniq(outer, `out_${op.id}`))
+        .init(new TensorNode.Builder(elemTy, shapeForOut, "intermediate"))
+        .as(TensorNode);
+
+      outer.addEdge(op, outTensor)
+        .init(new OnnxEdge.Builder(elemTy, shapeForOut))
+        .as(OnnxEdge);
+    }
 
     return {
       body,

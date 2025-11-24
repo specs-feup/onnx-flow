@@ -4,7 +4,6 @@ import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType, TensorProto } from "../../../OnnxTypes.js";
-import { inferShapes } from "@specs-feup/onnx-flow/initGraph";
 import {
   uniq, int64Vec, zeroTensor, bool, makeTensorConst
 } from "../../../Utils.js";
@@ -16,6 +15,7 @@ import {
 import handleRange from "../handlers/Range.js";
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleTranspose from "../handlers/Transpose.js";
+import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 
 export default class GenerativeBuilder implements LoopBuilder {
   canHandle(chain: OperationNode.Class[]) {
@@ -28,7 +28,7 @@ export default class GenerativeBuilder implements LoopBuilder {
     opts: { fuse: boolean; recurse: boolean; coalesce: boolean }
   ): BuildResult {
     const lastOp = chain.at(-1)!;
-    const outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
+    let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
     // Find the Range op in the chain
     const rangeOp = chain.find(op => op.type === "Range");
@@ -194,6 +194,23 @@ export default class GenerativeBuilder implements LoopBuilder {
 
     const trip = tripScalar; // scalar
     const cond = makeTensorConst(outer, `cond_${chain[0].id}`, DataType.BOOL, "constant", bool(true));
+
+    // Ensure we always have an outer output tensor node for this generative chain
+    if (!outTensor) {
+      const shapeForOut =
+        outShape && outShape.length && typeof outShape[0] === "number"
+          ? [outShape[0] as number]
+          : [];
+
+      outTensor = outer
+        .addNode(uniq(outer, `out_${lastOp.id}`))
+        .init(new TensorNode.Builder(elemTy, shapeForOut, "intermediate"))
+        .as(TensorNode);
+
+      outer.addEdge(lastOp, outTensor)
+        .init(new OnnxEdge.Builder(elemTy, shapeForOut))
+        .as(OnnxEdge);
+    }
 
     return {
       body,
