@@ -86,15 +86,88 @@ export function floatVec(arr: number[]): TensorProto {
 
 /* zero tensor that matches elemType + shape                                 */
 export function zeroTensor(elemType: DataType, shape: number[]): TensorProto {
-  const n = shape.reduce((a, b) => a * b, 1);
+  // Normalize dynamic/invalid dims: anything <= 0 or undefined becomes 1
+  const safeShape =
+    shape && shape.length
+      ? shape.map(d => (d != null && d > 0 ? d : 1))
+      : [1];
+
+  const n = safeShape.reduce((a, b) => a * b, 1);
+
+  // Base object reused in all branches
+  const base: TensorProto = {
+    dataType: elemType,
+    dims: safeShape,
+  };
+
   switch (elemType) {
-    case DataType.FLOAT:
-    case DataType.DOUBLE:
-      return { dataType: elemType, dims: shape, floatData: Array(n).fill(0) };
-    case DataType.INT32:
-      return { dataType: elemType, dims: shape, int32Data: Array(n).fill(0) };
+    // Floating point
+    case DataType.FLOAT: // 1
+      return {
+        ...base,
+        floatData: new Array<number>(n).fill(0),
+      };
+
+    case DataType.DOUBLE: // 11
+      return {
+        ...base,
+        doubleData: new Array<number>(n).fill(0),
+      };
+
+    // 32-bit style integers (and bool)
+    case DataType.INT32:  // 6
+      return {
+        ...base,
+        int32Data: new Array<number>(n).fill(0),
+      };
+
+    case DataType.BOOL:   // 9 – ONNX stores bools in int32_data
+      return {
+        ...base,
+        int32Data: new Array<number>(n).fill(0),
+      };
+
+    // 64-bit integers
+    case DataType.INT64:  // 7
+      return {
+        ...base,
+        int64Data: new Array<number>(n).fill(0),
+      };
+
+    case DataType.UINT64: // 13
+      return {
+        ...base,
+        uint64Data: new Array<number>(n).fill(0),
+      };
+
+    // Other integer-like types (INT8, UINT8, INT16, UINT16, UINT32, etc.)
+    // ONNX allows them to be stored in int32_data.
+    case DataType.INT8:
+    case DataType.UINT8:
+    case DataType.INT16:
+    case DataType.UINT16:
+    case DataType.UINT32:
+      return {
+        ...base,
+        int32Data: new Array<number>(n).fill(0),
+      };
+
+    // Float16 / BFloat16: we just store zeros via int32_data as a simple,
+    // spec-compatible representation (or you could move to rawData later).
+    case DataType.FLOAT16:
+    case DataType.BFLOAT16:
+      return {
+        ...base,
+        int32Data: new Array<number>(n).fill(0),
+      };
+
     default:
-      return { dataType: DataType.INT64, dims: shape, int64Data: Array(n).fill(Number(0)) };
+      // Fallback: still create a zero tensor with safeShape.
+      // Using int32Data is widely accepted for small integer types.
+      return {
+        ...base,
+        int32Data: new Array<number>(n).fill(0),
+      };
   }
 }
 
@@ -503,7 +576,7 @@ export function makeTensorConst(
   return g.addNode(uniq(g, id)).init(builder).as(TensorNode);
 }
 
-export function asStaticDims(shape: (number | string)[]): number[] {
+export function asStaticDims(shape: (number | String)[]): number[] {
   return shape.map(d => (typeof d === 'number' && d > 0) ? d : 1);
 }
 
@@ -586,29 +659,40 @@ export function topologicalSortOperationNodes(
 
       const sgOps = sg.getOperationNodes().toArray();
 
+      // --- 1) Map *local* tensor producers inside this subgraph -----------------
+      const sgTensorProducers = new Map<string, OperationNode.Class>();
       for (const bOp of sgOps) {
-        // Use getInputs() if available; fallback to incomers if needed
+        const outTensors =
+          bOp.getOutgoers?.targets?.filter(n => n.is(TensorNode)).toArray?.() ?? [];
+        for (const t of outTensors as TensorNode.Class[]) {
+          sgTensorProducers.set(t.id, bOp);
+        }
+      }
+
+      // --- 2) For each subgraph op, look for inputs that have no local producer
+      //        but *do* have a producer in the parent graph. Those are captured
+      //        values, so the parent op depends on that producer.
+      for (const bOp of sgOps) {
         const inputs = (bOp.getInputs?.() ?? []) as any[];
 
         for (const inp of inputs) {
           const t = inp?.tryAs?.(TensorNode);
           if (!t) continue;
 
-          // If tensor lives in parent graph but not in this subgraph,
-          // it's an implicit/outer value for this op.
-          const isFromParent = graph.hasNode(t.id);
-          const isInSubgraph = sg.hasNode(t.id);
+          const localProd = sgTensorProducers.get(t.id);
+          const parentProd = tensorProducers.get(t.id);
 
-          if (isFromParent && !isInSubgraph) {
-            const prod = tensorProducers.get(t.id);
-            if (!prod || prod.id === op.id) continue;
-
+          // We only care about tensors that:
+          //  - are NOT produced inside the subgraph (no localProd)
+          //  - ARE produced in the parent graph (parentProd)
+          //  - and whose producer is not this op itself
+          if (!localProd && parentProd && parentProd.id !== op.id) {
             let deps = extraDeps.get(op.id);
             if (!deps) {
               deps = new Set<OperationNode.Class>();
               extraDeps.set(op.id, deps);
             }
-            deps.add(prod);
+            deps.add(parentProd);
           }
         }
       }
