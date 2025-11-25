@@ -51,8 +51,9 @@ export default class OnnxDotFormatter<
             }),
             Node.Case(OperationNode, node => {
                 attrs.label = node.type;
+                attrs.type = node.type.toLowerCase();
 
-                // attrs.feedback = '0';
+                attrs.feedback = '0';
                 // attrs.constant = '0';
                 // attrs.constant_fu_input = '0';
                 // attrs.initial_value = '0';
@@ -303,7 +304,9 @@ export default class OnnxDotFormatter<
 
     reduceSumToDot(node: OperationNode.Class): DotStatement[] {
         const dotNode = this.nodeToDot(node);
-        dotNode.attr('label', 'Add');
+        dotNode.attr('label', 'Add')
+               .attr('type', 'add')
+               .attr('feedback', '1');
 
         const loopEdge = this.createDotEdge(
             node.id,
@@ -362,7 +365,7 @@ export default class OnnxDotFormatter<
 
     toIgnore(node: DotNode): boolean {
         // TODO(Process-ing): Make these conditions robust to weird input names
-        if (['Gather', 'GatherElements', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze', 'Reshape'].includes(node.attrList.label)) {
+        if (['Gather', 'GatherElements', 'Scatter', 'ScatterElements', 'Squeeze', 'Unsqueeze', 'Reshape', 'Concat'].includes(node.attrList.label)) {
             return true;
         }
 
