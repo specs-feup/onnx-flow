@@ -6,7 +6,7 @@ import { createGraph } from './initGraph.js';
 import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
 import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
-import OnnxModDotFormatter from "./Onnx/dot/OnnxModDotFormatter.js";
+import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
@@ -151,10 +151,10 @@ const argv = await yargs(hideBin(process.argv))
   })
   .option('formatter', {
     alias: 'fmtr',
-    describe: 'Specify the DOT formatter to use (0 = onnx, 1 = onnx-mod)',
+    describe: 'Specify the DOT formatter to use (0 = default, 1 = cgra)',
     type: 'string',
-    choices: ['onnx', 'onnx-mod'],
-    default: 'onnx',
+    choices: ['default', 'cgra'],
+    default: 'default',
   })
   .help()
   .argv;
@@ -169,7 +169,7 @@ const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = argv.formatter === 'onnx-mod' ? new OnnxModDotFormatter() : new OnnxDotFormatter();
+const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new OnnxDotFormatter();
 
 (async function main() {
   try {

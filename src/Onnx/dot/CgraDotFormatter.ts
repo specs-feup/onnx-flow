@@ -17,7 +17,7 @@ type ClusterInfo = {
     targetMapping: Record<string, string>,
 };
 
-export default class OnnxDotFormatter<
+export default class CgraDotFormatter<
     G extends OnnxGraph.Class = OnnxGraph.Class,
 > extends DefaultDotFormatter<G> {
     private idPrefix: string;
@@ -89,10 +89,10 @@ export default class OnnxDotFormatter<
         getContainer?: (node: BaseNode.Class) => BaseNode.Class | undefined,
         getGraphAttrs?: () => Record<string, string>
     ) {
-        getNodeAttrs ??= OnnxDotFormatter.defaultGetNodeAttrs;
-        getEdgeAttrs ??= OnnxDotFormatter.defaultGetEdgeAttrs;
-        getContainer ??= OnnxDotFormatter.defaultGetContainer;  // Method not implemented, add if needed
-        getGraphAttrs ??= OnnxDotFormatter.defaultGetGraphAttrs;
+        getNodeAttrs ??= CgraDotFormatter.defaultGetNodeAttrs;
+        getEdgeAttrs ??= CgraDotFormatter.defaultGetEdgeAttrs;
+        getContainer ??= CgraDotFormatter.defaultGetContainer;  // Method not implemented, add if needed
+        getGraphAttrs ??= CgraDotFormatter.defaultGetGraphAttrs;
 
         super(getNodeAttrs, getEdgeAttrs, getContainer, getGraphAttrs);
 
@@ -162,7 +162,7 @@ export default class OnnxDotFormatter<
 
         const body = node.getBodySubgraph();
         if (body !== undefined) {
-            const subFormatter = new OnnxDotFormatter(idPrefix);
+            const subFormatter = new CgraDotFormatter(idPrefix);
             const bodyDot = subFormatter.toDot(body);
 
             const bodySubdot = new DotSubgraph(`cluster_loop_${node.id}`, bodyDot.statementList)
@@ -197,7 +197,7 @@ export default class OnnxDotFormatter<
         const thenBranch = node.getThenBranch();
         if (thenBranch !== undefined) {
             const thenIdPrefix = `${idPrefix}then_`;
-            const thenFormatter = new OnnxDotFormatter(thenIdPrefix);
+            const thenFormatter = new CgraDotFormatter(thenIdPrefix);
             const thenDot = thenFormatter.toDot(thenBranch);
 
             const thenGraph = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
@@ -214,7 +214,7 @@ export default class OnnxDotFormatter<
         const elseBranch = node.getElseBranch();
         if (elseBranch !== undefined) {
             const elseIdPrefix = `${idPrefix}else_`;
-            const elseFormatter = new OnnxDotFormatter(elseIdPrefix);
+            const elseFormatter = new CgraDotFormatter(elseIdPrefix);
             const elseDot = elseFormatter.toDot(elseBranch);
 
             const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
