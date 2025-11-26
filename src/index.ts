@@ -156,6 +156,12 @@ const argv = await yargs(hideBin(process.argv))
     choices: ['default', 'cgra'],
     default: 'default',
   })
+  .option('decomposeForCgra', {
+    alias: 'dgc',
+    describe: 'Decompose the graph for CGRA mapping',
+    type: 'boolean',
+    default: false,
+  })
   .help()
   .argv;
 
@@ -197,7 +203,7 @@ const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new On
     }
 
     if(!argv.noLowLevel){
-      graph.apply(new OnnxGraphTransformer(argv.fuse, argv.recurse, argv.coalesce));
+      graph.apply(new OnnxGraphTransformer(argv.fuse, argv.recurse, argv.coalesce, argv.decomposeForCgra));
     }
 
     if (verbosity > 1){

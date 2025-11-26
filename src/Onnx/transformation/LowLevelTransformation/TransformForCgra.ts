@@ -284,7 +284,7 @@ function divideMatMul(
     return true;
 }
 
-export default function divideInputs(g: OnnxGraph.Class) {
+export default function transformForCgra(g: OnnxGraph.Class) {
     let done = false;
 
     while (!done) {

@@ -8,10 +8,11 @@ export default class OnnxGraphTransformer
   constructor(
     private fuse: boolean = true,
     private recurse: boolean = false,
-    private coalesce: boolean = true
+    private coalesce: boolean = true,
+    private decomposeForCgra: boolean = false
   ) {}
 
   apply(graph: OnnxGraph.Class): OnnxGraph.Class {
-    return new TransformChain(this.fuse, this.recurse, this.coalesce).apply(graph);
+    return new TransformChain(this.fuse, this.recurse, this.coalesce, this.decomposeForCgra).apply(graph);
   }
 }
