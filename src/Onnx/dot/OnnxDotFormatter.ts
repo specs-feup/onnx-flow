@@ -209,7 +209,7 @@ export default class OnnxDotFormatter<
     }
 
     /**
-     * @brief Tries to turn a node as an intermediate tensor.
+     * @brief Tries to convert a node to an intermediate tensor.
      *
      * @param node The node to convert.
      * @returns The intermediate tensor node if compatible, otherwise undefined.
