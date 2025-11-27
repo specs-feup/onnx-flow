@@ -27,18 +27,16 @@
     "clean": "rimraf out",
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
-
     "typecheck": "tsc --noEmit",
-
     "pretest": "npm run build",
     "pretestcomp": "npm run build",
     "test": "node ./out/test/testing.js",
     "testcomp": "node ./out/test/compatibility_test.js",
-
     "dev": "npm-run-all --parallel build:watch dev:testcomp",
     "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
-
     "prepare": "npm run build",
     "prepublishOnly": "npm run clean && npm run build && npm run typecheck"
   },
@@ -54,17 +52,18 @@
     "express": "^4.21.1",
     "node-graphviz": "^0.1.1",
     "onnxruntime-web": "^1.20.1",
+    "prettier": "^3.7.1",
     "protobufjs": "^7.4.0",
     "yargs": "^17.7.2"
   },
   "type": "module",
   "devDependencies": {
-    "rimraf": "^6.0.1",
-    "nodemon": "^3.1.7",
-    "npm-run-all": "^4.1.5",
     "@types/express": "^5.0.0",
     "@types/yargs": "^17.0.33",
     "cpx2": "^8.0.0",
+    "nodemon": "^3.1.7",
+    "npm-run-all": "^4.1.5",
+    "rimraf": "^6.0.1",
     "typescript": "^5.7.2"
   },
   "parserOptions": {
