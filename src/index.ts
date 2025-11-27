@@ -2,32 +2,38 @@
 
 import express, { Request, Response } from "express";
 import { graphviz } from "node-graphviz";
-import { createGraph } from './initGraph.js';
-import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
-import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
+import { createGraph } from "./initGraph.js";
+import OnnxGraphTransformer from "./Onnx/transformation/LowLevelTransformation/LowLevelConversion.js";
+import OnnxGraphOptimizer from "./Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js";
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
-import { generateCode } from './codeGeneration.js';
-import { onnx2json } from './onnx2json.js';
+import { generateCode } from "./codeGeneration.js";
+import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
 
-export async function parseOnnxFile(inputFilePath: string){
+export async function parseOnnxFile(inputFilePath: string) {
   return await onnx2json(inputFilePath);
 }
 
-export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
+export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string) {
   return await json2onnx(jsonFilePath, outputFilePath);
 }
 
-export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true,
+export function loadGraph(
+  onnxObject: any,
+  enableLowLevel: boolean = true,
+  enableOptimize: boolean = true,
   dotOutput: boolean = true,
-  fuse: boolean = true, recurse: boolean = false, coalesce: boolean = true) {
+  fuse: boolean = true,
+  recurse: boolean = false,
+  coalesce: boolean = true,
+) {
   let graph = createGraph(onnxObject);
 
   if (enableLowLevel) {
@@ -38,7 +44,7 @@ export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enabl
     graph = graph.apply(new OnnxGraphOptimizer());
   }
 
-  if(dotOutput){
+  if (dotOutput) {
     return graph.toString(dotFormatter);
   }
   return graph;
@@ -54,163 +60,185 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
 }
 
 export function generateGraphCode(graph: any): string {
-
   return generateCode(graph);
 }
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-let version = 'unknown';
+let version = "unknown";
 try {
   const packageJson = JSON.parse(
-    fs.readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')
+    fs.readFileSync(join(__dirname, "..", "..", "package.json"), "utf8"),
   );
   version = packageJson.version;
 } catch (error) {
-  console.warn('Warning: Unable to read package.json for version info.', error);
+  console.warn("Warning: Unable to read package.json for version info.", error);
 }
 
 const argv = await yargs(hideBin(process.argv))
-  .usage('Usage: onnx-flow <input_file> [options]')
+  .usage("Usage: onnx-flow <input_file> [options]")
   .version(version)
   .parserConfiguration({
-    'short-option-groups': false,
-    'camel-case-expansion': true,
-    'boolean-negation': true,
-    'duplicate-arguments-array': false,
+    "short-option-groups": false,
+    "camel-case-expansion": true,
+    "boolean-negation": true,
+    "duplicate-arguments-array": false,
   })
   .strictOptions()
-  .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
-  .option('output', {
-    alias: 'o',
-    describe: 'Output resulting graph to a file',
-    type: 'string',
+  .demandCommand(1, "You need to provide an input file (ONNX or JSON)")
+  .option("output", {
+    alias: "o",
+    describe: "Output resulting graph to a file",
+    type: "string",
   })
-  .option('format', {
-    alias: 'fm',
-    describe: 'Output format (json or dot)',
-    type: 'string',
-    choices: ['json', 'dot'],
-    default: 'json',
+  .option("format", {
+    alias: "fm",
+    describe: "Output format (json or dot)",
+    type: "string",
+    choices: ["json", "dot"],
+    default: "json",
   })
-  .option('verbosity', {
-    alias: 'v',
-    describe: 'Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)',
-    type: 'number',
+  .option("verbosity", {
+    alias: "v",
+    describe: "Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)",
+    type: "number",
     default: 1,
   })
-  .option('noLowLevel', {
-    alias: 'nl',
-    describe: 'Disable the low-level conversion',
-    type: 'boolean',
+  .option("noLowLevel", {
+    alias: "nl",
+    describe: "Disable the low-level conversion",
+    type: "boolean",
     default: false,
   })
-  .option('noOptimize', {
-    alias: 'no',
-    describe: 'Disable optimization steps',
-    type: 'boolean',
+  .option("noOptimize", {
+    alias: "no",
+    describe: "Disable optimization steps",
+    type: "boolean",
     default: false,
   })
-  .option('noCodegen', {
-    alias: 'nc',
-    describe: 'Disable code generation step',
-    type: 'boolean',
+  .option("noCodegen", {
+    alias: "nc",
+    describe: "Disable code generation step",
+    type: "boolean",
     default: false,
   })
-  .option('noReconversion', {
-    alias: 'nr',
-    describe: 'Skip ONNX reconversion',
-    type: 'boolean',
+  .option("noReconversion", {
+    alias: "nr",
+    describe: "Skip ONNX reconversion",
+    type: "boolean",
     default: false,
   })
-  .option('visualization', {
-    alias: 'vz',
-    describe: 'Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)',
-    type: 'number',
+  .option("visualization", {
+    alias: "vz",
+    describe:
+      "Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)",
+    type: "number",
     default: 2,
   })
-    .option('fuse', {
-    alias: 'f',
-    describe: 'Fuse supported ops into a single Loop when possible',
-    type: 'boolean',
+  .option("fuse", {
+    alias: "f",
+    describe: "Fuse supported ops into a single Loop when possible",
+    type: "boolean",
     default: true,
   })
-  .option('coalesce', {
-    alias: 'c',
-    describe: 'Use coalesced scalar MAC for MatMul inside Loop bodies',
-    type: 'boolean',
+  .option("coalesce", {
+    alias: "c",
+    describe: "Use coalesced scalar MAC for MatMul inside Loop bodies",
+    type: "boolean",
     default: true,
   })
-  .option('recurse', {
-    alias: 'r',
-    describe: 'Recursively decompose inside generated Loop bodies',
-    type: 'boolean',
+  .option("recurse", {
+    alias: "r",
+    describe: "Recursively decompose inside generated Loop bodies",
+    type: "boolean",
     default: false,
   })
-  .option('formatter', {
-    alias: 'fmtr',
-    describe: 'Specify the DOT formatter to use (0 = default, 1 = cgra)',
-    type: 'string',
-    choices: ['default', 'cgra'],
-    default: 'default',
+  .option("formatter", {
+    alias: "fmtr",
+    describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
+    type: "string",
+    choices: ["default", "cgra"],
+    default: "default",
   })
-  .option('decomposeForCgra', {
-    alias: 'dgc',
-    describe: 'Decompose the graph for CGRA mapping',
-    type: 'boolean',
+  .option("decomposeForCgra", {
+    alias: "dgc",
+    describe: "Decompose the graph for CGRA mapping",
+    type: "boolean",
     default: false,
   })
-  .help()
-  .argv;
+  .help().argv;
 
 const inputFilePath = argv._[0]; // Positional argument for input file
 
-if (typeof inputFilePath !== 'string') {
-  throw new Error('The input file path must be a string.');
+if (typeof inputFilePath !== "string") {
+  throw new Error("The input file path must be a string.");
 }
 
 const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new OnnxDotFormatter();
+const dotFormatter =
+  argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
 
 (async function main() {
   try {
     let onnxObject;
 
     // Step 1: Load the input (either ONNX or pre-existing JSON graph)
-    if (inputFilePath.endsWith('.json')) {
-      onnxObject = JSON.parse(fs.readFileSync(inputFilePath, 'utf8'));
+    if (inputFilePath.endsWith(".json")) {
+      onnxObject = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
     } else {
       onnxObject = await parseOnnxFile(inputFilePath);
       //fs.writeFileSync("./examples/onnxmodel.json", JSON.stringify(onnxObject, null, 2));
     }
 
-    if (verbosity > 1) console.log('Input ONNX/JSON Graph:', JSON.stringify(onnxObject, null, 2));
+    if (verbosity > 1)
+      console.log(
+        "Input ONNX/JSON Graph:",
+        JSON.stringify(onnxObject, null, 2),
+      );
 
     // Step 2: Process the graph
     let graph = createGraph(onnxObject);
 
-    if (verbosity > 1){
-      if (outputFormat === 'json') {
-        console.log('Initial Graph in JSON Format:', JSON.stringify(graph.toCy().json(), null, 2));
-      } else if (outputFormat === 'dot') {
-        console.log('Initial Graph in DOT Format:', graph.toString(dotFormatter));
+    if (verbosity > 1) {
+      if (outputFormat === "json") {
+        console.log(
+          "Initial Graph in JSON Format:",
+          JSON.stringify(graph.toCy().json(), null, 2),
+        );
+      } else if (outputFormat === "dot") {
+        console.log(
+          "Initial Graph in DOT Format:",
+          graph.toString(dotFormatter),
+        );
       }
     }
 
-    if(!argv.noLowLevel){
-      graph.apply(new OnnxGraphTransformer(argv.fuse, argv.recurse, argv.coalesce, argv.decomposeForCgra));
+    if (!argv.noLowLevel) {
+      graph.apply(
+        new OnnxGraphTransformer(
+          argv.fuse,
+          argv.recurse,
+          argv.coalesce,
+          argv.decomposeForCgra,
+        ),
+      );
     }
 
-    if (verbosity > 1){
-      if (outputFormat === 'json') {
-        console.log('Low-level Graph in JSON Format:', JSON.stringify(graph.toCy().json(), null, 2));
-      } else if (outputFormat === 'dot') {
-        console.log('Low-level Graph in DOT Format:', graph.toString(dotFormatter));
+    if (verbosity > 1) {
+      if (outputFormat === "json") {
+        console.log(
+          "Low-level Graph in JSON Format:",
+          JSON.stringify(graph.toCy().json(), null, 2),
+        );
+      } else if (outputFormat === "dot") {
+        console.log(
+          "Low-level Graph in DOT Format:",
+          graph.toString(dotFormatter),
+        );
       }
     }
 
@@ -221,71 +249,90 @@ const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new On
     // Step 3: Output the graph if requested
     if (outputFilePath) {
       // TEMP
-      if(!argv.noLowLevel){
+      if (!argv.noLowLevel) {
         graph = createGraph(convertFlowGraphToOnnxJson(graph));
       }
 
-      if (outputFormat === 'json') {
-        fs.writeFileSync(outputFilePath, JSON.stringify(graph.toCy().json(), null, 2));
-      } else if (outputFormat === 'dot') {
+      if (outputFormat === "json") {
+        fs.writeFileSync(
+          outputFilePath,
+          JSON.stringify(graph.toCy().json(), null, 2),
+        );
+      } else if (outputFormat === "dot") {
         fs.writeFileSync(outputFilePath, graph.toString(dotFormatter));
       }
-      if (verbosity > 0) console.log(`Output Graph written to ${outputFilePath} in ${outputFormat} format`);
+      if (verbosity > 0)
+        console.log(
+          `Output Graph written to ${outputFilePath} in ${outputFormat} format`,
+        );
     }
 
-    function getReconvertedPaths(inputPath: string): { json: string; onnx: string } {
-      const extIndex = inputPath.lastIndexOf('.');
+    function getReconvertedPaths(inputPath: string): {
+      json: string;
+      onnx: string;
+    } {
+      const extIndex = inputPath.lastIndexOf(".");
       const base = extIndex === -1 ? inputPath : inputPath.slice(0, extIndex);
-      const reconvertedBase = base + '_reconverted';
+      const reconvertedBase = base + "_reconverted";
 
       return {
-        json: reconvertedBase + '.json',
-        onnx: reconvertedBase + '.onnx',
+        json: reconvertedBase + ".json",
+        onnx: reconvertedBase + ".onnx",
       };
     }
 
-
     // Convert the ONNX JSON format to ONNX binary format if not disabled
     if (!argv.noReconversion) {
-      const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
+      const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } =
+        getReconvertedPaths(inputFilePath);
       const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
 
-      fs.writeFileSync(reconvertedJsonPath, JSON.stringify(onnxCompatibleJson, null, 2));
+      fs.writeFileSync(
+        reconvertedJsonPath,
+        JSON.stringify(onnxCompatibleJson, null, 2),
+      );
       console.log(`Reconverted JSON written to ${reconvertedJsonPath}`);
 
       await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
       console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-    }
-    else if (verbosity > 0) {
-      console.log('Skipping ONNX reconversion.');
+    } else if (verbosity > 0) {
+      console.log("Skipping ONNX reconversion.");
     }
 
     // Print the output graph to stdout
     if (verbosity > 0) {
-      if (outputFormat === 'json') {
-        console.log('Output Graph in JSON Format:', JSON.stringify(graph.toCy().json(), null, 2));
-      } else if (outputFormat === 'dot') {
-        console.log('Output Graph in DOT Format:', graph.toString(dotFormatter));
+      if (outputFormat === "json") {
+        console.log(
+          "Output Graph in JSON Format:",
+          JSON.stringify(graph.toCy().json(), null, 2),
+        );
+      } else if (outputFormat === "dot") {
+        console.log(
+          "Output Graph in DOT Format:",
+          graph.toString(dotFormatter),
+        );
       }
     }
 
     // Step 4: Code generation
     if (!argv.noLowLevel && !argv.noCodegen) {
       const generatedCode = generateGraphCode(graph);
-      if (verbosity > 0) console.log('Generated Code:', generatedCode);
+      if (verbosity > 0) console.log("Generated Code:", generatedCode);
     }
 
     // Step 5: Graphviz Online link generation
     if (visualizationOption > 0) {
       // TEMP
-      if(!argv.noLowLevel){
+      if (!argv.noLowLevel) {
         graph = createGraph(convertFlowGraphToOnnxJson(graph));
       }
 
-      if (visualizationOption == 1){
-        console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
-      }
-      else{
+      if (visualizationOption == 1) {
+        console.log(
+          "Graphviz Online Link:",
+          generateGraphvizOnlineLink(graph.toString(dotFormatter)),
+        );
+      } else {
         const app = express();
         const port = 8080;
 
@@ -293,7 +340,9 @@ const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new On
         app.get("/", async (req: Request, res: Response) => {
           try {
             // Render the DOT graph to SVG
-            const svgContent = await renderDotToSVG(graph.toString(dotFormatter));
+            const svgContent = await renderDotToSVG(
+              graph.toString(dotFormatter),
+            );
 
             // Create an HTML page with the embedded SVG
             const htmlContent = `
@@ -348,11 +397,9 @@ const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new On
               </html>
             `;
 
-
             // Send the HTML response
             res.setHeader("Content-Type", "text/html");
             res.send(htmlContent);
-
           } catch (error) {
             console.error("Error rendering graph:", error);
             res.status(500).send(error);
@@ -361,12 +408,13 @@ const dotFormatter = argv.formatter === 'cgra' ? new CgraDotFormatter() : new On
 
         // Start the server
         app.listen(port, () => {
-          console.log(`Graphviz Visualization server running at http://localhost:${port}`);
+          console.log(
+            `Graphviz Visualization server running at http://localhost:${port}`,
+          );
         });
       }
     }
-
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   }
 })();
