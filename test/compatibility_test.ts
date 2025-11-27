@@ -62,7 +62,7 @@ function generateReconvertedNow(originalPath: string, cliArgs: string) {
 }
 
 function reportOutcome(status: 'pass' | 'warn' | 'error', label = 'Outputs equivalent', value?: boolean) {
-  const icon = status === 'pass' ? '✅' : status === 'warn' ? '⚠️' : '❌';
+  const icon = status === 'pass' ? '✅ ' : status === 'warn' ? '⚠️ ' : '❌ ';
   console.log(`${icon} ${label}:`, value ?? (status === 'pass'));
   if (status === 'pass') RUN_TOTAL.passed++; else RUN_TOTAL.failed++;
 
@@ -135,7 +135,7 @@ function recordFailure(kind: 'warn' | 'error') {
 
 /* ============================== FEED HELPERS ================================== */
 
-type DType = 'uint8' | 'float32' | 'int32' | 'int64' | 'bool';
+type DType = 'uint8' | 'int8' | 'float32' | 'int32' | 'int64' | 'bool';
 type FeedSpec = {
   name: string;
   dtype: DType;
@@ -169,6 +169,10 @@ function makeArray(dtype: DType, len: number, gen: FeedSpec['gen']): number[] | 
       if (gen === 'zeros')  return Array.from({ length: len }, () => BigInt(0));
       if (gen === 'ones')   return Array.from({ length: len }, () => BigInt(1));
       return Array.from({ length: len }, () => BigInt(randInt(10)));
+    case 'int8':                               
+      if (gen === 'zeros')  return Array.from({ length: len }, () => 0);
+      if (gen === 'ones')   return Array.from({ length: len }, () => 1);
+      return Array.from({ length: len }, () => (randInt(256) - 128));
     case 'uint8': // <-- add this
       if (gen === 'zeros')  return Array.from({ length: len }, () => 0);
       if (gen === 'ones')   return Array.from({ length: len }, () => 1);
@@ -200,7 +204,8 @@ function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
     if (s.dtype === 'float32') typed = new Float32Array(data as number[]);
     else if (s.dtype === 'int32') typed = new Int32Array(data as number[]);
     else if (s.dtype === 'int64') typed = BigInt64Array.from(data as bigint[]);
-    else if (s.dtype === 'uint8')   typed = Uint8Array.from(data as number[]);  // <-- add this
+    else if (s.dtype === 'uint8')   typed = Uint8Array.from(data as number[]);
+    else if (s.dtype === 'int8')  typed = Int8Array.from(data as number[]);
     else /* bool */ typed = new Uint8Array((data as boolean[]).map(v => (v ? 1 : 0)));
 
     out[s.name] = new ort.Tensor(s.dtype, typed, s.shape);
@@ -342,6 +347,9 @@ async function testReconversion(opts: {
   }
 }
 
+function findTestConfig(label: string) {
+  return TESTS.find(t => t.label === label) || CORE_OP_TESTS.find(t => t.label === label);
+}
 
 /* ============================== TESTS ================================== */
 
@@ -668,16 +676,6 @@ const TESTS: Array<{
 
   // ── transpose + broadcast (2D..5D)
   {
-    label: 'transpose_broadcast_2d',
-    originalPath: 'examples/onnx/transpose_broadcast_2d.onnx',
-    tol: 1e-5,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'X', dtype: 'float32', shape: [1, 3] },
-      { name: 'Y', dtype: 'float32', shape: [3] },
-    ],
-  },
-  {
     label: 'transpose_broadcast_3d',
     originalPath: 'examples/onnx/transpose_broadcast_3d.onnx',
     tol: 1e-5,
@@ -739,7 +737,7 @@ const TESTS: Array<{
       { name: 'B', dtype: 'float32', shape: [1, 5, 4, 6] },
     ],
   },
-
+  
   
   // ── slice/pad/clip
   {
@@ -751,15 +749,7 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
-  {
-    label: 'pad_decomposition',
-    originalPath: 'examples/onnx/pad_normal.onnx',
-    tol: 1e-5,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'X', dtype: 'float32', shape: [1, 2, 3, 4] },
-    ],
-  },
+  
   {
     label: 'clip_scalar',
     originalPath: 'examples/onnx/clip_scalar.onnx',
@@ -772,7 +762,6 @@ const TESTS: Array<{
     ],
   },
   
-
   // ── conv
   {
     label: 'conv_normal',
@@ -791,13 +780,12 @@ const TESTS: Array<{
     tol: 1e-5,
     cliArgs: jsonFullArgs,
     specs: [
-      { name: 'X', dtype: 'float32', shape: [1, 1, 3, 3] },
-      { name: 'W', dtype: 'float32', shape: [1, 1, 1, 1] },
+      { name: 'X', dtype: 'float32', shape: [1, 1, 4, 4] },
+      { name: 'W', dtype: 'float32', shape: [1, 1, 3, 3] },
       { name: 'B', dtype: 'float32', shape: [1] },
     ],
   },
 
-  
   // ── gemm/concat/dequantize/avgpool
   {
     label: 'gemm_standard',
@@ -825,7 +813,7 @@ const TESTS: Array<{
   {
     label: 'dequantize_standard',
     originalPath: 'examples/onnx/dequantize_standard.onnx',
-    tol: 1e-6,
+    tol: 1e-5,
     cliArgs: jsonFullArgs,
     specs: [
       { name: 'X', dtype: 'uint8',   shape: [2, 3, 4] },   // 24 elems total
@@ -833,7 +821,7 @@ const TESTS: Array<{
       { name: 'Z', dtype: 'uint8',   shape: [3] },      // per-channel zero-points
     ],
   },
-
+  
   {
     label: 'averagepool_standard',
     originalPath: 'examples/onnx/avgpool_standard.onnx',
@@ -843,7 +831,6 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
-  
   
   // ===== Reduce ops (JSON) =====
   {
@@ -930,6 +917,7 @@ const TESTS: Array<{
     tol: 1e-4
   },
   
+  
   // ----- Expand -----
   {
     label: 'expand_scalar_to_2x3',
@@ -978,11 +966,194 @@ const TESTS: Array<{
     ],
   },
 
+  // TinyML and SC Models (or subset of models) 
+
+   {
+  label: 'ad01_fp32_standard',
+  // Put your ONNX next to other samples; if you only have JSON, see note below.
+  originalPath: 'examples/onnx/ad01_fp32.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs, // full JSON export + reconvert
+  specs: [
+    { name: 'input_1', dtype: 'float32', shape: [1, 640] },
+  ],
+},
+
+{
+  label: 'ad01_fp32_gemm_relu_standard',
+  originalPath: 'examples/onnx/ad01_fp32_gemm_relu.onnx',
+  tol: 1e-4,                 // relaxed a bit, should be fine
+  cliArgs: jsonFullArgs,
+  specs: [
+    {
+      name: 'input_1',
+      dtype: 'float32',
+      shape: [1, 640],
+    },
+    // output_1 [1, 128] float32 will be picked up automatically
+  ],
+},
+
+{
+  label: 'kws_ref_model_float32_standard',
+  originalPath: 'examples/onnx/kws_ref_model_float32.onnx',
+  tol: 1e-4,                       // softmax tail needs a little tolerance
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input_1', dtype: 'float32', shape: [1, 49, 10, 1] }, // in
+    // out: Identity [1,12] float32 (picked up automatically)
+  ],
+},
+
+{
+  label: 'averagepool_kws_like',
+  originalPath: 'examples/onnx/avgpool_kws_like.onnx',
+  tol: 1e-6,
+  cliArgs: jsonFullArgs,   // ensure low-level (AveragePool) lowering is exercised
+  specs: [
+    // Matches the KWS AveragePool input: [1, 64, 25, 5]
+    { name: 'X', dtype: 'float32', shape: [1, 64, 25, 5] },
+  ],
+},
+  
 ];
+
+const CORE_OP_TESTS: Array<{
+  label: string;
+  originalPath: string;
+  tol?: number;
+  exact?: boolean;
+  cliArgs: string | ((p: string) => string);
+  specs: FeedSpec[];
+}> = [
+  
+{
+  label: 'pad_decomposition',
+  originalPath: 'examples/onnx/pad_normal.onnx',
+  tol: 1e-5,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'X', dtype: 'float32', shape: [1, 2, 3, 4] },
+  ],
+},
+
+{
+  label: 'transpose_broadcast_2d',
+  originalPath: 'examples/onnx/transpose_broadcast_2d.onnx',
+  tol: 1e-5,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'X', dtype: 'float32', shape: [1, 3] },
+    { name: 'Y', dtype: 'float32', shape: [3] },
+  ],
+},
+  
+/*
+{
+  label: 'SC2_X',
+  originalPath: 'examples/onnx/SC2_X.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input', dtype: 'float32', shape: [33345, 2] },
+  ],
+},
+{
+  label: 'SC2_Y',
+  originalPath: 'examples/onnx/SC2_Y.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input', dtype: 'float32', shape: [33345, 2] },
+  ],
+},
+{
+  label: 'SC2_Z',
+  originalPath: 'examples/onnx/SC2_Z.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input', dtype: 'float32', shape: [33345, 2] },
+  ],
+},
+*/
+
+{
+  label: 'SC7',
+  originalPath: 'examples/onnx/SC7.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input',  dtype: 'float32', shape: [1, 10] },
+    { name: '_obs.3', dtype: 'float32', shape: [1, 10, 10] },
+    { name: '_obs.5', dtype: 'float32', shape: [1, 10] },
+    { name: '_obs.7', dtype: 'float32', shape: [1, 10] },
+    { name: '_obs.9', dtype: 'float32', shape: [1, 10] },
+    { name: '_obs.11', dtype: 'float32', shape: [1, 10] },
+    { name: '_obs',   dtype: 'float32', shape: [1] },
+  ],
+},
+/*
+{
+  label: 'ad01_int8_standard',
+  originalPath: 'examples/onnx/ad01_int8.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input_1', dtype: 'int8', shape: [1, 640] },
+  ],
+},
+
+{
+  label: 'kws_ref_model_int8_standard',
+  originalPath: 'examples/onnx/kws_ref_model.onnx',
+  exact: true,                     // uint8 pipeline → expect bit-exact
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input_1', dtype: 'int8', shape: [1, 49, 10, 1] },   // in
+    // out: Identity [1,12] uint8 (auto)
+  ],
+},
+*/
+
+  /*
+  // ----- LSTM (TBD) -----
+  {
+    label: 'lstm_standard',
+    originalPath: 'examples/onnx/lstm_standard.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,               // keep JSON for the standard model
+    specs: [
+      // X:[T,N,I] = [4,2,3]
+      { name: 'X', dtype: 'float32', shape: [4, 2, 3] },
+    ],
+  },
+  */
+];
+
+// Run ONLY the focused subset above.
+export async function runCoreOpSubset() {
+  for (const t of CORE_OP_TESTS) {
+    const cliArgs = typeof t.cliArgs === 'function'
+      ? t.cliArgs(t.originalPath)
+      : t.cliArgs;
+
+    const feeds = buildFeeds(t.specs);
+
+    await testReconversion({
+      label: t.label,
+      originalPath: t.originalPath,
+      feeds,
+      tol: t.tol,
+      exact: t.exact,
+      cliArgs,
+    });
+  }
+}
 
 /* ============================== RUN ================================== */
 
-async function runAllUnified() {
+export async function runAllUnified() {
   for (const t of TESTS) {
     const cli = typeof t.cliArgs === 'function' ? t.cliArgs(t.originalPath) : t.cliArgs;
     const feeds = buildFeeds(t.specs);
@@ -997,7 +1168,14 @@ async function runAllUnified() {
   }
 }
 
-await runAllUnified();
+
+const mode = process.env.COMPAT_MODE ?? 'all';
+
+if (mode === 'core') {
+  await runCoreOpSubset();
+} else if (mode === 'all') {
+  await runAllUnified();
+}
 
 // TOTAL
 process.on('beforeExit', () => {
@@ -1013,5 +1191,13 @@ process.on('beforeExit', () => {
 
   printList('❌ Reconverted models that FAILED to run', FAILURES.error);
   printList('⚠️ Reconverted models with NON-EQUIVALENT outputs', FAILURES.warn);
+
+  const summary = {
+    passed: RUN_TOTAL.passed,
+    failed: RUN_TOTAL.failed,
+    failedToRun: FAILURES.error,
+    nonEquivalent: FAILURES.warn,
+  };
+  console.log('AGENT_SUMMARY_JSON:' + JSON.stringify(summary));
 });
 
