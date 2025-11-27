@@ -191,6 +191,7 @@ export default function dequantizeLinearHandler(
     addEdge(g, expZop, Zx, floatT, X.shape);
   }
 
+  /*
   console.log(
     "[DQL]",
     op.id,
@@ -203,6 +204,7 @@ export default function dequantizeLinearHandler(
     "Zx.shape =", Zx.shape,
     "Y.shape =", Y.shape
   );
+  */
 
   /* ---------------- y = (Xf - Zx) * Sx ---------------- */
   const sub = g.addNode(uniq(g, `DQL_Sub_${op.id}`))

@@ -137,62 +137,109 @@ function ensureReflectSlab(
   tag: string
 ): TensorNode.Class | undefined {
   if (size <= 0) return undefined;
+
   const rank = cur.shape.length;
-  const shp = shapeOf(g, cur, `refl_shape_${tag}`);
-  const axisIdx = makeI64ShapeConst(g, `refl_axis_${tag}`, [axis]);
-  const gdim = g.addNode(uniq(g, `refl_gather_${tag}`)).init(new OperationNode.Builder("Gather", [shp, axisIdx], { axis: 0 })).as(OperationNode);
-  const dim1D = g.addNode(uniq(g, `refl_dim1D_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [1], "intermediate")).as(TensorNode);
-  addEdge(g, gdim, dim1D, DataType.INT64, [1]);
 
-  const one1 = makeI64ShapeConst(g, `refl_one_${tag}`, [1]);
-  const twoSc = scalarI64(g, `refl_two_${tag}`, 2);
-  const stepNeg1 = scalarI64(g, `refl_step_${tag}`, -1);
-
-  let startSc: TensorNode.Class; let endSc: TensorNode.Class;
-  if (tag.endsWith("L")) {
-    // left: indices = [size, size-1, ..., 1]  -> Range(size, 0, -1)
-    startSc = scalarI64(g, `refl_l_start_${tag}`, size);
-    endSc = scalarI64(g, `refl_l_end_${tag}`, 0);
-  } else {
-    // right: indices = [S-2, S-3, ..., S-2-size+1]
-    // start = dim - 2 ; endExclusive = start - size
-    const start1 = g.addNode(uniq(g, `refl_r_s1_${tag}`)).init(new OperationNode.Builder("Sub", [dim1D, one1], {})).as(OperationNode); // dim-1 (1D)
-    const start1T = g.addNode(uniq(g, `refl_r_s1T_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [1], "intermediate")).as(TensorNode);
-    addEdge(g, start1, start1T, DataType.INT64, [1]);
-    const start2 = g.addNode(uniq(g, `refl_r_s2_${tag}`)).init(new OperationNode.Builder("Sub", [start1T, one1], {})).as(OperationNode); // dim-2
-    const start2T = g.addNode(uniq(g, `refl_r_s2T_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [1], "intermediate")).as(TensorNode);
-    addEdge(g, start2, start2T, DataType.INT64, [1]);
-
-    const start2T_squeezed = g
-      .addNode(uniq(g, `refl_r_s2T_sq_${tag}`))
-      .init(new OperationNode.Builder("Squeeze", [start2T, makeI64ShapeConst(g, `refl_r_s2T_axes_${tag}`, [0])], {}))
-      .as(OperationNode);
-    const start2T_scalar = g
-      .addNode(uniq(g, `refl_r_s2T_scalar_${tag}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-      .as(TensorNode);
-    addEdge(g, start2T_squeezed, start2T_scalar, DataType.INT64, []);
-
-    const size1Sc = scalarI64(g, `refl_r_size_${tag}`, size);
-    const endOp = g.addNode(uniq(g, `refl_r_end_${tag}`)).init(new OperationNode.Builder("Sub", [start2T_scalar, size1Sc], {})).as(OperationNode);
-    const endT = g.addNode(uniq(g, `refl_r_endT_${tag}`)).init(new TensorNode.Builder(DataType.INT64, [], "intermediate")).as(TensorNode);
-    addEdge(g, endOp, endT, DataType.INT64, []);
-    
-    startSc = start2T_scalar; // []
-    endSc   = endT;           // []
+  // If we know statically that the dimension is 0 or 1, reflect is invalid.
+  const staticDim = cur.shape[axis];
+  if (staticDim === 0 || staticDim === 1) {
+    return undefined;
   }
 
-  const rangeOp = g.addNode(uniq(g, `refl_range_${tag}`)).init(new OperationNode.Builder("Range", [startSc, endSc, stepNeg1], {})).as(OperationNode);
-  // 1D index vector of length = size
-  const idxShape: (number | String | undefined)[] = [size];
+  const shp = shapeOf(g, cur, `refl_shape_${tag}`);
+  const axisIdx = makeI64ShapeConst(g, `refl_axis_${tag}`, [axis]);
 
+  // dim1D: [dim]
+  const gdim = g.addNode(uniq(g, `refl_gather_${tag}`))
+    .init(new OperationNode.Builder("Gather", [shp, axisIdx], { axis: 0 }))
+    .as(OperationNode);
+  const dim1D = g.addNode(uniq(g, `refl_dim1D_${tag}`))
+    .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+    .as(TensorNode);
+  addEdge(g, gdim, dim1D, DataType.INT64, [1]);
+
+  // dimSc: scalar dim ([])
+  const dimAxes = makeI64ShapeConst(g, `refl_dim_axes_${tag}`, [0]);
+  const dimSq = g.addNode(uniq(g, `refl_dim_sq_${tag}`))
+    .init(new OperationNode.Builder("Squeeze", [dim1D, dimAxes], {}))
+    .as(OperationNode);
+  const dimSc = g.addNode(uniq(g, `refl_dim_scalar_${tag}`))
+    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+    .as(TensorNode);
+  addEdge(g, dimSq, dimSc, DataType.INT64, []);
+
+  // Compute dim-1 and clamp requested size to [0, dim-1]
+  const oneSc = scalarI64(g, `refl_oneSc_${tag}`, 1);
+  const zeroSc = scalarI64(g, `refl_zeroSc_${tag}`, 0);
+
+  const dimMinus1Op = g.addNode(uniq(g, `refl_dim_minus1_${tag}`))
+    .init(new OperationNode.Builder("Sub", [dimSc, oneSc], {}))
+    .as(OperationNode);
+  const dimMinus1 = g.addNode(uniq(g, `refl_dim_minus1T_${tag}`))
+    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+    .as(TensorNode);
+  addEdge(g, dimMinus1Op, dimMinus1, DataType.INT64, []);
+
+  const sizeSc = scalarI64(g, `refl_size_${tag}`, size);
+  const sizeClampOp = g.addNode(uniq(g, `refl_size_clamp_${tag}`))
+    .init(new OperationNode.Builder("Min", [sizeSc, dimMinus1], {}))
+    .as(OperationNode);
+  const sizeClamped = g.addNode(uniq(g, `refl_size_clamped_${tag}`))
+    .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+    .as(TensorNode);
+  addEdge(g, sizeClampOp, sizeClamped, DataType.INT64, []);
+
+  const stepNeg1 = scalarI64(g, `refl_step_${tag}`, -1);
+
+  let startSc: TensorNode.Class;
+  let endSc: TensorNode.Class;
+
+  if (tag.endsWith("L")) {
+    // LEFT: indices = [sizeClamped, sizeClamped-1, ..., 1]
+    // Range(start=sizeClamped, end=0, step=-1)
+    startSc = sizeClamped;
+    endSc = zeroSc;
+  } else {
+    // RIGHT: start = dim-2, end = start - sizeClamped
+    const twoSc = scalarI64(g, `refl_two_${tag}`, 2);
+    const startOp = g.addNode(uniq(g, `refl_r_start_${tag}`))
+      .init(new OperationNode.Builder("Sub", [dimSc, twoSc], {})) // dim-2
+      .as(OperationNode);
+    const startT = g.addNode(uniq(g, `refl_r_startT_${tag}`))
+      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+      .as(TensorNode);
+    addEdge(g, startOp, startT, DataType.INT64, []);
+
+    const endOp = g.addNode(uniq(g, `refl_r_end_${tag}`))
+      .init(new OperationNode.Builder("Sub", [startT, sizeClamped], {}))
+      .as(OperationNode);
+    const endT = g.addNode(uniq(g, `refl_r_endT_${tag}`))
+      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+      .as(TensorNode);
+    addEdge(g, endOp, endT, DataType.INT64, []);
+
+    startSc = startT; // []
+    endSc = endT;     // []
+  }
+
+  // Range(startSc, endSc, -1) -> 1D index vector.
+  // Runtime length == clamped size; static shape uses original 'size' for now.
+  const rangeOp = g.addNode(uniq(g, `refl_range_${tag}`))
+    .init(new OperationNode.Builder("Range", [startSc, endSc, stepNeg1], {}))
+    .as(OperationNode);
+
+  const idxShape: (number | string | undefined)[] = [size];
   const idx = g.addNode(uniq(g, `refl_idx_${tag}`))
     .init(new TensorNode.Builder(DataType.INT64, idxShape, "intermediate"))
     .as(TensorNode);
   addEdge(g, rangeOp, idx, DataType.INT64, idxShape);
 
-  const gatherOp = g.addNode(uniq(g, `refl_gather_data_${tag}`)).init(new OperationNode.Builder("Gather", [cur, idx], { axis })).as(OperationNode);
-  // slab has same rank as cur, but axis dim = size
+  // Gather along 'axis' using these indices.
+  const gatherOp = g.addNode(uniq(g, `refl_gather_data_${tag}`))
+    .init(new OperationNode.Builder("Gather", [cur, idx], { axis }))
+    .as(OperationNode);
+
+  // slab has same rank as cur, but axis dim = original requested size
   const reflSlabShape: (number | String | undefined)[] =
     Array.isArray(cur.shape) ? [...cur.shape] : new Array(rank).fill(undefined);
   if (rank > 0) {

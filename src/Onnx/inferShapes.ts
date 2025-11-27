@@ -299,6 +299,37 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         break;
       }
 
+      case "Scan": {
+        // For Scan we rely on the shapes already attached to its outputs,
+        // typically coming from ONNX's own shape inference or from explicit
+        // annotations (e.g., UU000UU / UU001UU in the SC2 models).
+        //
+        // The key rule: DO NOT overwrite those shapes here.
+        //
+        // So we deliberately leave `outShape` empty, which means the generic
+        // "rewire edges + maybe update TensorNode.shape" block at the end
+        // will NOT touch TensorNode shapes for Scan outputs.
+        //
+        // We can still try to propagate a dtype if the first output already
+        // has one, but we keep the shape logic as a no-op.
+
+        const outs =
+          node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
+
+        const firstOutT = outs
+          .filter((t) => t.is(TensorNode))
+          .first()
+          ?.as(TensorNode);
+
+        if (firstOutT && firstOutT.literalType !== undefined) {
+          outDtype = firstOutT.literalType;
+        }
+
+        // Crucially: do not set outShape here.
+        outShape = [];
+        break;
+      }
+
       case "GatherElements": {
         const dataShape = infos[0]?.shape ?? [];
         const indicesShape = infos[1]?.shape ?? [];
@@ -435,12 +466,15 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         break;
       }
 
-      /** ───── Reduces (Sum/Mean/Prod/Min/Max) ───── */
       case "ReduceSum":
       case "ReduceMean":
       case "ReduceProd":
       case "ReduceMin":
-      case "ReduceMax": {
+      case "ReduceMax":
+      case "ReduceL1":
+      case "ReduceL2":
+      case "ReduceLogSum":
+      case "ReduceSumSquare": {
         const inShape = infos[0]?.shape ?? [];
         const keepdims = !!getAttr(node, "keepdims", 1);
 
@@ -610,7 +644,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
           }
         }
 
-        // 🔧 NEW: if we still don't know the shape, reuse the existing output shape
+        // if we still don't know the shape, reuse the existing output shape
         if (!shape.length) {
           const outs =
             node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);

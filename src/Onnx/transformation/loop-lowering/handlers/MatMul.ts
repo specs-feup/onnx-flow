@@ -143,21 +143,48 @@ export default function handleMatMul(
     throw new Error(`handleMatMul: ctx.matmulDims is missing for ${op.id}`);
   }
 
+  /*
+    console.log(
+    "[MatMulLoop/handle] enter",
+    "opId=", op.id,
+    "dims(before)=", JSON.stringify(ctx.matmulDims)
+  );
+  */
+
   const lhsInput = op.getInputs()![0];
   const rhsInput = op.getInputs()![1];
 
   const lhsTensor = resolveFusedInput(g, lhsInput, ctx, op, false, false);
   const rhsTensor = resolveFusedInput(g, rhsInput, ctx, op, false, false);
 
-  const aShape = lhsTensor.shape as number[];
-  const bShape = rhsTensor.shape as number[];
+  const aShape = lhsTensor.shape as (number | String)[];
+  const bShape = rhsTensor.shape as (number | String)[];
 
-  const { M, K, N } = dims;
+  // We may need to correct M if the builder's value doesn't match the real lhs size
+  let { M, K, N } = dims;
 
-  const aBatch = aShape.slice(0, -2);
-  const bBatch = bShape.slice(0, -2);
-  const batch = toStaticShape(dims.batchDims);
+const aStatic = toStaticShape(aShape);        // number[]
+  const bStatic = toStaticShape(bShape);        // number[]
+  const batch    = toStaticShape(dims.batchDims);
   const batchProd = dims.batchProd;
+
+  if (aStatic.length > 0 && aStatic.every(d => d > 0) && K > 0 && batchProd > 0) {
+    const lhsNumel     = aStatic.reduce((p, d) => p * d, 1);
+    const denom        = K * batchProd;
+    const candidateM   = lhsNumel / denom;
+
+    // If the builder's M does not match the actual lhs size, override it
+    if (Number.isFinite(candidateM) && Number.isInteger(candidateM) && candidateM > 0) {
+      M = candidateM;
+    }
+  }
+
+  // Propagate the corrected M back into the context so everything
+  // (indices, output reshape, etc.) remains consistent.
+  dims.M = M;
+
+  const aBatch = aStatic.slice(0, -2);
+  const bBatch = bStatic.slice(0, -2);
 
   const elemTy = lhsTensor.literalType;
 
@@ -243,11 +270,28 @@ export default function handleMatMul(
   } else {
     // no batch: t_in = t
     tIn = ctx.iter;
-    const shapeA2D = shapeVec2(g, `shape2_A_${op.id}`, M_c, K_c);
-    A2D = reshapeTensor(g, lhsTensor, shapeA2D, `reshape2D_A_${op.id}`); 
+
+    // Let ONNX infer the leading dim for A: [-1, K]
+    const minusOne = scalarI64(g, `Mneg1_${op.id}`, -1);
+    const shapeA2D = shapeVec2(g, `shape2_A_${op.id}`, minusOne, K_c);
+    A2D = reshapeTensor(g, lhsTensor, shapeA2D, `reshape2D_A_${op.id}`);
+
+    // For B we can still safely use [K, N]
     const shapeB2D = shapeVec2(g, `shape2_B_${op.id}`, K_c, N_c);
-    B2D = reshapeTensor(g, rhsTensor, shapeB2D, `reshape2D_A_${op.id}`); 
+    B2D = reshapeTensor(g, rhsTensor, shapeB2D, `reshape2D_B_${op.id}`);
   }
+
+  /*
+    console.log(
+    "[MatMulLoop/A2D_B2D]",
+    "opId=", op.id,
+    "A2D.id=", A2D.id,
+    "A2D.shape=", JSON.stringify(A2D.shape),
+    "B2D.id=", B2D.id,
+    "B2D.shape=", JSON.stringify(B2D.shape),
+    "ctx.matmulDims=", ctx.matmulDims
+  );
+  */
 
   // ---------------- decode i,j,k from t_in (NOT from full t) ----------------
   // i = floor(t_in / (K*N))
@@ -263,6 +307,17 @@ export default function handleMatMul(
   const iU = unsqueezeIdx(g, iIdx, ctx.axes, `iU_${op.id}`);
   const jU = unsqueezeIdx(g, jIdx, ctx.axes, `jU_${op.id}`);
   const kU = unsqueezeIdx(g, kIdx, ctx.axes, `kU_${op.id}`);
+
+  /*
+    console.log(
+    "[MatMulLoop/indices]",
+    "opId=", op.id,
+    "iU.shape=", ctx.iU?.shape,
+    "jU.shape=", ctx.jU?.shape,
+    "kU.shape=", ctx.kU?.shape,
+    "kIdx.shape=", ctx.kIdx?.shape,
+  );
+  */
 
   // Save in ctx for builder/chain
   ctx.iU = iU;

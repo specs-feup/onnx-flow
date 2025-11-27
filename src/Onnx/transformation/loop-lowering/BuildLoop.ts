@@ -132,15 +132,67 @@ export function broadcastShapes(shapes: number[][]): number[] {
 export function getMatDims(aShape: (number | String)[], bShape: (number | String)[]) {
   const a = asStaticDims(aShape);
   const b = asStaticDims(bShape);
+
   let aR = a.length, bR = b.length;
-  let A = a.slice(), B = b.slice();
+  let A  = a.slice();
+  let B  = b.slice();
+
+  // 1D -> 2D normalisation
   if (aR === 1) { A = [1, a[0]]; aR = 2; }
   if (bR === 1) { B = [b[0], 1]; bR = 2; }
-  const M = A[A.length - 2];
-  const K = A[A.length - 1];
-  const KN = B[B.length - 2];
-  const N = B[B.length - 1];
-  return { M, K, KN, N, A2: A, B2: B, aWasVec: a.length === 1, bWasVec: b.length === 1 };
+
+  // Basic dims from trailing 2D parts
+  let   M  = A[A.length - 2] ?? -1;
+  let   K  = A[A.length - 1] ?? -1;
+  const Kb = B[B.length - 2] ?? -1;
+  const N  = B[B.length - 1] ?? -1;
+
+  // Inner dim: trust B if both known and disagree
+  if (K > 0 && Kb > 0 && K !== Kb) {
+    console.warn(
+      `[getMatDims] inner dim mismatch: A[-1]=${K} vs B[-2]=${Kb}; ` +
+      `trusting B and setting K=${Kb}`
+    );
+    K = Kb;
+  }
+
+  // Batch dims = all leading dims before the last 2 (if any)
+  const batchDims = A.length > 2 ? A.slice(0, -2) : [];
+  const batchProd = batchDims.length
+    ? batchDims.reduce((p, d) => p * (d > 0 ? d : 1), 1)
+    : 1;
+
+  // Recompute M from total number of elements in A, if everything is static
+  const allKnown = A.length > 0 && A.every(d => typeof d === "number" && (d as number) > 0);
+  if (allKnown && K > 0 && batchProd > 0) {
+    const total = (A as number[]).reduce((p, d) => p * d, 1);
+    const cand  = total / (K * batchProd);
+
+    if (Number.isFinite(cand) && cand > 0 && Number.isInteger(cand)) {
+      M = cand;
+
+      // Also fix the trailing 2D part of A so it is [M, K].
+      // This is important so any later reshape to [M,K] has a product
+      // that matches the real tensor size.
+      if (A.length >= 2) {
+        const newA = A.slice();
+        newA[newA.length - 2] = M;
+        newA[newA.length - 1] = K;
+        A = newA;
+      }
+    }
+  }
+
+  return {
+    M,
+    K,
+    KN: Kb,
+    N,
+    A2: A,
+    B2: B,
+    aWasVec: a.length === 1,
+    bWasVec: b.length === 1,
+  };
 }
 
 export function gatherFrom(
@@ -153,6 +205,29 @@ export function gatherFrom(
 
   const dataShape = data.shape;
   const indexShape = indexNode.is(TensorNode) ? indexNode.shape : [];
+
+  const axisDim = dataShape[axis];
+    const idxKind = indexNode.is(TensorNode)
+      ? "Tensor"
+      : indexNode.is(OperationNode)
+        ? indexNode.type
+        : "Unknown";
+
+    // Log everything, but highlight dim==1
+    const dimFlag = axisDim === 1 ? " *** DIM=1 ***" : "";
+    /*
+    console.log(
+      "[gatherFrom]",
+      dimFlag,
+      "tag=", tag,
+      "axis=", axis,
+      "axisDim=", axisDim,
+      "dataId=", data.id,
+      "dataShape=", JSON.stringify(dataShape),
+      "indexKind=", idxKind,
+      "indexShape=", JSON.stringify(indexShape)
+    );
+    */
 
   const outShape = [
     ...dataShape.slice(0, axis),
@@ -281,6 +356,16 @@ export function safeGather1D(
   const [_, lenVec] = gatherFrom(g, shapeOut, `sg_len_${tag}`, zeroIdx, 0);
   const len = squeezeIfLen1(g, lenVec, axes, `sg_len_sq_${tag}`);
 
+  /*
+   console.log(
+      "[safeGather1D]",
+      "tag=", tag,
+      "dataId=", data.id,
+      "flatShape=", JSON.stringify(src.shape),
+      "len is scalar INT64 (runtime, check sg_len_* in JSON)"
+    );
+    */
+
   // idxMod = idxScalar % len  (guarantees 0 <= idxMod < len)
   const idxMod = divmod(g, idxScalar, len, `sg_mod_${tag}`, "Mod");
 
@@ -304,6 +389,16 @@ export function gatherWithBroadcast(
   const outDimsStatic = toStaticShape(ctx.outShape as Shape);
   const inDimsRaw = toStaticShape(t.shape as Shape);
   const inDims = inDimsRaw.map(d => (d > 0 ? d : 1));
+
+  /*
+   console.log(
+      "[gatherWithBroadcast]",
+      "tag=", tag,
+      "inDims=", JSON.stringify(inDims),
+      "outDims=", JSON.stringify(outDimsStatic),
+      "outShape(ctx)=", JSON.stringify(ctx.outShape)
+    );
+    */
 
   // 1D "plain indexing" fast path: just index by iter, but safely
   if (
@@ -392,28 +487,23 @@ export function ensureFlatInput(g: OnnxGraph.Class, t: TensorNode.Class): Tensor
   const shape: Shape = t.shape;
   if (shape.length <= 1) return t;
 
-  const allNum = shape.every(isNum);
-  let total = -1;
-
-  if (allNum) {
-    const dims = shape as number[];
-    const allPositive = dims.every(d => d > 0);
-    if (allPositive) {
-      total = dims.reduce((a, d) => a * d, 1);
-    }
-    // else: some dim <= 0 → keep total = -1 (dynamic length)
-  }
-
-  // For the Reshape, [-1] means “flatten all elements dynamically”.
-  const shpVec = int64Vec([total]);
-  const shapeConst = makeTensorConst(g, `flat_shape_${t.id}`, DataType.INT64, "constant", shpVec);
+  // We no longer trust the static product; always flatten dynamically.
+  const shpVec = int64Vec([-1]);
+  const shapeConst = makeTensorConst(
+    g,
+    `flat_shape_${t.id}`,
+    DataType.INT64,
+    "constant",
+    shpVec
+  );
 
   const rs = g.addNode(uniq(g, `flat_rs_${t.id}`))
     .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
     .as(OperationNode);
 
-  // Static shape for the TensorNode: use 1 as a safe placeholder when total <= 0
-  const outStatic = [total > 0 ? total : 1];
+  // For the TensorNode’s *static* shape we can still keep a best-effort guess,
+  // but it doesn't affect runtime correctness.
+  const outStatic = [1];
   const flat = g.addNode(uniq(g, `${t.id}_flat`))
     .init(new TensorNode.Builder(t.literalType, outStatic, "intermediate"))
     .as(TensorNode);
@@ -463,24 +553,83 @@ export function resolveFusedInput(
 
       if (s.length === 1) {
         const len = s[0];
-        if (N !== undefined && len === N && ctx.jU) idxToUse = ctx.jU;
-        else if (M !== undefined && len === M && ctx.iU) idxToUse = ctx.iU;
-        else if (ctx.flatU) idxToUse = ctx.flatU;
+
+        // Length-1 vectors behave like scalars: don't index them with i/j/flat.
+        if (len === 1) {
+          // If you still want to respect `flatten`, you could do:
+          // return flatten ? ensureFlatInput(g, t) : t;
+          return t;
+        }
+
+        // Normal 1D vector case: choose which logical index to follow
+        let idxScalar: TensorNode.Class | null = null;
+
+        if (N !== undefined && len === N && ctx.jU) {
+          // jU is [1]-shaped, squeeze to scalar
+          idxScalar = squeezeIfLen1(
+            g,
+            ctx.jU,
+            ctx.axes,
+            `idx_j_${t.id}_${op.id}`
+          );
+        } else if (M !== undefined && len === M && ctx.iU) {
+          idxScalar = squeezeIfLen1(
+            g,
+            ctx.iU,
+            ctx.axes,
+            `idx_i_${t.id}_${op.id}`
+          );
+        } else if (ctx.flatU) {
+          idxScalar = squeezeIfLen1(
+            g,
+            ctx.flatU,
+            ctx.axes,
+            `idx_flat_${t.id}_${op.id}`
+          );
+        }
+
+        if (!idxScalar) {
+          // Fall back: don't index, trust general broadcast later
+          return t;
+        }
 
         if (!returnGather) return t;
-        const [_, gathered] = gatherFrom(g, t, `gather_${t.id}_${op.id}`, idxToUse!, 0);
+
+        // Use the safe 1D helper so we never go out of bounds
+        const gathered = safeGather1D(
+          g,
+          t,
+          idxScalar,
+          ctx.axes,
+          `gather1d_${t.id}_${op.id}`
+        );
         return gathered;
       }
 
       if (s.length === 2) {
-        if (ctx.iU && ctx.jU) {
-          const [_, picked] = gatherAt2DPoint(g, t, ctx.iU!, ctx.jU!, `g2d_${t.id}_${op.id}`);
-          return picked;
-        }
+        // For 2D inputs in a coalesced loop, always go through the safe 1D path:
+        //   - flatten the tensor
+        //   - use a scalar index (prefer flatU)
+        //   - let safeGather1D handle modulo by the true length to avoid OOB.
         const flatT = ensureFlatInput(g, t);
-        const idx = ctx.flatU ?? idxToUse!;
+        const idxU = ctx.flatU ?? idxToUse!;
+
         if (!returnGather) return flatT;
-        const [__, gathered] = gatherFrom(g, flatT, `gather_${t.id}_${op.id}`, idx, 0);
+
+        const idxScalar = squeezeIfLen1(
+          g,
+          idxU,
+          ctx.axes,
+          `idx2d_${t.id}_${op.id}`
+        );
+
+        const gathered = safeGather1D(
+          g,
+          flatT,
+          idxScalar,
+          ctx.axes,
+          `gather2d_${t.id}_${op.id}`
+        );
         return gathered;
       }
     }
@@ -614,7 +763,7 @@ export function buildLoopForChain(
 ): void {
   const builder = BUILDERS.find(b => b.canHandle(chain));
   if (!builder) throw new Error(`No builder can handle chain starting at ${chain[0].type}`);
-  console.log("CHAIN:");
+  //console.log("CHAIN:");
   chain.forEach(op => console.log(op.type));
 
   const rootOp = chain[chain.length - 1];
@@ -642,6 +791,17 @@ export function buildLoopForChain(
     inputs, outTensor, trip, cond, v_initial
   } = buildResult;
 
+  /*
+  console.log(
+  "[LoopBuilder/result]",
+  "chain=", chain.map(op => `${op.id}:${op.type}`),
+  "builtOutShape=", JSON.stringify(builtOutShape),
+  "originalOutShape=", JSON.stringify(originalOutShape),
+  "ctx.carry.shape=", JSON.stringify(ctx.carry.shape),
+  "indicesOut.shape=", JSON.stringify(indicesOut.shape),
+  "lastOut.shape=", JSON.stringify(lastOut.shape)
+);
+*/
   
   let finalOutShape: (number | String)[] = builtOutShape;
 
@@ -702,14 +862,46 @@ export function buildLoopForChain(
     updates = castUOut;
   }
 
+  // --- NEW: ensure indices and updates have the same rank for ScatterElements ---
+  let scatterIndices = indicesOut;
+
+  const idxRank = scatterIndices.shape.length;
+  const updRank = updates.shape.length;
+
+  if (idxRank !== updRank) {
+    // If one is scalar and the other is 1D, safely Unsqueeze the scalar.
+    if (updRank === 0 && idxRank > 0) {
+      // updates: [] -> [1]
+      updates = unsqueezeIdx(body, updates, ctx.axes, "scatter_updates");
+    } else if (idxRank === 0 && updRank > 0) {
+      // indices: [] -> [1]
+      scatterIndices = unsqueezeIdx(body, scatterIndices, ctx.axes, "scatter_indices");
+    }
+    // If both are non-zero rank but still differ (very unlikely here),
+    // we leave them as-is; that would indicate a deeper modelling bug.
+  }
+
+  /*
+  console.log(
+  "[LoopBuilder/scatter]",
+  "scatterIndices.shape=", JSON.stringify(scatterIndices.shape),
+  "updates.shape=", JSON.stringify(updates.shape),
+  "carry.shape=", JSON.stringify(ctx.carry.shape)
+);
+*/
+
   // Scatter update
   const scatter = body.addNode(uniq(body, "scatter"))
-    .init(new OperationNode.Builder("ScatterElements", [ctx.carry, indicesOut, updates], { axis: 0 }))
+    .init(new OperationNode.Builder("ScatterElements", [ctx.carry, scatterIndices, updates], { axis: 0 }))
     .as(OperationNode);
 
-  body.addEdge(ctx.carry, scatter).init(new OnnxEdge.Builder(ctx.carry.literalType, ctx.carry.shape));
-  body.addEdge(indicesOut, scatter).init(new OnnxEdge.Builder(indicesOut.literalType, indicesOut.shape));
-  body.addEdge(updates, scatter).init(new OnnxEdge.Builder(updates.literalType, updates.shape));
+  body.addEdge(ctx.carry, scatter)
+    .init(new OnnxEdge.Builder(ctx.carry.literalType, ctx.carry.shape));
+  body.addEdge(scatterIndices, scatter)
+    .init(new OnnxEdge.Builder(scatterIndices.literalType, scatterIndices.shape));
+  body.addEdge(updates, scatter)
+    .init(new OnnxEdge.Builder(updates.literalType, updates.shape));
+
 
   const carryOut = body.addNode(uniq(body, "carry_out"))
     .init(new TensorNode.Builder(carryTy, ctx.carry.shape, "output"))

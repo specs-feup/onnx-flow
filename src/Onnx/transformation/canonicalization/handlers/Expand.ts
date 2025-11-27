@@ -107,6 +107,7 @@ export default function expandHandler(
   // CRUCIAL: use `dt` (from X), not `Y.literalType` which may be unset.
   addEdge(g, addOp, Y, dt, outShape ?? Y.shape);
 
+  /*
   console.log(
     "[ExpandLower]",
     op.id,
@@ -115,6 +116,7 @@ export default function expandHandler(
     "resolved outShape =", outShape,
     "Y.shape =", Y.shape
   );
+  */
 
   // Remove original Expand
   g.getNodeById(op.id)?.remove();

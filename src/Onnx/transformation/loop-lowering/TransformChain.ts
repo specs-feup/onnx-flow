@@ -89,7 +89,7 @@ function isBroadcastSafeSegment(seg: OperationNode.Class[]): boolean {
 
 const SUP = new Set([
   "Add","Sub","Mul","Div", "MatMul", "Range", "Transpose",
-  "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max", "Softmax",
+  "Relu","Sigmoid","Tanh","Exp","Sum","Min","Max",
   "ReduceSum","ReduceMax", "ReduceMin", "ReduceProd", "ReduceMean", "ReduceSumSquare",
   "ReduceL1", "ReduceL2", "ReduceLogSum", "ReduceLogSumExp",
   "Conv", "AveragePool"
@@ -116,6 +116,41 @@ function isAllowedNonReduce(op: OperationNode.Class) {
   // Any op your default/elemwise builders can already handle.
   // Keep this aligned with SUP (minus reduces).
   return SUP.has(op.type) && !isReduce(op);
+}
+
+function isSimpleMatMul(op: OperationNode.Class): boolean {
+  if (op.type !== "MatMul") return false;
+
+  const inputs = op.getInputs();
+  if (!inputs || inputs.length < 2) return false;
+
+  const aNode = inputs[0];
+  const bNode = inputs[1];
+
+  if (!aNode.is(TensorNode) || !bNode.is(TensorNode)) return false;
+
+  const aShape = aNode.as(TensorNode).shape ?? [];
+  const bShape = bNode.as(TensorNode).shape ?? [];
+
+  // Bail if we have symbolic dims we don't understand
+  if (aShape.some(d => typeof d === "string") ||
+      bShape.some(d => typeof d === "string")) {
+    return false;
+  }
+
+  const aDims = toStaticShape(aShape);
+  const bDims = toStaticShape(bShape);
+
+  // Only handle straightforward 2D MatMuls for now
+  if (aDims.length !== 2 || bDims.length !== 2) return false;
+
+  const K  = aDims[1];
+  const Kb = bDims[0];
+
+  // Require a known and matching inner dimension
+  if (K <= 0 || Kb <= 0 || K !== Kb) return false;
+
+  return true;
 }
 
 function sameOrBroadcastsTo(shapeA: (number|String) [], shapeB: (number|String)[]): boolean {
@@ -173,6 +208,14 @@ function canBeEpilogue(op: OperationNode.Class, reducedOutShape: (number|String)
 
 function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
   if (!SUP.has(op.type)) return false;
+  /*
+  if (op.type === "MatMul") {
+    // Only decompose MatMul when we have a simple, consistent 2D case
+    // like [M,K] x [K,N]. If shapes are weird or partially unknown,
+    // leave it as a plain MatMul in the graph.
+    if (!isSimpleMatMul(op)) return false;
+  }
+    */
   if (op.type === "Range" || op.type === "Conv" || op.type === "AveragePool") return true;
 
   const incs = op.getIncomers ?? [];

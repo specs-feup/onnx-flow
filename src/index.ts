@@ -15,6 +15,7 @@ import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
+import { safeWriteJson } from './Onnx/Utils.js';
 
 
 export async function parseOnnxFile(inputFilePath: string){
@@ -233,12 +234,13 @@ const dotFormatter = new OnnxDotFormatter();
       const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
       const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
 
-      fs.writeFileSync(reconvertedJsonPath, JSON.stringify(onnxCompatibleJson, null, 2));
+      // Use streaming writer to avoid RangeError for huge SC* models
+      safeWriteJson(reconvertedJsonPath, onnxCompatibleJson);
       console.log(`Reconverted JSON written to ${reconvertedJsonPath}`);
 
       await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
       console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-    } 
+    }
     else if (verbosity > 0) {
       console.log('Skipping ONNX reconversion.');
     }

@@ -3,6 +3,7 @@ import OnnxGraph from "./OnnxGraph.js";
 import { TensorProto, DataType } from "./OnnxTypes.js";
 import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
+import fs from 'fs';
 
 
 export type Dim = number | String;
@@ -819,3 +820,95 @@ export function dbgTensor(label: string, t: TensorNode.Class | null | undefined)
     shape: t.shape,
   });
 }
+
+export function safeWriteJson(filePath: string, obj: any) {
+  const fd = fs.openSync(filePath, "w");
+
+  const BUFFER_LIMIT = 1 << 20; // ~1MB
+  let buffer = "";
+
+  const flush = () => {
+    if (buffer.length > 0) {
+      fs.writeSync(fd, buffer);
+      buffer = "";
+    }
+  };
+
+  const write = (s: string) => {
+    buffer += s;
+    if (buffer.length >= BUFFER_LIMIT) {
+      flush();
+    }
+  };
+
+  const seen = new Set<any>();
+
+  const writePrimitive = (value: any) => {
+    if (value === null || value === undefined) {
+      write("null");
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      write(String(value));
+    } else if (typeof value === "string") {
+      // let JSON.stringify handle escaping
+      write(JSON.stringify(value));
+    } else {
+      // fallback
+      write(JSON.stringify(value));
+    }
+  };
+
+  const writeValue = (value: any) => {
+    if (value === null || value === undefined) {
+      write("null");
+      return;
+    }
+
+    const t = typeof value;
+    if (t === "number" || t === "boolean" || t === "string") {
+      writePrimitive(value);
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      write("[");
+      for (let i = 0; i < value.length; i++) {
+        if (i > 0) write(",");
+        writeValue(value[i]); // usually primitives; recursion is cheap
+      }
+      write("]");
+      return;
+    }
+
+    if (t === "object") {
+      if (seen.has(value)) {
+        throw new Error("safeWriteJson: cyclic reference detected");
+      }
+      seen.add(value);
+
+      const keys = Object.keys(value);
+      write("{");
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        if (i > 0) write(",");
+        write(JSON.stringify(key)); // key
+        write(":");
+        writeValue((value as any)[key]);
+      }
+      write("}");
+      seen.delete(value);
+      return;
+    }
+
+    // Just in case
+    writePrimitive(value);
+  };
+
+  try {
+    writeValue(obj);
+    flush();
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+

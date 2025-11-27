@@ -27,7 +27,7 @@ function buildDefaultRegistry(): HandlersRegistry {
     Clip: clipHandler,
     Gemm: gemmHandler,
     Concat: concatHandler,
-    //DequantizeLinear: dequantizeLinearHandler,
+    DequantizeLinear: dequantizeLinearHandler,
     AveragePool: averagePoolHandler,
     Softmax: softmaxHandler,
     Expand: expandHandler,
@@ -51,14 +51,14 @@ export default function applyCanonicalization(
     // snapshot to avoid visiting newly inserted nodes in the same pass
     const ops = graph.getOperationNodes();
 
-    
+    /*
     console.log(
       `PASS ${pass + 1} | OPS:`,
       (Array.isArray(ops) ? ops : Array.from(ops ?? []))
         .map(o => o?.type ?? o?.opType ?? '(unknown)')
         .join(', ')
     );
-    
+    */
 
     for (const op of ops) {
       const type = op.type;

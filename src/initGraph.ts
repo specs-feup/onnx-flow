@@ -10,6 +10,39 @@ import inferShapes from "./Onnx/InferShapes.js";
 
 const BASE_TEN = 10;
 
+function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
+  if (!data.graph.valueInfo) return;
+
+  // Collect all outputs of Constant nodes so we don't create dummy intermediates for them
+  const constantOutputs = new Set<string>();
+  for (const node of data.graph.node ?? []) {
+    if (node.opType === "Constant") {
+      for (const out of node.output ?? []) {
+        if (out) constantOutputs.add(out);
+      }
+    }
+  }
+
+  data.graph.valueInfo.forEach((vi: any) => {
+    const name = vi.name;
+
+    // Skip if we already created it as input/output/initializer
+    if (graph.hasNode(name)) return;
+
+    // Skip valueInfo for Constant outputs — they'll be created as proper "constant" tensors in addNodes
+    if (constantOutputs.has(name)) return;
+
+    const shape = parseShape(vi.type.tensorType.shape);
+    const elemType = vi.type.tensorType.elemType;
+
+    graph.addNode(name)
+      .init(new TensorNode.Builder(elemType, shape, "intermediate"))
+      .as(TensorNode);
+
+    definedVars.push(name);
+  });
+}
+
 // Helper function to convert shape to number[]
 function parseShape(shape: any): (number | String)[] {
   if (!shape?.dim) return [];
@@ -97,10 +130,19 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
 
         const dataType = constantValue?.dataType ?? AttributeType.UNDEFINED;
         const shape = constantValue?.dims ?? [];
-        graph.addNode(name)
-          .init(new TensorNode.Builder(dataType, shape, "constant", constantValue, undefined, extraAttrs))
-          .as(TensorNode);
 
+        if (!graph.hasNode(name)) {
+            graph.addNode(name)
+              .init(new TensorNode.Builder(
+                dataType,
+                shape,
+                "constant",
+                constantValue,
+                undefined,
+                extraAttrs
+              ))
+              .as(TensorNode);
+        }
 
         definedVars.push(name);
         addedNodes.add(nodeIndex);
@@ -197,6 +239,14 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
             graph.addNode(output)
               .init(new TensorNode.Builder(inferredType, inferredShape, 'intermediate'))
               .as(TensorNode);
+          } else {
+            // Node already exists (e.g. from valueInfo); DO NOT change its shape/type.
+            // You might optionally sync literalType if it's UNDEFINED, but avoid
+            // overwriting a valid shape.
+            // const existing = graph.getNodeById(output)?.tryAs(TensorNode);
+            // if (existing && existing.literalType === AttributeType.UNDEFINED && inputs[0]) {
+            //   existing.literalType = inputs[0].tryAs(TensorNode)?.literalType ?? existing.literalType;
+            // }
           }
 
           mapNodeAndOutput.push({ nodeId: index.toString(), output });
@@ -256,6 +306,7 @@ export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.C
     addInitializers(data, graph);
     addInputNodes(data, graph);
     addOutputNodes(data, graph);
+    addValueInfoNodes(data, graph);
 
     const mapNodeAndOutput: any[] = [];
     const mapNodeAndInputs: any[] = [];

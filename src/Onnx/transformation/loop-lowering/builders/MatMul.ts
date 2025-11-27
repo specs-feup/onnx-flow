@@ -94,6 +94,22 @@ export default class MatMulBuilder implements LoopBuilder {
 
     const matmulDims = { M, K, N, batchProd, batchDims };
 
+    /*
+  console.log(
+    "[MatMulLoop/build]",
+    "opId=", mm.id,
+    "lhsShape=", JSON.stringify(lhs.shape),
+    "rhsShape=", JSON.stringify(rhs.shape),
+    "M=", M, "K=", K, "N=", N,
+    "batchDims=", JSON.stringify(batchDims),
+    "batchProd=", batchProd,
+    "carryLen=", carryLen,
+    "totalIters=", totalIters,
+    "finalOutShape=", JSON.stringify(finalOutShape),
+    "coalesce=", opts.coalesce
+  );
+  */
+
     const inputs = new Map<string, TensorNode.Class>();
     chain.forEach(op => op.getInputs()?.filter(n => n.is(TensorNode)).forEach(t => inputs.set(t.id, t.as(TensorNode))));
 

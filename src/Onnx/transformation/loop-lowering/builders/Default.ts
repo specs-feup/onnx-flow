@@ -34,6 +34,14 @@ export default class DefaultBuilder implements LoopBuilder {
     const lastOp = chain.at(-1)!;
     let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
+    // Collect all tensor inputs for this chain (we'll use them for type inference)
+    const inputs = new Map<string, TensorNode.Class>();
+    chain.forEach(op =>
+      op.getInputs()
+        ?.filter(n => n.is(TensorNode))
+        .forEach(t => inputs.set(t.id, t.as(TensorNode)))
+    );
+
     // Prefer a floating-point element type when available (important for DQL)
     const floatSet = new Set<DataType>([
       DataType.FLOAT,
@@ -42,6 +50,7 @@ export default class DefaultBuilder implements LoopBuilder {
       DataType.DOUBLE,
     ]);
 
+    // 1) Start from the last op's output (or its first outgoer)
     let elemTy: DataType =
       outTensor
         ? (outTensor.literalType === DataType.UNDEFINED
@@ -49,7 +58,7 @@ export default class DefaultBuilder implements LoopBuilder {
             : outTensor.literalType)
         : DataType.UNDEFINED;
 
-    // If the chosen elemTy is not a float, try to upgrade to a float
+    // 2) If still non-float, look at all chain outputs
     if (!floatSet.has(elemTy)) {
       for (const op of chain) {
         const t = op.getOutgoers.targets.filterIs(TensorNode).first();
@@ -60,7 +69,17 @@ export default class DefaultBuilder implements LoopBuilder {
       }
     }
 
-    // Last fallback: default to FLOAT instead of INT64
+    // 3) If still non-float, infer from *inputs* of the whole chain
+    if (!floatSet.has(elemTy)) {
+      for (const t of inputs.values()) {
+        if (floatSet.has(t.literalType)) {
+          elemTy = t.literalType;
+          break;
+        }
+      }
+    }
+
+    // 4) Last fallback: default to FLOAT if still undefined
     if (elemTy === DataType.UNDEFINED) {
       elemTy = DataType.FLOAT;
     }
@@ -102,8 +121,8 @@ export default class DefaultBuilder implements LoopBuilder {
     const totalIters = safeOut.length <= 1 ? (safeOut[0] ?? 1) : safeOut.reduce((a, b) => a * b, 1);
     const carryLen = totalIters;
 
-    const inputs = new Map<string, TensorNode.Class>();
-    chain.forEach(op => op.getInputs()?.filter(n => n.is(TensorNode)).forEach(t => inputs.set(t.id, t.as(TensorNode))));
+    //const inputs = new Map<string, TensorNode.Class>();
+    //chain.forEach(op => op.getInputs()?.filter(n => n.is(TensorNode)).forEach(t => inputs.set(t.id, t.as(TensorNode))));
 
     // --- body graph skeleton
     const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
