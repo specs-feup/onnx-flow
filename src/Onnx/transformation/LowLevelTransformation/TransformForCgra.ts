@@ -5,30 +5,6 @@ import OnnxEdge from "../../OnnxEdge.js";
 import { DataType } from "../../OnnxTypes.js";
 import { int64Vec } from "../Utilities.js";
 
-// function getTopologicalOrder(g: OnnxGraph.Class): OperationNode.Class[] {
-//     const visited = new Set<OperationNode.Class>();
-//     const order: OperationNode.Class[] = [];
-
-//     function dfs(node: OperationNode.Class) {
-//         if (visited.has(node)) return;
-//         visited.add(node);
-
-//         const children = node.children.filterIs(OperationNode);
-//         for (const child of children) {
-//             dfs(child);
-//         }
-
-//         order.push(node);
-//     }
-
-//     const allNodes = g.getOperationNodes();
-//     for (const node of allNodes) {
-//         dfs(node);
-//     }
-
-//     return order.reverse();
-// }
-
 function splitInput(
   input: TensorNode.Class,
   g: OnnxGraph.Class,
@@ -105,7 +81,7 @@ function splitInput(
       newInputs.push(newInput);
     }
   } else {
-    // For true input nodes inputs, return copies
+    // For true input nodes, return copies
     const numDivs = rowWise
       ? (input.shape[0] as number)
       : (input.shape[1] as number);
@@ -232,8 +208,8 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   const literalType = input1.literalType;
   const edgeBuilder = new OnnxEdge.Builder();
 
-  const canDivideFirst = input1.shape.length == 2;
-  const canDivideSecond = input2.shape.length == 2;
+  const canDivideFirst = input1.shape.length === 2;
+  const canDivideSecond = input2.shape.length === 2;
   if (!canDivideFirst && !canDivideSecond) {
     return false;
   }
@@ -245,11 +221,6 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   // Create new input2 nodes
   const newInputs2: TensorNode.Class[] = splitInput(input2, g, false);
   const numCols = newInputs2.length;
-
-  // Create new operation nodes and outputs
-  const muls: OperationNode.Class[] = [];
-  const intermediates: TensorNode.Class[] = [];
-  const reduceSums: OperationNode.Class[] = [];
 
   const newOutputs: TensorNode.Class[] = [];
   const output = node.outgoers.at(0).target.as(TensorNode);
@@ -270,7 +241,6 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
         .addNode(`${node.id}_mul${row}${col}`, node.parent)
         .init(mulBuilder)
         .as(OperationNode);
-      muls.push(mulNode);
 
       // Create intermediate tensor node
       const intermediateBuilder = new TensorNode.Builder(
@@ -282,7 +252,6 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
         .addNode(`${node.id}_intermediate${row}${col}`, node.parent)
         .init(intermediateBuilder)
         .as(TensorNode);
-      intermediates.push(intermediateNode);
 
       // Create ReduceSum node
       const reduceSumBuilder = new OperationNode.Builder(
@@ -294,13 +263,11 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
         .addNode(`${node.id}_reducesum${row}${col}`, node.parent)
         .init(reduceSumBuilder)
         .as(OperationNode);
-      reduceSums.push(reduceSumNode);
 
       // Connect Mul to intermediate
       g.addEdge(mulNode, intermediateNode).init(edgeBuilder);
 
       // Connect ReduceSum to output
-      const output = node.outgoers.at(0).target.as(TensorNode);
       const newOutput = g
         .addNode(`${output.id}${row}${col}`)
         .init(outputBuilder)
@@ -319,12 +286,6 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
     output.remove();
   }
 
-  // // Remove original node, input and output
-  // output.remove();
-  // node.remove();
-  // input1.remove();
-  // input2.remove();
-
   // Remove original MatMul node and its edges
   for (const edge of [...node.incomers, ...node.outgoers]) {
     edge.remove();
@@ -335,15 +296,16 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
 }
 
 export default function transformForCgra(g: OnnxGraph.Class) {
-  let done = false;
+  let anyDivided = true;
 
-  while (!done) {
-    for (const node of g.getOperationNodes()) {
+  while (anyDivided) {
+    anyDivided = false;
+    const operationNodes = g.getOperationNodes().toArray();
+
+    for (const node of operationNodes) {
       if (node.type === "MatMul" && divideMatMul(node, g)) {
-        // continue;
+        anyDivided = true;
       }
     }
-
-    done = true;
   }
 }

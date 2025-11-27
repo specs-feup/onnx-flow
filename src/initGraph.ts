@@ -13,8 +13,8 @@ const BASE_TEN = 10;
 function parseShape(shape: any): (number | String)[] {
   if (!shape?.dim) return [];
   return shape.dim.map((dim: any) => {
-     if (typeof dim.dimParam === "string") {
-        return dim.dimParam;
+    if (typeof dim.dimParam === "string") {
+      return dim.dimParam;
     }
     if (dim.dimValue !== undefined && dim.dimValue !== null) {
       return Number(dim.dimValue);
@@ -51,20 +51,20 @@ function addInitializers(data: any, graph: OnnxGraph.Class) {
 
 // Add input nodes to the graph
 function addInputNodes(data: any, graph: OnnxGraph.Class) {
-    data.graph.input.forEach((input: any) => {
-        const shape = parseShape(input.type.tensorType.shape);
-        graph.addNode(input.name).init(new TensorNode.Builder(input.type.tensorType.elemType, shape, 'input')).as(TensorNode);
-        definedVars.push(input.name);
-    });
+  data.graph.input.forEach((input: any) => {
+    const shape = parseShape(input.type.tensorType.shape);
+    graph.addNode(input.name).init(new TensorNode.Builder(input.type.tensorType.elemType, shape, 'input')).as(TensorNode);
+    definedVars.push(input.name);
+  });
 }
 
 
 // Add output nodes to the graph
 function addOutputNodes(data: any, graph: OnnxGraph.Class) {
-    data.graph.output.forEach((output: any) => {
-        const shape = parseShape(output.type.tensorType.shape);
-        graph.addNode(output.name).init(new TensorNode.Builder(output.type.tensorType.elemType, shape, 'output')).as(TensorNode);
-    });
+  data.graph.output.forEach((output: any) => {
+    const shape = parseShape(output.type.tensorType.shape);
+    graph.addNode(output.name).init(new TensorNode.Builder(output.type.tensorType.elemType, shape, 'output')).as(TensorNode);
+  });
 }
 
 
@@ -79,19 +79,19 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
       const node = data.graph.node[nodeIndex];
       const allInputsDefined = node.input.every((input: string) => definedVars.includes(input));
 
-    
-    if (node.opType === "Constant" && node.output?.length > 0) {
+
+      if (node.opType === "Constant" && node.output?.length > 0) {
         const name = node.output[0];
 
         let constantValue: TensorProto | undefined = undefined;
         let extraAttrs: AttributeProto[] = [];
 
         for (const attr of node.attribute ?? []) {
-            if (attr.t) {
-                constantValue = attr.t;
-            } else {
-                extraAttrs.push(attr);
-            }
+          if (attr.t) {
+            constantValue = attr.t;
+          } else {
+            extraAttrs.push(attr);
+          }
         }
 
         const dataType = constantValue?.dataType ?? AttributeType.UNDEFINED;
@@ -104,56 +104,56 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
         definedVars.push(name);
         addedNodes.add(nodeIndex);
         continue;
-    }
+      }
 
       const inputs = [];
       node.input.forEach((input: any) => {
-          if (graph.hasNode(input)){
-            inputs.push(graph.getNodeById(input));
+        if (graph.hasNode(input)) {
+          inputs.push(graph.getNodeById(input));
+        }
+        else {
+          if (maingraph && maingraph.hasNode(input)) {
+            inputs.push(maingraph.getNodeById(input));
           }
-          else{
-            if (maingraph && maingraph.hasNode(input)) {
-                inputs.push(maingraph.getNodeById(input));
-            }
-          }
-        });
+        }
+      });
 
       if (allInputsDefined) {
         const attributes: Record<string, any> = {};
         if (node.attribute) {
-            for (const attr of node.attribute) {
-                if (!attr.name || attr.name === "body") continue;
+          for (const attr of node.attribute) {
+            if (!attr.name || attr.name === "body") continue;
 
-                switch (attr.type) {
-                case AttributeType.FLOAT:
-                case "FLOAT":
-                    attributes[attr.name] = Number(attr.f);
-                    break;
-                case AttributeType.INT:
-                case "INT":
-                    attributes[attr.name] = Number(attr.i);
-                    break;
-                case AttributeType.STRING:
-                case "STRING":
-                    attributes[attr.name] = attr.s;
-                    break;
-                case AttributeType.FLOATS:
-                case "FLOATS":
-                    attributes[attr.name] = attr.floats;
-                    break;
-                case AttributeType.INTS:
-                case "INTS":
-                    attributes[attr.name] = attr.ints;
-                    break;
-                case AttributeType.TENSOR:
-                case "TENSOR":
-                  attributes[attr.name] = attr.t;
-                  break;
-                default:
-                    console.warn(node)
-                    console.warn(`[addNodes] Unhandled attribute type '${attr.type}' for '${attr.name}'`);
-                }
+            switch (attr.type) {
+              case AttributeType.FLOAT:
+              case "FLOAT":
+                attributes[attr.name] = Number(attr.f);
+                break;
+              case AttributeType.INT:
+              case "INT":
+                attributes[attr.name] = Number(attr.i);
+                break;
+              case AttributeType.STRING:
+              case "STRING":
+                attributes[attr.name] = attr.s;
+                break;
+              case AttributeType.FLOATS:
+              case "FLOATS":
+                attributes[attr.name] = attr.floats;
+                break;
+              case AttributeType.INTS:
+              case "INTS":
+                attributes[attr.name] = attr.ints;
+                break;
+              case AttributeType.TENSOR:
+              case "TENSOR":
+                attributes[attr.name] = attr.t;
+                break;
+              default:
+                console.warn(node)
+                console.warn(`[addNodes] Unhandled attribute type '${attr.type}' for '${attr.name}'`);
             }
+          }
         }
 
 
@@ -216,36 +216,36 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
 
 // Calculate dimensions and add edges to the graph
 function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInputs: any[]) {
-    mapNodeAndInputs.forEach(node => {
-        const opNode = graph.getNodeById(node.nodeId);
-        if (opNode && node.inputs) {
-            node.inputs.forEach((input: string) => {
-                const inputNode = graph.getNodeById(input)?.tryAs(TensorNode);
-                if (inputNode && !inputNode.isConstant()) {
-                    const sourceShape = inputNode.shape;
-                    const sourceElemType = inputNode.literalType;
-                    graph.addEdge(inputNode, opNode).init(new OnnxEdge.Builder(sourceElemType, sourceShape)).as(OnnxEdge);
-                } else {
-                    const nodeWithCorrespondingOutput = mapNodeAndOutput.find(elem => elem.output === input);
-                    if (nodeWithCorrespondingOutput) {
-                        const outputNode = graph.getNodeById(nodeWithCorrespondingOutput.nodeId)?.tryAs(TensorNode);
-                        if (outputNode && !outputNode.isConstant()) {
-                            graph.addEdge(outputNode, opNode).init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape)).as(OnnxEdge);
-                        }
-                    }
-                }
-            });
-
-            mapNodeAndOutput.forEach(nodeAndOutput => {
-                if (nodeAndOutput.nodeId === opNode.id) {
-                    const outputNode = graph.getNodeById(nodeAndOutput.output)?.tryAs(TensorNode);
-                    if (outputNode && !outputNode.isConstant()) {
-                        graph.addEdge(opNode, outputNode).init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape)).as(OnnxEdge);
-                    }
-                }
-            });
+  mapNodeAndInputs.forEach(node => {
+    const opNode = graph.getNodeById(node.nodeId);
+    if (opNode && node.inputs) {
+      node.inputs.forEach((input: string) => {
+        const inputNode = graph.getNodeById(input)?.tryAs(TensorNode);
+        if (inputNode && !inputNode.isConstant()) {
+          const sourceShape = inputNode.shape;
+          const sourceElemType = inputNode.literalType;
+          graph.addEdge(inputNode, opNode).init(new OnnxEdge.Builder(sourceElemType, sourceShape)).as(OnnxEdge);
+        } else {
+          const nodeWithCorrespondingOutput = mapNodeAndOutput.find(elem => elem.output === input);
+          if (nodeWithCorrespondingOutput) {
+            const outputNode = graph.getNodeById(nodeWithCorrespondingOutput.nodeId)?.tryAs(TensorNode);
+            if (outputNode && !outputNode.isConstant()) {
+              graph.addEdge(outputNode, opNode).init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape)).as(OnnxEdge);
+            }
+          }
         }
-    });
+      });
+
+      mapNodeAndOutput.forEach(nodeAndOutput => {
+        if (nodeAndOutput.nodeId === opNode.id) {
+          const outputNode = graph.getNodeById(nodeAndOutput.output)?.tryAs(TensorNode);
+          if (outputNode && !outputNode.isConstant()) {
+            graph.addEdge(opNode, outputNode).init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape)).as(OnnxEdge);
+          }
+        }
+      });
+    }
+  });
 }
 
 
@@ -387,7 +387,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         const dataShape = infos[0]?.shape ?? [];
         const indicesShape = infos[1]?.shape ?? [];
         const rankData = dataShape.length;
-        const rankIdx  = indicesShape.length;
+        const rankIdx = indicesShape.length;
 
         // axis default 0 (normalize if negative)
         let axis = node.getAttributes["axis"] ?? 0;
@@ -407,7 +407,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         // - rank(indices) == rank(updates) == rank(data)
         // - For all dims d != axis: indices.shape[d] == updates.shape[d] == data.shape[d]
         // - For dim 'axis':      indices.shape[axis] == updates.shape[axis]
-        const dataShape    = infos[0]?.shape ?? [];
+        const dataShape = infos[0]?.shape ?? [];
         const indicesShape = infos[1]?.shape ?? [];
         const updatesShape = infos[2]?.shape ?? [];
         const rankData = dataShape.length;
@@ -504,7 +504,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
           const outputs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
           let firstOutT = null;
           let ind = 0;
-          while(!firstOutT && ind < outputs.length){
+          while (!firstOutT && ind < outputs.length) {
             firstOutT = outputs[ind];
           }
           outShape = firstOutT?.shape ?? [];
@@ -544,17 +544,17 @@ export function inferShapes(graph: OnnxGraph.Class): void {
         outShape = Array.from(infos[0].shape) as number[];
 
         // TODO(Process-ing): This assumes axes input is not specified, otherwise shape cannot be assumed here
-        const noopWithEmptyAxes = node.getAttributes['noop_with_empty_axes'] ?? 0;
+        const noopWithEmptyAxes = node.getAttributes()['noop_with_empty_axes'] ?? 0;
         const axes = noopWithEmptyAxes ? [] : Array.from(outShape.keys());
 
         // When present, reduced dimensions are set to 1 instead of being removed
         const keepdims = node.getAttributes()["keepdims"] != 0;  // Default is true
 
         if (keepdims) {
-          axes.forEach(axis => outShape[axis] = 1)
+          axes.forEach(axis => outShape[axis] = 1);
         } else {
           axes.forEach(axis => outShape[axis] = 0);
-          outShape = Array.from(outShape.filter(dim => dim > 0))
+          outShape = Array.from(outShape.filter(dim => dim > 0));
         }
 
         break;
@@ -568,7 +568,7 @@ export function inferShapes(graph: OnnxGraph.Class): void {
           outShape = first.shape;
           outDtype = first.dtype;
         }
-        //console.log(node.type, "outshape:", outShape);
+      //console.log(node.type, "outshape:", outShape);
     }
 
     // Get current output TensorNodes
@@ -602,19 +602,19 @@ export function inferShapes(graph: OnnxGraph.Class): void {
 
 // Create the graph using the implemented classes
 export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.Class {
-    const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+  const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
 
-    addInitializers(data, graph);
-    addInputNodes(data, graph);
-    addOutputNodes(data, graph);
+  addInitializers(data, graph);
+  addInputNodes(data, graph);
+  addOutputNodes(data, graph);
 
-    const mapNodeAndOutput: any[] = [];
-    const mapNodeAndInputs: any[] = [];
+  const mapNodeAndOutput: any[] = [];
+  const mapNodeAndInputs: any[] = [];
 
-    addNodes(data, graph, mapNodeAndOutput, mapNodeAndInputs, mainGraph);
-    addEdges(graph, mapNodeAndOutput, mapNodeAndInputs);
+  addNodes(data, graph, mapNodeAndOutput, mapNodeAndInputs, mainGraph);
+  addEdges(graph, mapNodeAndOutput, mapNodeAndInputs);
 
-    inferShapes(graph);
+  inferShapes(graph);
 
-    return graph;
+  return graph;
 }

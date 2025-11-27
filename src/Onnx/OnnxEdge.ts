@@ -26,7 +26,7 @@ namespace OnnxEdge {
         set shape(value: number[]) {
             this.data[TAG].shape = value;
         }
-    }   
+    }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
 
@@ -57,7 +57,7 @@ namespace OnnxEdge {
     }
 
     export const TypeGuard = Edge.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseEdge.Data {
         [TAG]: {
             version: typeof VERSION;
