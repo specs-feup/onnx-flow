@@ -172,7 +172,8 @@ export default class OnnxDotFormatter<
                 .graphAttr('style', 'dashed')
                 .graphAttr('color', 'lime');
 
-            const thenEdge = Dot.edge(this.idPrefix + node.id, thenIdPrefix + '0')  // Linked to first node in subgraph
+            const firstThenNode = thenBranch.nodes[0];
+            const thenEdge = Dot.edge(this.idPrefix + node.id, thenFormatter.idPrefix + firstThenNode.id)
                 .attr('lhead', thenGraph.label)
                 .attr('label', 'then')
                 .attr('style', 'dashed')
@@ -193,7 +194,8 @@ export default class OnnxDotFormatter<
                 .graphAttr('style', 'dashed')
                 .graphAttr('color', 'red');
 
-            const elseEdge = Dot.edge(this.idPrefix + node.id, elseIdPrefix + '0')  // Linked to first node in subgraph
+            const firstElseNode = elseBranch.nodes[0];
+            const elseEdge = Dot.edge(this.idPrefix + node.id, elseFormatter.idPrefix + firstElseNode.id)
                 .attr('lhead', elseGraph.label)
                 .attr('label', 'else')
                 .attr('style', 'dashed')
