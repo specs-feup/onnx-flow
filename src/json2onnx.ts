@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
  */
 const STRICT_RESHAPE_NULLS = false;
 
-const OPSET = 17;
+const OPSET = 19;
 
 /**
  * Recursively traverses an object and converts any { type: 'Buffer', data: [...] }

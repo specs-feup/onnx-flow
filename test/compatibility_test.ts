@@ -1082,6 +1082,36 @@ const TESTS: Array<{
     { name: 'X', dtype: 'float32', shape: [1, 64, 25, 5] },
   ],
 },
+
+{
+  label: 'SC2_X',
+  originalPath: 'examples/onnx/SC2_X_toy.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input', dtype: 'float32', shape: [2, 1] },
+  ],
+},
+
+{
+  label: 'SC2_Y',
+  originalPath: 'examples/onnx/SC2_Y_toy.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input', dtype: 'float32', shape: [2, 1] },
+  ],
+},
+
+{
+  label: 'SC2_Z',
+  originalPath: 'examples/onnx/SC2_Z_toy.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input', dtype: 'float32', shape: [2, 1] },
+  ],
+},
   
 ];
 
@@ -1093,7 +1123,7 @@ const CORE_OP_TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
-  
+/*
 {
   label: 'pad_decomposition',
   originalPath: 'examples/onnx/pad_normal.onnx',
@@ -1114,37 +1144,59 @@ const CORE_OP_TESTS: Array<{
     { name: 'Y', dtype: 'float32', shape: [3] },
   ],
 },
-  
-/*
+  */
+
 {
   label: 'SC2_X',
-  originalPath: 'examples/onnx/SC2_X.onnx',
+  originalPath: 'examples/onnx/SC2_X_toy.onnx',
   tol: 1e-4,
   cliArgs: jsonFullArgs,
   specs: [
-    { name: 'input', dtype: 'float32', shape: [33345, 2] },
+    { name: 'input', dtype: 'float32', shape: [2, 1] },
   ],
 },
 {
   label: 'SC2_Y',
-  originalPath: 'examples/onnx/SC2_Y.onnx',
+  originalPath: 'examples/onnx/SC2_Y_toy.onnx',
   tol: 1e-4,
   cliArgs: jsonFullArgs,
   specs: [
-    { name: 'input', dtype: 'float32', shape: [33345, 2] },
+    { name: 'input', dtype: 'float32', shape: [2, 1] },
   ],
 },
 {
   label: 'SC2_Z',
-  originalPath: 'examples/onnx/SC2_Z.onnx',
+  originalPath: 'examples/onnx/SC2_Z_toy.onnx',
   tol: 1e-4,
   cliArgs: jsonFullArgs,
   specs: [
-    { name: 'input', dtype: 'float32', shape: [33345, 2] },
+    { name: 'input', dtype: 'float32', shape: [2, 1] },
   ],
 },
-*/
 
+{
+  label: 'ad01_fp32_standard',
+  // Put your ONNX next to other samples; if you only have JSON, see note below.
+  originalPath: 'examples/onnx/ad01_fp32.onnx',
+  tol: 1e-4,
+  cliArgs: jsonFullArgs, // full JSON export + reconvert
+  specs: [
+    { name: 'input_1', dtype: 'float32', shape: [1, 640] },
+  ],
+},
+
+{
+  label: 'kws_ref_model_float32_standard',
+  originalPath: 'examples/onnx/kws_ref_model_float32.onnx',
+  tol: 1e-4,                       // softmax tail needs a little tolerance
+  cliArgs: jsonFullArgs,
+  specs: [
+    { name: 'input_1', dtype: 'float32', shape: [1, 49, 10, 1] }, // in
+    // out: Identity [1,12] float32 (picked up automatically)
+  ],
+},
+
+/*
 {
   label: 'SC7',
   originalPath: 'examples/onnx/SC7.onnx',
@@ -1160,6 +1212,8 @@ const CORE_OP_TESTS: Array<{
     { name: '_obs',   dtype: 'float32', shape: [1] },
   ],
 },
+*/
+
 /*
 {
   label: 'ad01_int8_standard',

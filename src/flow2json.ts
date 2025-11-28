@@ -5,7 +5,7 @@ import TensorNode from "./Onnx/TensorNode.js";
 import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
 
 const IR_VERSION = 9;
-const OPSET_IMPORT = 17;
+const OPSET_IMPORT = 19;
 
 
 export function prepareGraphForExport(graph: OnnxGraph.Class): void {
