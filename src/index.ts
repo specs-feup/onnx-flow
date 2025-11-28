@@ -180,6 +180,12 @@ const argv = await yargs(hideBin(process.argv))
     type: "boolean",
     default: false,
   })
+    .option('checkEquivalence', {
+    alias: 'qe',
+    describe: 'Run ONNXRuntime equivalence check using test inputs (when available)',
+    type: 'boolean',
+    default: false,
+  })
   .help()
   .argv;
 
@@ -296,6 +302,40 @@ const dotFormatter =
     if (!argv.noLowLevel && !argv.noCodegen) {
       const generatedCode = generateGraphCode(graph);
       if (verbosity > 0) console.log('Generated Code:', generatedCode);
+    }
+
+    // Optional: run ORT equivalence check using the test metadata, if requested.
+    if (argv.checkEquivalence) {
+      const { onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
+
+      // If reconversion was disabled and we don’t already have a reconverted file, just skip.
+      if (argv.noReconversion && !fs.existsSync(reconvertedOnnxPath)) {
+        console.log(
+          `--checkEquivalence requested but reconversion was disabled and ` +
+          `no reconverted model was found at ${reconvertedOnnxPath}. Skipping equivalence check.`
+        );
+      } else {
+        try {
+          // Dynamic import so that compatibility_test.ts is only loaded if needed
+          const { runEquivalenceForOriginalPath } = await import('../test/compatibility_test.js');
+
+          const result = await runEquivalenceForOriginalPath(inputFilePath, {
+            skipCli: true,   // reconversion was already done by this CLI run
+          });
+
+          if (result === 'no-config') {
+            // Exactly the behaviour you described for “we don’t know the input information”
+            console.log(
+              `No test input specification found for '${inputFilePath}'. ` +
+              `Equivalence check skipped without affecting the rest of the run.`
+            );
+          } else {
+            console.log(`Equivalence check result for '${inputFilePath}': ${result}`);
+          }
+        } catch (e) {
+          console.error('❌ Failed to run equivalence check:', e);
+        }
+      }
     }
 
     // Step 5: Graphviz Online link generation

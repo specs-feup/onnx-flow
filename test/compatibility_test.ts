@@ -351,6 +351,73 @@ function findTestConfig(label: string) {
   return TESTS.find(t => t.label === label) || CORE_OP_TESTS.find(t => t.label === label);
 }
 
+function normalizeForMatch(p: string): string {
+  // Resolve to absolute and normalize separators for cross-platform matching
+  return path.resolve(p).replace(/\\/g, '/');
+}
+
+function findTestConfigByOriginalPath(originalPath: string) {
+  const target = normalizeForMatch(originalPath);
+  const all = [...TESTS, ...CORE_OP_TESTS];
+  return all.find(t => normalizeForMatch(t.originalPath) === target);
+}
+
+export type SingleEquivResult = 'pass' | 'warn' | 'error' | 'no-config';
+
+/**
+ * Run a single reconversion equivalence check for a given originalPath.
+ *
+ * - Uses the TESTS/CORE_OP_TESTS metadata (shapes, dtypes, scalars).
+ * - If no matching entry is found → logs and returns "no-config".
+ * - If skipCli=true, it assumes the reconverted model already exists
+ *   (exactly like index.ts writes <base>_reconverted.onnx) and only runs ORT.
+ */
+export async function runEquivalenceForOriginalPath(
+  originalPath: string,
+  options?: { labelHint?: string; skipCli?: boolean }
+): Promise<SingleEquivResult> {
+  const byPath = findTestConfigByOriginalPath(originalPath);
+  const byLabel = options?.labelHint ? findTestConfig(options.labelHint) : undefined;
+  const config = byPath || byLabel;
+
+  if (!config) {
+    console.log(
+      `No compatibility test configuration found for '${originalPath}'. ` +
+      `Skipping equivalence check.`
+    );
+    return 'no-config';
+  }
+
+  const cliArgs =
+    typeof config.cliArgs === 'function'
+      ? config.cliArgs(config.originalPath)
+      : config.cliArgs;
+
+  const feeds = buildFeeds(config.specs);
+
+  // We don’t want the helper to re-run the CLI when we’re calling it from index.ts
+  // after reconversion, so we honor skipCli here.
+  await testReconversion({
+    label: config.label,
+    originalPath: config.originalPath,
+    feeds,
+    tol: config.tol,
+    exact: config.exact,
+    cliArgs,
+    skipCli: options?.skipCli ?? false,
+  });
+
+  // For the CLI use case we just want a coarse result; RUN_TOTAL + FAILURES
+  // already have detailed info printed.
+  const reconvertedPath = getReconvertedPath(config.originalPath);
+  const hasError = FAILURES.error.some(e => e.path === reconvertedPath && e.test === config.label);
+  const hasWarn  = FAILURES.warn.some(e => e.path === reconvertedPath && e.test === config.label);
+
+  if (hasError) return 'error';
+  if (hasWarn)  return 'warn';
+  return 'pass';
+}
+
 /* ============================== TESTS ================================== */
 
 const TESTS: Array<{
@@ -1171,33 +1238,42 @@ export async function runAllUnified() {
 
 const mode = process.env.COMPAT_MODE ?? 'all';
 
-if (mode === 'core') {
-  await runCoreOpSubset();
-} else if (mode === 'all') {
-  await runAllUnified();
+// Only auto-run when this file is the main script (test runner).
+const isMain =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  process.argv[1] &&
+  process.argv[1].includes('compatibility_test');
+
+if (isMain) {
+  if (mode === 'core') {
+    await runCoreOpSubset();
+  } else if (mode === 'all') {
+    await runAllUnified();
+  }
+
+  // TOTAL
+  process.on('beforeExit', () => {
+    console.log(`\n=== TOTAL ===\nPassed: ${RUN_TOTAL.passed}\nFailed: ${RUN_TOTAL.failed}`);
+
+    const printList = (title: string, items: Array<{ test: string; path: string }>) => {
+      if (!items.length) return;
+      console.log(`\n${title} (${items.length})`);
+      for (const { test, path } of items) {
+        console.log(`  • ${test}  —  ${path}`);
+      }
+    };
+
+    printList('❌ Reconverted models that FAILED to run', FAILURES.error);
+    printList('⚠️ Reconverted models with NON-EQUIVALENT outputs', FAILURES.warn);
+
+    const summary = {
+      passed: RUN_TOTAL.passed,
+      failed: RUN_TOTAL.failed,
+      failedToRun: FAILURES.error,
+      nonEquivalent: FAILURES.warn,
+    };
+    console.log('AGENT_SUMMARY_JSON:' + JSON.stringify(summary));
+  });
 }
-
-// TOTAL
-process.on('beforeExit', () => {
-  console.log(`\n=== TOTAL ===\nPassed: ${RUN_TOTAL.passed}\nFailed: ${RUN_TOTAL.failed}`);
-
-  const printList = (title: string, items: Array<{test: string; path: string}>) => {
-    if (!items.length) return;
-    console.log(`\n${title} (${items.length})`);
-    for (const { test, path } of items) {
-      console.log(`  • ${test}  —  ${path}`);
-    }
-  };
-
-  printList('❌ Reconverted models that FAILED to run', FAILURES.error);
-  printList('⚠️ Reconverted models with NON-EQUIVALENT outputs', FAILURES.warn);
-
-  const summary = {
-    passed: RUN_TOTAL.passed,
-    failed: RUN_TOTAL.failed,
-    failedToRun: FAILURES.error,
-    nonEquivalent: FAILURES.warn,
-  };
-  console.log('AGENT_SUMMARY_JSON:' + JSON.stringify(summary));
-});
 
