@@ -9,7 +9,8 @@ export default class OnnxGraphTransformer
   constructor(
     private fuse: boolean = true,
     private recurse: boolean = false,
-    private coalesce: boolean = true
+    private coalesce: boolean = true,
+    private decomposeForCgra: boolean = false
   ) {}
 
   apply(graph: OnnxGraph.Class): OnnxGraph.Class {
@@ -17,6 +18,6 @@ export default class OnnxGraphTransformer
     const canon = applyCanonicalization(graph);
 
     // 2) Loop-lowering (creating explicit loop and applying some Loop optimizations)
-    return new TransformChain(this.fuse, this.recurse, this.coalesce).apply(canon);
+    return new TransformChain(this.fuse, this.recurse, this.coalesce, this.decomposeForCgra).apply(canon);
   }
 }

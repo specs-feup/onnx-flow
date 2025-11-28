@@ -11,6 +11,7 @@ import { createGraph } from './initGraph.js';
 import OnnxGraphTransformer from './Onnx/transformation/loop-lowering/index.js';
 import OnnxGraphOptimizer from './Onnx/transformation/shape-optimization/index.js';
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
+import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
@@ -150,6 +151,19 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: false,
   })
+    .option("formatter", {
+    alias: "fmtr",
+    describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
+    type: "string",
+    choices: ["default", "cgra"],
+    default: "default",
+  })
+  .option("decomposeForCgra", {
+    alias: "dgc",
+    describe: "Decompose the graph for CGRA mapping",
+    type: "boolean",
+    default: false,
+  })
   .help()
   .argv;
 
@@ -163,7 +177,8 @@ const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = new OnnxDotFormatter();
+const dotFormatter =
+  argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
 
 
 (async function main() {
@@ -262,11 +277,6 @@ const dotFormatter = new OnnxDotFormatter();
 
     // Step 5: Graphviz Online link generation
     if (visualizationOption > 0) {
-      // TEMP
-      if(!argv.noLowLevel){
-        graph = createGraph(convertFlowGraphToOnnxJson(graph));
-      }
-
       if (visualizationOption == 1){
         console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
       }

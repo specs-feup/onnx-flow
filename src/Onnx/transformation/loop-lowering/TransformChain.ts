@@ -8,6 +8,7 @@ import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 import { toStaticShape } from "../../Utils.js";
+import transformForCgra from "./TransformForCgra.js";
 
 function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
   const rI = inDims.length;
@@ -265,13 +266,16 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
 }
 
 export default class TransformChain implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class> {
-  constructor(
-    private fuse: boolean = true,
-    private recurse: boolean = true,
-    private coalesce: boolean = true
-  ) {}
+  constructor(private fuse: boolean = true, private recurse: boolean = true, private coalesce: boolean = true, private decomposeForCgra: boolean = false) { }
 
   apply(g: OnnxGraph.Class): OnnxGraph.Class {
+    if (this.decomposeForCgra) {
+      transformForCgra(g);
+
+      // Transformations for CGRA is not compatible with the other decompositions
+      return g;
+    }
+
     //lowerLSTM(g);
     // Fast path: no fusion — build one Loop per supported op
     if (!this.fuse) {

@@ -764,7 +764,7 @@ export function buildLoopForChain(
   const builder = BUILDERS.find(b => b.canHandle(chain));
   if (!builder) throw new Error(`No builder can handle chain starting at ${chain[0].type}`);
   //console.log("CHAIN:");
-  chain.forEach(op => console.log(op.type));
+  //chain.forEach(op => console.log(op.type));
 
   const rootOp = chain[chain.length - 1];
   const rootOutTensor = rootOp.getOutgoers.targets.filterIs(TensorNode).first();
