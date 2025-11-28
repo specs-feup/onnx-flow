@@ -8,6 +8,9 @@ export interface DecompositionOptions {
   /** Use coalesced scalar MAC for MatMul inside Loop bodies */
   coalesce: boolean;
   
+  /** Apply loop lowering at all (create Loop nodes) */
+  loopLowering: boolean;
+
   decomposeForCgra: boolean;
 }
 
@@ -16,10 +19,12 @@ export interface DecompositionOptions {
  *  - fuse: true
  *  - recurse: false
  *  - coalesce: true
+ *  - loopLowering: true
  */
 export const defaultDecompositionOptions: DecompositionOptions = {
   fuse: true,
   recurse: false,
   coalesce: true,
+  loopLowering: true,
   decomposeForCgra: false,
 };

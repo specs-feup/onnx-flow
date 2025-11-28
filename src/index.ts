@@ -36,12 +36,13 @@ export function loadGraph(
   fuse: boolean = defaultDecompositionOptions.fuse,
   recurse: boolean = defaultDecompositionOptions.recurse,
   coalesce: boolean = defaultDecompositionOptions.coalesce,
+  loopLowering: boolean = defaultDecompositionOptions.loopLowering,
   decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra
 ) {
   let graph = createGraph(onnxObject);
 
   if (enableLowLevel) {
-    const decompOptions: DecompositionOptions = { fuse, recurse, coalesce, decomposeForCgra };
+    const decompOptions: DecompositionOptions = { fuse, recurse, coalesce, loopLowering, decomposeForCgra };
     graph = graph.apply(new OnnxGraphTransformer(decompOptions));
   }
 
@@ -160,6 +161,12 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: defaultDecompositionOptions.recurse,
   })
+    .option('loopLowering', {
+    alias: 'll',
+    describe: 'Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable',
+    type: 'boolean',
+    default: defaultDecompositionOptions.loopLowering,
+  })
     .option("formatter", {
     alias: "fmtr",
     describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
@@ -221,6 +228,7 @@ const dotFormatter =
         recurse: argv.recurse,
         coalesce: argv.coalesce,
         decomposeForCgra: argv.decomposeForCgra,
+        loopLowering: argv.loopLowering,
       };
       graph.apply(new OnnxGraphTransformer(decompOptions));
     }
