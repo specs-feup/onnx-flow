@@ -17,6 +17,7 @@ import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
 import { safeWriteJson } from './Onnx/Utils.js';
+import { DecompositionOptions, defaultDecompositionOptions } from './DecompositionOptions.js';
 
 
 export async function parseOnnxFile(inputFilePath: string){
@@ -27,20 +28,28 @@ export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
   return await json2onnx(jsonFilePath, outputFilePath);
 }
 
-export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, 
-  dotOutput: boolean = true, 
-  fuse: boolean = true, recurse: boolean = false, coalesce: boolean = true) {
+export function loadGraph(
+  onnxObject: any,
+  enableLowLevel: boolean = true,
+  enableOptimize: boolean = true,
+  dotOutput: boolean = true,
+  fuse: boolean = defaultDecompositionOptions.fuse,
+  recurse: boolean = defaultDecompositionOptions.recurse,
+  coalesce: boolean = defaultDecompositionOptions.coalesce,
+  decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra
+) {
   let graph = createGraph(onnxObject);
 
   if (enableLowLevel) {
-    graph = graph.apply(new OnnxGraphTransformer(fuse, recurse, coalesce));
+    const decompOptions: DecompositionOptions = { fuse, recurse, coalesce, decomposeForCgra };
+    graph = graph.apply(new OnnxGraphTransformer(decompOptions));
   }
 
   if (enableLowLevel && enableOptimize) {
     graph = graph.apply(new OnnxGraphOptimizer());
   }
 
-  if(dotOutput){
+  if (dotOutput) {
     return graph.toString(dotFormatter);
   }
   return graph;
@@ -133,23 +142,23 @@ const argv = await yargs(hideBin(process.argv))
     type: 'number',
     default: 2,
   })
-    .option('fuse', {
+  .option('fuse', {
     alias: 'f',
     describe: 'Fuse supported ops into a single Loop when possible',
     type: 'boolean',
-    default: true,
+    default: defaultDecompositionOptions.fuse,
   })
   .option('coalesce', {
     alias: 'c',
     describe: 'Use coalesced scalar MAC for MatMul inside Loop bodies',
     type: 'boolean',
-    default: true,
+    default: defaultDecompositionOptions.coalesce,
   })
   .option('recurse', {
     alias: 'r',
     describe: 'Recursively decompose inside generated Loop bodies',
     type: 'boolean',
-    default: false,
+    default: defaultDecompositionOptions.recurse,
   })
     .option("formatter", {
     alias: "fmtr",
@@ -206,8 +215,14 @@ const dotFormatter =
       }
     }
 
-    if(!argv.noLowLevel){
-      graph.apply(new OnnxGraphTransformer(argv.fuse, argv.recurse, argv.coalesce));
+    if (!argv.noLowLevel) {
+      const decompOptions: DecompositionOptions = {
+        fuse: argv.fuse,
+        recurse: argv.recurse,
+        coalesce: argv.coalesce,
+        decomposeForCgra: argv.decomposeForCgra,
+      };
+      graph.apply(new OnnxGraphTransformer(decompOptions));
     }
 
     if (verbosity > 1){

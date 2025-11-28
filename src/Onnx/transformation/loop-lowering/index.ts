@@ -1,17 +1,43 @@
 import Graph from "@specs-feup/flow/graph/Graph";
+import { DecompositionOptions, defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import OnnxGraph from "../../OnnxGraph.js";
-import TransformChain from "./TransformChain.js";
 import applyCanonicalization from "../canonicalization/index.js";
+import TransformChain from "./TransformChain.js";
 
 export default class OnnxGraphTransformer
-  implements Graph.Transformation<OnnxGraph.Class,OnnxGraph.Class>
+  implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class>
 {
+  private fuse: boolean;
+  private recurse: boolean;
+  private coalesce: boolean;
+  private decomposeForCgra: boolean;
+
+  // Overload signatures (for TypeScript type checking)
+  constructor();
+  constructor(options: Partial<DecompositionOptions>);
+  constructor(fuse: boolean, recurse: boolean, coalesce: boolean, decomposeForCgra: boolean);
+
+  // Single implementation
   constructor(
-    private fuse: boolean = true,
-    private recurse: boolean = false,
-    private coalesce: boolean = true,
-    private decomposeForCgra: boolean = false
-  ) {}
+    fuseOrOptions: boolean | Partial<DecompositionOptions> = defaultDecompositionOptions.fuse,
+    recurse: boolean = defaultDecompositionOptions.recurse,
+    coalesce: boolean = defaultDecompositionOptions.coalesce,
+    decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra
+  ) {
+    if (typeof fuseOrOptions === "boolean") {
+      // Old style: new OnnxGraphTransformer(fuse, recurse, coalesce)
+      this.fuse = fuseOrOptions;
+      this.recurse = recurse;
+      this.coalesce = coalesce;
+      this.decomposeForCgra = decomposeForCgra;
+    } else {
+      // New style: new OnnxGraphTransformer({ fuse, recurse, coalesce })
+      this.fuse = fuseOrOptions.fuse ?? defaultDecompositionOptions.fuse;
+      this.recurse = fuseOrOptions.recurse ?? defaultDecompositionOptions.recurse;
+      this.coalesce = fuseOrOptions.coalesce ?? defaultDecompositionOptions.coalesce;
+      this.decomposeForCgra = fuseOrOptions.decomposeForCgra ?? defaultDecompositionOptions.decomposeForCgra;
+    }
+  }
 
   apply(graph: OnnxGraph.Class): OnnxGraph.Class {
     // 1) Canonical version of high-level operations (no explicit Loop needed)
