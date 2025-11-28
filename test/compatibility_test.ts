@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import * as ort from 'onnxruntime-web';
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -181,7 +183,7 @@ function makeArray(dtype: DType, len: number, gen: FeedSpec['gen']): number[] | 
       if (gen === 'zeros')  return Array.from({ length: len }, () => BigInt(0));
       if (gen === 'ones')   return Array.from({ length: len }, () => BigInt(1));
       return Array.from({ length: len }, () => BigInt(randInt(10)));
-    case 'int8':                               
+    case 'int8':
       if (gen === 'zeros')  return Array.from({ length: len }, () => 0);
       if (gen === 'ones')   return Array.from({ length: len }, () => 1);
       return Array.from({ length: len }, () => (randInt(256) - 128));
@@ -440,7 +442,7 @@ const TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
-  
+
   // ===== Standard Reconversions (JSON, noLowLevel) =====
   {
     label: 'vector_add_standard',
@@ -538,7 +540,7 @@ const TESTS: Array<{
       { name: 'cond', dtype: 'bool', shape: [], init: [true] as any },
     ],
   },
-  
+
 
   // ===== “Complete” suite (Full Decomposition with DOTs) =====
   {
@@ -816,8 +818,8 @@ const TESTS: Array<{
       { name: 'B', dtype: 'float32', shape: [1, 5, 4, 6] },
     ],
   },
-  
-  
+
+
   // ── slice/pad/clip
   {
     label: 'slice_decomposition',
@@ -828,7 +830,7 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
-  
+
   {
     label: 'clip_scalar',
     originalPath: 'examples/onnx/clip_scalar.onnx',
@@ -840,7 +842,7 @@ const TESTS: Array<{
       { name: 'Max', dtype: 'float32', shape: [] },
     ],
   },
-  
+
   // ── conv
   {
     label: 'conv_normal',
@@ -877,7 +879,7 @@ const TESTS: Array<{
       { name: 'C', dtype: 'float32', shape: [2, 4] }, // 8
     ],
   },
-  
+
   {
     label: 'concat_standard',
     originalPath: 'examples/onnx/concat_standard.onnx',
@@ -900,7 +902,7 @@ const TESTS: Array<{
       { name: 'Z', dtype: 'uint8',   shape: [3] },      // per-channel zero-points
     ],
   },
-  
+
   {
     label: 'averagepool_standard',
     originalPath: 'examples/onnx/avgpool_standard.onnx',
@@ -910,7 +912,7 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
-  
+
   // ===== Reduce ops (JSON) =====
   {
     label: 'reducesum_standard',
@@ -986,7 +988,7 @@ const TESTS: Array<{
     cliArgs: jsonFullArgs,
     specs: [{ name: 'X', dtype: 'float32', shape: [2, 3, 4], gen: 'random' }],
   },
-  
+
   // ----- Softmax -----
   {
     label: "softmax_standard",
@@ -995,8 +997,8 @@ const TESTS: Array<{
     specs: [{ name: 'X', dtype: 'float32', shape: [8, 3], gen: 'random' }],
     tol: 1e-4
   },
-  
-  
+
+
   // ----- Expand -----
   {
     label: 'expand_scalar_to_2x3',
@@ -1045,7 +1047,7 @@ const TESTS: Array<{
     ],
   },
 
-  // TinyML and SC Models (or subset of models) 
+  // TinyML and SC Models (or subset of models)
 
    {
   label: 'ad01_fp32_standard',
@@ -1124,7 +1126,7 @@ const TESTS: Array<{
     { name: 'input', dtype: 'float32', shape: [2, 1] },
   ],
 },
-  
+
 ];
 
 const CORE_OP_TESTS: Array<{
@@ -1309,7 +1311,7 @@ const isMain =
   typeof process !== 'undefined' &&
   Array.isArray(process.argv) &&
   process.argv[1] &&
-  process.argv[1].includes('compatibility_test');
+  (process.argv[1].includes('compatibility_test') || process.argv[1].includes('onnx-flow-testcomp'));
 
 if (isMain) {
   if (mode === 'core') {
