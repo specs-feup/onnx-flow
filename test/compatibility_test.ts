@@ -3,6 +3,12 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { performance } from 'perf_hooks';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PKG_ROOT = path.resolve(__dirname, '..'); // out/test -> out/
+const CLI_ENTRY = path.resolve(PKG_ROOT, 'src', 'index.js');
 
 
 const RUN_TOTAL = { passed: 0, failed: 0 };
@@ -15,6 +21,12 @@ const FAILURES = {
 };
 
 /* ============================== HELPERS ================================== */
+
+function resolveModelPath(rel: string): string {
+  // PKG_ROOT is .../out, so go one level up
+  const root = path.resolve(PKG_ROOT, '..');
+  return path.resolve(root, rel);
+}
 
 function printInputs(label: string, inputs: Record<string, ort.Tensor>) {
   console.log(`Inputs for ${label}:`);
@@ -253,7 +265,8 @@ async function testReconversion(opts: {
     skipCli = false,
   } = opts;
 
-  const reconvertedPath = getReconvertedPath(originalPath);
+  const absOriginalPath = resolveModelPath(originalPath);
+  const reconvertedPath = getReconvertedPath(absOriginalPath);
   CURRENT.test = label;
   CURRENT.reconverted = reconvertedPath;
 
@@ -263,7 +276,7 @@ async function testReconversion(opts: {
     if (!skipCli) {
       console.log(`\n=== Running CLI to generate reconverted ${path.basename(originalPath)} model ===`);
       try {
-        const r = generateReconvertedNow(originalPath, cliArgs);
+        const r = generateReconvertedNow(absOriginalPath, cliArgs);
         generatedNow = r.generatedNow;
       } catch (cliErr) {
         logErrorDetails('reconversion CLI', cliErr);
@@ -285,7 +298,7 @@ async function testReconversion(opts: {
     printInputs(label, feeds);
 
     // Original
-    const originalSession = await ort.InferenceSession.create(originalPath);
+    const originalSession = await ort.InferenceSession.create(absOriginalPath);
     const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds);
     console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
 
@@ -352,14 +365,13 @@ function findTestConfig(label: string) {
 }
 
 function normalizeForMatch(p: string): string {
-  // Resolve to absolute and normalize separators for cross-platform matching
   return path.resolve(p).replace(/\\/g, '/');
 }
 
 function findTestConfigByOriginalPath(originalPath: string) {
   const target = normalizeForMatch(originalPath);
   const all = [...TESTS, ...CORE_OP_TESTS];
-  return all.find(t => normalizeForMatch(t.originalPath) === target);
+  return all.find(t => normalizeForMatch(resolveModelPath(t.originalPath)) === target);
 }
 
 export type SingleEquivResult = 'pass' | 'warn' | 'error' | 'no-config';
