@@ -3,6 +3,7 @@ import { DecompositionOptions, defaultDecompositionOptions } from "@specs-feup/o
 import OnnxGraph from "../../OnnxGraph.js";
 import applyCanonicalization from "../canonicalization/index.js";
 import TransformChain from "./TransformChain.js";
+import transformForCgra from "../cgra-decomposition/index.js";
 
 export default class OnnxGraphTransformer
   implements Graph.Transformation<OnnxGraph.Class, OnnxGraph.Class>
@@ -46,10 +47,15 @@ export default class OnnxGraphTransformer
     }
 
   apply(graph: OnnxGraph.Class): OnnxGraph.Class {
-    // 1) Canonical version of high-level operations (no explicit Loop needed)
+    // 1) If CGRA decomposition is enabled, perform it only
+    if (this.decomposeForCgra) {
+      return transformForCgra(graph);
+    }
+
+    // 2) Canonical version of high-level operations (no explicit Loop needed)
     const canon = applyCanonicalization(graph);
 
-    // 2) Optionally perform loop-lowering
+    // 3) Optionally perform loop-lowering
     if (!this.loopLowering) {
       // Return canonicalised graph with no explicit Loop nodes
       return canon;
@@ -59,7 +65,6 @@ export default class OnnxGraphTransformer
       this.fuse,
       this.recurse,
       this.coalesce,
-      this.decomposeForCgra
     ).apply(canon);
   }
 }

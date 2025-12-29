@@ -204,7 +204,7 @@ function mergeOutputs(
   g.addEdge(reshape, originalOutput).init(edgeBuilder);
 }
 
-function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
+export function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
   const literalType = input1.literalType;
   const edgeBuilder = new OnnxEdge.Builder();
@@ -298,19 +298,4 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   node.remove();
 
   return true;
-}
-
-export default function transformForCgra(g: OnnxGraph.Class) {
-  let anyDivided = true;
-
-  while (anyDivided) {
-    anyDivided = false;
-    const operationNodes = g.getOperationNodes().toArray();
-
-    for (const node of operationNodes) {
-      if (node.type === "MatMul" && divideMatMul(node, g)) {
-        anyDivided = true;
-      }
-    }
-  }
 }
