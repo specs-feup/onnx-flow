@@ -33,7 +33,7 @@ function splitInput(
         axis: rowWise ? 0 : 1,
       });
       const split = g
-        .addNode(`${input.id}_split`)
+        .addNode(`${input.id}_split`, input.parent)
         .init(splitBuilder)
         .as(OperationNode);
 
@@ -45,7 +45,7 @@ function splitInput(
 
       for (let i = 0; i < numDivs; i++) {
         const splitOutput = g
-          .addNode(`${input.id}${i}_unsqz`)
+          .addNode(`${input.id}${i}_unsqz`, input.parent)
           .init(splitOutBuilder)
           .as(TensorNode);
         g.addEdge(split, splitOutput).init(edgeBuilder);
@@ -54,12 +54,12 @@ function splitInput(
           splitOutput,
         ]);
         const squeeze = g
-          .addNode(`${input.id}${i}_squeeze`)
+          .addNode(`${input.id}${i}_squeeze`, input.parent)
           .init(squeezeBuilder)
           .as(OperationNode);
 
         const newInput = g
-          .addNode(input.id + i.toString())
+          .addNode(input.id + i.toString(), input.parent)
           .init(inputBuilder)
           .as(TensorNode);
         g.addEdge(squeeze, newInput).init(edgeBuilder);
@@ -69,12 +69,12 @@ function splitInput(
       // Just needs to squeeze
       const squeezeBuilder = new OperationNode.Builder("Squeeze", [input]);
       const squeeze = g
-        .addNode(`${input.id}_squeeze`)
+        .addNode(`${input.id}_squeeze`, input.parent)
         .init(squeezeBuilder)
         .as(OperationNode);
 
       const newInput = g
-        .addNode(input.id + "0")
+        .addNode(input.id + "0", input.parent)
         .init(inputBuilder)
         .as(TensorNode);
       g.addEdge(squeeze, newInput).init(edgeBuilder);
@@ -95,7 +95,7 @@ function splitInput(
           input.type,
         );
         const newInput = g
-          .addNode(input.id + i.toString())
+          .addNode(input.id + i.toString(), input.parent)
           .init(inputBuilder)
           .as(TensorNode);
         newInputs.push(newInput);
@@ -195,6 +195,7 @@ function mergeOutputs(
     concatOut,
     shapeConst,
   ]);
+
   const reshape = g
     .addNode(`${originalOutput.id}_reshape`)
     .init(reshapeBuilder)
