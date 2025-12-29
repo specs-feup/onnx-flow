@@ -1,11 +1,19 @@
-import OnnxGraph from "../../OnnxGraph.js";
-import TensorNode from "../../TensorNode.js";
-import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
+import OnnxGraph from "../../OnnxGraph.js";
 import { DataType } from "../../OnnxTypes.js";
+import OperationNode from "../../OperationNode.js";
+import TensorNode from "../../TensorNode.js";
 import { int64Vec } from "../../Utils.js";
 
-function splitInput(
+/**
+ * @brief Splits a 2D tensor input node into multiple 1D tensor nodes either row-wise or column-wise.
+ *
+ * @param {TensorNode.Class} input - The input tensor node to be split
+ * @param {OnnxGraph.Class} g - The ONNX graph to which the nodes belong
+ * @param {boolean} rowWise - If true, splits the input row-wise; otherwise, splits column-wise
+ * @returns {TensorNode.Class[]} An array of new tensor nodes resulting from the split
+ */
+export function splitInput(
   input: TensorNode.Class,
   g: OnnxGraph.Class,
   rowWise: boolean,
@@ -112,7 +120,14 @@ function splitInput(
   return newInputs;
 }
 
-function mergeOutputs(
+/**
+ * @brief Merges multiple output scalar nodes into a single tensor node with the original output shape.
+ *
+ * @param {TensorNode.Class[]} outputs - The array of output nodes to be merged.
+ * @param {TensorNode.Class} originalOutput - The original output tensor node to restore the shape.
+ * @param {OnnxGraph.Class} g - The ONNX graph to which the nodes belong.
+ */
+export function mergeOutputs(
   outputs: TensorNode.Class[],
   originalOutput: TensorNode.Class,
   g: OnnxGraph.Class,
@@ -202,100 +217,4 @@ function mergeOutputs(
     .as(OperationNode);
 
   g.addEdge(reshape, originalOutput).init(edgeBuilder);
-}
-
-export function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
-  const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
-  const literalType = input1.literalType;
-  const edgeBuilder = new OnnxEdge.Builder();
-
-  const canDivideFirst = input1.shape.length === 2;
-  const canDivideSecond = input2.shape.length === 2;
-  if (!canDivideFirst && !canDivideSecond) {
-    return false;
-  }
-
-  // Create new input1 nodes
-  const newInputs1: TensorNode.Class[] = splitInput(input1, g, true);
-  const numRows = newInputs1.length;
-
-  // Create new input2 nodes
-  const newInputs2: TensorNode.Class[] = splitInput(input2, g, false);
-  const numCols = newInputs2.length;
-
-  const newOutputs: TensorNode.Class[] = [];
-  const output = node.outgoers.at(0).target.as(TensorNode);
-  const outputBuilder = new TensorNode.Builder(
-    output.literalType,
-    [],
-    output.type,
-  );
-
-  for (let row = 0; row < numRows; row++) {
-    for (let col = 0; col < numCols; col++) {
-      // Create Mul node
-      const mulBuilder = new OperationNode.Builder("Mul", [
-        newInputs1[row],
-        newInputs2[col],
-      ]);
-      console.log(newInputs1[row].id, newInputs2[col].id);
-      const mulNode = g
-        .addNode(`${node.id}_mul${row}${col}`, node.parent)
-        .init(mulBuilder)
-        .as(OperationNode);
-
-      g.addEdge(newInputs1[row], mulNode).init(edgeBuilder);
-      g.addEdge(newInputs2[col], mulNode).init(edgeBuilder);
-
-      // Create intermediate tensor node
-      const intermediateBuilder = new TensorNode.Builder(
-        literalType,
-        [input1.shape[1]],
-        "intermediate",
-      );
-      const intermediateNode = g
-        .addNode(`${node.id}_intermediate${row}${col}`, node.parent)
-        .init(intermediateBuilder)
-        .as(TensorNode);
-
-      // Create ReduceSum node
-      const reduceSumBuilder = new OperationNode.Builder(
-        "ReduceSum",
-        [intermediateNode],
-        { keepdims: 0 },
-      );
-      const reduceSumNode = g
-        .addNode(`${node.id}_reducesum${row}${col}`, node.parent)
-        .init(reduceSumBuilder)
-        .as(OperationNode);
-
-      // Connect Mul to intermediate
-      g.addEdge(mulNode, intermediateNode).init(edgeBuilder);
-
-      // Connect ReduceSum to output
-      const newOutput = g
-        .addNode(`${output.id}${row}${col}`)
-        .init(outputBuilder)
-        .as(TensorNode);
-      newOutputs.push(newOutput);
-
-      g.addEdge(reduceSumNode, newOutput).init(edgeBuilder);
-    }
-  }
-
-  // Merge outputs back to original output, if output is not the final tensor
-  if (output.type !== "output") {
-    mergeOutputs(newOutputs, output, g);
-  } else {
-    // Otherwise, just replace the output
-    output.remove();
-  }
-
-  // Remove original MatMul node and its edges
-  for (const edge of [...node.incomers, ...node.outgoers]) {
-    edge.remove();
-  }
-  node.remove();
-
-  return true;
 }

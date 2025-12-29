@@ -1,5 +1,5 @@
 import OnnxGraph from "../../OnnxGraph.js";
-import { divideMatMul } from "./CgraDecomposition.js";
+import { decomposeMatMul } from "./decomposers/MatMul.js";
 
 export default function transformForCgra(g: OnnxGraph.Class): OnnxGraph.Class {
   let anyDivided = true;
@@ -9,7 +9,7 @@ export default function transformForCgra(g: OnnxGraph.Class): OnnxGraph.Class {
     const operationNodes = g.getOperationNodes().toArray();
 
     for (const node of operationNodes) {
-      if (node.type === "MatMul" && divideMatMul(node, g)) {
+      if (node.type === "MatMul" && decomposeMatMul(node, g)) {
         anyDivided = true;
       }
     }
