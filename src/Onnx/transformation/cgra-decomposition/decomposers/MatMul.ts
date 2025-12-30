@@ -7,7 +7,6 @@ import { mergeOutputs, splitInput } from "../utils.js";
 export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
   const literalType = input1.literalType;
-  const edgeBuilder = new OnnxEdge.Builder();
 
   if (input1.shape.length > 2 || input2.shape.length > 2) {
     throw new Error("MatMul decomposition for tensors with more than 2 dimensions is not supported.");
@@ -42,27 +41,32 @@ export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class): 
         newInputs1[row],
         newInputs2[col],
       ]);
-
       const mulNode = g
         .addNode(`${node.id}_mul${row}${col}`, node.parent)
         .init(mulBuilder)
         .as(OperationNode);
 
-      // Create intermediate tensor node
-      const intermediateBuilder = new TensorNode.Builder(
+      // Create mul output tensor
+      const mulOutputBuilder = new TensorNode.Builder(
         literalType,
         [input1.shape[1]],
         "intermediate",
       );
-      const intermediateNode = g
+      const mulOutputNode = g
         .addNode(`${node.id}_intermediate${row}${col}`, node.parent)
-        .init(intermediateBuilder)
+        .init(mulOutputBuilder)
         .as(TensorNode);
+
+      const mulOutputEdgeBuilder = new OnnxEdge.Builder(
+        literalType,
+        [input1.shape[1]],
+      );
+      g.addEdge(mulNode, mulOutputNode).init(mulOutputEdgeBuilder);
 
       // Create ReduceSum node
       const reduceSumBuilder = new OperationNode.Builder(
         "ReduceSum",
-        [intermediateNode],
+        [mulOutputNode],
         { keepdims: 0 },
       );
       const reduceSumNode = g
@@ -77,9 +81,11 @@ export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class): 
         .as(TensorNode);
       newOutputs.push(newOutput);
 
-      // Connect operation nodes to results
-      g.addEdge(mulNode, intermediateNode).init(edgeBuilder);
-      g.addEdge(reduceSumNode, newOutput).init(edgeBuilder);
+      const newOutputEdgeBuilder = new OnnxEdge.Builder(
+        literalType,
+        [],
+      );
+      g.addEdge(reduceSumNode, newOutput).init(newOutputEdgeBuilder);
     }
   }
 
