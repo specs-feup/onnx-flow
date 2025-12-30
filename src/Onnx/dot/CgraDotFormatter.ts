@@ -331,6 +331,40 @@ export default class CgraDotFormatter<
     return [dotNode, loopEdge];
   }
 
+  greaterToDot(node: OperationNode.Class): DotStatement[] {
+    if (node.getInputs().length !== 2) {
+      throw new Error("Greater node must have two inputs.");
+    }
+
+    const isZeroConstVector = (tensor: TensorNode.Class): boolean => {
+      if (tensor.type !== "constant") return false;
+
+      // TODO(Process-ing): STRELA only supports operations on integers, but add support to other types if needed
+      return tensor.constantValue.int32Data?.every((val) => val === 0);
+    }
+
+    const secondInput = node.getInputs()[1].as(TensorNode);
+    if (!isZeroConstVector(secondInput)) {
+      throw new Error("All Greater nodes must compare against a zero constant vector on the left-hand side.");
+    }
+
+    const dotNode = this.nodeToDot(node);
+    dotNode
+      .attr("label", ">0")
+      .attr("type", ">0");
+
+    return [dotNode];
+  }
+
+  whereToDot(node: OperationNode.Class): DotStatement[] {
+    const dotNode = this.nodeToDot(node);
+    dotNode
+      .attr("label", "Mux")
+      .attr("type", "mux");
+
+    return [dotNode];
+  }
+
   /**
    * @brief Handles special cases in the conversion from node to DOT.
    *
@@ -355,6 +389,10 @@ export default class CgraDotFormatter<
           return [this.nodeToDot(opNode), ...this.externalInputsToDot(opNode)];
         case "ReduceSum":
           return this.reduceSumToDot(opNode);
+        case "Where":
+          return this.whereToDot(opNode);
+        case "Greater":
+          return this.greaterToDot(opNode);
       }
     }
 
@@ -390,7 +428,6 @@ export default class CgraDotFormatter<
         "Squeeze",
         "Unsqueeze",
         "Reshape",
-        // "Concat",
       ].includes(node.attrList.label)
     ) {
       return true;
