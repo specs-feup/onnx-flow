@@ -18,12 +18,14 @@ export function splitInput(
   g: OnnxGraph.Class,
   rowWise: boolean = true,
 ): TensorNode.Class[] {
+  if (input.shape.length !== 2) {
+    throw new Error("Input splitting is only supported for 2D tensors.");
+  }
+
   const newInputs: TensorNode.Class[] = [];
   const literalType = input.literalType;
 
   if (input.type !== "input") {
-    const edgeBuilder = new OnnxEdge.Builder();
-
     const numDivs = rowWise
       ? (input.shape[0] as number)
       : (input.shape[1] as number);
@@ -33,6 +35,11 @@ export function splitInput(
       literalType,
       newShape,
       "intermediate",
+    );
+
+    const outputEdgeBuilder = new OnnxEdge.Builder(
+      literalType,
+      newShape,
     );
 
     if (numDivs > 1) {
@@ -45,10 +52,15 @@ export function splitInput(
         .init(splitBuilder)
         .as(OperationNode);
 
+      const splitOutShape = [...newShape, 1];
       const splitOutBuilder = new TensorNode.Builder(
         literalType,
-        rowWise ? [1, input.shape[1]] : [input.shape[0], 1],
+        splitOutShape,
         "intermediate",
+      );
+      const splitOutEdgeBuilder = new OnnxEdge.Builder(
+        literalType,
+        splitOutShape,
       );
 
       for (let i = 0; i < numDivs; i++) {
@@ -56,7 +68,7 @@ export function splitInput(
           .addNode(`${input.id}${i}_unsqz`, input.parent)
           .init(splitOutBuilder)
           .as(TensorNode);
-        g.addEdge(split, splitOutput).init(edgeBuilder);
+        g.addEdge(split, splitOutput).init(splitOutEdgeBuilder);
 
         const squeezeBuilder = new OperationNode.Builder("Squeeze", [
           splitOutput,
@@ -70,7 +82,7 @@ export function splitInput(
           .addNode(`${input.id}_new${i.toString()}`, input.parent)
           .init(inputBuilder)
           .as(TensorNode);
-        g.addEdge(squeeze, newInput).init(edgeBuilder);
+        g.addEdge(squeeze, newInput).init(outputEdgeBuilder);
         newInputs.push(newInput);
       }
     } else {
@@ -85,7 +97,7 @@ export function splitInput(
         .addNode(input.id + "_new0", input.parent)
         .init(inputBuilder)
         .as(TensorNode);
-      g.addEdge(squeeze, newInput).init(edgeBuilder);
+      g.addEdge(squeeze, newInput).init(outputEdgeBuilder);
       newInputs.push(newInput);
     }
   } else {
@@ -134,19 +146,19 @@ export function mergeOutputs(
 ) {
   const literalType = originalOutput.literalType;
 
-  const edgeBuilder = new OnnxEdge.Builder();
-
-  const oneConstBuilder = new TensorNode.Builder(
+  // Create constant zero node (for Unsqueeze axis)
+  const zeroConstBuilder = new TensorNode.Builder(
     DataType.INT64,
     [1],
     "constant",
-    int64Vec([1]),
+    int64Vec([0]),
   );
-  const oneConst = g
-    .addNode(`${originalOutput.id}_one`, originalOutput.parent)
-    .init(oneConstBuilder)
+  const zeroConst = g
+    .addNode(`${originalOutput.id}_zero`, originalOutput.parent)
+    .init(zeroConstBuilder)
     .as(TensorNode);
 
+  // Create shape constant node (for Reshape)
   const shapeBuilder = new TensorNode.Builder(
     DataType.INT64,
     [2],
@@ -160,28 +172,32 @@ export function mergeOutputs(
 
   // Add Unsqueeze nodes
   const unsqOuts: TensorNode.Class[] = [];
-
+  const unsqOutBuilder = new TensorNode.Builder(
+    literalType,
+    [1],
+    "intermediate",
+  );
+  const unsqOutEdgeBuilder = new OnnxEdge.Builder(
+    literalType,
+    [1],
+  );
 
   for (let i = 0; i < outputs.length; i++) {
     const unsqueezeBuilder = new OperationNode.Builder("Unsqueeze", [
       outputs[i],
-      oneConst,
+      zeroConst,
     ]);
     const unsqueeze = g
       .addNode(`${outputs[i].id}_unsqueeze`, originalOutput.parent)
       .init(unsqueezeBuilder)
       .as(OperationNode);
 
-    const unsqOutBuilder = new TensorNode.Builder(
-      literalType,
-      [1, 1],
-      "intermediate",
-    );
+    // Create Unsqueeze output tensor
     const unsqOut = g
       .addNode(`${outputs[i].id}_unsq_out`, originalOutput.parent)
       .init(unsqOutBuilder)
       .as(TensorNode);
-    g.addEdge(unsqueeze, unsqOut).init(edgeBuilder);
+    g.addEdge(unsqueeze, unsqOut).init(unsqOutEdgeBuilder);
 
     unsqOuts.push(unsqOut);
   }
@@ -195,7 +211,7 @@ export function mergeOutputs(
     .init(concatBuilder)
     .as(OperationNode);
 
-  // Add Concat output node
+  // Add Concat output tensor
   const concatOutBuilder = new TensorNode.Builder(
     literalType,
     [outputs.length],
@@ -205,7 +221,12 @@ export function mergeOutputs(
     .addNode(`${originalOutput.id}_concat_out`, originalOutput.parent)
     .init(concatOutBuilder)
     .as(TensorNode);
-  g.addEdge(concat, concatOut).init(edgeBuilder);
+
+  const concatOutEdgeBuilder = new OnnxEdge.Builder(
+    literalType,
+    [outputs.length],
+  );
+  g.addEdge(concat, concatOut).init(concatOutEdgeBuilder);
 
   // Add Reshape node to get original output shape
   const reshapeBuilder = new OperationNode.Builder("Reshape", [
@@ -218,7 +239,12 @@ export function mergeOutputs(
     .init(reshapeBuilder)
     .as(OperationNode);
 
-  g.addEdge(reshape, originalOutput).init(edgeBuilder);
+  // Connect Reshape to original output
+  const outputEdgeBuilder = new OnnxEdge.Builder(
+    literalType,
+    originalOutput.shape,
+  );
+  g.addEdge(reshape, originalOutput).init(outputEdgeBuilder);
 }
 
 /**
