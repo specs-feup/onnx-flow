@@ -67,7 +67,7 @@ export function splitInput(
           .as(OperationNode);
 
         const newInput = g
-          .addNode(input.id + i.toString(), input.parent)
+          .addNode(`${input.id}_new${i.toString()}`, input.parent)
           .init(inputBuilder)
           .as(TensorNode);
         g.addEdge(squeeze, newInput).init(edgeBuilder);
@@ -82,7 +82,7 @@ export function splitInput(
         .as(OperationNode);
 
       const newInput = g
-        .addNode(input.id + "0", input.parent)
+        .addNode(input.id + "_new0", input.parent)
         .init(inputBuilder)
         .as(TensorNode);
       g.addEdge(squeeze, newInput).init(edgeBuilder);

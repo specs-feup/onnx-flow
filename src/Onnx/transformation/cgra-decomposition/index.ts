@@ -3,7 +3,7 @@ import decomposeAdd from "./decomposers/Add.js";
 import { decomposeMatMul } from "./decomposers/MatMul.js";
 
 const decomposers = {
-  // "MatMul": decomposeMatMul,
+  "MatMul": decomposeMatMul,
   "Add": decomposeAdd,
 };
 
