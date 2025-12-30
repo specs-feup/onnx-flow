@@ -32,7 +32,7 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
     const opNode = graph.getNodeById(nodeId);
     for (const inputId of inputs) {
       const inputNode = graph.getNodeById(inputId)?.tryAs(TensorNode);
-      if (inputNode && (inputNode.type === "intermediate" || inputNode.type === "output")) {
+      if (inputNode && (inputNode.type === "input" || inputNode.type === "intermediate" || inputNode.type === "output")) {
         const alreadyConnected = inputNode.getOutgoers?.some(e =>
           e.target.id === opNode.id
         );
@@ -354,7 +354,7 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
         output: outputs,
         attribute: filteredAttrs,
       });
-    } 
+    }
     else if (opType === "If") {
       const subgraphs = opNode.getSubgraphs();
       const filteredAttrs = baseAttrs.filter(attr => attr.name !== "then_branch" && attr.name !== "else_branch");

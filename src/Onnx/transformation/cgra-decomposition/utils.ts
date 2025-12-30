@@ -143,7 +143,7 @@ export function mergeOutputs(
     int64Vec([1]),
   );
   const oneConst = g
-    .addNode(`${originalOutput.id}_one`)
+    .addNode(`${originalOutput.id}_one`, originalOutput.parent)
     .init(oneConstBuilder)
     .as(TensorNode);
 
@@ -160,13 +160,15 @@ export function mergeOutputs(
 
   // Add Unsqueeze nodes
   const unsqOuts: TensorNode.Class[] = [];
+
+
   for (let i = 0; i < outputs.length; i++) {
     const unsqueezeBuilder = new OperationNode.Builder("Unsqueeze", [
       outputs[i],
       oneConst,
     ]);
     const unsqueeze = g
-      .addNode(`${outputs[i].id}_unsqueeze`)
+      .addNode(`${outputs[i].id}_unsqueeze`, originalOutput.parent)
       .init(unsqueezeBuilder)
       .as(OperationNode);
 
@@ -176,7 +178,7 @@ export function mergeOutputs(
       "intermediate",
     );
     const unsqOut = g
-      .addNode(`${outputs[i].id}_unsq_out`)
+      .addNode(`${outputs[i].id}_unsq_out`, originalOutput.parent)
       .init(unsqOutBuilder)
       .as(TensorNode);
     g.addEdge(unsqueeze, unsqOut).init(edgeBuilder);
@@ -200,7 +202,7 @@ export function mergeOutputs(
     "intermediate",
   );
   const concatOut = g
-    .addNode(`${originalOutput.id}_concat_out`)
+    .addNode(`${originalOutput.id}_concat_out`, originalOutput.parent)
     .init(concatOutBuilder)
     .as(TensorNode);
   g.addEdge(concat, concatOut).init(edgeBuilder);
@@ -212,7 +214,7 @@ export function mergeOutputs(
   ]);
 
   const reshape = g
-    .addNode(`${originalOutput.id}_reshape`)
+    .addNode(`${originalOutput.id}_reshape`, originalOutput.parent)
     .init(reshapeBuilder)
     .as(OperationNode);
 

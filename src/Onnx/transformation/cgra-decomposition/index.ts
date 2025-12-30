@@ -2,7 +2,7 @@ import OnnxGraph from "../../OnnxGraph.js";
 import { decomposeMatMul } from "./decomposers/MatMul.js";
 
 const decomposers = {
-  MatMul: decomposeMatMul,
+  "MatMul": decomposeMatMul,
 };
 
 export default function transformForCgra(g: OnnxGraph.Class): OnnxGraph.Class {

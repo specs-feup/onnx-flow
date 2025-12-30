@@ -124,9 +124,6 @@ export default class CgraDotFormatter<
     if (sourceId in this.clusterInfos) {
       const sourceCluster = this.clusterInfos[sourceId];
 
-      // attrs.ltail = sourceCluster.subgraphLabel;
-      // source = sourceCluster.idPrefix + source;
-
       // Map all references to the cluster to an appropriate inner node
       for (const [prefix, newSource] of Object.entries(
         sourceCluster.sourceMapping,
@@ -140,9 +137,6 @@ export default class CgraDotFormatter<
 
     if (targetId in this.clusterInfos) {
       const targetCluster = this.clusterInfos[targetId];
-
-      // attrs.lhead = targetCluster.subgraphLabel;
-      // target = targetCluster.idPrefix + target;
 
       // Map all references to the cluster to an appropriate inner node
       for (const [prefix, newTarget] of Object.entries(
@@ -197,9 +191,6 @@ export default class CgraDotFormatter<
           (s) => s instanceof DotNode || s instanceof DotEdge,
         ),
       );
-
-      // TODO(Process-ing): Only for demonstration, remove/improve later
-      // statements.push(this.createDotEdge(idPrefix + carryOut.id, idPrefix + carry.id));
 
       this.clusterInfos[node.id] = {
         idPrefix,
@@ -399,7 +390,7 @@ export default class CgraDotFormatter<
         "Squeeze",
         "Unsqueeze",
         "Reshape",
-        "Concat",
+        // "Concat",
       ].includes(node.attrList.label)
     ) {
       return true;

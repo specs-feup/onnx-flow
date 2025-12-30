@@ -38,14 +38,11 @@ export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class): 
         newInputs1[row],
         newInputs2[col],
       ]);
-      console.log(newInputs1[row].id, newInputs2[col].id);
+
       const mulNode = g
         .addNode(`${node.id}_mul${row}${col}`, node.parent)
         .init(mulBuilder)
         .as(OperationNode);
-
-      g.addEdge(newInputs1[row], mulNode).init(edgeBuilder);
-      g.addEdge(newInputs2[col], mulNode).init(edgeBuilder);
 
       // Create intermediate tensor node
       const intermediateBuilder = new TensorNode.Builder(

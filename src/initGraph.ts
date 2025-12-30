@@ -112,8 +112,8 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
     for (const nodeIndex of nodesToAdd) {
       const node = data.graph.node[nodeIndex];
       const allInputsDefined = node.input.every((input: string) => definedVars.includes(input));
-    
-    
+
+
     if (node.opType === "Constant" && node.output?.length > 0) {
         const name = node.output[0];
 
