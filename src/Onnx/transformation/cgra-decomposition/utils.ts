@@ -124,7 +124,13 @@ export function splitInput(
       // Remove the original input node
       input.remove();
     } else {
-      // Return original, no split needed
+      // No split needed, just change shape
+      const inputBuilder = new TensorNode.Builder(
+        literalType,
+        newShape,
+        input.type,
+      );
+      input.init(inputBuilder);
       newInputs.push(input);
     }
   }

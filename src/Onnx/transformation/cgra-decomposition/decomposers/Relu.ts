@@ -9,7 +9,6 @@ import { DataType } from "../../../OnnxTypes.js";
 export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   const [input] = node.getInputs().map((inp) => inp.as(TensorNode));
   const literalType = input.literalType;
-  const edgeBuilder = new OnnxEdge.Builder();
 
   if (input.shape.length > 2) {
     throw new Error("Relu decomposition for tensors with more than 2 dimensions is not supported.");
@@ -22,9 +21,9 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
   // Create constant zero (for comparisons)
   const reluZeroBuilder = new TensorNode.Builder(
     literalType,
-    [],
+    input.shape.slice(1),
     "constant",
-    makeTensorProto(literalType, [], [0]),
+    makeTensorProto(literalType, input.shape.slice(1) as number[], [0]),
   );
 
   const reluZero = g.addNode(`${node.id}_zero`, node.parent)
@@ -60,6 +59,12 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
       .init(greaterOutBuilder)
       .as(TensorNode);
 
+    const greaterOutEdgeBuilder = new OnnxEdge.Builder(
+      DataType.BOOL,
+      inputs[i].shape.slice(),
+    );
+    g.addEdge(greaterNode, greaterOut).init(greaterOutEdgeBuilder);
+
     // Create Where node (serving as "mux" node)
     const whereBuilder = new OperationNode.Builder("Where", [
       greaterOut,
@@ -77,9 +82,11 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
       .as(TensorNode);
     newOutputs.push(newOutput);
 
-    // Connect operation nodes to results
-    g.addEdge(greaterNode, greaterOut).init(edgeBuilder);
-    g.addEdge(whereNode, newOutput).init(edgeBuilder);
+    const whereOutEdgeBuilder = new OnnxEdge.Builder(
+      output.literalType,
+      output.shape.slice(1),
+    );
+    g.addEdge(whereNode, newOutput).init(whereOutEdgeBuilder);
   }
 
   // Merge outputs
