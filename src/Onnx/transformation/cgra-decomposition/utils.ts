@@ -16,7 +16,7 @@ import { int64Vec } from "../../Utils.js";
 export function splitInput(
   input: TensorNode.Class,
   g: OnnxGraph.Class,
-  rowWise: boolean,
+  rowWise: boolean = true,
 ): TensorNode.Class[] {
   const newInputs: TensorNode.Class[] = [];
   const literalType = input.literalType;

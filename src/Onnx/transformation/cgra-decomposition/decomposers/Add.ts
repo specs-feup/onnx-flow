@@ -24,7 +24,7 @@ export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Cla
   const output = node.outgoers.at(0).target.as(TensorNode);
   const outputBuilder = new TensorNode.Builder(
     output.literalType,
-    [],
+    output.shape.slice(1),
     output.type,
   );
 
