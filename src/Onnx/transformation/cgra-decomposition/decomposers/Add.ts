@@ -6,7 +6,6 @@ import { mergeOutputs, shapesEqual, splitInput } from "../utils.js";
 
 export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
   const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
-  const edgeBuilder = new OnnxEdge.Builder();
 
   if (!shapesEqual(input1, input2)) {
     throw new Error("Add decomposition is only supported for inputs with the same shape.");
@@ -47,7 +46,10 @@ export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Cla
       .as(TensorNode);
     newOutputs.push(newOutput);
 
-    // Connect operation nodes to results
+    const edgeBuilder = new OnnxEdge.Builder(
+      output.literalType,
+      output.shape.slice(1),
+    );
     g.addEdge(addNode, newOutput).init(edgeBuilder);
   }
 
