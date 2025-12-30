@@ -9,6 +9,10 @@ export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class): 
   const literalType = input1.literalType;
   const edgeBuilder = new OnnxEdge.Builder();
 
+  if (input1.shape.length > 2 || input2.shape.length > 2) {
+    throw new Error("MatMul decomposition for tensors with more than 2 dimensions is not supported.");
+  }
+
   const canDivideFirst = input1.shape.length === 2;
   const canDivideSecond = input2.shape.length === 2;
   if (!canDivideFirst && !canDivideSecond) {
@@ -66,16 +70,15 @@ export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class): 
         .init(reduceSumBuilder)
         .as(OperationNode);
 
-      // Connect Mul to intermediate
-      g.addEdge(mulNode, intermediateNode).init(edgeBuilder);
-
-      // Connect ReduceSum to output
+      // Create output tensor node
       const newOutput = g
         .addNode(`${output.id}${row}${col}`)
         .init(outputBuilder)
         .as(TensorNode);
       newOutputs.push(newOutput);
 
+      // Connect operation nodes to results
+      g.addEdge(mulNode, intermediateNode).init(edgeBuilder);
       g.addEdge(reduceSumNode, newOutput).init(edgeBuilder);
     }
   }
