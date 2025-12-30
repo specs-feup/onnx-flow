@@ -160,95 +160,11 @@ export default class CgraDotFormatter<
     return this.createDotEdge(sourceId, targetId, attrs);
   }
 
-  loopToDot(node: OperationNode.Class): DotStatement[] {
-    const idPrefix = `loop${node.id}_`;
-    const statements = [];
-
-    // Uncomment this if you need the loop as a node as well in the DOT
-    // const loopNode = this.nodeToDot(node);
-    // loopNode.attr('label', `Loop ${node.id}`);
-    // statements.push(loopNode);
-
-    const body = node.getBodySubgraph();
-    if (body !== undefined) {
-      const subFormatter = new CgraDotFormatter(idPrefix);
-      const bodyDot = subFormatter.toDot(body);
-
-      const bodySubdot = new DotSubgraph(
-        `cluster_loop_${node.id}`,
-        bodyDot.statementList,
-      ).graphAttr("label", `Loop ${node.id}`);
-
-      const carry = body.nodes
-        .filter((node, _, __) => node.id.startsWith("carry"))
-        .first();
-      const carryOut = body.nodes
-        .filter((node, _, __) => node.id.startsWith("carry_out"))
-        .first();
-
-      statements.push(
-        ...bodySubdot.statementList.filter(
-          (s) => s instanceof DotNode || s instanceof DotEdge,
-        ),
-      );
-
-      this.clusterInfos[node.id] = {
-        idPrefix,
-        subgraphLabel: bodySubdot.label,
-        targetMapping: { init_carry: carry.id },
-        sourceMapping: { "": carryOut.id },
-      };
-    }
-
-    return statements;
-  }
-
   ifToDot(node: OperationNode.Class): DotStatement[] {
-    const idPrefix = `if${node.id}_`;
-    const statements = [];
-
-    const ifDot = this.nodeToDot(node);
-    statements.push(ifDot);
-
-    const thenBranch = node.getThenBranch();
-    if (thenBranch !== undefined) {
-      const thenIdPrefix = `${idPrefix}then_`;
-      const thenFormatter = new CgraDotFormatter(thenIdPrefix);
-      const thenDot = thenFormatter.toDot(thenBranch);
-
-      const thenGraph = new DotSubgraph(
-        `cluster_if_then_${node.id}`,
-        thenDot.statementList,
-      ).graphAttr("label", `If-Then ${node.id}`);
-
-      const thenEdge = Dot.edge(this.idPrefix + node.id, thenIdPrefix + "0") // Linked to first node in subgraph
-        .attr("lhead", thenGraph.label)
-        .attr("label", "then");
-
-      statements.push(thenGraph);
-      statements.push(thenEdge);
-    }
-
-    const elseBranch = node.getElseBranch();
-    if (elseBranch !== undefined) {
-      const elseIdPrefix = `${idPrefix}else_`;
-      const elseFormatter = new CgraDotFormatter(elseIdPrefix);
-      const elseDot = elseFormatter.toDot(elseBranch);
-
-      const elseGraph = new DotSubgraph(
-        `cluster_if_else_${node.id}`,
-        elseDot.statementList,
-      ).graphAttr("label", `If-Else ${node.id}`);
-
-      const elseEdge = Dot.edge(this.idPrefix + node.id, elseIdPrefix + "0") // Linked to first node in subgraph
-        .attr("lhead", elseGraph.label)
-        .attr("label", "else");
-
-      statements.push(elseGraph);
-      statements.push(elseEdge);
-    }
-
-    return statements;
+    // Implementing the transformation of If is possible using a "branch" and
+    // a "merge" node, but since it is not generated for the tested examples
+    // and the representation in ONNX is non-trivial, we leave it unimplemented for now
+    throw new Error("If node conversion to DOT is not implemented.");
   }
 
   /**
@@ -265,6 +181,19 @@ export default class CgraDotFormatter<
       return undefined;
 
     return tensorNode;
+  }
+
+  validateTensorNode(node: TensorNode.Class): void {
+    // TODO(Process-ing): Remove this bypass, once split-concat skip is implemented
+    if (node.type === "intermediate") {
+      return;
+    }
+
+    if (node.shape.length > 1) {
+      throw new Error(
+        "CGRA supports only 1D tensors.",
+      );
+    }
   }
 
   /**
@@ -295,36 +224,27 @@ export default class CgraDotFormatter<
     return statements;
   }
 
-  /**
-   * @brief Adds edges from external inputs to a given node.
-   *
-   * @param node The node to which to add external input edges.
-   * @returns The resulting DOT statements.
-   */
-  externalInputsToDot(node: OperationNode.Class): DotStatement[] {
-    const statements = [];
+  addToDot(node: OperationNode.Class): DotStatement[] {
+    const dotNode = this.nodeToDot(node)
+      .attr("label", "Add")
+      .attr("type", "add");
 
-    const extInputs = node
-      .getInputs()
-      .filter((input) => !node.graph.as(OnnxGraph).hasNode(input.id));
+    return [dotNode];
+  }
 
-    for (const input of extInputs) {
-      const tensor = input.tryAs(TensorNode);
-      if (tensor === undefined) continue;
+  mulToDot(node: OperationNode.Class): DotStatement[] {
+    const dotNode = this.nodeToDot(node)
+      .attr("label", "Mul")
+      .attr("type", "mul");
 
-      const targetId = this.idPrefix + node.id;
-      const attrs = {};
-
-      const edge = Dot.edge(tensor.id, targetId, attrs);
-      statements.push(edge);
-    }
-
-    return statements;
+    return [dotNode];
   }
 
   reduceSumToDot(node: OperationNode.Class): DotStatement[] {
-    const dotNode = this.nodeToDot(node);
-    dotNode.attr("label", "Add").attr("type", "add").attr("feedback", "1");
+    const dotNode = this.nodeToDot(node)
+      .attr("label", "Add")
+      .attr("type", "add")
+      .attr("feedback", "1");
 
     const loopEdge = this.createDotEdge(node.id, node.id, {});
 
@@ -348,8 +268,7 @@ export default class CgraDotFormatter<
       throw new Error("All Greater nodes must compare against a zero constant vector on the left-hand side.");
     }
 
-    const dotNode = this.nodeToDot(node);
-    dotNode
+    const dotNode = this.nodeToDot(node)
       .attr("label", ">0")
       .attr("type", ">0");
 
@@ -357,42 +276,59 @@ export default class CgraDotFormatter<
   }
 
   whereToDot(node: OperationNode.Class): DotStatement[] {
-    const dotNode = this.nodeToDot(node);
-    dotNode
+    const dotNode = this.nodeToDot(node)
       .attr("label", "Mux")
       .attr("type", "mux");
 
     return [dotNode];
   }
 
-  /**
-   * @brief Handles special cases in the conversion from node to DOT.
-   *
-   * @param node The node to convert.
-   * @returns The resulting DOT statements.
-   */
-  specialNodeToDot(node: BaseNode.Class): DotStatement[] | null {
-    const intermediateTensorNode = this.tryAsIntermediateTensor(node);
-    if (intermediateTensorNode !== undefined) {
-      return this.intermediateTensorToDot(intermediateTensorNode);
+  toSkipNode(node: OperationNode.Class): DotStatement[] {
+    const dotNode = this.nodeToDot(node)
+      .attr("type", "skip");
+
+    return [dotNode];
+  }
+
+  safeNodeToDot(node: BaseNode.Class): DotStatement[] {
+    const tensorNode = node.tryAs(TensorNode);
+    if (tensorNode !== undefined) {
+      this.validateTensorNode(tensorNode);
+
+      if (["intermediate", "constant"].includes(tensorNode.type)) {
+        return this.intermediateTensorToDot(tensorNode);
+      }
+
+      return [this.nodeToDot(tensorNode)];
     }
 
     const opNode = node.tryAs(OperationNode);
     if (opNode !== undefined) {
       switch (opNode.type) {
-        case "Loop":
-          return this.loopToDot(opNode);
-        case "If":
-          return this.ifToDot(opNode);
-        case "Gather":
-        case "Scatter":
-          return [this.nodeToDot(opNode), ...this.externalInputsToDot(opNode)];
+        case "Add":
+          return this.addToDot(opNode);
+        case "Mul":
+          return this.mulToDot(opNode);
         case "ReduceSum":
           return this.reduceSumToDot(opNode);
         case "Where":
           return this.whereToDot(opNode);
         case "Greater":
           return this.greaterToDot(opNode);
+        case "If":
+          return this.ifToDot(opNode);
+        case "Squeeze":
+        case "Unsqueeze":
+        case "Reshape":
+          return this.toSkipNode(opNode);
+
+        // Temporary case to visualize Split and Concat nodes
+        case "Split":
+        case "Concat":
+          return [this.nodeToDot(opNode)];
+
+        default:
+          throw new Error(`Operation node of type "${opNode.type}" is not supported in CGRA DOT formatter.`);
       }
     }
 
@@ -415,41 +351,6 @@ export default class CgraDotFormatter<
     }
 
     return null;
-  }
-
-  toIgnore(node: DotNode): boolean {
-    // TODO(Process-ing): Make these conditions robust to weird input names
-    if (
-      [
-        "Gather",
-        "GatherElements",
-        "Scatter",
-        "ScatterElements",
-        "Squeeze",
-        "Unsqueeze",
-        "Reshape",
-      ].includes(node.attrList.label)
-    ) {
-      return true;
-    }
-
-    const id = node.id as string;
-    const label = node.attrList.label as string;
-    if (
-      id.startsWith("loop") &&
-      (id.includes("_cond_in") ||
-        id.includes("_cond_out") ||
-        label === "Identity")
-    ) {
-      return true;
-    }
-
-    // TODO(Process-ing): Only for demonstration, remove/improve later
-    if (label.startsWith("init_carry")) {
-      return true;
-    }
-
-    return false;
   }
 
   override toDot(graph: G): DotGraph {
@@ -482,16 +383,10 @@ export default class CgraDotFormatter<
     }
 
     for (const node of nodes.filter((node) => !this.isContained(node))) {
-      const statements = this.specialNodeToDot(node);
-      if (statements !== null) {
-        addNodeStatements(...statements);
-        continue;
-      }
-
       if (this.isContainer(node)) {
         addNodeStatements(this.clusterNodeToDot(node));
       } else {
-        addNodeStatements(this.nodeToDot(node));
+        addNodeStatements(...this.safeNodeToDot(node));
       }
     }
 
@@ -508,7 +403,7 @@ export default class CgraDotFormatter<
     const nextTargets = new Map<string, string[]>();
 
     for (const node of dotNodes) {
-      if (this.toIgnore(node)) {
+      if (node.attrList.type === "skip") {
         nextTargets.set(node.id as string, []);
       }
     }
@@ -537,7 +432,7 @@ export default class CgraDotFormatter<
       }
     }
 
-    dot.statements(...dotNodes.filter((node) => !this.toIgnore(node)));
+    dot.statements(...dotNodes.filter((node) => node.attrList.type !== "skip"));
 
     for (const edge of dotEdges.values()) {
       if (
