@@ -62,7 +62,12 @@ function ensurePadSlabConst(
 
   const kT = makeValueScalar1(g, `pad_val_${tag}`, dtype, padValue);
   const exp = g.addNode(uniq(g, `pad_expand_${tag}`)).init(new OperationNode.Builder("Expand", [kT, newShape], {})).as(OperationNode);
-  const slab = g.addNode(uniq(g, `pad_slab_${tag}`)).init(new TensorNode.Builder(dtype, Array(cur.shape.length).fill(undefined), "intermediate")).as(TensorNode);
+  
+  // Calculate static shape for the slab if possible
+  const slabShape = Array.isArray(cur.shape) ? [...cur.shape] : [];
+  if (slabShape.length > axis) slabShape[axis] = size;
+
+  const slab = g.addNode(uniq(g, `pad_slab_${tag}`)).init(new TensorNode.Builder(dtype, slabShape, "intermediate")).as(TensorNode);
   addEdge(g, exp, slab, dtype, slab.shape);
   return slab;
 }
@@ -295,6 +300,8 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
 
   // Prepare working tensor (may be cropped if negative pads)
   let cur = Xin;
+  // Maintain current shape for intermediate updates
+  let currentShape: (number | string | undefined)[] = Array.isArray(Xin.shape) ? [...Xin.shape] : new Array(rank).fill(undefined);
 
   // Negative pads => crop via Slice, then zero-out those pads in the array
   const beg = pads.slice(0, rank);
@@ -317,8 +324,15 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     const end1 = g.addNode(uniq(g, `pad_crop_end_${op.id}_${ax}`)).init(new TensorNode.Builder(DataType.INT64, [1], "intermediate")).as(TensorNode);
     addEdge(g, endOp, end1, DataType.INT64, [1]);
 
+    // Update static shape
+    if (typeof currentShape[ax] === "number") {
+      currentShape[ax] = (currentShape[ax] as number) - negB - negE;
+    } else {
+      currentShape[ax] = undefined; // became unknown if it was unknown
+    }
+
     const sliceOp = g.addNode(uniq(g, `pad_crop_slice_${op.id}_${ax}`)).init(new OperationNode.Builder("Slice", [cur, start1, end1, axVec], {})).as(OperationNode);
-    const mid = g.addNode(uniq(g, `pad_crop_mid_${op.id}_${ax}`)).init(new TensorNode.Builder(dtype, Array(rank).fill(undefined), "intermediate")).as(TensorNode);
+    const mid = g.addNode(uniq(g, `pad_crop_mid_${op.id}_${ax}`)).init(new TensorNode.Builder(dtype, [...currentShape], "intermediate")).as(TensorNode);
     addEdge(g, sliceOp, mid, dtype, mid.shape);
     cur = mid;
 
@@ -347,6 +361,13 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
       right = ensureReflectSlab(g, cur, ax, pEnd, `${op.id}_${ax}_R`);
     }
 
+    // Update static shape for result of Concat
+    if (typeof currentShape[ax] === "number") {
+      currentShape[ax] = (currentShape[ax] as number) + pBeg + pEnd;
+    } else {
+      currentShape[ax] = undefined;
+    }
+
     const parts: TensorNode.Class[] = [];
     if (left) parts.push(left);
     parts.push(cur);
@@ -355,10 +376,11 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     const cc = g.addNode(uniq(g, `pad_concat_${op.id}_${ax}`)).init(new OperationNode.Builder("Concat", parts, { axis: ax })).as(OperationNode);
 
     if (ax === rank - 1) {
+      // Last axis: connect to Y.
       addEdge(g, cc, Y, dtype, Y.shape);
       cur = Y;
     } else {
-      const mid = g.addNode(uniq(g, `pad_mid_${op.id}_${ax}`)).init(new TensorNode.Builder(dtype, Array(rank).fill(undefined), "intermediate")).as(TensorNode);
+      const mid = g.addNode(uniq(g, `pad_mid_${op.id}_${ax}`)).init(new TensorNode.Builder(dtype, [...currentShape], "intermediate")).as(TensorNode);
       addEdge(g, cc, mid, dtype, mid.shape);
       cur = mid;
     }

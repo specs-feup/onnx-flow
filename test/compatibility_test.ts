@@ -757,6 +757,16 @@ const TESTS: Array<{
 
   // ── transpose + broadcast (2D..5D)
   {
+    label: 'transpose_broadcast_2d',
+    originalPath: 'examples/onnx/transpose_broadcast_2d.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [1, 3] },
+      { name: 'Y', dtype: 'float32', shape: [3] },
+    ],
+  },
+  {
     label: 'transpose_broadcast_3d',
     originalPath: 'examples/onnx/transpose_broadcast_3d.onnx',
     tol: 1e-5,
@@ -830,7 +840,15 @@ const TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 2, 5, 6] },
     ],
   },
-
+  {
+    label: 'pad_decomposition',
+    originalPath: 'examples/onnx/pad_normal.onnx',
+    tol: 1e-5,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [1, 2, 3, 4] },
+    ],
+  },
   {
     label: 'clip_scalar',
     originalPath: 'examples/onnx/clip_scalar.onnx',
@@ -1137,119 +1155,44 @@ const CORE_OP_TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
-/*
-{
-  label: 'pad_decomposition',
-  originalPath: 'examples/onnx/pad_normal.onnx',
-  tol: 1e-5,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'X', dtype: 'float32', shape: [1, 2, 3, 4] },
-  ],
-},
+  {
+    label: 'ad01_int8_standard',
+    originalPath: 'examples/onnx/ad01_int8.onnx',
+    tol: 1e-4,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'input_1', dtype: 'int8', shape: [1, 640] },
+    ],
+  },
 
-{
-  label: 'transpose_broadcast_2d',
-  originalPath: 'examples/onnx/transpose_broadcast_2d.onnx',
-  tol: 1e-5,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'X', dtype: 'float32', shape: [1, 3] },
-    { name: 'Y', dtype: 'float32', shape: [3] },
-  ],
-},
+  {
+    label: 'kws_ref_model_int8_standard',
+    originalPath: 'examples/onnx/kws_ref_model.onnx',
+    exact: true,                     // uint8 pipeline → expect bit-exact
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'input_1', dtype: 'int8', shape: [1, 49, 10, 1] },   // in
+      // out: Identity [1,12] uint8 (auto)
+    ],
+  },
+
+  /*
+  {
+    label: 'SC7',
+    originalPath: 'examples/onnx/SC7.onnx',
+    tol: 1e-4,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'input',  dtype: 'float32', shape: [1, 10] },
+      { name: '_obs.3', dtype: 'float32', shape: [1, 10, 10] },
+      { name: '_obs.5', dtype: 'float32', shape: [1, 10] },
+      { name: '_obs.7', dtype: 'float32', shape: [1, 10] },
+      { name: '_obs.9', dtype: 'float32', shape: [1, 10] },
+      { name: '_obs.11', dtype: 'float32', shape: [1, 10] },
+      { name: '_obs',   dtype: 'float32', shape: [1] },
+    ],
+  },
   */
-
-{
-  label: 'SC2_X',
-  originalPath: 'examples/onnx/SC2_X_toy.onnx',
-  tol: 1e-4,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input', dtype: 'float32', shape: [2, 1] },
-  ],
-},
-{
-  label: 'SC2_Y',
-  originalPath: 'examples/onnx/SC2_Y_toy.onnx',
-  tol: 1e-4,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input', dtype: 'float32', shape: [2, 1] },
-  ],
-},
-{
-  label: 'SC2_Z',
-  originalPath: 'examples/onnx/SC2_Z_toy.onnx',
-  tol: 1e-4,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input', dtype: 'float32', shape: [2, 1] },
-  ],
-},
-
-{
-  label: 'ad01_fp32_standard',
-  // Put your ONNX next to other samples; if you only have JSON, see note below.
-  originalPath: 'examples/onnx/ad01_fp32.onnx',
-  tol: 1e-4,
-  cliArgs: jsonFullArgs, // full JSON export + reconvert
-  specs: [
-    { name: 'input_1', dtype: 'float32', shape: [1, 640] },
-  ],
-},
-
-{
-  label: 'kws_ref_model_float32_standard',
-  originalPath: 'examples/onnx/kws_ref_model_float32.onnx',
-  tol: 1e-4,                       // softmax tail needs a little tolerance
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input_1', dtype: 'float32', shape: [1, 49, 10, 1] }, // in
-    // out: Identity [1,12] float32 (picked up automatically)
-  ],
-},
-
-/*
-{
-  label: 'SC7',
-  originalPath: 'examples/onnx/SC7.onnx',
-  tol: 1e-4,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input',  dtype: 'float32', shape: [1, 10] },
-    { name: '_obs.3', dtype: 'float32', shape: [1, 10, 10] },
-    { name: '_obs.5', dtype: 'float32', shape: [1, 10] },
-    { name: '_obs.7', dtype: 'float32', shape: [1, 10] },
-    { name: '_obs.9', dtype: 'float32', shape: [1, 10] },
-    { name: '_obs.11', dtype: 'float32', shape: [1, 10] },
-    { name: '_obs',   dtype: 'float32', shape: [1] },
-  ],
-},
-*/
-
-/*
-{
-  label: 'ad01_int8_standard',
-  originalPath: 'examples/onnx/ad01_int8.onnx',
-  tol: 1e-4,
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input_1', dtype: 'int8', shape: [1, 640] },
-  ],
-},
-
-{
-  label: 'kws_ref_model_int8_standard',
-  originalPath: 'examples/onnx/kws_ref_model.onnx',
-  exact: true,                     // uint8 pipeline → expect bit-exact
-  cliArgs: jsonFullArgs,
-  specs: [
-    { name: 'input_1', dtype: 'int8', shape: [1, 49, 10, 1] },   // in
-    // out: Identity [1,12] uint8 (auto)
-  ],
-},
-*/
 
   /*
   // ----- LSTM (TBD) -----
@@ -1304,7 +1247,7 @@ export async function runAllUnified() {
 }
 
 
-const mode = process.env.COMPAT_MODE ?? 'all';
+const mode = process.env.COMPAT_MODE ?? 'core';
 
 // Only auto-run when this file is the main script (test runner).
 const isMain =

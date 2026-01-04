@@ -2,10 +2,28 @@ import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { toStaticShape, makeTensorConst, scalarInt64, computeStrides } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopCtx, resolveFusedInput, decodeMixedRadix, buildLinearIndex, unsqueezeIdx, ensureFlatInput, gatherFrom, squeezeIfLen1 } from "../BuildLoop.js";
+import { toStaticShape, makeTensorConst, scalarInt64, computeStrides, int64Vec, uniq } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { LoopCtx, resolveFusedInput, decodeMixedRadix, buildLinearIndex, unsqueezeIdx, ensureFlatInput, gatherFrom } from "../BuildLoop.js";
+import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 
 /* ============================== HANDLER ================================== */
+
+function toScalar(g: OnnxGraph.Class, t: TensorNode.Class, tag: string): TensorNode.Class {
+  // If we know statically it's already scalar, return as is (optimization)
+  if (t.shape && t.shape.length === 0) return t;
+
+  // Otherwise, force Reshape to [] (scalar)
+  // An empty 1D tensor (dims=[0]) represents the shape []
+  const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), DataType.INT64, "constant", int64Vec([]));
+  const reshape = g.addNode(uniq(g, `${tag}_reshape`))
+    .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
+    .as(OperationNode);
+  const out = g.addNode(uniq(g, `${tag}_out`))
+    .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
+    .as(TensorNode);
+  g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+  return out;
+}
 
 export default function handleTranspose(
   op: OperationNode.Class,
@@ -81,5 +99,7 @@ export default function handleTranspose(
 
   const flat = ensureFlatInput(g, X);
   const [_, gathered] = gatherFrom(g, flat, `tp_g_${op.id}`, linU, 0); // [1]
-  return squeezeIfLen1(g, gathered, ctx.axes, `tp_sq_${op.id}`); // []
+  
+  // Force to scalar [] to ensure consistent rank 0 for downstream ops
+  return toScalar(g, gathered, `tp_scalar_${op.id}`); 
 }

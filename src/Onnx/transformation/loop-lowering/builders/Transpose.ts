@@ -23,13 +23,11 @@ import {
   LoopBuilder,
   unsqueezeIdx,
   resolveFusedInput,
-  squeezeIfLen1,
 } from "../BuildLoop.js";
 import handleTranspose from "../handlers/Transpose.js";
 
 /**
  * Local getAttr helper – identical to the one used in the Transpose handler.
- * This is important so we read `perm` in the *same way* in both places.
  */
 function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | undefined {
   const anyOp: any = op as any;
@@ -47,10 +45,23 @@ function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | u
   return dflt;
 }
 
+function toScalar(g: OnnxGraph.Class, t: TensorNode.Class, tag: string): TensorNode.Class {
+  if (t.shape && t.shape.length === 0) return t;
+  const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), DataType.INT64, "constant", int64Vec([]));
+  const reshape = g.addNode(uniq(g, `${tag}_reshape`))
+    .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
+    .as(OperationNode);
+  const out = g.addNode(uniq(g, `${tag}_out`))
+    .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
+    .as(TensorNode);
+  g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+  return out;
+}
+
 /**
  * Dedicated builder for Transpose chains:
- *   - CHAIN: [Transpose]
- *   - CHAIN: [Transpose, Add] (2D broadcast case)
+ * - CHAIN: [Transpose]
+ * - CHAIN: [Transpose, Add] (2D broadcast case)
  */
 export default class TransposeBuilder implements LoopBuilder {
   canHandle(chain: OperationNode.Class[]): boolean {
@@ -214,6 +225,7 @@ export default class TransposeBuilder implements LoopBuilder {
     };
 
     // ---- 1) Transpose scalar for this iteration -----------------------
+    // handleTranspose now strictly returns a scalar []
     const tpScalar = handleTranspose(transposeOp, body, ctx);
     ctx.opMap.set(transposeOp, [transposeOp, tpScalar]);
 
@@ -255,9 +267,8 @@ export default class TransposeBuilder implements LoopBuilder {
         /*returnGather*/ true
       );
 
-      // 🔴 Critical fix for 2D case:
-      // if resolveFusedInput returned a [1]-vector, squeeze it to scalar
-      otherScalar = squeezeIfLen1(body, otherScalar, axes, "add_other");
+      // Force to scalar [] so we have strictly Rank 0 + Rank 0
+      otherScalar = toScalar(body, otherScalar, "add_other_scalar");
 
       // Now build Add: scalar + scalar → scalar
       const addBodyNode = body
@@ -279,15 +290,14 @@ export default class TransposeBuilder implements LoopBuilder {
       lastOut = addOut;
     }
 
-    // lastOut must be rank-1 for ScatterElements (indices are [1])
-    if (lastOut.shape.length === 0) {
-      lastOut = unsqueezeIdx(
-        body,
-        lastOut,
-        ctx.axes,
-        hasAdd ? "updateUnsq_add" : "updateUnsq"
-      );
-    }
+    // lastOut is now guaranteed to be scalar [].
+    // We must Unsqueeze it to [1] to match the rank of ScatterElements indices (unsqOut [1]).
+    lastOut = unsqueezeIdx(
+      body,
+      lastOut,
+      ctx.axes,
+      hasAdd ? "updateUnsq_add" : "updateUnsq"
+    );
 
     // ---- Loop inputs for outer graph ----------------------------------
     const trip = makeTensorConst(

@@ -35,22 +35,29 @@ function tensorProtoToIntArray(t?: TensorProto): number[] {
     return Array.from(t.int32Data, (n) => Number(n));
   }
 
-  const raw : any = t.rawData ?? t.rawData;
+  // Handle both 'rawData' property and 'raw_data' (if coming from raw JSON)
+  const raw : any = t.rawData ?? (t as any).raw_data;
   if (!raw) return [];
 
   let buf: Buffer;
-  if (typeof raw === "string") {
+  // If it's the { type: 'Buffer', data: [...] } structure
+  if (raw.data && Array.isArray(raw.data)) {
+     buf = Buffer.from(raw.data);
+  } else if (typeof raw === "string") {
     buf = Buffer.from(raw, "base64");
   } else {
     buf = Buffer.from(raw);
   }
 
   const out: number[] = [];
+  // Default to INT64 if undefined, but usually it's set
   if (t.dataType === DataType.INT64) {
     for (let i = 0; i + 8 <= buf.length; i += 8) {
       out.push(Number(buf.readBigInt64LE(i)));
     }
-  } else if (t.dataType === DataType.INT32) {
+  } else if (t.dataType === DataType.INT32 || t.dataType === DataType.INT16 || t.dataType === DataType.INT8) {
+    // Basic support for smaller ints if needed, though usually shapes are INT64
+    // Treating as INT32 for now to match existing logic logic
     for (let i = 0; i + 4 <= buf.length; i += 4) {
       out.push(buf.readInt32LE(i));
     }
@@ -258,10 +265,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
       case "Unsqueeze": {
         const tensorShape = infos[0]?.shape ?? [];
         const axesNode = inputs[1]?.tryAs(TensorNode);
-        const raw =
-          axesNode?.constantValue?.int64Data?.map(Number) ??
-          axesNode?.constantValue?.int32Data?.map(Number) ??
-          [];
+        
+        // Fix: use tensorProtoToIntArray to handle rawData correctly
+        const raw = tensorProtoToIntArray(
+          axesNode?.constantValue ?? axesNode?.originalInitializer
+        );
+        
         const axes = [...raw].sort((a, b) => a - b);
         outShape = [...tensorShape];
         for (const ax of axes) outShape.splice(ax, 0, 1);
@@ -271,7 +280,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
       case "Squeeze": {
         const inputShape = infos[0]?.shape ?? [];
         const axesNode = inputs[1]?.tryAs(TensorNode);
-        const axes = axesNode?.constantValue?.int64Data?.map(Number);
+        
+        // Fix: use tensorProtoToIntArray
+        const axes = tensorProtoToIntArray(
+          axesNode?.constantValue ?? axesNode?.originalInitializer
+        );
+
         if (!axes || axes.length === 0) {
           outShape = inputShape.filter((d) => d !== 1);
         } else {
@@ -300,19 +314,6 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
       }
 
       case "Scan": {
-        // For Scan we rely on the shapes already attached to its outputs,
-        // typically coming from ONNX's own shape inference or from explicit
-        // annotations (e.g., UU000UU / UU001UU in the SC2 models).
-        //
-        // The key rule: DO NOT overwrite those shapes here.
-        //
-        // So we deliberately leave `outShape` empty, which means the generic
-        // "rewire edges + maybe update TensorNode.shape" block at the end
-        // will NOT touch TensorNode shapes for Scan outputs.
-        //
-        // We can still try to propagate a dtype if the first output already
-        // has one, but we keep the shape logic as a no-op.
-
         const outs =
           node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
 
@@ -324,8 +325,6 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         if (firstOutT && firstOutT.literalType !== undefined) {
           outDtype = firstOutT.literalType;
         }
-
-        // Crucially: do not set outShape here.
         outShape = [];
         break;
       }
@@ -333,12 +332,6 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
       case "GatherElements": {
         const dataShape = infos[0]?.shape ?? [];
         const indicesShape = infos[1]?.shape ?? [];
-        const rankData = dataShape.length;
-
-        let axis = getAttr(node, "axis", 0) as number;
-        if (rankData > 0) axis = normalizeAxis(axis, rankData);
-
-        // ONNX: output shape == indices.shape
         outShape = indicesShape.slice();
         outDtype = infos[0]?.dtype ?? outDtype;
         break;
@@ -346,30 +339,6 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
       case "ScatterElements": {
         const dataShape = infos[0]?.shape ?? [];
-        const indicesShape = infos[1]?.shape ?? [];
-        const updatesShape = infos[2]?.shape ?? [];
-        const rankData = dataShape.length;
-
-        let axis = getAttr(node, "axis", 0) as number;
-        if (rankData > 0) axis = normalizeAxis(axis, rankData);
-
-        // Optional sanity checks (non-fatal)
-        if (indicesShape.length && updatesShape.length) {
-          if (
-            indicesShape.length !== rankData ||
-            updatesShape.length !== rankData
-          ) {
-            // console.warn(...) if you want
-          }
-          const axOk =
-            indicesShape[axis] === undefined ||
-            updatesShape[axis] === undefined ||
-            indicesShape[axis] === updatesShape[axis];
-          if (!axOk) {
-            // console.warn(...)
-          }
-        }
-
         outShape = dataShape.slice();
         outDtype = infos[0]?.dtype ?? outDtype;
         break;
@@ -451,8 +420,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
       case "Pad": {
         const dataShape = infos[0]?.shape ?? [];
         const padsNode = inputs[1]?.tryAs(TensorNode);
-        const pads =
-          padsNode?.constantValue?.int64Data?.map(Number) ?? [];
+        
+        // Fix: use tensorProtoToIntArray
+        const pads = tensorProtoToIntArray(
+          padsNode?.constantValue ?? padsNode?.originalInitializer
+        );
+        
         const rank = dataShape.length;
         outShape = dataShape.slice();
         if (pads.length === 2 * rank) {
@@ -491,10 +464,13 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
         if (!axes) {
           const axesNode = inputs[1]?.tryAs(TensorNode);
-          const cv = axesNode?.constantValue;
-          const raw = cv?.int64Data ?? cv?.int32Data ?? cv?.uint64Data;
-          if (raw && raw.length !== undefined) {
-            axes = Array.from(raw).map((v) => Number(v));
+          
+          // Fix: use tensorProtoToIntArray
+          const raw = tensorProtoToIntArray(
+            axesNode?.constantValue ?? axesNode?.originalInitializer
+          );
+          if (raw.length > 0) {
+            axes = raw;
           }
         }
 
@@ -616,12 +592,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         let shape: (number | String)[] = [];
 
         if (shapeTensor) {
-          const cv = shapeTensor.constantValue;
-
-          if (cv?.int64Data?.length) {
-            shape = Array.from(cv.int64Data, (n) => Number(n));
-          } else if (cv?.int32Data?.length) {
-            shape = Array.from(cv.int32Data, (n) => Number(n));
+          // Fix: use tensorProtoToIntArray
+          const arr = tensorProtoToIntArray(
+            shapeTensor.constantValue ?? shapeTensor.originalInitializer
+          );
+          if (arr.length) {
+            shape = arr;
           }
 
           if (!shape.length) {
@@ -718,11 +694,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         let targetShape: (String | number)[] | undefined;
 
         if (shapeInput) {
-          const cv = shapeInput.constantValue;
-          if (cv?.int64Data?.length) {
-            targetShape = Array.from(cv.int64Data, (n) => Number(n));
-          } else if (cv?.int32Data?.length) {
-            targetShape = Array.from(cv.int32Data, (n) => Number(n));
+          // Fix: use tensorProtoToIntArray
+          const arr = tensorProtoToIntArray(
+            shapeInput.constantValue ?? shapeInput.originalInitializer
+          );
+          if (arr.length) {
+            targetShape = arr;
           }
 
           if (!targetShape?.length) {
@@ -842,13 +819,6 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         const H_out = Math.floor((H_padded - kEffH) / sH + 1);
         const W_out = Math.floor((W_padded - kEffW) / sW + 1);
 
-        if (group > 0 && Cw > 0) {
-          const expectedC = Cw * group;
-          if (C !== expectedC) {
-            // you can console.warn here if you want
-          }
-        }
-
         outShape = [N, M, H_out, W_out];
         outDtype = infos[0]?.dtype ?? outDtype;
         break;
@@ -913,20 +883,15 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
       /** ───── Range (1D) ───── */
       case "Range": {
-        const st = inputs[0]?.tryAs(TensorNode)?.constantValue;
-        const ed = inputs[1]?.tryAs(TensorNode)?.constantValue;
-        const dt = inputs[2]?.tryAs(TensorNode)?.constantValue;
-        if (
-          st &&
-          ed &&
-          dt &&
-          st.int64Data &&
-          ed.int64Data &&
-          dt.int64Data
-        ) {
-          const start = Number(st.int64Data[0]);
-          const end = Number(ed.int64Data[0]);
-          const step = Number(dt.int64Data[0] || 1);
+        // Fix: use tensorProtoToIntArray for all inputs
+        const st = tensorProtoToIntArray(inputs[0]?.tryAs(TensorNode)?.constantValue);
+        const ed = tensorProtoToIntArray(inputs[1]?.tryAs(TensorNode)?.constantValue);
+        const dt = tensorProtoToIntArray(inputs[2]?.tryAs(TensorNode)?.constantValue);
+        
+        if (st.length && ed.length && dt.length) {
+          const start = st[0];
+          const end = ed[0];
+          const step = dt[0] || 1;
           const len = Math.max(0, Math.ceil((end - start) / step));
           outShape = [len];
         } else {
