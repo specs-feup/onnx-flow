@@ -148,7 +148,7 @@ export function decomposeMatMul(node: OperationNode.Class, g: OnnxGraph.Class, t
 
       // Add Concat node
       const concatBuilder = new OperationNode.Builder("Concat", unsqueezeOutputs, {
-        axis: 1,
+        axis: 0,
       });
       const concatNode = g
         .addNode(`${node.id}_concat${row}`, node.parent)
