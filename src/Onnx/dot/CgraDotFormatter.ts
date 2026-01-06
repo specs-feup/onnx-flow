@@ -184,11 +184,6 @@ export default class CgraDotFormatter<
   }
 
   validateTensorNode(node: TensorNode.Class): void {
-    // TODO(Process-ing): Remove this bypass, once split-concat skip is implemented
-    if (node.type === "intermediate") {
-      return;
-    }
-
     if (node.shape.length > 1) {
       throw new Error(
         "CGRA supports only 1D tensors.",
@@ -317,13 +312,12 @@ export default class CgraDotFormatter<
           return this.greaterToDot(opNode);
         case "If":
           return this.ifToDot(opNode);
-        case "Squeeze":
         case "Unsqueeze":
-        case "Reshape":
           return this.toSkipNode(opNode);
 
-        // Temporary case to visualize Split and Concat nodes
-        case "Split":
+        // Assume the is a Concat node to join results
+        // In principle, joining results in the CGRA is done by manipulating addresses,
+        // but that will generate an incorrect ONNX model, so this operation is needed
         case "Concat":
           return [this.nodeToDot(opNode)];
 
