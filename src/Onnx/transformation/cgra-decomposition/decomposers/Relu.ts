@@ -2,7 +2,6 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { mergeOutputs, splitInput } from "../utils.js";
 import { makeTensorProto } from "../../../Utils.js";
 import { DataType } from "../../../OnnxTypes.js";
 import TensorSplitter from "../TensorSplitter.js";
@@ -74,6 +73,8 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
       output.literalType,
       output.shape.slice(1),
     );
+
+    // Connect Where output to final output tensor
     g.addEdge(whereNode, outputs[i]).init(whereOutEdgeBuilder);
   }
 

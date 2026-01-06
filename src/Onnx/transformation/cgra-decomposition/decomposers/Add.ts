@@ -2,9 +2,10 @@ import OnnxEdge from "../../../OnnxEdge.js";
 import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import { mergeOutputs, shapesEqual, splitInput } from "../utils.js";
+import TensorSplitter from "../TensorSplitter.js";
+import { shapesEqual } from "../utils.js";
 
-export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
+export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Class, tensorSplitter: TensorSplitter): boolean {
   const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
 
   if (!shapesEqual(input1, input2)) {
@@ -16,16 +17,11 @@ export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Cla
     return false;
   }
 
-  const newInputs1: TensorNode.Class[] = splitInput(input1, g, true);
-  const newInputs2: TensorNode.Class[] = splitInput(input2, g, true);
+  const newInputs1: TensorNode.Class[] = tensorSplitter.getSplit(input1, false).splits;
+  const newInputs2: TensorNode.Class[] = tensorSplitter.getSplit(input2, false).splits;
 
-  const newOutputs: TensorNode.Class[] = [];
   const output = node.outgoers.at(0).target.as(TensorNode);
-  const outputBuilder = new TensorNode.Builder(
-    output.literalType,
-    output.shape.slice(1),
-    output.type,
-  );
+  const outputs = tensorSplitter.getSplit(output, false).splits;
 
   for (let i = 0; i < newInputs1.length; i++) {
     // Create Add node
@@ -39,26 +35,12 @@ export default function decomposeAdd(node: OperationNode.Class, g: OnnxGraph.Cla
       .init(addBuilder)
       .as(OperationNode);
 
-    // Create output tensor node
-    const newOutput = g
-      .addNode(`${output.id}${i}`)
-      .init(outputBuilder)
-      .as(TensorNode);
-    newOutputs.push(newOutput);
-
+    // Connect Add output to final output tensor
     const edgeBuilder = new OnnxEdge.Builder(
       output.literalType,
       output.shape.slice(1),
     );
-    g.addEdge(addNode, newOutput).init(edgeBuilder);
-  }
-
-  // Merge outputs
-  if (output.type !== "output") {
-    mergeOutputs(newOutputs, output, g);
-  } else {
-    // Otherwise, just replace the output
-    output.remove();
+    g.addEdge(addNode, outputs[i]).init(edgeBuilder);
   }
 
   // Remove original Add node and its edges
