@@ -7,7 +7,7 @@ export type TensorSplit = {
 }
 
 export default class TensorSplitter {
-  tensorSplits: Map<TensorNode.Class, TensorSplit>;
+  tensorSplits: Map<string, TensorSplit>;
   graph: OnnxGraph.Class;
 
   constructor(graph: OnnxGraph.Class) {
@@ -16,7 +16,7 @@ export default class TensorSplitter {
   }
 
   getSplit(tensor: TensorNode.Class, columnWise: boolean): TensorSplit {
-    const existingSplit = this.tensorSplits.get(tensor);
+    const existingSplit = this.tensorSplits.get(tensor.id);
     if (existingSplit !== undefined) {
       if (existingSplit.columnWise !== columnWise) {
         throw new Error("Tensor has already been split in a different orientation.");
@@ -40,7 +40,7 @@ export default class TensorSplitter {
       columnWise,
     };
 
-    this.tensorSplits.set(tensor, tensorSplit);
+    this.tensorSplits.set(tensor.id, tensorSplit);
     return tensorSplit;
   }
 
@@ -48,9 +48,9 @@ export default class TensorSplitter {
    * @brief Removes all unremoved splitted tensors from the graph.
    */
   clearTensors(): void {
-    this.tensorSplits.forEach((split, oldTensor) => {
-      if (split.splits.every(split => split.id != oldTensor.id) && this.graph.hasNode(oldTensor.id)) {
-        oldTensor.remove();
+    this.tensorSplits.forEach((split, oldTensorId) => {
+      if (split.splits.every(split => split.id != oldTensorId) && this.graph.hasNode(oldTensorId)) {
+        this.graph.getNodeById(oldTensorId).remove();
       }
     });
   }

@@ -5,8 +5,9 @@ import OnnxEdge from "../../../OnnxEdge.js";
 import { mergeOutputs, splitInput } from "../utils.js";
 import { makeTensorProto } from "../../../Utils.js";
 import { DataType } from "../../../OnnxTypes.js";
+import TensorSplitter from "../TensorSplitter.js";
 
-export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
+export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Class, tensorSplitter: TensorSplitter): boolean {
   const [input] = node.getInputs().map((inp) => inp.as(TensorNode));
   const literalType = input.literalType;
 
@@ -14,9 +15,7 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
     throw new Error("Relu decomposition for tensors with more than 2 dimensions is not supported.");
   }
 
-  const inputs: TensorNode.Class[] = input.shape.length === 2
-    ? splitInput(input, g, true)
-    : [input];
+  const inputs: TensorNode.Class[] = tensorSplitter.getSplit(input, false).splits;
 
   // Create constant zero (for comparisons)
   const reluZeroBuilder = new TensorNode.Builder(
@@ -30,13 +29,8 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
     .init(reluZeroBuilder)
     .as(TensorNode);
 
-  const newOutputs: TensorNode.Class[] = [];
   const output = node.outgoers.at(0).target.as(TensorNode);
-  const outputBuilder = new TensorNode.Builder(
-    output.literalType,
-    output.shape.slice(1),
-    output.type,
-  );
+  const outputs: TensorNode.Class[] = tensorSplitter.getSplit(output, false).splits;
 
   for (let i = 0; i < inputs.length; i++) {
     // Create Greater node (serving as ">0" node)
@@ -76,25 +70,11 @@ export default function decomposeRelu(node: OperationNode.Class, g: OnnxGraph.Cl
       .init(whereBuilder)
       .as(OperationNode);
 
-    const newOutput = g
-      .addNode(`${output.id}${i}`, node.parent)
-      .init(outputBuilder)
-      .as(TensorNode);
-    newOutputs.push(newOutput);
-
     const whereOutEdgeBuilder = new OnnxEdge.Builder(
       output.literalType,
       output.shape.slice(1),
     );
-    g.addEdge(whereNode, newOutput).init(whereOutEdgeBuilder);
-  }
-
-  // Merge outputs
-  if (output.type !== "output") {
-    mergeOutputs(newOutputs, output, g);
-  } else {
-    // Otherwise, just replace the output
-    output.remove();
+    g.addEdge(whereNode, outputs[i]).init(whereOutEdgeBuilder);
   }
 
   // Remove original Relu node and its edges
