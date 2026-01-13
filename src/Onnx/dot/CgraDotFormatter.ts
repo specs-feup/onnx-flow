@@ -22,7 +22,17 @@ type ClusterInfo = {
   targetMapping: Record<string, string>;
 };
 
-
+/**
+ * @class CgraDotFormatter
+ * @extends DefaultDotFormatter
+ *
+ * @brief A DOT formatter specialized for exporting ONNX graphs to the DOT
+ * specification of the STRELA CGRA mapper.
+ *
+ * By design, the formatter requires the graph to be already in a CGRA-compatible
+ * form, meaning that all operations must be supported by the CGRA and all tensors
+ * must not have more than one dimension.
+ */
 export default class CgraDotFormatter<
   G extends OnnxGraph.Class = OnnxGraph.Class,
 > extends DefaultDotFormatter<G> {

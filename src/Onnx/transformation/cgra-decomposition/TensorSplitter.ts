@@ -6,6 +6,13 @@ export type TensorSplit = {
   columnWise: boolean;
 }
 
+/**
+ * @class TensorSplitter
+ * @brief Manages the splitting of tensors into smaller tensors for CGRA mapping.
+ *
+ * The TensorSplitter class provides functionality to split tensors, which is
+ * useful for converting
+ */
 export default class TensorSplitter {
   tensorSplits: Map<string, TensorSplit>;
   graph: OnnxGraph.Class;
@@ -15,6 +22,13 @@ export default class TensorSplitter {
     this.graph = graph;
   }
 
+  /**
+   * @brief Gives a split of the given tensor, creating it if it does not already exist.
+   *
+   * @param tensor The tensor to be split.
+   * @param columnWise Whether to split the tensor column-wise or row-wise.
+   * @returns The TensorSplit object containing the splits.
+   */
   getSplit(tensor: TensorNode.Class, columnWise: boolean): TensorSplit {
     const existingSplit = this.tensorSplits.get(tensor.id);
     if (existingSplit !== undefined) {

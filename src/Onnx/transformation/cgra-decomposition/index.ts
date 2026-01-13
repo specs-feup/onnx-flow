@@ -10,6 +10,16 @@ const decomposers = {
   "Relu": decomposeRelu,
 };
 
+/**
+ * @brief Decomposes the given ONNX graph for CGRA mapping.
+ *
+ * @attention This function does not ensure that the resulting graph is valid
+ * for CGRA mapping, which will depend on the operations present in the graph
+ * and the decompositions currently supported.
+ *
+ * @param g The ONNX graph to be transformed.
+ * @returns The transformed ONNX graph.
+ */
 export default function transformForCgra(g: OnnxGraph.Class): OnnxGraph.Class {
   let anyDivided = true;
   const tensorSplitter = new TensorSplitter(g);
