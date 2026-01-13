@@ -22,6 +22,7 @@ type ClusterInfo = {
   targetMapping: Record<string, string>;
 };
 
+
 export default class CgraDotFormatter<
   G extends OnnxGraph.Class = OnnxGraph.Class,
 > extends DefaultDotFormatter<G> {
