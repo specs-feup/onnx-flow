@@ -5,7 +5,6 @@ import Dot, {
   DotGraph,
   DotNode,
   DotStatement,
-  DotSubgraph,
 } from "@specs-feup/flow/graph/dot/dot";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
