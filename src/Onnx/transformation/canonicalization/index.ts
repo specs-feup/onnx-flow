@@ -9,6 +9,7 @@ import sliceHandler from "./handlers/Slice.js";
 import OperationNode from "../../OperationNode.js";
 import softmaxHandler from "./handlers/Softmax.js";
 import expandHandler from "./handlers/Expand.js";
+import quantizeLinearHandler from "./handlers/QuantizeLinear.js";
 
 export type Handler = (graph: OnnxGraph.Class, op: OperationNode.Class) => boolean;
 // Registry by op type
@@ -28,6 +29,7 @@ function buildDefaultRegistry(): HandlersRegistry {
     Gemm: gemmHandler,
     Concat: concatHandler,
     DequantizeLinear: dequantizeLinearHandler,
+    QuantizeLinear: quantizeLinearHandler,
     AveragePool: averagePoolHandler,
     Softmax: softmaxHandler,
     Expand: expandHandler,

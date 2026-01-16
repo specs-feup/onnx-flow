@@ -1155,6 +1155,18 @@ const CORE_OP_TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
+  
+  {
+    label: 'quantizelinear',
+    originalPath: 'examples/onnx/quantizelinear.onnx',
+    tol: 0, // Exact match expected for integer output
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [1, 3, 4, 4] },
+    ],
+  },
+
+  
   {
     label: 'ad01_int8_standard',
     originalPath: 'examples/onnx/ad01_int8.onnx',

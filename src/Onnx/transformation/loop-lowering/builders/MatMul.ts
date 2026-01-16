@@ -33,9 +33,20 @@ export default class MatMulBuilder implements LoopBuilder {
     let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
     const fallbackElemTy = lastOp.getOutgoers.first()?.literalType ?? DataType.FLOAT;
-    const elemTy = outTensor && outTensor.literalType !== DataType.UNDEFINED
+    
+    let elemTy = outTensor && outTensor.literalType !== DataType.UNDEFINED
       ? outTensor.literalType
       : fallbackElemTy;
+
+    // If the operation works on 8-bit integers, we MUST accumulate in INT32 
+    // to avoid immediate overflow. We also update the output tensor type 
+    // so the graph remains consistent.
+    if (elemTy === DataType.INT8 || elemTy === DataType.UINT8) {
+      elemTy = DataType.INT32;
+      if (outTensor) {
+        outTensor.setLiteralType(elemTy);
+      }
+    }
 
     inferShapes(outer);
 

@@ -180,7 +180,7 @@ const argv = await yargs(hideBin(process.argv))
     type: "boolean",
     default: false,
   })
-    .option('checkEquivalence', {
+  .option('checkEquivalence', {
     alias: 'qe',
     describe: 'Run ONNXRuntime equivalence check using test inputs (when available)',
     type: 'boolean',
