@@ -149,8 +149,8 @@ function recordFailure(kind: 'warn' | 'error') {
 
 /* ============================== FEED HELPERS ================================== */
 
-type DType = 'uint8' | 'int8' | 'float32' | 'int32' | 'int64' | 'bool';
-type FeedSpec = {
+export type DType = 'uint8' | 'int8' | 'float32' | 'int32' | 'int64' | 'bool';
+export type FeedSpec = {
   name: string;
   dtype: DType;
   shape: number[];               // [] for scalars
@@ -168,7 +168,7 @@ function randNegMix() { return Math.random() * 2 - 1; }
 function randInt(max = 10) { return Math.floor(Math.random() * max); }
 function randBool() { return Math.random() < 0.5; }
 
-function makeArray(dtype: DType, len: number, gen: FeedSpec['gen']): number[] | bigint[] | boolean[] {
+export function makeArray(dtype: DType, len: number, gen: FeedSpec['gen']): number[] | bigint[] | boolean[] {
   switch (dtype) {
     case 'float32':
       if (gen === 'negmix') return Array.from({ length: len }, randNegMix);
