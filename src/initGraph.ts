@@ -32,8 +32,8 @@ function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
     // Skip valueInfo for Constant outputs — they'll be created as proper "constant" tensors in addNodes
     if (constantOutputs.has(name)) return;
 
-    const shape = parseShape(vi.type.tensorType.shape);
-    const elemType = vi.type.tensorType.elemType;
+    const shape = parseShape(vi.type.tensorType ? vi.type.tensorType.shape : []);
+    const elemType = vi.type.tensorType ? vi.type.tensorType.elemType : 0;
 
     graph.addNode(name)
       .init(new TensorNode.Builder(elemType, shape, "intermediate"))
@@ -86,8 +86,9 @@ function addInitializers(data: any, graph: OnnxGraph.Class) {
 // Add input nodes to the graph
 function addInputNodes(data: any, graph: OnnxGraph.Class) {
     data.graph.input.forEach((input: any) => {
-        const shape = parseShape(input.type.tensorType.shape);
-        graph.addNode(input.name).init(new TensorNode.Builder(input.type.tensorType.elemType, shape, 'input')).as(TensorNode);
+        const shape = parseShape(input.type.tensorType ? input.type.tensorType.shape : []);
+        const eltype = input.type.tensorType ? input.type.tensorType.elemType : 0;
+        graph.addNode(input.name).init(new TensorNode.Builder(eltype, shape, 'input')).as(TensorNode);
         definedVars.push(input.name);
     });
 }
@@ -96,8 +97,9 @@ function addInputNodes(data: any, graph: OnnxGraph.Class) {
 // Add output nodes to the graph
 function addOutputNodes(data: any, graph: OnnxGraph.Class) {
     data.graph.output.forEach((output: any) => {
-        const shape = parseShape(output.type.tensorType.shape);
-        graph.addNode(output.name).init(new TensorNode.Builder(output.type.tensorType.elemType, shape, 'output')).as(TensorNode);
+        const shape = parseShape(output.type.tensorType ? output.type.tensorType.shape : []);
+        const eltype = output.type.tensorType ? output.type.tensorType.elemType : 0;
+        graph.addNode(output.name).init(new TensorNode.Builder(eltype, shape, 'output')).as(TensorNode);
     });
 }
 

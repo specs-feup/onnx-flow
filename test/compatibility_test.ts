@@ -6,6 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import { performance } from 'perf_hooks';
 import { fileURLToPath } from 'url';
+import { onnx2json } from '../src/onnx2json.js';
+import { createGraph } from '../src/initGraph.js';
+import OnnxGraph from '@specs-feup/onnx-flow/Onnx/OnnxGraph';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +27,91 @@ const FAILURES = {
 };
 
 /* ============================== HELPERS ================================== */
+// Helper to recursively collect stats from a graph and its subgraphs
+function collectStatsRecursive(graph: OnnxGraph.Class, stats: { total: number; ops: Record<string, number> }) {
+  const opNodes = graph.getOperationNodes().toArray();
+  stats.total += opNodes.length;
+
+  for (const node of opNodes) {
+    // 1. Count current node
+    stats.ops[node.type] = (stats.ops[node.type] || 0) + 1;
+
+    // 2. Check for subgraphs (Loop/Scan/If)
+    // OperationNode exposes subgraphs via getSubgraphs() map OR getBodySubgraph() accessor
+    const subgraphs = node.getSubgraphs() || {};
+    const body = node.getBodySubgraph();
+
+    // Collect distinct subgraphs to avoid double counting if body is also in the map
+    const graphsToVisit = new Set<OnnxGraph.Class>();
+    
+    if (body) graphsToVisit.add(body);
+    for (const key of Object.keys(subgraphs)) {
+      if (subgraphs[key]) graphsToVisit.add(subgraphs[key]);
+    }
+
+    // 3. Recurse
+    for (const subGraph of graphsToVisit) {
+      collectStatsRecursive(subGraph, stats);
+    }
+  }
+}
+
+async function getGraphStats(modelPath: string) {
+  if (!fs.existsSync(modelPath)) {
+    console.warn(`(Stats warning: file not found ${modelPath})`);
+    return null;
+  }
+  try {
+    const json = await onnx2json(modelPath);
+    const graph = createGraph(json);
+    
+    const stats = { total: 0, ops: {} as Record<string, number> };
+    collectStatsRecursive(graph, stats);
+    
+    return stats;
+  } catch (e: any) {
+    console.warn(`(Stats warning: could not load ${path.basename(modelPath)})`);
+    console.error(`   Reason: ${e.message}`);
+    return null;
+  }
+}
+
+function printStatsComparison(label: string, original: any, decomposed: any) {
+  console.log(`\n--- Stats for ${label} (Recursive) ---`);
+  
+  if (original) {
+    console.log(`Original Nodes: ${original.total}`);
+  }
+  if (decomposed) {
+    console.log(`Decomposed Nodes: ${decomposed.total}`);
+  }
+
+  if (original && decomposed) {
+    console.log(`Node Count Change: ${original.total} -> ${decomposed.total}`);
+  }
+
+  console.log("Operations:");
+  
+  const opsSet = new Set<string>();
+  if (original) Object.keys(original.ops).forEach(k => opsSet.add(k));
+  if (decomposed) Object.keys(decomposed.ops).forEach(k => opsSet.add(k));
+  
+  const sorted = Array.from(opsSet).sort();
+  
+  for (const op of sorted) {
+    const from = original?.ops[op] || 0;
+    const to = decomposed?.ops[op] || 0;
+    
+    // If we have both, show comparison. If one failed, show what we have.
+    if (original && decomposed) {
+        if (from !== to) console.log(`   ${op.padEnd(25)}: ${from} -> ${to}`);
+    } else {
+        const val = original ? from : to;
+        if (val > 0) console.log(`   ${op.padEnd(25)}: ${val}`);
+    }
+  }
+  console.log("--------------------------\n");
+}
 
 function resolveModelPath(rel: string): string {
   // PKG_ROOT is .../out, so go one level up
@@ -272,6 +361,8 @@ async function testReconversion(opts: {
   CURRENT.test = label;
   CURRENT.reconverted = reconvertedPath;
 
+  const originalStats = await getGraphStats(absOriginalPath);
+
   try {
     let generatedNow = false;
 
@@ -295,6 +386,9 @@ async function testReconversion(opts: {
       reportOutcome('error', 'Reconverted file missing');
       return;
     }
+
+    const decomposedStats = await getGraphStats(reconvertedPath);
+    printStatsComparison(label, originalStats, decomposedStats);
 
     console.log(`\n=== Comparing ${label} and its reconverted version ===`);
     printInputs(label, feeds);
@@ -1155,7 +1249,50 @@ const CORE_OP_TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
-  
+  {
+    label: 'ad01_fp32_standard',
+    // Put your ONNX next to other samples; if you only have JSON, see note below.
+    originalPath: 'examples/onnx/ad01_fp32.onnx',
+    tol: 1e-4,
+    cliArgs: jsonFullArgs, // full JSON export + reconvert
+    specs: [
+      { name: 'input_1', dtype: 'float32', shape: [1, 640] },
+    ],
+  },
+
+  {
+    label: 'kws_ref_model_float32_standard',
+    originalPath: 'examples/onnx/kws_ref_model_float32.onnx',
+    tol: 1e-4,                       // softmax tail needs a little tolerance
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'input_1', dtype: 'float32', shape: [1, 49, 10, 1] }, // in
+      // out: Identity [1,12] float32 (picked up automatically)
+    ],
+  },
+
+  {
+    label: 'SC2_X',
+    originalPath: 'examples/onnx/SC2_X_toy.onnx',
+    tol: 1e-4,
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'input', dtype: 'float32', shape: [2, 1] },
+    ],
+  },
+
+  {
+    label: 'matmul_test',
+    originalPath: 'examples/onnx/matmul_test.onnx',
+    tol: 1e-5,
+    cliArgs: (p) => dotFullArgs(p),
+    specs: [
+      { name: 'A', dtype: 'float32', shape: [2, 2] },
+      { name: 'B', dtype: 'float32', shape: [2, 2] },
+    ],
+  },
+
+  /*
   {
     label: 'quantizelinear',
     originalPath: 'examples/onnx/quantizelinear.onnx',
@@ -1259,7 +1396,7 @@ export async function runAllUnified() {
 }
 
 
-const mode = process.env.COMPAT_MODE ?? 'core';
+const mode = process.env.COMPAT_MODE ?? 'all';
 
 // Only auto-run when this file is the main script (test runner).
 const isMain =
