@@ -58,6 +58,20 @@ namespace OnnxGraph {
                 .filterIs(OnnxEdge).toArray()
                 .find(edge => edge.target === target);
         }
+
+        /**
+         * Resolves a node by its type and instance number (e.g., "MatMul", 2).
+         * Instance is 1-based (first occurrence is 1).
+         */
+        getNodeByTypeAndInstance(type: string, instance: number): OperationNode.Class | undefined {
+            const ops = this.getOperationNodes()
+                .toArray();
+            const matchingOps = this.getOperationNodes()
+                .toArray()
+                .filter(op => op.type === type);
+            
+            return matchingOps[instance - 1]; // 1-based to 0-based
+        }
     }   
 
     export class Builder implements Graph.Builder<Data, ScratchData> {

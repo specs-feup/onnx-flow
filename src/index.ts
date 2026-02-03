@@ -18,7 +18,9 @@ import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
 import { safeWriteJson } from './Onnx/Utils.js';
 import { DecompositionOptions, defaultDecompositionOptions } from './DecompositionOptions.js';
-
+import { splitByAncestor } from './Onnx/partitioning/Strategies.js';
+import { partitionGraph } from './Onnx/partitioning/Partition.js';
+import OnnxGraph from './Onnx/OnnxGraph.js';
 
 export async function parseOnnxFile(inputFilePath: string){
   return await onnx2json(inputFilePath);
@@ -66,10 +68,8 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
 }
 
 export function generateGraphCode(graph: any): string {
-
   return generateCode(graph);
 }
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -186,6 +186,20 @@ const argv = await yargs(hideBin(process.argv))
     type: 'boolean',
     default: false,
   })
+  .option('partition', {
+    alias: 'pt',
+    describe: 'Partition graph into head/tail. Provide <nodeId> or <OpType> <Instance>',
+    type: 'string',
+    array: true,
+  })
+  .check((argv) => {
+    if (argv.partition !== undefined) {
+      if (argv.partition.length < 1 || argv.partition.length > 2) {
+        throw new Error('Argument check failed: --partition requires either 1 argument "<nodeId>" or 2 arguments "<OpType> <Instance>")');
+      }
+    }
+    return true;
+  })
   .help()
   .argv;
 
@@ -202,6 +216,16 @@ const visualizationOption = argv.visualization;
 const dotFormatter =
   argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
 
+// --- Transformation Control ---
+// If partitioning is active, we override and disable other transformations 
+// to ensure the split point remains stable and recognizable.
+const isPartitioning = argv.partition && argv.partition.length > 0;
+
+if (isPartitioning) {
+  argv.noLowLevel = true;
+  argv.noOptimize = true;
+  argv.noCodegen = true; 
+}
 
 (async function main() {
   try {
@@ -212,13 +236,13 @@ const dotFormatter =
       onnxObject = JSON.parse(fs.readFileSync(inputFilePath, 'utf8'));
     } else {
       onnxObject = await parseOnnxFile(inputFilePath);
-      //fs.writeFileSync("./examples/onnxmodel.json", JSON.stringify(onnxObject, null, 2));
     }
 
     if (verbosity > 1) console.log('Input ONNX/JSON Graph:', JSON.stringify(onnxObject, null, 2));
 
     // Step 2: Process the graph
     let graph = createGraph(onnxObject);
+    let partitions: { head: OnnxGraph.Class, tail: OnnxGraph.Class } | undefined;
 
     if (verbosity > 1){
       if (outputFormat === 'json') {
@@ -251,7 +275,46 @@ const dotFormatter =
       graph.apply(new OnnxGraphOptimizer());
     }
 
-    // Step 3: Output the graph if requested
+    // --- Partitioning Logic ---
+    if (argv.partition && argv.partition.length > 0) {
+      let targetNodeId: string | undefined;
+
+      if (argv.partition.length === 1) {
+        targetNodeId = argv.partition[0];
+      } else if (argv.partition.length === 2) {
+        const opType = argv.partition[0];
+        const instance = parseInt(argv.partition[1], 10);
+        if (isNaN(instance)) {
+            throw new Error(`Invalid instance number: ${argv.partition[1]}`);
+        }
+        const resolvedNode = (graph as any).getNodeByTypeAndInstance(opType, instance);
+        if (!resolvedNode) {
+            throw new Error(`Could not find instance ${instance} of operation '${opType}'`);
+        }
+        targetNodeId = resolvedNode.id;
+      }
+
+      if (targetNodeId) {
+        if (verbosity > 0) console.log(`Partitioning graph at node: ${targetNodeId}`);
+        const sets = splitByAncestor(graph, targetNodeId);
+        partitions = partitionGraph(graph, sets);
+
+        const base = inputFilePath.split('.').slice(0, -1).join('.');
+        
+        const exportPartition = async (g: any, suffix: string) => {
+            const jsonPath = `${base}_${suffix}.json`;
+            const onnxPath = `${base}_${suffix}.onnx`;
+            const onnxJson = convertFlowGraphToOnnxJson(g, `${suffix}_graph`);
+            safeWriteJson(jsonPath, onnxJson);
+            await jsonToOnnx(jsonPath, onnxPath);
+            if (verbosity > 0) console.log(`Saved ${suffix} to ${onnxPath}`);
+        };
+
+        await exportPartition(partitions.head, "head");
+        await exportPartition(partitions.tail, "tail");
+      }
+    }
+
     if (outputFilePath) {
       if (outputFormat === 'json') {
         fs.writeFileSync(outputFilePath, JSON.stringify(graph.toCy().json(), null, 2));
@@ -278,7 +341,7 @@ const dotFormatter =
       const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
       const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
 
-      // Use streaming writer to avoid RangeError for huge SC* models
+      // Use streaming writer to avoid RangeError for huge models
       safeWriteJson(reconvertedJsonPath, onnxCompatibleJson);
       console.log(`Reconverted JSON written to ${reconvertedJsonPath}`);
 
@@ -304,7 +367,7 @@ const dotFormatter =
       if (verbosity > 0) console.log('Generated Code:', generatedCode);
     }
 
-    // Optional: run ORT equivalence check using the test metadata, if requested.
+    // Optional: run ORT equivalence check
     if (argv.checkEquivalence) {
       const { onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
 
@@ -340,10 +403,38 @@ const dotFormatter =
 
     // Step 5: Graphviz Online link generation
     if (visualizationOption > 0) {
+      const getDot = () => {
+          if (partitions) {
+            // Helper to strip 'digraph { ... }' wrapper and keep only the body
+            const stripWrapper = (g: OnnxGraph.Class) => {
+              return g.toString(dotFormatter)
+                .replace(/^digraph[^\{]*\{/, "")
+                .replace(/\}\s*$/, "");          
+            };
+
+            return `digraph G {
+              rankdir=LR;
+              compound=true;
+              subgraph cluster_head { 
+                  label="HEAD PARTITION"; 
+                  color=blue; 
+                  style=dashed;
+                  ${stripWrapper(partitions.head)} 
+              }
+              subgraph cluster_tail { 
+                  label="TAIL PARTITION"; 
+                  color=red; 
+                  style=dashed;
+                  ${stripWrapper(partitions.tail)} 
+              }
+            }`;
+          }
+          return graph.toString(dotFormatter);
+        };
       if (visualizationOption == 1){
-        console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
+        console.log('Graphviz Online Link:', generateGraphvizOnlineLink(getDot()));
       }
-      else{
+      else {
         const app = express();
         const port = 8080;
 
@@ -351,7 +442,7 @@ const dotFormatter =
         app.get("/", async (req: Request, res: Response) => {
           try {
             // Render the DOT graph to SVG
-            const svgContent = await renderDotToSVG(graph.toString(dotFormatter));
+            const svgContent = await renderDotToSVG(getDot());
 
             // Create an HTML page with the embedded SVG
             const htmlContent = `
