@@ -30,10 +30,6 @@ node_modules
 /graph.dot
 .DS_Store
 .env
-.eslintrc.json
-.husky/
-.prettierrc
-.vscode/
 agents/
 comparison_test/
 demo/
