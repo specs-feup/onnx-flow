@@ -1,44 +1,48 @@
-import fs from 'fs';
-import path from 'path';
-import protobuf from 'protobufjs';
-import { fileURLToPath } from 'url';
+import fs from "fs";
+import path from "path";
+import protobuf from "protobufjs";
+import { fileURLToPath } from "url";
 
 export function onnx2json(onnxFilePath: string): Promise<any> {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    
+
     // Try possible locations for onnx.proto:
     const possiblePaths = [
-        path.join(__dirname, '../../out/src/Onnx/onnx.proto'),
-        path.join(__dirname, '../src/Onnx/onnx.proto'),
-        path.join(__dirname, 'Onnx/onnx.proto') // If compiled next to this file
+        path.join(__dirname, "../../out/src/Onnx/onnx.proto"),
+        path.join(__dirname, "../src/Onnx/onnx.proto"),
+        path.join(__dirname, "Onnx/onnx.proto"), // If compiled next to this file
     ];
 
-    let protoPath = possiblePaths.find(p => fs.existsSync(p));
+    const protoPath = possiblePaths.find((p) => fs.existsSync(p));
 
     if (!protoPath) {
-        return Promise.reject(`Error: Could not find 'onnx.proto'. Searched in: \n${possiblePaths.join('\n')}`);
+        return Promise.reject(
+            `Error: Could not find 'onnx.proto'. Searched in: \n${possiblePaths.join("\n")}`,
+        );
     }
 
     return new Promise((resolve, reject) => {
         // Load the ONNX protobuf definition
         protobuf.load(protoPath!, (err, root) => {
             if (err) {
-                return reject('Error loading ONNX protobuf definition: ' + err);
+                return reject("Error loading ONNX protobuf definition: " + err);
             }
 
             // Get the ModelProto message type
             if (!root) {
-                return reject('Error: ONNX protobuf root is undefined.');
+                return reject("Error: ONNX protobuf root is undefined.");
             }
             try {
-                const ModelProto = root.lookupType('onnx.ModelProto');
+                const ModelProto = root.lookupType("onnx.ModelProto");
 
                 // Function to load and inspect the ONNX model
                 function loadAndInspectModel(filePath: string) {
                     try {
                         // Check if the file exists and is a valid ONNX file
-                        if (path.extname(filePath) !== '.onnx') {
-                            return reject('The specified file is not an ONNX file. Please provide a valid .onnx file.');
+                        if (path.extname(filePath) !== ".onnx") {
+                            return reject(
+                                "The specified file is not an ONNX file. Please provide a valid .onnx file.",
+                            );
                         }
 
                         // Read the ONNX model file
@@ -55,9 +59,9 @@ export function onnx2json(onnxFilePath: string): Promise<any> {
                         resolve(modelJson);
                     } catch (error) {
                         if (error instanceof Error) {
-                            reject('Error decoding ONNX model: ' + error.message);
+                            reject("Error decoding ONNX model: " + error.message);
                         } else {
-                            reject('Error decoding ONNX model: ' + String(error));
+                            reject("Error decoding ONNX model: " + String(error));
                         }
                     }
                 }
@@ -65,7 +69,7 @@ export function onnx2json(onnxFilePath: string): Promise<any> {
                 // Load and inspect the ONNX model
                 loadAndInspectModel(onnxFilePath);
             } catch (e) {
-                reject('Error looking up ModelProto: ' + e);
+                reject("Error looking up ModelProto: " + e);
             }
         });
     });

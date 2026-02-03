@@ -7,7 +7,7 @@ import OperationNode from "../OperationNode.js";
 import ConstantNode from "../ConstantNode.js";
 import VariableNode from "../VariableNode.js";
 import OnnxEdge from "../OnnxEdge.js";
-import OnnxGraph from "../OnnxGraph.js"
+import OnnxGraph from "../OnnxGraph.js";
 import Edge from "@specs-feup/flow/graph/Edge";
 import Node from "@specs-feup/flow/graph/Node";
 
@@ -17,7 +17,7 @@ export default class OnnxDotFormatter<
     private nodesInCluster: Record<string, string[]> = {};
 
     static defaultGetNodeAttrs(node: BaseNode.Class): Record<string, string> {
-        let result: Record<string, string> | DotSubgraph = { label: node.id, shape: "box" }; 
+        const result: Record<string, string> | DotSubgraph = { label: node.id, shape: "box" };
         node.switch(
             Node.Case(TensorNode, (n) => {
                 if (n.type === "input") {
@@ -53,8 +53,8 @@ export default class OnnxDotFormatter<
         const result: Record<string, string> = {};
         edge.switch(
             Edge.Case(OnnxEdge, (e) => {
-                const shapeString = `{${e.shape.join(',')}}`;
-                result.label = shapeString === "{}" ? "sc" : `{${e.shape.join(',')}}`;
+                const shapeString = `{${e.shape.join(",")}}`;
+                result.label = shapeString === "{}" ? "sc" : `{${e.shape.join(",")}}`;
             }),
         );
         return result;
@@ -81,47 +81,44 @@ export default class OnnxDotFormatter<
         return Dot.node(this.idPrefix + node.id, OnnxDotFormatter.defaultGetNodeAttrs(node));
     }
 
-    edgeToDotIDs(sourceID: string, targetID: string, attrs: Record<string, string> = {}): DotEdge{
+    edgeToDotIDs(sourceID: string, targetID: string, attrs: Record<string, string> = {}): DotEdge {
         let source = this.idPrefix + sourceID;
         let target = this.idPrefix + targetID;
-        if (source in this.nodesInCluster){
+        if (source in this.nodesInCluster) {
             attrs["ltail"] = this.nodesInCluster[source][1];
             source = this.nodesInCluster[source][0] + source;
         }
-        if (target in this.nodesInCluster){
+        if (target in this.nodesInCluster) {
             attrs["lhead"] = this.nodesInCluster[target][1];
             target = this.nodesInCluster[target][0] + target;
         }
-        const dot = Dot.edge(
-            source,
-            target, 
-            attrs
-        );
+        const dot = Dot.edge(source, target, attrs);
         return dot;
     }
 
     edgeToDot(edge: BaseEdge.Class): DotEdge {
-        let attrs = {};
+        const attrs = {};
         let source = this.idPrefix + edge.source.id;
         let target = this.idPrefix + edge.target.id;
-        if (source in this.nodesInCluster){
+        if (source in this.nodesInCluster) {
             attrs["ltail"] = this.nodesInCluster[source][1];
             source = this.nodesInCluster[source][0] + source;
         }
-        if (target in this.nodesInCluster){
+        if (target in this.nodesInCluster) {
             attrs["lhead"] = this.nodesInCluster[target][1];
             target = this.nodesInCluster[target][0] + target;
         }
-        const dot = Dot.edge(
-            source,
-            target, 
-            {...OnnxDotFormatter.defaultGetEdgeAttrs(edge), ...attrs}
-        );
+        const dot = Dot.edge(source, target, {
+            ...OnnxDotFormatter.defaultGetEdgeAttrs(edge),
+            ...attrs,
+        });
         return dot;
     }
 
-    loopBodyToDot(node: OperationNode.Class): {DotSubgraph : DotSubgraph, idPrefix : string} | null {
-        let idPrefix = `loop${node.id}_`;
+    loopBodyToDot(
+        node: OperationNode.Class,
+    ): { DotSubgraph: DotSubgraph; idPrefix: string } | null {
+        const idPrefix = `loop${node.id}_`;
         const body = node.getBodySubgraph?.();
         if (body && body instanceof OnnxGraph.Class) {
             // Format the body subgraph
@@ -130,7 +127,7 @@ export default class OnnxDotFormatter<
                 OnnxDotFormatter.defaultGetEdgeAttrs,
                 DefaultDotFormatter.defaultGetContainer,
                 OnnxDotFormatter.defaultGetGraphAttrs,
-                idPrefix
+                idPrefix,
             );
             const bodyDot = subFormatter.toDot(body);
 
@@ -140,16 +137,23 @@ export default class OnnxDotFormatter<
                 .graphAttr("style", "dashed")
                 .graphAttr("color", "gray");
 
-            return {DotSubgraph: cluster, idPrefix};
+            return { DotSubgraph: cluster, idPrefix };
         }
 
         return null;
     }
 
-    ifBodyToDot(node: OperationNode.Class): {thenSubgraph?: DotSubgraph, elseSubgraph?: DotSubgraph, idPrefix: string} {
-        let idPrefix = `if${node.id}_`;
-        let result: {thenSubgraph?: DotSubgraph, elseSubgraph?: DotSubgraph, idPrefix: string} = {idPrefix};
-        
+    ifBodyToDot(node: OperationNode.Class): {
+        thenSubgraph?: DotSubgraph;
+        elseSubgraph?: DotSubgraph;
+        idPrefix: string;
+    } {
+        const idPrefix = `if${node.id}_`;
+        const result: { thenSubgraph?: DotSubgraph; elseSubgraph?: DotSubgraph; idPrefix: string } =
+            {
+                idPrefix,
+            };
+
         // Get then branch
         const thenBody = node.getThenBranch?.();
         if (thenBody && thenBody instanceof OnnxGraph.Class) {
@@ -158,18 +162,18 @@ export default class OnnxDotFormatter<
                 OnnxDotFormatter.defaultGetEdgeAttrs,
                 DefaultDotFormatter.defaultGetContainer,
                 OnnxDotFormatter.defaultGetGraphAttrs,
-                `${idPrefix}then_`
+                `${idPrefix}then_`,
             );
             const thenDot = thenFormatter.toDot(thenBody);
-            
+
             const thenCluster = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
                 .graphAttr("label", `If-Then ${node.id}`)
                 .graphAttr("style", "dashed")
                 .graphAttr("color", "green");
-                
+
             result.thenSubgraph = thenCluster;
         }
-        
+
         // Get else branch
         const elseBody = node.getElseBranch?.();
         if (elseBody && elseBody instanceof OnnxGraph.Class) {
@@ -178,18 +182,18 @@ export default class OnnxDotFormatter<
                 OnnxDotFormatter.defaultGetEdgeAttrs,
                 DefaultDotFormatter.defaultGetContainer,
                 OnnxDotFormatter.defaultGetGraphAttrs,
-                `${idPrefix}else_`
+                `${idPrefix}else_`,
             );
             const elseDot = elseFormatter.toDot(elseBody);
-            
+
             const elseCluster = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
                 .graphAttr("label", `If-Else ${node.id}`)
                 .graphAttr("style", "dashed")
                 .graphAttr("color", "red");
-                
+
             result.elseSubgraph = elseCluster;
         }
-        
+
         return result;
     }
 
@@ -198,8 +202,10 @@ export default class OnnxDotFormatter<
         const operationNodes = graph.getOperationNodes();
 
         for (const node of graph.nodes) {
-            const tensorNode = node.tryAs(TensorNode)
-            const isIntermediateTensor = tensorNode && (tensorNode.type === "intermediate" || tensorNode.type === "constant");
+            const tensorNode = node.tryAs(TensorNode);
+            const isIntermediateTensor =
+                tensorNode &&
+                (tensorNode.type === "intermediate" || tensorNode.type === "constant");
 
             if (isIntermediateTensor) {
                 const incomers = tensorNode.getIncomers;
@@ -223,23 +229,26 @@ export default class OnnxDotFormatter<
                 const result = this.ifBodyToDot(node.as(OperationNode));
                 if (result) {
                     const { thenSubgraph: thenBody, elseSubgraph: elseBody, idPrefix } = result;
-                    this.nodesInCluster[node.id] = [idPrefix, thenBody.label, elseBody.label]
+                    this.nodesInCluster[node.id] = [idPrefix, thenBody.label, elseBody.label];
 
                     dot.statements(elseBody);
                     dot.statements(thenBody);
 
-                    dot.statements(Dot.edge(
-                        this.idPrefix + node.id,
-                        `${idPrefix}then_condition`,
-                        { label: "then", style: "dashed", color: "green" }
-                    ));
+                    dot.statements(
+                        Dot.edge(this.idPrefix + node.id, `${idPrefix}then_condition`, {
+                            label: "then",
+                            style: "dashed",
+                            color: "green",
+                        }),
+                    );
 
-                    dot.statements(Dot.edge(
-                        this.idPrefix + node.id,
-                        `${idPrefix}else_condition`,
-                        { label: "else", style: "dashed", color: "red" }
-                    ));
-
+                    dot.statements(
+                        Dot.edge(this.idPrefix + node.id, `${idPrefix}else_condition`, {
+                            label: "else",
+                            style: "dashed",
+                            color: "red",
+                        }),
+                    );
                 }
                 continue;
             }
@@ -266,29 +275,37 @@ export default class OnnxDotFormatter<
 
             // Skip edges involving intermediate TensorNodes (already handled above)
             if (
-                (graph.getNodeById(src).tryAs(TensorNode)?.type === "intermediate") ||
-                (graph.getNodeById(tgt).tryAs(TensorNode)?.type === "intermediate")
-            ) continue;
+                graph.getNodeById(src).tryAs(TensorNode)?.type === "intermediate" ||
+                graph.getNodeById(tgt).tryAs(TensorNode)?.type === "intermediate"
+            )
+                continue;
 
             dot.statements(this.edgeToDot(edge));
         }
 
         // Extra: Add missing edges for operations like Gather, Scatter with external inputs
         for (const opNode of graph.getOperationNodes()) {
-            if (["Reshape", "Gather", "GatherElements", "Scatter", "ScatterElements"].includes(opNode.type)) {
-                const inputTensors = opNode.getInputs().filter(n => !graph.hasNode(n.id));
+            if (
+                ["Reshape", "Gather", "GatherElements", "Scatter", "ScatterElements"].includes(
+                    opNode.type,
+                )
+            ) {
+                const inputTensors = opNode.getInputs().filter((n) => !graph.hasNode(n.id));
                 for (const ext of inputTensors) {
-                    dot.statements(Dot.edge(
-                        ext.id,
-                        this.idPrefix + opNode.id,
-                        { style: "dashed", color: "gray", label: (ext.is(TensorNode) && ext.as(TensorNode).shape) ? `{${ext.as(TensorNode).shape.join(',')}}` : ""}
-                    ));
+                    dot.statements(
+                        Dot.edge(ext.id, this.idPrefix + opNode.id, {
+                            style: "dashed",
+                            color: "gray",
+                            label:
+                                ext.is(TensorNode) && ext.as(TensorNode).shape
+                                    ? `{${ext.as(TensorNode).shape.join(",")}}`
+                                    : "",
+                        }),
+                    );
                 }
             }
         }
 
         return dot;
     }
-   
 }
-

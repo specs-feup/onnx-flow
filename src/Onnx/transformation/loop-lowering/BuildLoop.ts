@@ -9,728 +9,753 @@ import { DataType } from "../../OnnxTypes.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import TransformChain from "./TransformChain.js";
 import {
-  scalarInt64, uniq, int64Vec, Shape,
-  makeTensorConst, computeStrides, isNum, toStaticShape, asStaticDims
+    scalarInt64,
+    uniq,
+    int64Vec,
+    Shape,
+    makeTensorConst,
+    computeStrides,
+    toStaticShape,
+    asStaticDims,
 } from "../../Utils.js";
 
 /* ------------------------------------------------------------------ */
-/* Public context given to handlers/builders                           */
+/* Public context given to handlers/builders                          */
 /* ------------------------------------------------------------------ */
 export type LoopCtx = {
-  opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>,
-  iter: TensorNode.Class,
-  unsqIdx: TensorNode.Class | null,
-  carry: TensorNode.Class,
-  axes: TensorNode.Class,
-  outShape: (number | String)[],
-  coalesce: boolean,
+    opMap: Map<OperationNode.Class, [OperationNode.Class, TensorNode.Class]>;
+    iter: TensorNode.Class;
+    unsqIdx: TensorNode.Class | null;
+    carry: TensorNode.Class;
+    axes: TensorNode.Class;
+    outShape: (number | string)[];
+    coalesce: boolean;
 
-  // Dims for MatMul-like ops (optional)
-  matmulDims?: {
-    M: number;
-    K: number;
-    N: number;
-    batchProd: number;
-    batchDims: (number | String)[];
-  };
+    // Dims for MatMul-like ops (optional)
+    matmulDims?: {
+        M: number;
+        K: number;
+        N: number;
+        batchProd: number;
+        batchDims: (number | string)[];
+    };
 
-  // Optional indices for coalesced MatMul
-  iU?: TensorNode.Class | null,
-  jU?: TensorNode.Class | null,
-  kU?: TensorNode.Class | null,
-  flatU?: TensorNode.Class | null,
-  kIdx?: TensorNode.Class | null,
-  kM1?: TensorNode.Class | null,
-  gateByK?: boolean,
-  running?: TensorNode.Class | null,
+    // Optional indices for coalesced MatMul
+    iU?: TensorNode.Class | null;
+    jU?: TensorNode.Class | null;
+    kU?: TensorNode.Class | null;
+    flatU?: TensorNode.Class | null;
+    kIdx?: TensorNode.Class | null;
+    kM1?: TensorNode.Class | null;
+    gateByK?: boolean;
+    running?: TensorNode.Class | null;
 
-  // Optional for Reduce
-  meanScale?: TensorNode.Class,
+    // Optional for Reduce
+    meanScale?: TensorNode.Class;
 };
 
 /* ------------------------------------------------------------------ */
-/* Shared helpers (unchanged from your working version)                */
+/* Shared helpers                                                     */
 /* ------------------------------------------------------------------ */
 
 export function decodeMixedRadix(
-  g: OnnxGraph.Class, iter: TensorNode.Class, dims: number[], tag: string
+    g: OnnxGraph.Class,
+    iter: TensorNode.Class,
+    dims: number[],
+    tag: string,
 ): TensorNode.Class[] {
-  const dd = dims.map(d => (d > 0 ? d : 1));
-  const out: TensorNode.Class[] = [];
-  let rem = iter;
+    const dd = dims.map((d) => (d > 0 ? d : 1));
+    const out: TensorNode.Class[] = [];
+    let rem = iter;
 
-  for (let k = dd.length - 1; k >= 0; k--) {
-    const dConst = makeTensorConst(g, `mr_dim_${tag}_${k}`, DataType.INT64, "constant", scalarInt64(dd[k]));
-    const modN = g.addNode(uniq(g, `mr_mod_${tag}_${k}`))
-      .init(new OperationNode.Builder("Mod", [rem, dConst]))
-      .as(OperationNode);
-    const modOut = g.addNode(uniq(g, `mr_mod_out_${tag}_${k}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-      .as(TensorNode);
-    g.addEdge(modN, modOut).init(new OnnxEdge.Builder(modOut.literalType, modOut.shape)).as(OnnxEdge);
-    out.unshift(modOut);
+    for (let k = dd.length - 1; k >= 0; k--) {
+        const dConst = makeTensorConst(
+            g,
+            `mr_dim_${tag}_${k}`,
+            DataType.INT64,
+            "constant",
+            scalarInt64(dd[k]),
+        );
+        const modN = g
+            .addNode(uniq(g, `mr_mod_${tag}_${k}`))
+            .init(new OperationNode.Builder("Mod", [rem, dConst]))
+            .as(OperationNode);
+        const modOut = g
+            .addNode(uniq(g, `mr_mod_out_${tag}_${k}`))
+            .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+            .as(TensorNode);
+        g.addEdge(modN, modOut)
+            .init(new OnnxEdge.Builder(modOut.literalType, modOut.shape))
+            .as(OnnxEdge);
+        out.unshift(modOut);
 
-    const divN = g.addNode(uniq(g, `mr_div_${tag}_${k}`))
-      .init(new OperationNode.Builder("Div", [rem, dConst]))
-      .as(OperationNode);
-    const divOut = g.addNode(uniq(g, `mr_div_out_${tag}_${k}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-      .as(TensorNode);
-    g.addEdge(divN, divOut).init(new OnnxEdge.Builder(divOut.literalType, divOut.shape)).as(OnnxEdge);
-    rem = divOut;
-  }
-  return out;
+        const divN = g
+            .addNode(uniq(g, `mr_div_${tag}_${k}`))
+            .init(new OperationNode.Builder("Div", [rem, dConst]))
+            .as(OperationNode);
+        const divOut = g
+            .addNode(uniq(g, `mr_div_out_${tag}_${k}`))
+            .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+            .as(TensorNode);
+        g.addEdge(divN, divOut)
+            .init(new OnnxEdge.Builder(divOut.literalType, divOut.shape))
+            .as(OnnxEdge);
+        rem = divOut;
+    }
+    return out;
 }
 
 export function buildLinearIndex(
-  g: OnnxGraph.Class, idx: TensorNode.Class[], strides: number[], tag: string
+    g: OnnxGraph.Class,
+    idx: TensorNode.Class[],
+    strides: number[],
+    tag: string,
 ): TensorNode.Class {
-  let acc = makeTensorConst(g, `lin_zero_${tag}`, DataType.INT64, "constant", scalarInt64(0));
-  for (let i = 0; i < idx.length; i++) {
-    const sConst = makeTensorConst(g, `lin_stride_${tag}_${i}`, DataType.INT64, "constant", scalarInt64(strides[i]));
-    const mulN = g.addNode(uniq(g, `lin_mul_${tag}_${i}`))
-      .init(new OperationNode.Builder("Mul", [idx[i], sConst]))
-      .as(OperationNode);
-    const mulOut = g.addNode(uniq(g, `lin_mul_out_${tag}_${i}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-      .as(TensorNode);
-    g.addEdge(mulN, mulOut).init(new OnnxEdge.Builder(mulOut.literalType, mulOut.shape)).as(OnnxEdge);
+    let acc = makeTensorConst(g, `lin_zero_${tag}`, DataType.INT64, "constant", scalarInt64(0));
+    for (let i = 0; i < idx.length; i++) {
+        const sConst = makeTensorConst(
+            g,
+            `lin_stride_${tag}_${i}`,
+            DataType.INT64,
+            "constant",
+            scalarInt64(strides[i]),
+        );
+        const mulN = g
+            .addNode(uniq(g, `lin_mul_${tag}_${i}`))
+            .init(new OperationNode.Builder("Mul", [idx[i], sConst]))
+            .as(OperationNode);
+        const mulOut = g
+            .addNode(uniq(g, `lin_mul_out_${tag}_${i}`))
+            .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+            .as(TensorNode);
+        g.addEdge(mulN, mulOut)
+            .init(new OnnxEdge.Builder(mulOut.literalType, mulOut.shape))
+            .as(OnnxEdge);
 
-    //console.log("N:", idx[i].id,"STRIDES:", strides, " | Mul:", mulOut.id);
-
-    const addN = g.addNode(uniq(g, `lin_add_${tag}_${i}`))
-      .init(new OperationNode.Builder("Add", [acc, mulOut]))
-      .as(OperationNode);
-    const addOut = g.addNode(uniq(g, `lin_add_out_${tag}_${i}`))
-      .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
-      .as(TensorNode);
-    g.addEdge(addN, addOut).init(new OnnxEdge.Builder(addOut.literalType, addOut.shape)).as(OnnxEdge);
-    acc = addOut;
-  }
-  return acc;
+        const addN = g
+            .addNode(uniq(g, `lin_add_${tag}_${i}`))
+            .init(new OperationNode.Builder("Add", [acc, mulOut]))
+            .as(OperationNode);
+        const addOut = g
+            .addNode(uniq(g, `lin_add_out_${tag}_${i}`))
+            .init(new TensorNode.Builder(DataType.INT64, [], "intermediate"))
+            .as(TensorNode);
+        g.addEdge(addN, addOut)
+            .init(new OnnxEdge.Builder(addOut.literalType, addOut.shape))
+            .as(OnnxEdge);
+        acc = addOut;
+    }
+    return acc;
 }
 
 export function broadcastShapes(shapes: number[][]): number[] {
-  if (shapes.length === 0) return [];
-  const maxR = Math.max(...shapes.map(s => s.length));
-  const out = Array(maxR).fill(1);
-  for (let i = 0; i < maxR; i++) {
-    let dim = 1;
-    for (const s of shapes) {
-      const d = s[s.length - 1 - i] ?? 1;
-      if (d === -1) { dim = dim === 1 ? -1 : dim; continue; }
-      if (dim === 1) dim = d;
-      else if (d === 1) continue;
-      else if (dim === -1) dim = d;
-      else if (dim !== d) throw new Error(`Broadcast mismatch on axis -${i + 1}: got ${dim} vs ${d}`);
+    if (shapes.length === 0) return [];
+    const maxR = Math.max(...shapes.map((s) => s.length));
+    const out = Array(maxR).fill(1);
+    for (let i = 0; i < maxR; i++) {
+        let dim = 1;
+        for (const s of shapes) {
+            const d = s[s.length - 1 - i] ?? 1;
+            if (d === -1) {
+                dim = dim === 1 ? -1 : dim;
+                continue;
+            }
+            if (dim === 1) dim = d;
+            else if (d === 1) continue;
+            else if (dim === -1) dim = d;
+            else if (dim !== d)
+                throw new Error(`Broadcast mismatch on axis -${i + 1}: got ${dim} vs ${d}`);
+        }
+        out[maxR - 1 - i] = dim;
     }
-    out[maxR - 1 - i] = dim;
-  }
-  return out;
+    return out;
 }
 
-export function getMatDims(aShape: (number | String)[], bShape: (number | String)[]) {
-  const a = asStaticDims(aShape);
-  const b = asStaticDims(bShape);
+export function getMatDims(aShape: (number | string)[], bShape: (number | string)[]) {
+    const a = asStaticDims(aShape);
+    const b = asStaticDims(bShape);
 
-  let aR = a.length, bR = b.length;
-  let A  = a.slice();
-  let B  = b.slice();
+    let aR = a.length,
+        bR = b.length;
+    let A = a.slice();
+    let B = b.slice();
 
-  // 1D -> 2D normalisation
-  if (aR === 1) { A = [1, a[0]]; aR = 2; }
-  if (bR === 1) { B = [b[0], 1]; bR = 2; }
-
-  // Basic dims from trailing 2D parts
-  let   M  = A[A.length - 2] ?? -1;
-  let   K  = A[A.length - 1] ?? -1;
-  const Kb = B[B.length - 2] ?? -1;
-  const N  = B[B.length - 1] ?? -1;
-
-  // Inner dim: trust B if both known and disagree
-  if (K > 0 && Kb > 0 && K !== Kb) {
-    console.warn(
-      `[getMatDims] inner dim mismatch: A[-1]=${K} vs B[-2]=${Kb}; ` +
-      `trusting B and setting K=${Kb}`
-    );
-    K = Kb;
-  }
-
-  // Batch dims = all leading dims before the last 2 (if any)
-  const batchDims = A.length > 2 ? A.slice(0, -2) : [];
-  const batchProd = batchDims.length
-    ? batchDims.reduce((p, d) => p * (d > 0 ? d : 1), 1)
-    : 1;
-
-  // Recompute M from total number of elements in A, if everything is static
-  const allKnown = A.length > 0 && A.every(d => typeof d === "number" && (d as number) > 0);
-  if (allKnown && K > 0 && batchProd > 0) {
-    const total = (A as number[]).reduce((p, d) => p * d, 1);
-    const cand  = total / (K * batchProd);
-
-    if (Number.isFinite(cand) && cand > 0 && Number.isInteger(cand)) {
-      M = cand;
-
-      // Also fix the trailing 2D part of A so it is [M, K].
-      // This is important so any later reshape to [M,K] has a product
-      // that matches the real tensor size.
-      if (A.length >= 2) {
-        const newA = A.slice();
-        newA[newA.length - 2] = M;
-        newA[newA.length - 1] = K;
-        A = newA;
-      }
+    // 1D -> 2D normalisation
+    if (aR === 1) {
+        A = [1, a[0]];
+        aR = 2;
     }
-  }
+    if (bR === 1) {
+        B = [b[0], 1];
+        bR = 2;
+    }
 
-  return {
-    M,
-    K,
-    KN: Kb,
-    N,
-    A2: A,
-    B2: B,
-    aWasVec: a.length === 1,
-    bWasVec: b.length === 1,
-  };
+    // Basic dims from trailing 2D parts
+    let M = A[A.length - 2] ?? -1;
+    let K = A[A.length - 1] ?? -1;
+    const Kb = B[B.length - 2] ?? -1;
+    const N = B[B.length - 1] ?? -1;
+
+    // Inner dim: trust B if both known and disagree
+    if (K > 0 && Kb > 0 && K !== Kb) {
+        console.warn(
+            `[getMatDims] inner dim mismatch: A[-1]=${K} vs B[-2]=${Kb}; ` +
+                `trusting B and setting K=${Kb}`,
+        );
+        K = Kb;
+    }
+
+    // Batch dims = all leading dims before the last 2 (if any)
+    const batchDims = A.length > 2 ? A.slice(0, -2) : [];
+    const batchProd = batchDims.length ? batchDims.reduce((p, d) => p * (d > 0 ? d : 1), 1) : 1;
+
+    // Recompute M from total number of elements in A, if everything is static
+    const allKnown = A.length > 0 && A.every((d) => typeof d === "number" && (d as number) > 0);
+    if (allKnown && K > 0 && batchProd > 0) {
+        const total = (A as number[]).reduce((p, d) => p * d, 1);
+        const cand = total / (K * batchProd);
+
+        if (Number.isFinite(cand) && cand > 0 && Number.isInteger(cand)) {
+            M = cand;
+
+            if (A.length >= 2) {
+                const newA = A.slice();
+                newA[newA.length - 2] = M;
+                newA[newA.length - 1] = K;
+                A = newA;
+            }
+        }
+    }
+
+    return {
+        M,
+        K,
+        KN: Kb,
+        N,
+        A2: A,
+        B2: B,
+        aWasVec: a.length === 1,
+        bWasVec: b.length === 1,
+    };
 }
 
 export function gatherFrom(
-  g: OnnxGraph.Class, data: TensorNode.Class, tag: string,
-  indexNode: OperationNode.Class | TensorNode.Class, axis: number
+    g: OnnxGraph.Class,
+    data: TensorNode.Class,
+    tag: string,
+    indexNode: OperationNode.Class | TensorNode.Class,
+    axis: number,
 ): [OperationNode.Class, TensorNode.Class] {
-  const gather = g.addNode(uniq(g, tag))
-    .init(new OperationNode.Builder("Gather", [data, indexNode], { axis }))
-    .as(OperationNode);
+    const gather = g
+        .addNode(uniq(g, tag))
+        .init(new OperationNode.Builder("Gather", [data, indexNode], { axis }))
+        .as(OperationNode);
 
-  const dataShape = data.shape;
-  const indexShape = indexNode.is(TensorNode) ? indexNode.shape : [];
+    const dataShape = data.shape;
+    const indexShape = indexNode.is(TensorNode) ? indexNode.shape : [];
 
-  const axisDim = dataShape[axis];
-    const idxKind = indexNode.is(TensorNode)
-      ? "Tensor"
-      : indexNode.is(OperationNode)
-        ? indexNode.type
-        : "Unknown";
+    const outShape = [...dataShape.slice(0, axis), ...indexShape, ...dataShape.slice(axis + 1)];
 
-    // Log everything, but highlight dim==1
-    const dimFlag = axisDim === 1 ? " *** DIM=1 ***" : "";
-    /*
-    console.log(
-      "[gatherFrom]",
-      dimFlag,
-      "tag=", tag,
-      "axis=", axis,
-      "axisDim=", axisDim,
-      "dataId=", data.id,
-      "dataShape=", JSON.stringify(dataShape),
-      "indexKind=", idxKind,
-      "indexShape=", JSON.stringify(indexShape)
-    );
-    */
+    const out = g
+        .addNode(uniq(g, `${tag}_out`))
+        .init(new TensorNode.Builder(data.literalType, outShape, "intermediate"))
+        .as(TensorNode);
+    g.addEdge(gather, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
 
-  const outShape = [
-    ...dataShape.slice(0, axis),
-    ...indexShape,
-    ...dataShape.slice(axis + 1),
-  ];
-
-  const out = g.addNode(uniq(g, `${tag}_out`))
-    .init(new TensorNode.Builder(data.literalType, outShape, 'intermediate'))
-    .as(TensorNode);
-  g.addEdge(gather, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-
-  return [gather, out];
+    return [gather, out];
 }
 
 export function gatherAt2DPoint(
-  g: OnnxGraph.Class, input: TensorNode.Class, rowIdx: TensorNode.Class, colIdx: TensorNode.Class, tag: string
+    g: OnnxGraph.Class,
+    input: TensorNode.Class,
+    rowIdx: TensorNode.Class,
+    colIdx: TensorNode.Class,
+    tag: string,
 ): [OperationNode.Class, TensorNode.Class] {
-  const g0 = g.addNode(uniq(g, `${tag}_g0`))
-    .init(new OperationNode.Builder("Gather", [input, rowIdx], { axis: 0 }))
-    .as(OperationNode);
-  const g0Out = g.addNode(uniq(g, `${tag}_g0_out`))
-    .init(new TensorNode.Builder(input.literalType, [1, input.shape[1]], "intermediate"))
-    .as(TensorNode);
-  g.addEdge(g0, g0Out).init(new OnnxEdge.Builder(g0Out.literalType, g0Out.shape)).as(OnnxEdge);
+    const g0 = g
+        .addNode(uniq(g, `${tag}_g0`))
+        .init(new OperationNode.Builder("Gather", [input, rowIdx], { axis: 0 }))
+        .as(OperationNode);
+    const g0Out = g
+        .addNode(uniq(g, `${tag}_g0_out`))
+        .init(new TensorNode.Builder(input.literalType, [1, input.shape[1]], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(g0, g0Out).init(new OnnxEdge.Builder(g0Out.literalType, g0Out.shape)).as(OnnxEdge);
 
-  const g1 = g.addNode(uniq(g, `${tag}_g1`))
-    .init(new OperationNode.Builder("Gather", [g0Out, colIdx], { axis: 1 }))
-    .as(OperationNode);
-  const g1Out = g.addNode(uniq(g, `${tag}_g1_out`))
-    .init(new TensorNode.Builder(input.literalType, [1, input.shape[1]], "intermediate"))
-    .as(TensorNode);
-  g.addEdge(g1, g1Out).init(new OnnxEdge.Builder(g1Out.literalType, g1Out.shape)).as(OnnxEdge);
+    const g1 = g
+        .addNode(uniq(g, `${tag}_g1`))
+        .init(new OperationNode.Builder("Gather", [g0Out, colIdx], { axis: 1 }))
+        .as(OperationNode);
+    const g1Out = g
+        .addNode(uniq(g, `${tag}_g1_out`))
+        .init(new TensorNode.Builder(input.literalType, [1, input.shape[1]], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(g1, g1Out).init(new OnnxEdge.Builder(g1Out.literalType, g1Out.shape)).as(OnnxEdge);
 
-  const shape1 = makeTensorConst(g, `${tag}_shape1`, DataType.INT64, "constant", int64Vec([1]));
-  const rs = g.addNode(uniq(g, `${tag}_reshape`))
-    .init(new OperationNode.Builder("Reshape", [g1Out, shape1]))
-    .as(OperationNode);
-  const out = g.addNode(uniq(g, `${tag}_out1`))
-    .init(new TensorNode.Builder(input.literalType, [1], "intermediate"))
-    .as(TensorNode);
-  g.addEdge(rs, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    const shape1 = makeTensorConst(g, `${tag}_shape1`, DataType.INT64, "constant", int64Vec([1]));
+    const rs = g
+        .addNode(uniq(g, `${tag}_reshape`))
+        .init(new OperationNode.Builder("Reshape", [g1Out, shape1]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `${tag}_out1`))
+        .init(new TensorNode.Builder(input.literalType, [1], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(rs, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
 
-  return [g1, out];
+    return [g1, out];
 }
 
 export function isBroadcastableTo(
-  inShape: (number | string)[],
-  outShape: (number | string)[]
+    inShape: (number | string)[],
+    outShape: (number | string)[],
 ): boolean {
-  const inDims = toStaticShape(inShape as Shape);
-  const outDims = toStaticShape(outShape as Shape);
+    const inDims = toStaticShape(inShape as Shape);
+    const outDims = toStaticShape(outShape as Shape);
 
-  let i = inDims.length - 1;
-  let j = outDims.length - 1;
+    let i = inDims.length - 1;
+    let j = outDims.length - 1;
 
-  while (j >= 0) {
-    const od = outDims[j];
-    const id = i >= 0 ? inDims[i] : 1;
+    while (j >= 0) {
+        const od = outDims[j];
+        const id = i >= 0 ? inDims[i] : 1;
 
-    const idKnown = id > 0;
-    const odKnown = od > 0;
+        const idKnown = id > 0;
+        const odKnown = od > 0;
 
-    if (idKnown && odKnown) {
-      if (id !== od && id !== 1) return false;
-    } else if (idKnown && !odKnown) {
-      if (id !== 1) return false;
+        if (idKnown && odKnown) {
+            if (id !== od && id !== 1) return false;
+        } else if (idKnown && !odKnown) {
+            if (id !== 1) return false;
+        }
+
+        i--;
+        j--;
     }
-    // if !idKnown && odKnown: ok, input can broadcast later
-    // if both unknown: also ok
 
-    i--; j--;
-  }
+    while (i >= 0) {
+        const id = inDims[i];
+        if (id > 1) return false;
+        i--;
+    }
 
-  // leftover leading input dims must be 1 or unknown
-  while (i >= 0) {
-    const id = inDims[i];
-    if (id > 1) return false;
-    i--;
-  }
-
-  return true;
+    return true;
 }
 
 export function assertBroadcastableTo(
-  inShape: (number | string)[],
-  outShape: (number | string)[],
-  tag: string
+    inShape: (number | string)[],
+    outShape: (number | string)[],
+    tag: string,
 ): void {
-  if (!isBroadcastableTo(inShape, outShape)) {
-    throw new Error(
-      `Broadcast error in ${tag}: shape ${JSON.stringify(inShape)} not broadcastable to ${JSON.stringify(outShape)}`
-    );
-  }
+    if (!isBroadcastableTo(inShape, outShape)) {
+        throw new Error(
+            `Broadcast error in ${tag}: shape ${JSON.stringify(inShape)} not broadcastable to ${JSON.stringify(outShape)}`,
+        );
+    }
 }
 
 export function safeGather1D(
-  g: OnnxGraph.Class,
-  data: TensorNode.Class,
-  idxScalar: TensorNode.Class,
-  axes: TensorNode.Class,
-  tag: string
+    g: OnnxGraph.Class,
+    data: TensorNode.Class,
+    idxScalar: TensorNode.Class,
+    axes: TensorNode.Class,
+    tag: string,
 ): TensorNode.Class {
-  // Flatten data to 1D (respects dynamic dims via [-1] reshape)
-  const src = ensureFlatInput(g, data);
+    // Flatten data to 1D (respects dynamic dims via [-1] reshape)
+    const src = ensureFlatInput(g, data);
 
-  // Shape(src) → [len]
-  const shapeNode = g.addNode(uniq(g, `sg_shape_${tag}`))
-    .init(new OperationNode.Builder("Shape", [src]))
-    .as(OperationNode);
-  const shapeOut = g.addNode(uniq(g, `sg_shape_out_${tag}`))
-    .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
-    .as(TensorNode);
-  g.addEdge(shapeNode, shapeOut)
-    .init(new OnnxEdge.Builder(shapeOut.literalType, shapeOut.shape))
-    .as(OnnxEdge);
+    // Shape(src) → [len]
+    const shapeNode = g
+        .addNode(uniq(g, `sg_shape_${tag}`))
+        .init(new OperationNode.Builder("Shape", [src]))
+        .as(OperationNode);
+    const shapeOut = g
+        .addNode(uniq(g, `sg_shape_out_${tag}`))
+        .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(shapeNode, shapeOut)
+        .init(new OnnxEdge.Builder(shapeOut.literalType, shapeOut.shape))
+        .as(OnnxEdge);
 
-  // len = shapeOut[0] (scalar)
-  const zeroIdx = makeTensorConst(
-    g,
-    `sg_len_idx_${tag}`,
-    DataType.INT64,
-    "constant",
-    scalarInt64(0)
-  );
-  const [_, lenVec] = gatherFrom(g, shapeOut, `sg_len_${tag}`, zeroIdx, 0);
-  const len = squeezeIfLen1(g, lenVec, axes, `sg_len_sq_${tag}`);
-
-  /*
-   console.log(
-      "[safeGather1D]",
-      "tag=", tag,
-      "dataId=", data.id,
-      "flatShape=", JSON.stringify(src.shape),
-      "len is scalar INT64 (runtime, check sg_len_* in JSON)"
+    // len = shapeOut[0] (scalar)
+    const zeroIdx = makeTensorConst(
+        g,
+        `sg_len_idx_${tag}`,
+        DataType.INT64,
+        "constant",
+        scalarInt64(0),
     );
-    */
+    const [, lenVec] = gatherFrom(g, shapeOut, `sg_len_${tag}`, zeroIdx, 0);
+    const len = squeezeIfLen1(g, lenVec, axes, `sg_len_sq_${tag}`);
 
-  // idxMod = idxScalar % len  (guarantees 0 <= idxMod < len)
-  const idxMod = divmod(g, idxScalar, len, `sg_mod_${tag}`, "Mod");
+    // idxMod = idxScalar % len  (guarantees 0 <= idxMod < len)
+    const idxMod = divmod(g, idxScalar, len, `sg_mod_${tag}`, "Mod");
 
-  // Unsqueeze to a 1D index [1]
-  const idxU = unsqueezeIdx(g, idxMod, axes, `sg_idx_unsq_${tag}`);
+    // Unsqueeze to a 1D index [1]
+    const idxU = unsqueezeIdx(g, idxMod, axes, `sg_idx_unsq_${tag}`);
 
-  // Actual Gather
-  const [__, gathered] = gatherFrom(g, src, `sg_g_${tag}`, idxU, 0);
-  return gathered;
+    // Actual Gather
+    const [, gathered] = gatherFrom(g, src, `sg_g_${tag}`, idxU, 0);
+    return gathered;
 }
 
 export function gatherWithBroadcast(
-  g: OnnxGraph.Class,
-  t: TensorNode.Class,
-  ctx: LoopCtx,
-  tag: string
+    g: OnnxGraph.Class,
+    t: TensorNode.Class,
+    ctx: LoopCtx,
+    tag: string,
 ): TensorNode.Class {
-  // Scalars: nothing to gather
-  if (t.shape.length === 0) return t;
+    // Scalars: nothing to gather
+    if (t.shape.length === 0) return t;
 
-  const outDimsStatic = toStaticShape(ctx.outShape as Shape);
-  const inDimsRaw = toStaticShape(t.shape as Shape);
-  const inDims = inDimsRaw.map(d => (d > 0 ? d : 1));
+    const outDimsStatic = toStaticShape(ctx.outShape as Shape);
+    const inDimsRaw = toStaticShape(t.shape as Shape);
+    const inDims = inDimsRaw.map((d) => (d > 0 ? d : 1));
 
-  /*
-   console.log(
-      "[gatherWithBroadcast]",
-      "tag=", tag,
-      "inDims=", JSON.stringify(inDims),
-      "outDims=", JSON.stringify(outDimsStatic),
-      "outShape(ctx)=", JSON.stringify(ctx.outShape)
-    );
-    */
-
-  // 1D "plain indexing" fast path: just index by iter, but safely
-  if (
-    inDims.length === 1 &&
-    outDimsStatic.length === 1 &&
-    outDimsStatic[0] <= 0 // dynamic or unknown
-  ) {
-    return safeGather1D(g, t, ctx.iter, ctx.axes, `gb_1d_iter_${tag}`);
-  }
-
-  // Fallback for inRank > outRank:
-  // treat input as a flattened 1D vector and index by iter (mod len).
-  if (inDims.length > outDimsStatic.length) {
-    return safeGather1D(g, t, ctx.iter, ctx.axes, `gb_fallback_${tag}`);
-  }
-
-  // General broadcast case
-  const rO = outDimsStatic.length;
-  const rI = inDims.length;
-
-  // Radices: output dims, with unknown/non-positive treated as 1
-  const outRadix: number[] = outDimsStatic.map(d => (d > 0 ? d : 1));
-
-  // Decode iter into output multi-index digits (right-aligned)
-  const oDigits = decodeMixedRadix(g, ctx.iter, outRadix, `gb_out_${tag}`);
-
-  // Map output digits to input digits, taking broadcasting into account
-  const iDigits: TensorNode.Class[] = [];
-  for (let k = 0; k < rI; k++) {
-    const inDim = inDims[k];
-    const outPos = rO - rI + k; // align trailing dims
-
-    if (outPos < 0 || inDim === 1) {
-      // extra leading dims or broadcast-from-1 → always index 0
-      const z = makeTensorConst(
-        g,
-        `gb_zero_${tag}_${k}`,
-        DataType.INT64,
-        "constant",
-        scalarInt64(0)
-      );
-      iDigits.push(z);
-    } else {
-      // normal axis: reuse the corresponding output digit
-      iDigits.push(oDigits[outPos]);
+    // 1D "plain indexing" fast path: just index by iter, but safely
+    if (
+        inDims.length === 1 &&
+        outDimsStatic.length === 1 &&
+        outDimsStatic[0] <= 0 // dynamic or unknown
+    ) {
+        return safeGather1D(g, t, ctx.iter, ctx.axes, `gb_1d_iter_${tag}`);
     }
-  }
 
-  // Linear index over inDims
-  const strides = computeStrides(inDims);
-  const linScalar = buildLinearIndex(g, iDigits, strides, `gb_lin_${tag}`);
+    // Fallback for inRank > outRank:
+    // treat input as a flattened 1D vector and index by iter (mod len).
+    if (inDims.length > outDimsStatic.length) {
+        return safeGather1D(g, t, ctx.iter, ctx.axes, `gb_fallback_${tag}`);
+    }
 
-  // Safe gather from t with linear index
-  return safeGather1D(g, t, linScalar, ctx.axes, `gb_lin_${tag}`);
+    // General broadcast case
+    const rO = outDimsStatic.length;
+    const rI = inDims.length;
+
+    // Radices: output dims, with unknown/non-positive treated as 1
+    const outRadix: number[] = outDimsStatic.map((d) => (d > 0 ? d : 1));
+
+    // Decode iter into output multi-index digits (right-aligned)
+    const oDigits = decodeMixedRadix(g, ctx.iter, outRadix, `gb_out_${tag}`);
+
+    // Map output digits to input digits, taking broadcasting into account
+    const iDigits: TensorNode.Class[] = [];
+    for (let k = 0; k < rI; k++) {
+        const inDim = inDims[k];
+        const outPos = rO - rI + k; // align trailing dims
+
+        if (outPos < 0 || inDim === 1) {
+            // extra leading dims or broadcast-from-1 → always index 0
+            const z = makeTensorConst(
+                g,
+                `gb_zero_${tag}_${k}`,
+                DataType.INT64,
+                "constant",
+                scalarInt64(0),
+            );
+            iDigits.push(z);
+        } else {
+            // normal axis: reuse the corresponding output digit
+            iDigits.push(oDigits[outPos]);
+        }
+    }
+
+    // Linear index over inDims
+    const strides = computeStrides(inDims);
+    const linScalar = buildLinearIndex(g, iDigits, strides, `gb_lin_${tag}`);
+
+    // Safe gather from t with linear index
+    return safeGather1D(g, t, linScalar, ctx.axes, `gb_lin_${tag}`);
 }
 
 export function divmod(
-  g: OnnxGraph.Class, lhs: TensorNode.Class, rhs: TensorNode.Class,
-  tag: string, op: "Div" | "Mod"
+    g: OnnxGraph.Class,
+    lhs: TensorNode.Class,
+    rhs: TensorNode.Class,
+    tag: string,
+    op: "Div" | "Mod",
 ): TensorNode.Class {
-  const node = g.addNode(uniq(g, `${op}_${tag}`))
-    .init(new OperationNode.Builder(op, [lhs, rhs]))
-    .as(OperationNode);
-  const out = g.addNode(uniq(g, `${op}_${tag}_out`))
-               .init(new TensorNode.Builder(lhs.literalType, lhs.shape, "intermediate"))
-               .as(TensorNode);
-  g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-  return out;
+    const node = g
+        .addNode(uniq(g, `${op}_${tag}`))
+        .init(new OperationNode.Builder(op, [lhs, rhs]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `${op}_${tag}_out`))
+        .init(new TensorNode.Builder(lhs.literalType, lhs.shape, "intermediate"))
+        .as(TensorNode);
+    g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
 }
 
-export function squeezeIfLen1(g: OnnxGraph.Class, t: TensorNode.Class, axes: TensorNode.Class, tag: string) {
-  if (t.shape.length === 1 && t.shape[0] === 1) {
-    const sq = g.addNode(uniq(g, `sq_${tag}`))
-      .init(new OperationNode.Builder("Squeeze", [t, axes]))
-      .as(OperationNode);
-    const out = g.addNode(uniq(g, `sq_${tag}_out`))
-      .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
-      .as(TensorNode);
-    g.addEdge(sq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-    return out;
-  }
-  return t;
+export function squeezeIfLen1(
+    g: OnnxGraph.Class,
+    t: TensorNode.Class,
+    axes: TensorNode.Class,
+    tag: string,
+) {
+    if (t.shape.length === 1 && t.shape[0] === 1) {
+        const sq = g
+            .addNode(uniq(g, `sq_${tag}`))
+            .init(new OperationNode.Builder("Squeeze", [t, axes]))
+            .as(OperationNode);
+        const out = g
+            .addNode(uniq(g, `sq_${tag}_out`))
+            .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
+            .as(TensorNode);
+        g.addEdge(sq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+        return out;
+    }
+    return t;
 }
 
 export function ensureFlatInput(g: OnnxGraph.Class, t: TensorNode.Class): TensorNode.Class {
-  const shape: Shape = t.shape;
-  if (shape.length <= 1) return t;
+    const shape: Shape = t.shape;
+    if (shape.length <= 1) return t;
 
-  // We no longer trust the static product; always flatten dynamically.
-  const shpVec = int64Vec([-1]);
-  const shapeConst = makeTensorConst(
-    g,
-    `flat_shape_${t.id}`,
-    DataType.INT64,
-    "constant",
-    shpVec
-  );
+    // We no longer trust the static product; always flatten dynamically.
+    const shpVec = int64Vec([-1]);
+    const shapeConst = makeTensorConst(g, `flat_shape_${t.id}`, DataType.INT64, "constant", shpVec);
 
-  const rs = g.addNode(uniq(g, `flat_rs_${t.id}`))
-    .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
-    .as(OperationNode);
+    const rs = g
+        .addNode(uniq(g, `flat_rs_${t.id}`))
+        .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
+        .as(OperationNode);
 
-  // For the TensorNode’s *static* shape we can still keep a best-effort guess,
-  // but it doesn't affect runtime correctness.
-  const outStatic = [1];
-  const flat = g.addNode(uniq(g, `${t.id}_flat`))
-    .init(new TensorNode.Builder(t.literalType, outStatic, "intermediate"))
-    .as(TensorNode);
+    // For the TensorNode’s *static* shape we can still keep a best-effort guess,
+    // but it doesn't affect runtime correctness.
+    const outStatic = [1];
+    const flat = g
+        .addNode(uniq(g, `${t.id}_flat`))
+        .init(new TensorNode.Builder(t.literalType, outStatic, "intermediate"))
+        .as(TensorNode);
 
-  g.addEdge(rs, flat).init(new OnnxEdge.Builder(t.literalType, outStatic)).as(OnnxEdge);
-  return flat;
+    g.addEdge(rs, flat).init(new OnnxEdge.Builder(t.literalType, outStatic)).as(OnnxEdge);
+    return flat;
 }
 
-export function unsqueezeIdx(g: OnnxGraph.Class, idx: TensorNode.Class, axes: TensorNode.Class, tag: string): TensorNode.Class {
-  const unsq = g.addNode(uniq(g, tag))
-    .init(new OperationNode.Builder("Unsqueeze", [idx, axes]))
-    .as(OperationNode);
-  const out = g.addNode(uniq(g, `${tag}_out`))
-    .init(new TensorNode.Builder(idx.literalType, [1], "intermediate"))
-    .as(TensorNode);
-  g.addEdge(unsq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-  return out;
+export function unsqueezeIdx(
+    g: OnnxGraph.Class,
+    idx: TensorNode.Class,
+    axes: TensorNode.Class,
+    tag: string,
+): TensorNode.Class {
+    const unsq = g
+        .addNode(uniq(g, tag))
+        .init(new OperationNode.Builder("Unsqueeze", [idx, axes]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `${tag}_out`))
+        .init(new TensorNode.Builder(idx.literalType, [1], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(unsq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
 }
 
 export function resolveFusedInput(
-  g: OnnxGraph.Class, input: BaseNode.Class, ctx: LoopCtx,
-  op: OperationNode.Class, flatten = true, returnGather = true
+    g: OnnxGraph.Class,
+    input: BaseNode.Class,
+    ctx: LoopCtx,
+    op: OperationNode.Class,
+    flatten = true,
+    returnGather = true,
 ): TensorNode.Class {
-  if (input.is(TensorNode)) {
-    const t = input.as(TensorNode);
+    if (input.is(TensorNode)) {
+        const t = input.as(TensorNode);
 
-    if (t.type === "intermediate" && t.getIncomers.length > 0) {
-      const producer = t.getIncomers[0].source;
-      if (producer.is(OperationNode)) {
-        const fused = Array.from(ctx.opMap.entries()).find(([key]) => key.id === producer.id);
+        if (t.type === "intermediate" && t.getIncomers.length > 0) {
+            const producer = t.getIncomers[0].source;
+            if (producer.is(OperationNode)) {
+                const fused = Array.from(ctx.opMap.entries()).find(
+                    ([key]) => key.id === producer.id,
+                );
+                if (fused) return fused[1][1];
+            }
+        }
+
+        if (!returnGather) {
+            return flatten ? ensureFlatInput(g, t) : t;
+        }
+
+        const idxToUse: TensorNode.Class | null = ctx.unsqIdx;
+
+        const [M, N] = ctx.outShape.length === 2 ? ctx.outShape : [undefined, undefined];
+
+        if (ctx.coalesce && (ctx.iU || ctx.jU || ctx.flatU)) {
+            const s = t.shape;
+
+            if (s.length === 0) return t;
+
+            if (s.length === 1) {
+                const len = s[0];
+
+                // Length-1 vectors behave like scalars
+                if (len === 1) {
+                    return t;
+                }
+
+                // Normal 1D vector case: choose which logical index to follow
+                let idxScalar: TensorNode.Class | null = null;
+
+                if (N !== undefined && len === N && ctx.jU) {
+                    // jU is [1]-shaped, squeeze to scalar
+                    idxScalar = squeezeIfLen1(g, ctx.jU, ctx.axes, `idx_j_${t.id}_${op.id}`);
+                } else if (M !== undefined && len === M && ctx.iU) {
+                    idxScalar = squeezeIfLen1(g, ctx.iU, ctx.axes, `idx_i_${t.id}_${op.id}`);
+                } else if (ctx.flatU) {
+                    idxScalar = squeezeIfLen1(g, ctx.flatU, ctx.axes, `idx_flat_${t.id}_${op.id}`);
+                }
+
+                if (!idxScalar) {
+                    // Fallback
+                    return t;
+                }
+
+                if (!returnGather) return t;
+
+                // Using safe 1D helper so we never go out of bounds
+                const gathered = safeGather1D(
+                    g,
+                    t,
+                    idxScalar,
+                    ctx.axes,
+                    `gather1d_${t.id}_${op.id}`,
+                );
+                return gathered;
+            }
+
+            if (s.length === 2) {
+                // For 2D inputs in a coalesced loop, always going through the safe 1D path:
+                //   - flatten the tensor
+                //   - using a scalar index (prefer flatU)
+                //   - leting safeGather1D handle modulo by the true length to avoid OOB.
+                const flatT = ensureFlatInput(g, t);
+                const idxU = ctx.flatU ?? idxToUse!;
+
+                if (!returnGather) return flatT;
+
+                const idxScalar = squeezeIfLen1(g, idxU, ctx.axes, `idx2d_${t.id}_${op.id}`);
+
+                const gathered = safeGather1D(
+                    g,
+                    flatT,
+                    idxScalar,
+                    ctx.axes,
+                    `gather2d_${t.id}_${op.id}`,
+                );
+                return gathered;
+            }
+        }
+
+        if (!ctx.unsqIdx) {
+            const unsq = g
+                .addNode(uniq(g, "unsq_idx"))
+                .init(new OperationNode.Builder("Unsqueeze", [ctx.iter, ctx.axes]))
+                .as(OperationNode);
+            const unsqOut = g
+                .addNode(uniq(g, "unsq_idx_out"))
+                .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
+                .as(TensorNode);
+            g.addEdge(unsq, unsqOut)
+                .init(new OnnxEdge.Builder(unsqOut.literalType, unsqOut.shape))
+                .as(OnnxEdge);
+            ctx.unsqIdx = unsqOut;
+        }
+
+        return gatherWithBroadcast(g, t, ctx, `${t.id}_${op.id}`);
+    }
+
+    if (input.is(OperationNode)) {
+        const fused = Array.from(ctx.opMap.entries()).find(([key]) => key.id === input.id);
         if (fused) return fused[1][1];
-      }
     }
 
-    if (!returnGather) {
-      return flatten ? ensureFlatInput(g, t) : t;
-    }
-
-    let idxToUse: TensorNode.Class | null = ctx.unsqIdx;
-
-    const [M, N] = ctx.outShape.length === 2 ? ctx.outShape : [undefined, undefined];
-
-    if (ctx.coalesce && (ctx.iU || ctx.jU || ctx.flatU)) {
-      const s = t.shape;
-
-      if (s.length === 0) return t;
-
-      if (s.length === 1) {
-        const len = s[0];
-
-        // Length-1 vectors behave like scalars: don't index them with i/j/flat.
-        if (len === 1) {
-          // If you still want to respect `flatten`, you could do:
-          // return flatten ? ensureFlatInput(g, t) : t;
-          return t;
-        }
-
-        // Normal 1D vector case: choose which logical index to follow
-        let idxScalar: TensorNode.Class | null = null;
-
-        if (N !== undefined && len === N && ctx.jU) {
-          // jU is [1]-shaped, squeeze to scalar
-          idxScalar = squeezeIfLen1(
-            g,
-            ctx.jU,
-            ctx.axes,
-            `idx_j_${t.id}_${op.id}`
-          );
-        } else if (M !== undefined && len === M && ctx.iU) {
-          idxScalar = squeezeIfLen1(
-            g,
-            ctx.iU,
-            ctx.axes,
-            `idx_i_${t.id}_${op.id}`
-          );
-        } else if (ctx.flatU) {
-          idxScalar = squeezeIfLen1(
-            g,
-            ctx.flatU,
-            ctx.axes,
-            `idx_flat_${t.id}_${op.id}`
-          );
-        }
-
-        if (!idxScalar) {
-          // Fall back: don't index, trust general broadcast later
-          return t;
-        }
-
-        if (!returnGather) return t;
-
-        // Use the safe 1D helper so we never go out of bounds
-        const gathered = safeGather1D(
-          g,
-          t,
-          idxScalar,
-          ctx.axes,
-          `gather1d_${t.id}_${op.id}`
-        );
-        return gathered;
-      }
-
-      if (s.length === 2) {
-        // For 2D inputs in a coalesced loop, always go through the safe 1D path:
-        //   - flatten the tensor
-        //   - use a scalar index (prefer flatU)
-        //   - let safeGather1D handle modulo by the true length to avoid OOB.
-        const flatT = ensureFlatInput(g, t);
-        const idxU = ctx.flatU ?? idxToUse!;
-
-        if (!returnGather) return flatT;
-
-        const idxScalar = squeezeIfLen1(
-          g,
-          idxU,
-          ctx.axes,
-          `idx2d_${t.id}_${op.id}`
-        );
-
-        const gathered = safeGather1D(
-          g,
-          flatT,
-          idxScalar,
-          ctx.axes,
-          `gather2d_${t.id}_${op.id}`
-        );
-        return gathered;
-      }
-    }
-
-    if (!ctx.unsqIdx) {
-      const unsq = g.addNode(uniq(g, "unsq_idx"))
-        .init(new OperationNode.Builder("Unsqueeze", [ctx.iter, ctx.axes]))
-        .as(OperationNode);
-      const unsqOut = g.addNode(uniq(g, "unsq_idx_out"))
-        .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
-        .as(TensorNode);
-      g.addEdge(unsq, unsqOut).init(new OnnxEdge.Builder(unsqOut.literalType, unsqOut.shape)).as(OnnxEdge);
-      ctx.unsqIdx = unsqOut;
-    }
-
-    return gatherWithBroadcast(g, t, ctx, `${t.id}_${op.id}`);
-  }
-
-  if (input.is(OperationNode)) {
-    const fused = Array.from(ctx.opMap.entries()).find(([key]) => key.id === input.id);
-    if (fused) return fused[1][1];
-  }
-
-  throw new Error(`Unhandled input case in resolveFusedInput for ${input.id}`);
+    throw new Error(`Unhandled input case in resolveFusedInput for ${input.id}`);
 }
 
 export function reshapeTensor(
-  g: OnnxGraph.Class,
-  input: TensorNode.Class,
-  shape: TensorNode.Class,
-  tag: string
+    g: OnnxGraph.Class,
+    input: TensorNode.Class,
+    shape: TensorNode.Class,
+    tag: string,
 ): TensorNode.Class {
-  const reshape = g.addNode(uniq(g, `reshape_${tag}`))
-    .init(new OperationNode.Builder("Reshape", [input, shape]))
-    .as(OperationNode);
-  const out = g.addNode(uniq(g, `reshaped_${tag}`))
-    .init(new TensorNode.Builder(input.literalType, shape.shape, "intermediate"))
-    .as(TensorNode);
-  g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-  return out;
+    const reshape = g
+        .addNode(uniq(g, `reshape_${tag}`))
+        .init(new OperationNode.Builder("Reshape", [input, shape]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `reshaped_${tag}`))
+        .init(new TensorNode.Builder(input.literalType, shape.shape, "intermediate"))
+        .as(TensorNode);
+    g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
 }
 
 export function targetReshape(
-  g: OnnxGraph.Class,
-  tensor: TensorNode.Class,
-  targetShape: number[],
-  tag: string
+    g: OnnxGraph.Class,
+    tensor: TensorNode.Class,
+    targetShape: number[],
+    tag: string,
 ): TensorNode.Class {
-  const actualShape = tensor.shape;
+    const actualShape = tensor.shape;
 
-  // Check if shape is already correct
-  const isSame = actualShape.length === targetShape.length &&
-                 actualShape.every((d, i) => d === targetShape[i]);
-  //console.log("SHAPES:", actualShape, targetShape, isSame);
-  if (isSame || targetShape.length == 0) return tensor;
+    // Check if shape is already correct
+    const isSame =
+        actualShape.length === targetShape.length &&
+        actualShape.every((d, i) => d === targetShape[i]);
+    if (isSame || targetShape.length == 0) return tensor;
 
-  // Create shape constant
-  const shapeConst = makeTensorConst(g, `fixshape_${tag}`, DataType.INT64, "constant", int64Vec(targetShape));
+    // Create shape constant
+    const shapeConst = makeTensorConst(
+        g,
+        `fixshape_${tag}`,
+        DataType.INT64,
+        "constant",
+        int64Vec(targetShape),
+    );
 
-  // Create reshape op
-  const reshape = g.addNode(uniq(g, `reshape_${tag}`))
-                   .init(new OperationNode.Builder("Reshape", [tensor, shapeConst]))
-                   .as(OperationNode);
+    // Create reshape op
+    const reshape = g
+        .addNode(uniq(g, `reshape_${tag}`))
+        .init(new OperationNode.Builder("Reshape", [tensor, shapeConst]))
+        .as(OperationNode);
 
-  const out = g.addNode(uniq(g, `reshaped_${tag}`))
-               .init(new TensorNode.Builder(tensor.literalType, targetShape, "intermediate"))
-               .as(TensorNode);
+    const out = g
+        .addNode(uniq(g, `reshaped_${tag}`))
+        .init(new TensorNode.Builder(tensor.literalType, targetShape, "intermediate"))
+        .as(TensorNode);
 
-  g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
 
-  return out;
+    return out;
 }
 
 /* ------------------------------------------------------------------ */
-/* Builder wiring                                                      */
+/* Builder wiring                                                     */
 /* ------------------------------------------------------------------ */
 export type BuildResult = {
-  body: OnnxGraph.Class,
-  ctx: LoopCtx,
-  lastOut: TensorNode.Class,
-  indicesOut: TensorNode.Class,
-  elemTy: DataType,
-  outShape: (number | String)[],
-  inputs: Map<string, TensorNode.Class>,
-  outTensor: TensorNode.Class,
-  trip: TensorNode.Class,
-  cond: TensorNode.Class,
-  v_initial: TensorNode.Class
+    body: OnnxGraph.Class;
+    ctx: LoopCtx;
+    lastOut: TensorNode.Class;
+    indicesOut: TensorNode.Class;
+    elemTy: DataType;
+    outShape: (number | string)[];
+    inputs: Map<string, TensorNode.Class>;
+    outTensor: TensorNode.Class;
+    trip: TensorNode.Class;
+    cond: TensorNode.Class;
+    v_initial: TensorNode.Class;
 };
 
 export interface LoopBuilder {
-  canHandle(chain: OperationNode.Class[]): boolean;
-  build(
-    chain: OperationNode.Class[],
-    outer: OnnxGraph.Class,
-    opts: { fuse: boolean; recurse: boolean; coalesce: boolean }
-  ): BuildResult;
+    canHandle(chain: OperationNode.Class[]): boolean;
+    build(
+        chain: OperationNode.Class[],
+        outer: OnnxGraph.Class,
+        opts: { fuse: boolean; recurse: boolean; coalesce: boolean },
+    ): BuildResult;
 }
 
 /* ------------------------------------------------------------------ */
-/* Builder selection                                                   */
+/* Builder selection                                                  */
 /* ------------------------------------------------------------------ */
 import DefaultBuilder from "./builders/Default.js";
 import GenerativeBuilder from "./builders/Generative.js";
@@ -742,294 +767,314 @@ import inferShapes from "../../InferShapes.js";
 import TransposeBuilder from "./builders/Transpose.js";
 
 const BUILDERS: LoopBuilder[] = [
-  new ConvBuilder(),
-  new AveragePoolBuilder(),
-  new ReducesBuilder(),
-  new MatMulBuilder(),      // must come before Default (it also handles trailing elemwise)
-  new GenerativeBuilder(),  // Range (may also have trailing elemwise)
-  new TransposeBuilder(),   // pure Transpose chains
-  new DefaultBuilder(),     // pure elemwise/transpose/etc.
+    new ConvBuilder(),
+    new AveragePoolBuilder(),
+    new ReducesBuilder(),
+    new MatMulBuilder(), // must come before Default (it also handles trailing elemwise)
+    new GenerativeBuilder(), // Range (may also have trailing elemwise)
+    new TransposeBuilder(), // pure Transpose chains
+    new DefaultBuilder(), // pure elemwise/transpose/etc.
 ];
 
 /* ------------------------------------------------------------------ */
 /* Main entry                                                         */
 /* ------------------------------------------------------------------ */
 export function buildLoopForChain(
-  chain: OperationNode.Class[],
-  graph: OnnxGraph.Class,
-  fuse = true,
-  recurse = true,
-  coalesce = true
+    chain: OperationNode.Class[],
+    graph: OnnxGraph.Class,
+    fuse = true,
+    recurse = true,
+    coalesce = true,
 ): void {
-  const builder = BUILDERS.find(b => b.canHandle(chain));
-  if (!builder) throw new Error(`No builder can handle chain starting at ${chain[0].type}`);
-  //console.log("CHAIN:");
-  //chain.forEach(op => console.log(op.type));
+    const builder = BUILDERS.find((b) => b.canHandle(chain));
+    if (!builder) throw new Error(`No builder can handle chain starting at ${chain[0].type}`);
 
-  const rootOp = chain[chain.length - 1];
-  const rootOutTensor = rootOp.getOutgoers.targets.filterIs(TensorNode).first();
-  const originalOutShape: (number | String)[] = rootOutTensor ? [...rootOutTensor.shape] : [];
-  const rootIsGlobalOutput =
-  !!rootOutTensor && graph.getOutputTensorNodes().contains(rootOutTensor);
+    const rootOp = chain[chain.length - 1];
+    const rootOutTensor = rootOp.getOutgoers.targets.filterIs(TensorNode).first();
+    const originalOutShape: (number | string)[] = rootOutTensor ? [...rootOutTensor.shape] : [];
+    const rootIsGlobalOutput =
+        !!rootOutTensor && graph.getOutputTensorNodes().contains(rootOutTensor);
 
-  let buildResult : BuildResult;
-  try {
-    buildResult = builder.build(chain, graph, { fuse, recurse, coalesce });
-  } catch (e) {
-    if (chain[0].type === "Conv") {
-      console.warn(
-        `[Loop lowering] ConvBuilder failed for chain starting at ${chain[0].id}:`,
-        e
-      );
-      return;
-    }
-    throw e;
-  }
-
-  const {
-    body, ctx, lastOut, indicesOut, elemTy, outShape: builtOutShape, 
-    inputs, outTensor, trip, cond, v_initial
-  } = buildResult;
-
-  /*
-  console.log(
-  "[LoopBuilder/result]",
-  "chain=", chain.map(op => `${op.id}:${op.type}`),
-  "builtOutShape=", JSON.stringify(builtOutShape),
-  "originalOutShape=", JSON.stringify(originalOutShape),
-  "ctx.carry.shape=", JSON.stringify(ctx.carry.shape),
-  "indicesOut.shape=", JSON.stringify(indicesOut.shape),
-  "lastOut.shape=", JSON.stringify(lastOut.shape)
-);
-*/
-  
-  let finalOutShape: (number | String)[] = builtOutShape;
-
-  const prod = (shape: (number | String)[]) =>
-    shape.length &&
-    shape.every(d => typeof d === "number" && (d as number) > 0)
-      ? (shape as number[]).reduce((a, b) => a * b, 1)
-      : -1;
-
-  if (rootIsGlobalOutput && originalOutShape.length) {
-    const pOrig = prod(originalOutShape);
-    const pBuilt = prod(builtOutShape);
-
-    if (pOrig > 0 && pBuilt > 0 && pOrig !== pBuilt) {
-      console.warn(
-        `[Loop lowering] Overriding builder outShape ${JSON.stringify(builtOutShape)} ` +
-        `with original output shape ${JSON.stringify(originalOutShape)} ` +
-        `for chain starting at ${chain[0].id}`
-      );
+    let buildResult: BuildResult;
+    try {
+        buildResult = builder.build(chain, graph, { fuse, recurse, coalesce });
+    } catch (e) {
+        if (chain[0].type === "Conv") {
+            console.warn(
+                `[Loop lowering] ConvBuilder failed for chain starting at ${chain[0].id}:`,
+                e,
+            );
+            return;
+        }
+        throw e;
     }
 
-    // For graph-visible outputs, trust the original ONNX shape
-    finalOutShape = originalOutShape;
-  }
+    const {
+        body,
+        ctx,
+        lastOut,
+        indicesOut,
+        elemTy,
+        outShape: builtOutShape,
+        inputs,
+        outTensor,
+        trip,
+        cond,
+        v_initial,
+    } = buildResult;
 
-  // New: derive authoritative element type from carry
-  const carryTy = ctx.carry.literalType;
+    let finalOutShape: (number | string)[] = builtOutShape;
 
-  // Optional but recommended sanity check:
-  if (v_initial.literalType !== carryTy) {
-    throw new Error(
-      `[Loop lowering] v_initial type (${v_initial.literalType}) `
-      + `does not match carry type (${carryTy}) for chain starting at ${chain[0].id}`
+    const prod = (shape: (number | string)[]) =>
+        shape.length && shape.every((d) => typeof d === "number" && (d as number) > 0)
+            ? (shape as number[]).reduce((a, b) => a * b, 1)
+            : -1;
+
+    if (rootIsGlobalOutput && originalOutShape.length) {
+        const pOrig = prod(originalOutShape);
+        const pBuilt = prod(builtOutShape);
+
+        if (pOrig > 0 && pBuilt > 0 && pOrig !== pBuilt) {
+            console.warn(
+                `[Loop lowering] Overriding builder outShape ${JSON.stringify(builtOutShape)} ` +
+                    `with original output shape ${JSON.stringify(originalOutShape)} ` +
+                    `for chain starting at ${chain[0].id}`,
+            );
+        }
+
+        // For graph-visible outputs, trust the original ONNX shape
+        finalOutShape = originalOutShape;
+    }
+
+    // Derive authoritative element type from carry
+    const carryTy = ctx.carry.literalType;
+
+    // Sanity check:
+    if (v_initial.literalType !== carryTy) {
+        throw new Error(
+            `[Loop lowering] v_initial type (${v_initial.literalType}) ` +
+                `does not match carry type (${carryTy}) for chain starting at ${chain[0].id}`,
+        );
+    }
+
+    // cond passthrough
+    const condIn = body
+        .getInputTensorNodes()
+        .filter((t) => t.id.includes("cond_in"))
+        .first();
+    const idCond = body
+        .addNode(uniq(body, "id_cond"))
+        .init(new OperationNode.Builder("Identity", [condIn]))
+        .as(OperationNode);
+    const condOut = body
+        .addNode(uniq(body, "cond_out"))
+        .init(new TensorNode.Builder(DataType.BOOL, [], "output"))
+        .as(TensorNode);
+    body.addEdge(condIn, idCond).init(new OnnxEdge.Builder(condIn.literalType, condIn.shape));
+    body.addEdge(idCond, condOut).init(new OnnxEdge.Builder(condOut.literalType, condOut.shape));
+
+    // --- ensuring updates dtype == carry dtype ---
+    let updates = lastOut;
+    if (updates.literalType !== carryTy) {
+        const castU = body
+            .addNode(uniq(body, `cast_updates_${updates.id}`))
+            .init(new OperationNode.Builder("Cast", [updates], { to: carryTy }))
+            .as(OperationNode);
+        const castUOut = body
+            .addNode(uniq(body, `cast_updates_out_${updates.id}`))
+            .init(new TensorNode.Builder(carryTy, updates.shape, "intermediate"))
+            .as(TensorNode);
+        body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(carryTy, updates.shape));
+        updates = castUOut;
+    }
+
+    // --- ensuring indices and updates have the same rank for ScatterElements ---
+    let scatterIndices = indicesOut;
+
+    const idxRank = scatterIndices.shape.length;
+    const updRank = updates.shape.length;
+
+    if (idxRank !== updRank) {
+        // If one is scalar and the other is 1D, safely Unsqueeze the scalar.
+        if (updRank === 0 && idxRank > 0) {
+            // updates: [] -> [1]
+            updates = unsqueezeIdx(body, updates, ctx.axes, "scatter_updates");
+        } else if (idxRank === 0 && updRank > 0) {
+            // indices: [] -> [1]
+            scatterIndices = unsqueezeIdx(body, scatterIndices, ctx.axes, "scatter_indices");
+        }
+        // If both are non-zero rank but still differ (very unlikely here),
+        // we leave them as-is; that would indicate a deeper modelling bug.
+    }
+
+    // Scatter update
+    const scatter = body
+        .addNode(uniq(body, "scatter"))
+        .init(
+            new OperationNode.Builder("ScatterElements", [ctx.carry, scatterIndices, updates], {
+                axis: 0,
+            }),
+        )
+        .as(OperationNode);
+
+    body.addEdge(ctx.carry, scatter).init(
+        new OnnxEdge.Builder(ctx.carry.literalType, ctx.carry.shape),
     );
-  }
+    body.addEdge(scatterIndices, scatter).init(
+        new OnnxEdge.Builder(scatterIndices.literalType, scatterIndices.shape),
+    );
+    body.addEdge(updates, scatter).init(new OnnxEdge.Builder(updates.literalType, updates.shape));
 
-  // cond passthrough
-  const condIn = body.getInputTensorNodes().filter(t => t.id.includes("cond_in")).first();
-  const idCond = body.addNode(uniq(body, "id_cond"))
-    .init(new OperationNode.Builder("Identity", [condIn]))
-    .as(OperationNode);
-  const condOut = body.addNode(uniq(body, "cond_out"))
-    .init(new TensorNode.Builder(DataType.BOOL, [], "output"))
-    .as(TensorNode);
-  body.addEdge(condIn, idCond).init(new OnnxEdge.Builder(condIn.literalType, condIn.shape));
-  body.addEdge(idCond, condOut).init(new OnnxEdge.Builder(condOut.literalType, condOut.shape));
+    const carryOut = body
+        .addNode(uniq(body, "carry_out"))
+        .init(new TensorNode.Builder(carryTy, ctx.carry.shape, "output"))
+        .as(TensorNode);
+    body.addEdge(scatter, carryOut).init(
+        new OnnxEdge.Builder(carryOut.literalType, carryOut.shape),
+    );
 
-  // --- ensure updates dtype == carry dtype ---
-  let updates = lastOut;
-  if (updates.literalType !== carryTy) {
-    const castU = body.addNode(uniq(body, `cast_updates_${updates.id}`))
-      .init(new OperationNode.Builder("Cast", [updates], { to: carryTy }))
-      .as(OperationNode);
-    const castUOut = body.addNode(uniq(body, `cast_updates_out_${updates.id}`))
-      .init(new TensorNode.Builder(carryTy, updates.shape, "intermediate"))
-      .as(TensorNode);
-    body.addEdge(castU, castUOut).init(new OnnxEdge.Builder(carryTy, updates.shape));
-    updates = castUOut;
-  }
+    const bodyInputsAll = body.getInputTensorNodes();
+    const bodyCapturedInputs = bodyInputsAll.filter(
+        (t) => !t.id.includes("iter") && !t.id.includes("cond_in") && !t.id.includes("carry"),
+    );
 
-  // --- NEW: ensure indices and updates have the same rank for ScatterElements ---
-  let scatterIndices = indicesOut;
-
-  const idxRank = scatterIndices.shape.length;
-  const updRank = updates.shape.length;
-
-  if (idxRank !== updRank) {
-    // If one is scalar and the other is 1D, safely Unsqueeze the scalar.
-    if (updRank === 0 && idxRank > 0) {
-      // updates: [] -> [1]
-      updates = unsqueezeIdx(body, updates, ctx.axes, "scatter_updates");
-    } else if (idxRank === 0 && updRank > 0) {
-      // indices: [] -> [1]
-      scatterIndices = unsqueezeIdx(body, scatterIndices, ctx.axes, "scatter_indices");
-    }
-    // If both are non-zero rank but still differ (very unlikely here),
-    // we leave them as-is; that would indicate a deeper modelling bug.
-  }
-
-  /*
-  console.log(
-  "[LoopBuilder/scatter]",
-  "scatterIndices.shape=", JSON.stringify(scatterIndices.shape),
-  "updates.shape=", JSON.stringify(updates.shape),
-  "carry.shape=", JSON.stringify(ctx.carry.shape)
-);
-*/
-
-  // Scatter update
-  const scatter = body.addNode(uniq(body, "scatter"))
-    .init(new OperationNode.Builder("ScatterElements", [ctx.carry, scatterIndices, updates], { axis: 0 }))
-    .as(OperationNode);
-
-  body.addEdge(ctx.carry, scatter)
-    .init(new OnnxEdge.Builder(ctx.carry.literalType, ctx.carry.shape));
-  body.addEdge(scatterIndices, scatter)
-    .init(new OnnxEdge.Builder(scatterIndices.literalType, scatterIndices.shape));
-  body.addEdge(updates, scatter)
-    .init(new OnnxEdge.Builder(updates.literalType, updates.shape));
-
-
-  const carryOut = body.addNode(uniq(body, "carry_out"))
-    .init(new TensorNode.Builder(carryTy, ctx.carry.shape, "output"))
-    .as(TensorNode);
-  body.addEdge(scatter, carryOut).init(new OnnxEdge.Builder(carryOut.literalType, carryOut.shape));
-
-  const bodyInputsAll = body.getInputTensorNodes();
-  const bodyCapturedInputs = bodyInputsAll.filter(t =>
-    !t.id.includes("iter") &&
-    !t.id.includes("cond_in") &&
-    !t.id.includes("carry")
-  );
-
-  bodyCapturedInputs.forEach((tin, i) => {
-    const id = body.addNode(uniq(body, `id_cap_${i}`))
-      .init(new OperationNode.Builder("Identity", [tin]))
-      .as(OperationNode);
-    const tout = body.addNode(uniq(body, `cap_out_${i}`))
-      .init(new TensorNode.Builder(tin.literalType, tin.shape, "output"))
-      .as(TensorNode);
-    body.addEdge(tin, id).init(new OnnxEdge.Builder(tin.literalType, tin.shape));
-    body.addEdge(id, tout).init(new OnnxEdge.Builder(tout.literalType, tout.shape));
-  });
-
-  inferShapes(graph);
-  inferShapes(body);
-
-  if (recurse) {
-    const recursiveDecomposer = new TransformChain(fuse, recurse);
-    recursiveDecomposer.apply(body);
-  }
-
-  /* ---------- Outer Loop node + wiring -------------------------------- */
-  const loopInputs: TensorNode.Class[] = [trip, cond, v_initial];
-
-  bodyCapturedInputs.forEach((tin) => {
-    const outerT = inputs.get(tin.id);
-    if (!outerT) {
-      throw new Error(`[Loop wiring] Missing captured input binding for ${tin.id}`);
-    }
-    loopInputs.push(outerT);
-  });
-
-  const loop = graph.addNode(uniq(graph, `Loop_${chain[0].id}`))
-    .init(new OperationNode.Builder("Loop", loopInputs, {}, body))
-    .as(OperationNode);
-
-  graph.addEdge(trip, loop).init(new OnnxEdge.Builder(trip.literalType, trip.shape)).as(OnnxEdge);
-  graph.addEdge(cond, loop).init(new OnnxEdge.Builder(cond.literalType, cond.shape)).as(OnnxEdge);
-
-  bodyCapturedInputs.forEach((tin) => {
-    const outerT = inputs.get(tin.id);
-    if (!outerT) throw new Error(`[Loop wiring] Missing captured input binding for ${tin.id}`);
-    graph.addEdge(outerT, loop).init(new OnnxEdge.Builder(outerT.literalType, outerT.shape)).as(OnnxEdge);
-  });
-
-  chain[chain.length - 1].getOutgoers.forEach(e => e.remove());
-
-  // Prefer the original root output tensor to decide global vs intermediate
-  const isGlobalOutput = rootIsGlobalOutput;
-  let outId = uniq(graph, "out");
-
-  if (rootOutTensor) {
-    outId = rootOutTensor.id;
-    graph.getNodeById(outId).remove();
-  } else if (outTensor) {
-    outId = outTensor.id;
-    graph.getNodeById(outId).remove();
-  }
-
-  graph.addNode(outId)
-    .init(new TensorNode.Builder(carryTy, finalOutShape, isGlobalOutput ? "output" : "intermediate"))
-    .as(TensorNode);
-
-
-  if (finalOutShape.length > 1) {
-    const loop_out = graph.addNode(uniq(graph, "loop_out"))
-      .init(new TensorNode.Builder(carryTy, ctx.carry.shape, "intermediate"))
-      .as(TensorNode);
-    graph.addEdge(loop, loop_out)
-      .init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape))
-      .as(OnnxEdge);
-
-    // --- Sanitize exported output shape ---
-    const rawOutShape = (finalOutShape ?? []) as number[];
-
-    // Replace non-positive / unknown dims with -1, but keep the rank.
-    let seenInfer = false;
-    const exportShape = rawOutShape.map(d => {
-      if (d != null && (d as number) > 0) return d as number;
-
-      // First unknown → -1 (ONNX "infer this dim")
-      if (!seenInfer) {
-        seenInfer = true;
-        return -1;
-      }
-
-      // Additional unknowns: use 1 as a safe placeholder
-      return 1;
+    bodyCapturedInputs.forEach((tin, i) => {
+        const id = body
+            .addNode(uniq(body, `id_cap_${i}`))
+            .init(new OperationNode.Builder("Identity", [tin]))
+            .as(OperationNode);
+        const tout = body
+            .addNode(uniq(body, `cap_out_${i}`))
+            .init(new TensorNode.Builder(tin.literalType, tin.shape, "output"))
+            .as(TensorNode);
+        body.addEdge(tin, id).init(new OnnxEdge.Builder(tin.literalType, tin.shape));
+        body.addEdge(id, tout).init(new OnnxEdge.Builder(tout.literalType, tout.shape));
     });
 
-    const shapeVec = int64Vec(exportShape);
-    const shapeNode = graph.addNode(uniq(graph, `reshape_shape_${chain[0].id}`))
-      .init(new TensorNode.Builder(DataType.INT64, [exportShape.length], "constant", shapeVec))
-      .as(TensorNode);
+    inferShapes(graph);
+    inferShapes(body);
 
-    const reshape = graph.addNode(uniq(graph, `reshape_${chain[0].id}`))
-      .init(new OperationNode.Builder("Reshape", [loop_out, shapeNode]))
-      .as(OperationNode);
+    if (recurse) {
+        const recursiveDecomposer = new TransformChain(fuse, recurse);
+        recursiveDecomposer.apply(body);
+    }
 
-    graph.addEdge(loop_out, reshape)
-      .init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape))
-      .as(OnnxEdge);
-    graph.addEdge(shapeNode, reshape)
-      .init(new OnnxEdge.Builder(shapeNode.literalType, shapeNode.shape))
-      .as(OnnxEdge);
+    /* ---------- Outer Loop node + wiring -------------------------------- */
+    const loopInputs: TensorNode.Class[] = [trip, cond, v_initial];
 
-    // NOTE: outTensor is still the tensor that the builder gave us; its
-    // shape metadata should now match the exported shape.
-    outTensor.setShape(exportShape);
-    graph.addEdge(reshape, outTensor)
-      .init(new OnnxEdge.Builder(elemTy, exportShape))
-      .as(OnnxEdge);
-  } else {
-    graph.addEdge(loop, outTensor)
-      .init(new OnnxEdge.Builder(elemTy, finalOutShape))
-      .as(OnnxEdge);
-  }
+    bodyCapturedInputs.forEach((tin) => {
+        const outerT = inputs.get(tin.id);
+        if (!outerT) {
+            throw new Error(`[Loop wiring] Missing captured input binding for ${tin.id}`);
+        }
+        loopInputs.push(outerT);
+    });
 
-  chain.forEach(op => op.remove());
+    const loop = graph
+        .addNode(uniq(graph, `Loop_${chain[0].id}`))
+        .init(new OperationNode.Builder("Loop", loopInputs, {}, body))
+        .as(OperationNode);
+
+    graph.addEdge(trip, loop).init(new OnnxEdge.Builder(trip.literalType, trip.shape)).as(OnnxEdge);
+    graph.addEdge(cond, loop).init(new OnnxEdge.Builder(cond.literalType, cond.shape)).as(OnnxEdge);
+
+    bodyCapturedInputs.forEach((tin) => {
+        const outerT = inputs.get(tin.id);
+        if (!outerT) throw new Error(`[Loop wiring] Missing captured input binding for ${tin.id}`);
+        graph
+            .addEdge(outerT, loop)
+            .init(new OnnxEdge.Builder(outerT.literalType, outerT.shape))
+            .as(OnnxEdge);
+    });
+
+    chain[chain.length - 1].getOutgoers.forEach((e) => e.remove());
+
+    // Prefer the original root output tensor to decide global vs intermediate
+    const isGlobalOutput = rootIsGlobalOutput;
+    let outId = uniq(graph, "out");
+
+    if (rootOutTensor) {
+        outId = rootOutTensor.id;
+        graph.getNodeById(outId).remove();
+    } else if (outTensor) {
+        outId = outTensor.id;
+        graph.getNodeById(outId).remove();
+    }
+
+    graph
+        .addNode(outId)
+        .init(
+            new TensorNode.Builder(
+                carryTy,
+                finalOutShape,
+                isGlobalOutput ? "output" : "intermediate",
+            ),
+        )
+        .as(TensorNode);
+
+    if (finalOutShape.length > 1) {
+        const loop_out = graph
+            .addNode(uniq(graph, "loop_out"))
+            .init(new TensorNode.Builder(carryTy, ctx.carry.shape, "intermediate"))
+            .as(TensorNode);
+        graph
+            .addEdge(loop, loop_out)
+            .init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape))
+            .as(OnnxEdge);
+
+        // --- Sanitize exported output shape ---
+        const rawOutShape = (finalOutShape ?? []) as number[];
+
+        // Replace non-positive / unknown dims with -1, but keep the rank.
+        let seenInfer = false;
+        const exportShape = rawOutShape.map((d) => {
+            if (d != null && (d as number) > 0) return d as number;
+
+            // First unknown → -1 (ONNX "infer this dim")
+            if (!seenInfer) {
+                seenInfer = true;
+                return -1;
+            }
+
+            // Additional unknowns: use 1 as a safe placeholder
+            return 1;
+        });
+
+        const shapeVec = int64Vec(exportShape);
+        const shapeNode = graph
+            .addNode(uniq(graph, `reshape_shape_${chain[0].id}`))
+            .init(
+                new TensorNode.Builder(DataType.INT64, [exportShape.length], "constant", shapeVec),
+            )
+            .as(TensorNode);
+
+        const reshape = graph
+            .addNode(uniq(graph, `reshape_${chain[0].id}`))
+            .init(new OperationNode.Builder("Reshape", [loop_out, shapeNode]))
+            .as(OperationNode);
+
+        graph
+            .addEdge(loop_out, reshape)
+            .init(new OnnxEdge.Builder(loop_out.literalType, loop_out.shape))
+            .as(OnnxEdge);
+        graph
+            .addEdge(shapeNode, reshape)
+            .init(new OnnxEdge.Builder(shapeNode.literalType, shapeNode.shape))
+            .as(OnnxEdge);
+
+        // NOTE: outTensor is still the tensor that the builder gave us; its
+        // shape metadata should now match the exported shape.
+        outTensor.setShape(exportShape);
+        graph
+            .addEdge(reshape, outTensor)
+            .init(new OnnxEdge.Builder(elemTy, exportShape))
+            .as(OnnxEdge);
+    } else {
+        graph
+            .addEdge(loop, outTensor)
+            .init(new OnnxEdge.Builder(elemTy, finalOutShape))
+            .as(OnnxEdge);
+    }
+
+    chain.forEach((op) => op.remove());
 }

@@ -1,106 +1,106 @@
 {
-  "name": "@specs-feup/onnx-flow",
-  "version": "1.0.7-demo.0",
-  "engines": {
-    "node": ">=16"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "description": "Tool to convert an ONNX graph into a data-flow graph (DFG), decomposing its high-level operations into low-level operations and performing a set of optimizations.",
-  "bin": {
-    "onnx-flow": "./out/src/index.js",
-    "onnx-flow-testcomp": "./out/test/compatibility_test.js"
-  },
-  "keywords": [
-    "onnx",
-    "optimization",
-    "operation decomposition",
-    "dfg"
-  ],
-  "main": "./out/src/index.js",
-  "files": [
-    "out/",
-    "package.json",
-    "README.md"
-  ],
-  "scripts": {
-    "clean": "rimraf out",
-    "build": "tsc",
-    "build:watch": "tsc --watch",
-    "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"{src,test}/**/*.{ts,js,json}\" package.json",
-    "lint": "eslint \"{src,test}/**/*.{ts,js}\" --fix",
-    "lint:check": "eslint \"{src,test}/**/*.{ts,js}\"",
-    "pretest": "npm run build",
-    "pretestcomp": "npm run build",
-    "pretestpartition": "npm run build",
-    "test": "node ./out/test/compatibility_test.js",
-    "testcomp": "node ./out/test/compatibility_test.js",
-    "testpartition": "node ./out/test/partition_test.js",
-    "dev": "npm-run-all --parallel build:watch dev:testcomp",
-    "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
-    "prepare": "npm run build && husky install",
-    "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
-    "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
-    "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js"
-  },
-  "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/specs-feup/onnx-flow.git"
-  },
-  "homepage": "https://github.com/specs-feup/onnx-flow#readme",
-  "license": "Apache-2.0",
-  "dependencies": {
-    "@specs-feup/flow": "^1.0.3",
-    "express": "^4.21.1",
-    "node-graphviz": "^0.1.1",
-    "onnxruntime-web": "^1.20.1",
-    "protobufjs": "^7.4.0",
-    "yargs": "^17.7.2"
-  },
-  "type": "module",
-  "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/yargs": "^17.0.33",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
-    "@typescript-eslint/parser": "^8.54.0",
-    "cpx2": "^8.0.0",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.5",
-    "globals": "^17.3.0",
-    "husky": "^8.0.0",
-    "nodemon": "^3.1.7",
-    "npm-run-all": "^4.1.5",
-    "prettier": "^3.8.1",
-    "rimraf": "^6.0.1",
-    "typescript": "^5.7.2",
-    "typescript-eslint": "^8.54.0"
-  },
-  "lint-staged": {
-    "{src,test}/**/*.{ts,js}": [
-      "prettier --write",
-      "eslint --fix"
+    "name": "@specs-feup/onnx-flow",
+    "version": "1.0.7-demo.0",
+    "engines": {
+        "node": ">=16"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "description": "Tool to convert an ONNX graph into a data-flow graph (DFG), decomposing its high-level operations into low-level operations and performing a set of optimizations.",
+    "bin": {
+        "onnx-flow": "./out/src/index.js",
+        "onnx-flow-testcomp": "./out/test/compatibility_test.js"
+    },
+    "keywords": [
+        "onnx",
+        "optimization",
+        "operation decomposition",
+        "dfg"
     ],
-    "{src,test}/**/*.json": [
-      "prettier --write"
+    "main": "./out/src/index.js",
+    "files": [
+        "out/",
+        "package.json",
+        "README.md"
     ],
-    "package.json": [
-      "prettier --write"
-    ]
-  },
-  "parserOptions": {
-    "project": [
-      "./tsconfig.*.json"
-    ]
-  },
-  "exports": {
-    "./*": {
-      "types": "./out/src/*.d.ts",
-      "default": "./out/src/*.js"
+    "scripts": {
+        "clean": "rimraf out",
+        "build": "tsc",
+        "build:watch": "tsc --watch",
+        "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
+        "typecheck": "tsc --noEmit",
+        "format": "prettier --write \"{src,test}/**/*.{ts,js,json}\" package.json",
+        "lint": "eslint \"{src,test}/**/*.{ts,js}\" --fix",
+        "lint:check": "eslint \"{src,test}/**/*.{ts,js}\"",
+        "pretest": "npm run build",
+        "pretestcomp": "npm run build",
+        "pretestpartition": "npm run build",
+        "test": "node ./out/test/compatibility_test.js",
+        "testcomp": "node ./out/test/compatibility_test.js",
+        "testpartition": "node ./out/test/partition_test.js",
+        "dev": "npm-run-all --parallel build:watch dev:testcomp",
+        "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
+        "prepare": "npm run build && husky install",
+        "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
+        "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
+        "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js"
+    },
+    "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/specs-feup/onnx-flow.git"
+    },
+    "homepage": "https://github.com/specs-feup/onnx-flow#readme",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@specs-feup/flow": "^1.0.3",
+        "express": "^4.21.1",
+        "node-graphviz": "^0.1.1",
+        "onnxruntime-web": "^1.20.1",
+        "protobufjs": "^7.4.0",
+        "yargs": "^17.7.2"
+    },
+    "type": "module",
+    "devDependencies": {
+        "@types/express": "^5.0.0",
+        "@types/yargs": "^17.0.33",
+        "@typescript-eslint/eslint-plugin": "^8.54.0",
+        "@typescript-eslint/parser": "^8.54.0",
+        "cpx2": "^8.0.0",
+        "eslint": "^9.39.2",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.5",
+        "globals": "^17.3.0",
+        "husky": "^8.0.0",
+        "nodemon": "^3.1.7",
+        "npm-run-all": "^4.1.5",
+        "prettier": "^3.8.1",
+        "rimraf": "^6.0.1",
+        "typescript": "^5.7.2",
+        "typescript-eslint": "^8.54.0"
+    },
+    "lint-staged": {
+        "{src,test}/**/*.{ts,js}": [
+            "prettier --write",
+            "eslint --fix"
+        ],
+        "{src,test}/**/*.json": [
+            "prettier --write"
+        ],
+        "package.json": [
+            "prettier --write"
+        ]
+    },
+    "parserOptions": {
+        "project": [
+            "./tsconfig.*.json"
+        ]
+    },
+    "exports": {
+        "./*": {
+            "types": "./out/src/*.d.ts",
+            "default": "./out/src/*.js"
+        }
     }
-  }
 }

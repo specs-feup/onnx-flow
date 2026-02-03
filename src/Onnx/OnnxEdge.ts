@@ -2,7 +2,6 @@ import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
 
 namespace OnnxEdge {
-
     export const TAG = "__specs-onnx__onnx_edge";
     export const VERSION = "1";
 
@@ -10,7 +9,6 @@ namespace OnnxEdge {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseEdge.Class<D, S> {
-
         get literalType(): number | undefined {
             return this.data[TAG].literalType;
         }
@@ -19,21 +17,20 @@ namespace OnnxEdge {
             this.data[TAG].literalType = value;
         }
 
-        get shape(): (number|String)[] {
+        get shape(): (number | string)[] {
             return this.data[TAG].shape;
         }
 
         set shape(value: number[]) {
             this.data[TAG].shape = value;
         }
-    }   
+    }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
-
         private literalType?: number;
-        private shape: (number|String)[];
+        private shape: (number | string)[];
 
-        constructor(literalType?: number, shape: (number|String)[] = []) {
+        constructor(literalType?: number, shape: (number | string)[] = []) {
             this.literalType = literalType;
             this.shape = shape;
         }
@@ -57,16 +54,15 @@ namespace OnnxEdge {
     }
 
     export const TypeGuard = Edge.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseEdge.Data {
         [TAG]: {
             version: typeof VERSION;
             literalType?: number;
-            shape: (number|String)[];
+            shape: (number | string)[];
         };
     }
 
     export interface ScratchData extends BaseEdge.ScratchData {}
-
 }
 export default OnnxEdge;
