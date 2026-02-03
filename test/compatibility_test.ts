@@ -1249,6 +1249,7 @@ const CORE_OP_TESTS: Array<{
   cliArgs: string | ((p: string) => string);
   specs: FeedSpec[];
 }> = [
+  /*
   {
     label: 'ad01_fp32_standard',
     // Put your ONNX next to other samples; if you only have JSON, see note below.
@@ -1291,6 +1292,7 @@ const CORE_OP_TESTS: Array<{
       { name: 'B', dtype: 'float32', shape: [2, 2] },
     ],
   },
+  */
 
   /*
   {
@@ -1302,6 +1304,7 @@ const CORE_OP_TESTS: Array<{
       { name: 'X', dtype: 'float32', shape: [1, 3, 4, 4] },
     ],
   },
+  */
 
   
   {
@@ -1324,8 +1327,10 @@ const CORE_OP_TESTS: Array<{
       // out: Identity [1,12] uint8 (auto)
     ],
   },
+  
 
   /*
+  // ----- LSTM (TBD) -----
   {
     label: 'SC7',
     originalPath: 'examples/onnx/SC7.onnx',

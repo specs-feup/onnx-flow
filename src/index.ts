@@ -95,6 +95,10 @@ const argv = await yargs(hideBin(process.argv))
   })
   .strictOptions()
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
+  .group(['partition'], 'Partitioning Options (overrides Transformation Options):')
+  .group(['fuse', 'coalesce', 'recurse', 'loopLowering', 'noLowLevel', 'noOptimize'], 'Transformation Options:')
+  .group(['format', 'output', 'visualization', 'formatter'], 'Output & Visualization Options:')
+  .group(['checkEquivalence', 'verbosity', 'noCodegen', 'noReconversion'], 'Development & Testing Options:')
   .option('output', {
     alias: 'o',
     describe: 'Output resulting graph to a file',
@@ -192,6 +196,7 @@ const argv = await yargs(hideBin(process.argv))
     type: 'string',
     array: true,
   })
+  // Enforce mutual exclusion at the CLI level
   .check((argv) => {
     if (argv.partition !== undefined) {
       if (argv.partition.length < 1 || argv.partition.length > 2) {
@@ -298,16 +303,25 @@ if (isPartitioning) {
         if (verbosity > 0) console.log(`Partitioning graph at node: ${targetNodeId}`);
         const sets = splitByAncestor(graph, targetNodeId);
         partitions = partitionGraph(graph, sets);
-
-        const base = inputFilePath.split('.').slice(0, -1).join('.');
         
         const exportPartition = async (g: any, suffix: string) => {
-            const jsonPath = `${base}_${suffix}.json`;
-            const onnxPath = `${base}_${suffix}.onnx`;
-            const onnxJson = convertFlowGraphToOnnxJson(g, `${suffix}_graph`);
-            safeWriteJson(jsonPath, onnxJson);
-            await jsonToOnnx(jsonPath, onnxPath);
-            if (verbosity > 0) console.log(`Saved ${suffix} to ${onnxPath}`);
+            const base = outputFilePath ? outputFilePath.split('.').slice(0, -1).join('.') : inputFilePath.split('.').slice(0, -1).join('.');
+            const fileName = `${base}_${suffix}`;
+
+            // Always generate ONNX/JSON if reconversion is enabled
+            if (!argv.noReconversion) {
+                const onnxJson = convertFlowGraphToOnnxJson(g, `${suffix}_graph`);
+                safeWriteJson(`${fileName}.json`, onnxJson);
+                await jsonToOnnx(`${fileName}.json`, `${fileName}.onnx`);
+                if (verbosity > 0) console.log(`Created ONNX partition: ${fileName}.onnx`);
+            }
+
+            // Respect the --format flag for the partition files
+            if (outputFormat === 'json') {
+                fs.writeFileSync(`${fileName}.json`, JSON.stringify(g.toCy().json(), null, 2));
+            } else if (outputFormat === 'dot') {
+                fs.writeFileSync(`${fileName}.dot`, g.toString(dotFormatter));
+            }
         };
 
         await exportPartition(partitions.head, "head");
@@ -337,7 +351,7 @@ if (isPartitioning) {
 
 
     // Convert the ONNX JSON format to ONNX binary format if not disabled
-    if (!argv.noReconversion) {
+    if (!argv.noReconversion && !isPartitioning) {
       const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
       const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
 
@@ -348,16 +362,28 @@ if (isPartitioning) {
       await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
       console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
     }
-    else if (verbosity > 0) {
+    else if (verbosity > 0 && !isPartitioning) {
       console.log('Skipping ONNX reconversion.');
     }
 
     // Print the output graph to stdout
     if (verbosity > 0) {
       if (outputFormat === 'json') {
-        console.log('Output Graph in JSON Format:', JSON.stringify(graph.toCy().json(), null, 2));
+        if (isPartitioning && partitions){
+          console.log('Output Head Graph in JSON Format:', JSON.stringify(partitions.head.toCy().json(), null, 2));
+          console.log('Output Tail Graph in JSON Format:', JSON.stringify(partitions.tail.toCy().json(), null, 2));
+        }
+        else{
+          console.log('Output Graph in JSON Format:', JSON.stringify(graph.toCy().json(), null, 2));
+        }
       } else if (outputFormat === 'dot') {
-        console.log('Output Graph in DOT Format:', graph.toString(dotFormatter));
+        if (isPartitioning && partitions){
+          console.log('Output Head Graph in DOT Format:', partitions.head.toString(dotFormatter));
+          console.log('Output Tail Graph in DOT Format:', partitions.tail.toString(dotFormatter));
+        }
+        else{
+          console.log('Output Graph in DOT Format:', graph.toString(dotFormatter));
+        }
       }
     }
 

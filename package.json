@@ -34,8 +34,10 @@
 
     "pretest": "npm run build",
     "pretestcomp": "npm run build",
+    "pretestpartition": "npm run build",
     "test": "node ./out/test/testing.js",
     "testcomp": "node ./out/test/compatibility_test.js",
+    "testpartition": "node ./out/test/partition_test.js",
 
     "dev": "npm-run-all --parallel build:watch dev:testcomp",
     "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
