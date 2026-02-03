@@ -304,6 +304,17 @@ if (isPartitioning) {
             }
         }
 
+        if (verbosity > 1) {
+            if (outputFormat === "json") {
+                console.log(
+                    "Low-level Graph in JSON Format:",
+                    JSON.stringify(graph.toCy().json(), null, 2),
+                );
+            } else if (outputFormat === "dot") {
+                console.log("Low-level Graph in DOT Format:", graph.toString(dotFormatter));
+            }
+        }
+
         if (!argv.noLowLevel && !argv.noOptimize) {
             graph.apply(new OnnxGraphOptimizer());
         }

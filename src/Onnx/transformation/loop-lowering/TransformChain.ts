@@ -8,7 +8,6 @@ import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 import { toStaticShape } from "../../Utils.js";
-import transformForCgra from "./TransformForCgra.js";
 
 function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
     const rI = inDims.length;
@@ -299,14 +298,8 @@ export default class TransformChain implements Graph.Transformation<
     ) {}
 
     apply(g: OnnxGraph.Class): OnnxGraph.Class {
-        if (this.decomposeForCgra) {
-            transformForCgra(g);
-
-            // Transformations for CGRA is not compatible with the other decompositions
-            return g;
-        }
-
         // LSTM TBD
+
         // Fast path: no fusion — build one Loop per supported op
         if (!this.fuse) {
             const supported = new Set<string>();

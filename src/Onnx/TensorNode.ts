@@ -41,6 +41,10 @@ namespace TensorNode {
             return this.data[TAG].type;
         }
 
+        get address(): number {
+            return this.data[TAG].address;
+        }
+
         get constantValue(): TensorProto | undefined {
             return this.data[TAG].constantValue;
         }
@@ -70,6 +74,7 @@ namespace TensorNode {
         private literalType: number;
         private shape: (number | string)[];
         private type: TensorKind;
+        private address: number;
         private constantValue?: TensorProto;
         private originalInitializer?: TensorProto;
         private extraAttrs?: AttributeProto[];
@@ -85,6 +90,7 @@ namespace TensorNode {
             this.literalType = literalType;
             this.shape = shape;
             this.type = type;
+            this.address = 0; // TODO(Process-ing): Allow reading addresses
             this.constantValue = constantValue;
             this.originalInitializer = originalInitializer;
             this.extraAttrs = extraAttrs;
@@ -98,6 +104,7 @@ namespace TensorNode {
                     literalType: this.literalType,
                     shape: this.shape,
                     type: this.type,
+                    address: this.address,
                     constantValue: this.constantValue,
                     originalInitializer: this.originalInitializer,
                     extraAttrs: this.extraAttrs,
@@ -120,6 +127,7 @@ namespace TensorNode {
             literalType: number;
             shape: (number | string)[];
             type: TensorKind;
+            address: number;
             constantValue?: TensorProto;
             originalInitializer?: TensorProto;
             extraAttrs?: AttributeProto[];
