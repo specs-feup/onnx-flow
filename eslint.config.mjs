@@ -1,15 +1,15 @@
-import globals from "globals";
-import pluginJs from "@eslint/js";
-import tseslint from "typescript-eslint";
-import pluginPrettierRecommended from "eslint-plugin-prettier/recommended";
+import pluginJs from '@eslint/js';
+import pluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   // 1. Target all files
-  { files: ["**/*.{js,mjs,cjs,ts}"] },
+  {files: ['**/*.{js,mjs,cjs,ts}']},
 
   // 2. Define environments (Node.js for your CLI tool)
-  { languageOptions: { globals: { ...globals.node, ...globals.browser } } },
+  {languageOptions: {globals: {...globals.node, ...globals.browser}}},
 
   // 3. Base JS rules
   pluginJs.configs.recommended,
@@ -23,13 +23,28 @@ export default [
   // 6. Custom Overrides
   {
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-      "prettier/prettier": "error",
+      // Allow explicit "any" for now
+      '@typescript-eslint/no-explicit-any': 'off',
+
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      'prettier/prettier': 'error',
+
+      // Configure unused variables to ignore those starting with an underscore
+      '@typescript-eslint/no-unused-vars': [
+        'error', {
+          'argsIgnorePattern': '^_',
+          'varsIgnorePattern': '^_',
+          'caughtErrorsIgnorePattern': '^_'
+        }
+      ],
+
+      // Allow namespaces and empty interfaces because of flow
+      '@typescript-eslint/no-namespace': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
     },
   },
   {
     // Ignore specific folders (replacing .eslintignore)
-    ignores: ["dist/", "out/", "node_modules/", "*.min.js"],
+    ignores: ['dist/', 'out/', 'node_modules/', '*.min.js'],
   },
 ];
