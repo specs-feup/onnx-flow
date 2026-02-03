@@ -29,3 +29,13 @@ node_modules
 .idea
 /graph.dot
 .DS_Store
+.env
+.eslintrc.json
+.husky/
+.prettierrc
+.vscode/
+agents/
+comparison_test/
+demo/
+onnx_out/
+python scripts/
