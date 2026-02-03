@@ -96,8 +96,8 @@ const argv = await yargs(hideBin(process.argv))
   .strictOptions()
   .demandCommand(1, 'You need to provide an input file (ONNX or JSON)')
   .group(['partition'], 'Partitioning Options (overrides Transformation Options):')
-  .group(['fuse', 'coalesce', 'recurse', 'loopLowering', 'noLowLevel', 'noOptimize'], 'Transformation Options:')
-  .group(['format', 'output', 'visualization', 'formatter'], 'Output & Visualization Options:')
+  .group(['fuse', 'coalesce', 'recurse', 'loopLowering', 'decomposeForCgra', 'noLowLevel', 'noOptimize'], 'Transformation Options:')
+  .group(['output', 'format', 'visualization', 'formatter'], 'Output & Visualization Options:')
   .group(['checkEquivalence', 'verbosity', 'noCodegen', 'noReconversion'], 'Development & Testing Options:')
   .option('output', {
     alias: 'o',
