@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 
+import fs from 'fs';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import express, { Request, Response } from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from './initGraph.js';
-import OnnxGraphTransformer from './Onnx/transformation/LowLevelTransformation/LowLevelConversion.js';
-import OnnxGraphOptimizer from './Onnx/transformation/OptimizeForDimensions/OptimizeForDimensions.js';
+import OnnxGraphTransformer from './Onnx/transformation/loop-lowering/index.js';
+import OnnxGraphOptimizer from './Onnx/transformation/shape-optimization/index.js';
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
+import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 import { generateCode } from './codeGeneration.js';
 import { onnx2json } from './onnx2json.js';
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
+import { safeWriteJson } from './Onnx/Utils.js';
+import { DecompositionOptions, defaultDecompositionOptions } from './DecompositionOptions.js';
+
 
 export async function parseOnnxFile(inputFilePath: string){
   return await onnx2json(inputFilePath);
@@ -24,20 +28,29 @@ export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string){
   return await json2onnx(jsonFilePath, outputFilePath);
 }
 
-export function loadGraph(onnxObject: any, enableLowLevel: boolean = true, enableOptimize: boolean = true, 
-  dotOutput: boolean = true, 
-  fuse: boolean = true, recurse: boolean = false, coalesce: boolean = true) {
+export function loadGraph(
+  onnxObject: any,
+  enableLowLevel: boolean = true,
+  enableOptimize: boolean = true,
+  dotOutput: boolean = true,
+  fuse: boolean = defaultDecompositionOptions.fuse,
+  recurse: boolean = defaultDecompositionOptions.recurse,
+  coalesce: boolean = defaultDecompositionOptions.coalesce,
+  loopLowering: boolean = defaultDecompositionOptions.loopLowering,
+  decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra
+) {
   let graph = createGraph(onnxObject);
 
   if (enableLowLevel) {
-    graph = graph.apply(new OnnxGraphTransformer(fuse, recurse, coalesce));
+    const decompOptions: DecompositionOptions = { fuse, recurse, coalesce, loopLowering, decomposeForCgra };
+    graph = graph.apply(new OnnxGraphTransformer(decompOptions));
   }
 
   if (enableLowLevel && enableOptimize) {
     graph = graph.apply(new OnnxGraphOptimizer());
   }
 
-  if(dotOutput){
+  if (dotOutput) {
     return graph.toString(dotFormatter);
   }
   return graph;
@@ -130,21 +143,46 @@ const argv = await yargs(hideBin(process.argv))
     type: 'number',
     default: 2,
   })
-    .option('fuse', {
+  .option('fuse', {
     alias: 'f',
     describe: 'Fuse supported ops into a single Loop when possible',
     type: 'boolean',
-    default: true,
+    default: defaultDecompositionOptions.fuse,
   })
   .option('coalesce', {
     alias: 'c',
     describe: 'Use coalesced scalar MAC for MatMul inside Loop bodies',
     type: 'boolean',
-    default: true,
+    default: defaultDecompositionOptions.coalesce,
   })
   .option('recurse', {
     alias: 'r',
     describe: 'Recursively decompose inside generated Loop bodies',
+    type: 'boolean',
+    default: defaultDecompositionOptions.recurse,
+  })
+    .option('loopLowering', {
+    alias: 'll',
+    describe: 'Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable',
+    type: 'boolean',
+    default: defaultDecompositionOptions.loopLowering,
+  })
+    .option("formatter", {
+    alias: "fmtr",
+    describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
+    type: "string",
+    choices: ["default", "cgra"],
+    default: "default",
+  })
+  .option("decomposeForCgra", {
+    alias: "dgc",
+    describe: "Decompose the graph for CGRA mapping",
+    type: "boolean",
+    default: false,
+  })
+    .option('checkEquivalence', {
+    alias: 'qe',
+    describe: 'Run ONNXRuntime equivalence check using test inputs (when available)',
     type: 'boolean',
     default: false,
   })
@@ -161,7 +199,8 @@ const verbosity = argv.verbosity;
 const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
-const dotFormatter = new OnnxDotFormatter();
+const dotFormatter =
+  argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
 
 
 (async function main() {
@@ -189,8 +228,15 @@ const dotFormatter = new OnnxDotFormatter();
       }
     }
 
-    if(!argv.noLowLevel){
-      graph.apply(new OnnxGraphTransformer(argv.fuse, argv.recurse, argv.coalesce));
+    if (!argv.noLowLevel) {
+      const decompOptions: DecompositionOptions = {
+        fuse: argv.fuse,
+        recurse: argv.recurse,
+        coalesce: argv.coalesce,
+        decomposeForCgra: argv.decomposeForCgra,
+        loopLowering: argv.loopLowering,
+      };
+      graph.apply(new OnnxGraphTransformer(decompOptions));
     }
 
     if (verbosity > 1){
@@ -199,8 +245,8 @@ const dotFormatter = new OnnxDotFormatter();
       } else if (outputFormat === 'dot') {
         console.log('Low-level Graph in DOT Format:', graph.toString(dotFormatter));
       }
-    }    
-      
+    }
+
     if (!argv.noLowLevel && !argv.noOptimize) {
       graph.apply(new OnnxGraphOptimizer());
     }
@@ -232,12 +278,13 @@ const dotFormatter = new OnnxDotFormatter();
       const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
       const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
 
-      fs.writeFileSync(reconvertedJsonPath, JSON.stringify(onnxCompatibleJson, null, 2));
+      // Use streaming writer to avoid RangeError for huge SC* models
+      safeWriteJson(reconvertedJsonPath, onnxCompatibleJson);
       console.log(`Reconverted JSON written to ${reconvertedJsonPath}`);
 
       await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
       console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-    } 
+    }
     else if (verbosity > 0) {
       console.log('Skipping ONNX reconversion.');
     }
@@ -257,13 +304,42 @@ const dotFormatter = new OnnxDotFormatter();
       if (verbosity > 0) console.log('Generated Code:', generatedCode);
     }
 
+    // Optional: run ORT equivalence check using the test metadata, if requested.
+    if (argv.checkEquivalence) {
+      const { onnx: reconvertedOnnxPath } = getReconvertedPaths(inputFilePath);
+
+      // If reconversion was disabled and we don’t already have a reconverted file, just skip.
+      if (argv.noReconversion && !fs.existsSync(reconvertedOnnxPath)) {
+        console.log(
+          `--checkEquivalence requested but reconversion was disabled and ` +
+          `no reconverted model was found at ${reconvertedOnnxPath}. Skipping equivalence check.`
+        );
+      } else {
+        try {
+          // Dynamic import so that compatibility_test.ts is only loaded if needed
+          const { runEquivalenceForOriginalPath } = await import('../test/compatibility_test.js');
+
+          const result = await runEquivalenceForOriginalPath(inputFilePath, {
+            skipCli: true,   // reconversion was already done by this CLI run
+          });
+
+          if (result === 'no-config') {
+            // Exactly the behaviour you described for “we don’t know the input information”
+            console.log(
+              `No test input specification found for '${inputFilePath}'. ` +
+              `Equivalence check skipped without affecting the rest of the run.`
+            );
+          } else {
+            console.log(`Equivalence check result for '${inputFilePath}': ${result}`);
+          }
+        } catch (e) {
+          console.error('❌ Failed to run equivalence check:', e);
+        }
+      }
+    }
+
     // Step 5: Graphviz Online link generation
     if (visualizationOption > 0) {
-      // TEMP
-      if(!argv.noLowLevel){
-        graph = createGraph(convertFlowGraphToOnnxJson(graph));
-      }
-
       if (visualizationOption == 1){
         console.log('Graphviz Online Link:', generateGraphvizOnlineLink(graph.toString(dotFormatter)));
       }

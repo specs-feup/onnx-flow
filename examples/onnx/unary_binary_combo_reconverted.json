@@ -1,0 +1,1171 @@
+{
+  "irVersion": 9,
+  "opsetImport": [
+    {
+      "version": 17
+    }
+  ],
+  "graph": {
+    "name": "Graph",
+    "initializer": [
+      {
+        "name": "init_carry",
+        "dataType": 1,
+        "dims": [
+          6
+        ],
+        "floatData": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "node": [
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "trip_count_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "trip_count_0",
+              "dataType": 7,
+              "dims": [],
+              "int64Data": [
+                6
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Constant",
+        "input": [],
+        "output": [
+          "cond_0"
+        ],
+        "attribute": [
+          {
+            "name": "value",
+            "type": 4,
+            "t": {
+              "name": "cond_0",
+              "dataType": 9,
+              "dims": [],
+              "int32Data": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "opType": "Loop",
+        "input": [
+          "trip_count_0",
+          "cond_0",
+          "init_carry"
+        ],
+        "output": [
+          "O"
+        ],
+        "attribute": [
+          {
+            "name": "body",
+            "type": 5,
+            "g": {
+              "name": "loop_body_0",
+              "initializer": [],
+              "node": [
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "axes"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "axes",
+                        "dataType": 7,
+                        "dims": [
+                          1
+                        ],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_X_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_X_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          6
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_X_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_X_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_X_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_X_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_A_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_A_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          6
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_A_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_A_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_A_0_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_A_0_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_B_1_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_B_1_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          6
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_B_1"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_B_1",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_B_1_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_B_1_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_Y_4_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_Y_4_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          6
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_Y_4"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_Y_4",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_Y_4_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_Y_4_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "mr_dim_gb_S_6_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "mr_dim_gb_S_6_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          6
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_zero_gb_lin_S_6"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_zero_gb_lin_S_6",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "lin_stride_gb_lin_S_6_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "lin_stride_gb_lin_S_6_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          1
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "iter",
+                    "axes"
+                  ],
+                  "output": [
+                    "unsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_X_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_X_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_X_0_0",
+                    "lin_stride_gb_lin_X_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_X_0",
+                    "lin_mul_out_gb_lin_X_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_X_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_X_0_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_X_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "X",
+                    "gb_linU_X_0_out"
+                  ],
+                  "output": [
+                    "gb_g_X_0_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_A_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_A_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_A_0_0",
+                    "lin_stride_gb_lin_A_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_A_0",
+                    "lin_mul_out_gb_lin_A_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_A_0_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_A_0_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_A_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "A",
+                    "gb_linU_A_0_out"
+                  ],
+                  "output": [
+                    "gb_g_A_0_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gb_g_X_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_0_in0_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gb_g_A_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_0_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "sq_0_in0_scalar_out",
+                    "sq_0_in1_scalar_out"
+                  ],
+                  "output": [
+                    "0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_B_1_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_B_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_B_1_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_B_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_B_1_0",
+                    "lin_stride_gb_lin_B_1_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_B_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_B_1",
+                    "lin_mul_out_gb_lin_B_1_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_B_1_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_B_1_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_B_1_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "B",
+                    "gb_linU_B_1_out"
+                  ],
+                  "output": [
+                    "gb_g_B_1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gb_g_B_1_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "0_out",
+                    "sq_1_in1_scalar_out"
+                  ],
+                  "output": [
+                    "1_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Relu",
+                  "input": [
+                    "1_out"
+                  ],
+                  "output": [
+                    "2_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Sigmoid",
+                  "input": [
+                    "2_out"
+                  ],
+                  "output": [
+                    "3_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_Y_4_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_Y_4_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_Y_4_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_Y_4_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_Y_4_0",
+                    "lin_stride_gb_lin_Y_4_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_Y_4_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_Y_4",
+                    "lin_mul_out_gb_lin_Y_4_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_Y_4_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_Y_4_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_Y_4_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "Y",
+                    "gb_linU_Y_4_out"
+                  ],
+                  "output": [
+                    "gb_g_Y_4_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gb_g_Y_4_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_4_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Sub",
+                  "input": [
+                    "3_out",
+                    "sq_4_in1_scalar_out"
+                  ],
+                  "output": [
+                    "4_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Exp",
+                  "input": [
+                    "4_out"
+                  ],
+                  "output": [
+                    "5_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mod",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_S_6_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_gb_S_6_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "iter",
+                    "mr_dim_gb_S_6_0"
+                  ],
+                  "output": [
+                    "mr_div_out_gb_S_6_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "mr_mod_out_gb_S_6_0",
+                    "lin_stride_gb_lin_S_6_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_S_6_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "lin_zero_gb_lin_S_6",
+                    "lin_mul_out_gb_lin_S_6_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_S_6_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "lin_add_out_gb_lin_S_6_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_S_6_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "S",
+                    "gb_linU_S_6_out"
+                  ],
+                  "output": [
+                    "gb_g_S_6_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "gb_g_S_6_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_6_in1_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Div",
+                  "input": [
+                    "5_out",
+                    "sq_6_in1_scalar_out"
+                  ],
+                  "output": [
+                    "6_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Tanh",
+                  "input": [
+                    "6_out"
+                  ],
+                  "output": [
+                    "7_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "7_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "updateUnsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "ScatterElements",
+                  "input": [
+                    "carry",
+                    "unsq_out",
+                    "updateUnsq_out"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Identity",
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "attribute": []
+                }
+              ],
+              "input": [
+                {
+                  "name": "iter",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 7,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 6
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 6
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "valueInfo": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 9,
+                      "shape": {
+                        "dim": []
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensorType": {
+                      "elemType": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dimValue": 6
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 6
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "A",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 6
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 6
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Y",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 6
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "S",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 6
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "O",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": 6
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

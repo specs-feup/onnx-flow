@@ -139,29 +139,6 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "shape1_0"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "value",
-                      "type": 4,
-                      "t": {
-                        "name": "shape1_0",
-                        "dataType": 7,
-                        "dims": [
-                          1
-                        ],
-                        "int64Data": [
-                          1
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "opType": "Constant",
-                  "input": [],
-                  "output": [
                     "KN_0"
                   ],
                   "attribute": [
@@ -174,6 +151,27 @@
                         "dims": [],
                         "int64Data": [
                           9
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "K_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "K_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          3
                         ]
                       }
                     }
@@ -204,14 +202,35 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "shapeK_0"
+                    "Km1_0"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "shapeK_0",
+                        "name": "Km1_0",
+                        "dataType": 7,
+                        "dims": [],
+                        "int64Data": [
+                          2
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "opType": "Constant",
+                  "input": [],
+                  "output": [
+                    "fixshape_a_vec_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "type": 4,
+                      "t": {
+                        "name": "fixshape_a_vec_0",
                         "dataType": 7,
                         "dims": [
                           1
@@ -227,14 +246,14 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "shapeK2_0"
+                    "fixshape_b_vec_0"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "shapeK2_0",
+                        "name": "fixshape_b_vec_0",
                         "dataType": 7,
                         "dims": [
                           1
@@ -250,44 +269,33 @@
                   "opType": "Constant",
                   "input": [],
                   "output": [
-                    "flat_shape_B"
+                    "g2d_B_1_shape1"
                   ],
                   "attribute": [
                     {
                       "name": "value",
                       "type": 4,
                       "t": {
-                        "name": "flat_shape_B",
+                        "name": "g2d_B_1_shape1",
                         "dataType": 7,
                         "dims": [
                           1
                         ],
                         "int64Data": [
-                          9
+                          1
                         ]
                       }
                     }
                   ]
                 },
                 {
-                  "opType": "Unsqueeze",
-                  "input": [
-                    "iter",
-                    "axes"
-                  ],
-                  "output": [
-                    "unsq_out"
-                  ],
-                  "attribute": []
-                },
-                {
                   "opType": "Div",
                   "input": [
                     "iter",
                     "KN_0"
                   ],
                   "output": [
-                    "Div_ijIdx_out"
+                    "Div_i_0_out"
                   ],
                   "attribute": []
                 },
@@ -298,36 +306,36 @@
                     "KN_0"
                   ],
                   "output": [
-                    "Mod_kIdx_out"
+                    "Mod_rem_0_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Div",
                   "input": [
-                    "Div_ijIdx_out",
-                    "N_0"
+                    "Mod_rem_0_out",
+                    "K_0"
                   ],
                   "output": [
-                    "Div_iIdx_out"
+                    "Div_j_0_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Mod",
                   "input": [
-                    "Div_ijIdx_out",
-                    "N_0"
+                    "Mod_rem_0_out",
+                    "K_0"
                   ],
                   "output": [
-                    "Mod_jIdx_out"
+                    "Mod_k_0_out"
                   ],
                   "attribute": []
                 },
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "Div_iIdx_out",
+                    "Div_i_0_out",
                     "axes"
                   ],
                   "output": [
@@ -338,7 +346,7 @@
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "Mod_jIdx_out",
+                    "Div_j_0_out",
                     "axes"
                   ],
                   "output": [
@@ -349,7 +357,7 @@
                 {
                   "opType": "Unsqueeze",
                   "input": [
-                    "Mod_kIdx_out",
+                    "Mod_k_0_out",
                     "axes"
                   ],
                   "output": [
@@ -358,110 +366,9 @@
                   "attribute": []
                 },
                 {
-                  "opType": "Gather",
-                  "input": [
-                    "X",
-                    "iU_0_out"
-                  ],
-                  "output": [
-                    "a_row_0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Reshape",
-                  "input": [
-                    "a_row_0_out",
-                    "shapeK_0"
-                  ],
-                  "output": [
-                    "reshaped_a_vec_0"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "reshaped_a_vec_0",
-                    "kU_0_out"
-                  ],
-                  "output": [
-                    "a_val_0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "A",
-                    "jU_0_out"
-                  ],
-                  "output": [
-                    "b_col_0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 1,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
-                  "opType": "Reshape",
-                  "input": [
-                    "b_col_0_out",
-                    "shapeK2_0"
-                  ],
-                  "output": [
-                    "reshaped_b_vec_0"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Gather",
-                  "input": [
-                    "reshaped_b_vec_0",
-                    "kU_0_out"
-                  ],
-                  "output": [
-                    "b_val_0_out"
-                  ],
-                  "attribute": [
-                    {
-                      "name": "axis",
-                      "i": 0,
-                      "type": 2
-                    }
-                  ]
-                },
-                {
                   "opType": "Mul",
                   "input": [
-                    "a_val_0_out",
-                    "b_val_0_out"
-                  ],
-                  "output": [
-                    "prod_0"
-                  ],
-                  "attribute": []
-                },
-                {
-                  "opType": "Mul",
-                  "input": [
-                    "Div_iIdx_out",
+                    "Div_i_0_out",
                     "N_0"
                   ],
                   "output": [
@@ -473,7 +380,7 @@
                   "opType": "Add",
                   "input": [
                     "iMulN_out_0",
-                    "Mod_jIdx_out"
+                    "Div_j_0_out"
                   ],
                   "output": [
                     "flat_out_0"
@@ -488,6 +395,129 @@
                   ],
                   "output": [
                     "flatU_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "X",
+                    "iU_0_out"
+                  ],
+                  "output": [
+                    "a_row_out_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "a_row_out_0",
+                    "fixshape_a_vec_0"
+                  ],
+                  "output": [
+                    "reshaped_a_vec_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "reshaped_a_vec_0",
+                    "kU_0_out"
+                  ],
+                  "output": [
+                    "a_scalar_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "a_scalar_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_a_sq_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "A",
+                    "jU_0_out"
+                  ],
+                  "output": [
+                    "b_col_out_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 1,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "b_col_out_0",
+                    "fixshape_b_vec_0"
+                  ],
+                  "output": [
+                    "reshaped_b_vec_0"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Gather",
+                  "input": [
+                    "reshaped_b_vec_0",
+                    "kU_0_out"
+                  ],
+                  "output": [
+                    "b_scalar_0"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 0,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "b_scalar_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_b_sq_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Mul",
+                  "input": [
+                    "sq_a_sq_0_out",
+                    "sq_b_sq_0_out"
+                  ],
+                  "output": [
+                    "prod_0"
                   ],
                   "attribute": []
                 },
@@ -509,9 +539,20 @@
                   ]
                 },
                 {
-                  "opType": "Add",
+                  "opType": "Squeeze",
                   "input": [
                     "prev_out_0",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_prev_sq_0_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Add",
+                  "input": [
+                    "sq_prev_sq_0_out",
                     "prod_0"
                   ],
                   "output": [
@@ -520,24 +561,13 @@
                   "attribute": []
                 },
                 {
-                  "opType": "Reshape",
-                  "input": [
-                    "B",
-                    "flat_shape_B"
-                  ],
-                  "output": [
-                    "B_flat"
-                  ],
-                  "attribute": []
-                },
-                {
                   "opType": "Gather",
                   "input": [
-                    "B_flat",
-                    "unsq_out"
+                    "B",
+                    "iU_0_out"
                   ],
                   "output": [
-                    "gather_B_1_out"
+                    "g2d_B_1_g0_out"
                   ],
                   "attribute": [
                     {
@@ -548,9 +578,48 @@
                   ]
                 },
                 {
+                  "opType": "Gather",
+                  "input": [
+                    "g2d_B_1_g0_out",
+                    "jU_0_out"
+                  ],
+                  "output": [
+                    "g2d_B_1_g1_out"
+                  ],
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": 1,
+                      "type": 2
+                    }
+                  ]
+                },
+                {
+                  "opType": "Reshape",
+                  "input": [
+                    "g2d_B_1_g1_out",
+                    "g2d_B_1_shape1"
+                  ],
+                  "output": [
+                    "g2d_B_1_out1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Squeeze",
+                  "input": [
+                    "g2d_B_1_out1",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_1_in0_scalar_out"
+                  ],
+                  "attribute": []
+                },
+                {
                   "opType": "Add",
                   "input": [
-                    "gather_B_1_out",
+                    "sq_1_in0_scalar_out",
                     "acc_out_0"
                   ],
                   "output": [
@@ -559,11 +628,45 @@
                   "attribute": []
                 },
                 {
+                  "opType": "Equal",
+                  "input": [
+                    "Mod_k_0_out",
+                    "Km1_0"
+                  ],
+                  "output": [
+                    "eq_k_last_1_out"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Where",
+                  "input": [
+                    "eq_k_last_1_out",
+                    "1_out",
+                    "acc_out_0"
+                  ],
+                  "output": [
+                    "gated_1"
+                  ],
+                  "attribute": []
+                },
+                {
+                  "opType": "Unsqueeze",
+                  "input": [
+                    "gated_1",
+                    "axes"
+                  ],
+                  "output": [
+                    "updateUnsq_out"
+                  ],
+                  "attribute": []
+                },
+                {
                   "opType": "ScatterElements",
                   "input": [
                     "carry",
-                    "unsq_out",
-                    "1_out"
+                    "flatU_0_out",
+                    "updateUnsq_out"
                   ],
                   "output": [
                     "carry_out"

@@ -1,6 +1,6 @@
 {
   "name": "@specs-feup/onnx-flow",
-  "version": "1.0.5",
+  "version": "1.0.7-demo.0",
   "engines": {
     "node": ">=16"
   },
@@ -9,7 +9,8 @@
   },
   "description": "Tool to convert an ONNX graph into a data-flow graph (DFG), decomposing its high-level operations into low-level operations and performing a set of optimizations.",
   "bin": {
-    "onnx-flow": "./out/src/index.js"
+    "onnx-flow": "./out/src/index.js",
+    "onnx-flow-testcomp": "./out/test/compatibility_test.js"
   },
   "keywords": [
     "onnx",
@@ -40,7 +41,10 @@
     "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
 
     "prepare": "npm run build",
-    "prepublishOnly": "npm run clean && npm run build && npm run typecheck"
+    "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
+
+    "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
+    "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js"
   },
   "author": "Nelson Neto, José Pedro Ferreira",
   "repository": {

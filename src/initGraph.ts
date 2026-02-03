@@ -1,13 +1,47 @@
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
+import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { AttributeProto, AttributeType, DataType, TensorProto } from "./Onnx/OnnxTypes.js";
-import { topologicalSortOperationNodes } from "./flow2json.js";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
+import inferShapes from "./Onnx/InferShapes.js";
 
 const BASE_TEN = 10;
+
+function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
+  if (!data.graph.valueInfo) return;
+
+  // Collect all outputs of Constant nodes so we don't create dummy intermediates for them
+  const constantOutputs = new Set<string>();
+  for (const node of data.graph.node ?? []) {
+    if (node.opType === "Constant") {
+      for (const out of node.output ?? []) {
+        if (out) constantOutputs.add(out);
+      }
+    }
+  }
+
+  data.graph.valueInfo.forEach((vi: any) => {
+    const name = vi.name;
+
+    // Skip if we already created it as input/output/initializer
+    if (graph.hasNode(name)) return;
+
+    // Skip valueInfo for Constant outputs — they'll be created as proper "constant" tensors in addNodes
+    if (constantOutputs.has(name)) return;
+
+    const shape = parseShape(vi.type.tensorType.shape);
+    const elemType = vi.type.tensorType.elemType;
+
+    graph.addNode(name)
+      .init(new TensorNode.Builder(elemType, shape, "intermediate"))
+      .as(TensorNode);
+
+    definedVars.push(name);
+  });
+}
 
 // Helper function to convert shape to number[]
 function parseShape(shape: any): (number | String)[] {
@@ -78,8 +112,8 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
     for (const nodeIndex of nodesToAdd) {
       const node = data.graph.node[nodeIndex];
       const allInputsDefined = node.input.every((input: string) => definedVars.includes(input));
-    
-    
+
+
     if (node.opType === "Constant" && node.output?.length > 0) {
         const name = node.output[0];
 
@@ -96,10 +130,19 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
 
         const dataType = constantValue?.dataType ?? AttributeType.UNDEFINED;
         const shape = constantValue?.dims ?? [];
-        graph.addNode(name)
-          .init(new TensorNode.Builder(dataType, shape, "constant", constantValue, undefined, extraAttrs))
-          .as(TensorNode);
 
+        if (!graph.hasNode(name)) {
+            graph.addNode(name)
+              .init(new TensorNode.Builder(
+                dataType,
+                shape,
+                "constant",
+                constantValue,
+                undefined,
+                extraAttrs
+              ))
+              .as(TensorNode);
+        }
 
         definedVars.push(name);
         addedNodes.add(nodeIndex);
@@ -196,6 +239,14 @@ function addNodes(data: any, graph: OnnxGraph.Class, mapNodeAndOutput: any[], ma
             graph.addNode(output)
               .init(new TensorNode.Builder(inferredType, inferredShape, 'intermediate'))
               .as(TensorNode);
+          } else {
+            // Node already exists (e.g. from valueInfo); DO NOT change its shape/type.
+            // You might optionally sync literalType if it's UNDEFINED, but avoid
+            // overwriting a valid shape.
+            // const existing = graph.getNodeById(output)?.tryAs(TensorNode);
+            // if (existing && existing.literalType === AttributeType.UNDEFINED && inputs[0]) {
+            //   existing.literalType = inputs[0].tryAs(TensorNode)?.literalType ?? existing.literalType;
+            // }
           }
 
           mapNodeAndOutput.push({ nodeId: index.toString(), output });
@@ -248,338 +299,6 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
     });
 }
 
-
-// Infer Intermediate Shapes
-export function inferShapes(graph: OnnxGraph.Class): void {
-  const ops = topologicalSortOperationNodes(graph);
-  
-  for (const node of ops) {
-    const inputs = node.getInputs?.() ?? [];
-    const infos = inputs.map(inp => {
-      const tns = inp.tryAs(TensorNode);
-
-      let interEdge = null;
-      if (tns.type === "intermediate") interEdge = tns.getIncomers.first;
-
-      const directEdge = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
-
-      // Optional Debug: Log all sources to help debug which one is being used
-      /*
-      console.log(`INFO CALC FOR node ${node.id}, input ${inp.id}`);
-      console.log("Intermediate edge:", interEdge?.shape, interEdge?.literalType);
-      console.log("Direct edge:", directEdge?.shape, directEdge?.literalType);
-      console.log("Tensor node:", tns?.shape, tns?.literalType);
-      */
-
-      return {
-        shape: interEdge?.shape ?? directEdge?.shape ?? tns?.shape ?? [],
-        dtype: interEdge?.literalType ?? directEdge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED
-      };
-    });
-
-    let outShape: number[] = [];
-    let outDtype = infos[0]?.dtype ?? AttributeType.UNDEFINED;
-
-    function broadcastTwoShapes(a: number[], b: number[]): number[] {
-      const ra = a.length, rb = b.length;
-      const r = Math.max(ra, rb);
-      const out = new Array<number>(r);
-
-      for (let i = 0; i < r; i++) {
-        const da = a[ra - 1 - i] ?? 1;
-        const db = b[rb - 1 - i] ?? 1;
-
-        if (da === 1) out[r - 1 - i] = db;
-        else if (db === 1) out[r - 1 - i] = da;
-        else if (da === db) out[r - 1 - i] = da;
-        else {
-          console.warn(`Broadcast mismatch at dim ${r - 1 - i}: ${da} vs ${db}. Guessing max.`);
-          out[r - 1 - i] = Math.max(da, db);
-        }
-      }
-      return out;
-    }
-
-    function broadcastShapes(...shapes: number[][]): number[] {
-      return shapes.reduce((acc, s) => broadcastTwoShapes(acc, s), []);
-    }
-
-    switch (node.type) {
-      case "Transpose":
-        if (infos.length >= 1) {
-          const [orgMatrix] = infos;
-          const [N, M] = orgMatrix.shape;
-          outShape = [M, N]
-        }
-        break;
-      case "MatMul":
-        if (infos.length >= 2) {
-          const [a, b] = infos;
-          if (a.shape.length === 2 && b.shape.length === 2) {
-            outShape = [a.shape[0], b.shape[1]];
-          } else {
-            console.warn("MatMul with non-2D tensors:", a.shape, b.shape);
-            outShape = []; // fallback
-          }
-        }
-        break;
-
-      case "Unsqueeze": {
-        // Input 0 = tensor, Input 1 = axes (constant)
-        //console.log("Unsq infos:", infos);
-
-        const tensorShape = infos[0].shape ?? [];
-        const axesNode = inputs[1]?.tryAs(TensorNode);
-
-        let axes: number[] = axesNode?.constantValue?.dims ?? axesNode?.constantValue?.int32Data ?? axesNode?.constantValue?.int64Data.map(v => Number(v)) ?? axesNode?.constantValue?.stringData.map(v => Number(v)) ?? [];
-
-        //console.log("Unsq tensorShape:", tensorShape);
-        //console.log("Unsq axes:", axes);
-
-        if (axes.length > 0) {
-          outShape = [...tensorShape]; // may be [] if scalar
-          axes.sort((a, b) => a - b).forEach(axis => {
-            outShape.splice(axis, 0, 1);
-          });
-        }
-        break;
-      }
-
-      case "Squeeze": {
-        const inputShape = infos[0].shape;
-        const axesNode = inputs[1]?.tryAs(TensorNode);
-        const axes = axesNode?.constantValue?.int64Data?.map(Number);
-        if (!axes || axes.length === 0) {
-          // If no axes provided, remove all dims of size 1
-          outShape = inputShape.filter(dim => dim !== 1);
-        } else {
-          const axisSet = new Set(axes);
-          outShape = inputShape.filter((dim, idx) => !axisSet.has(idx) || dim !== 1);
-        }
-        break;
-      }
-
-      case "Gather": {
-        const dataShape = infos[0].shape ?? [];
-        const indicesShape = infos[1].shape ?? [];
-        const axis = node.getAttributes["axis"] ?? 0;
-
-        //console.log("Gather dataShape:", dataShape);
-        //console.log("Gather indicesShape:", indicesShape);
-        //console.log("Gather axis:", axis);
-
-        if (dataShape.length >= axis) {
-          outShape = [
-            ...dataShape.slice(0, axis),
-            ...indicesShape,
-            ...dataShape.slice(axis + 1),
-          ];
-          //console.log("Gather outShape:", outShape);
-        } else {
-          console.warn(`Invalid axis ${axis} for data shape [${dataShape}]`);
-        }
-        break;
-      }
-
-      case "GatherElements": {
-        // ONNX rule: rank(indices) == rank(data)
-        // Output shape == indices.shape; dtype == data.dtype
-        const dataShape = infos[0]?.shape ?? [];
-        const indicesShape = infos[1]?.shape ?? [];
-        const rankData = dataShape.length;
-        const rankIdx  = indicesShape.length;
-
-        // axis default 0 (normalize if negative)
-        let axis = node.getAttributes["axis"] ?? 0;
-        if (rankData > 0 && axis < 0) axis = (axis % rankData + rankData) % rankData;
-
-        if (rankData !== 0 && rankIdx !== 0 && rankIdx !== rankData) {
-          console.warn(`GatherElements: rank(indices) (${rankIdx}) != rank(data) (${rankData}). Inference may be unreliable.`);
-        }
-        outShape = indicesShape.slice();
-        outDtype = infos[0]?.dtype ?? outDtype;
-        break;
-      }
-
-      case "ScatterElements": {
-        // ONNX rule: Output shape == data.shape; dtype == data.dtype
-        // Constraints (not enforced here, but good to sanity-check):
-        // - rank(indices) == rank(updates) == rank(data)
-        // - For all dims d != axis: indices.shape[d] == updates.shape[d] == data.shape[d]
-        // - For dim 'axis':      indices.shape[axis] == updates.shape[axis]
-        const dataShape    = infos[0]?.shape ?? [];
-        const indicesShape = infos[1]?.shape ?? [];
-        const updatesShape = infos[2]?.shape ?? [];
-        const rankData = dataShape.length;
-
-        let axis = node.getAttributes["axis"] ?? 0;
-        if (rankData > 0 && axis < 0) axis = (axis % rankData + rankData) % rankData;
-
-        // Optional sanity warnings (do not block inference)
-        if (indicesShape.length && updatesShape.length) {
-          if (indicesShape.length !== rankData || updatesShape.length !== rankData) {
-            console.warn(`ScatterElements: rank mismatch (data=${rankData}, indices=${indicesShape.length}, updates=${updatesShape.length}).`);
-          }
-          // Light check for axis dim agreement when shapes are known
-          const axOk =
-            indicesShape[axis] === undefined ||
-            updatesShape[axis] === undefined ||
-            indicesShape[axis] === updatesShape[axis];
-          if (!axOk) {
-            console.warn(`ScatterElements: indices.shape[axis] != updates.shape[axis] at axis=${axis}.`);
-          }
-        }
-
-        outShape = dataShape.slice();
-        outDtype = infos[0]?.dtype ?? outDtype;
-        break;
-      }
-
-      case "Scatter": {
-        // (Legacy op) Output shape == data.shape; dtype == data.dtype
-        // axis attribute may exist (default 0); indices/upserts semantics differ from ScatterElements,
-        // but for shape inference we simply mirror data.
-        const dataShape = infos[0]?.shape ?? [];
-        outShape = dataShape.slice();
-        outDtype = infos[0]?.dtype ?? outDtype;
-        break;
-      }
-
-      case "Reshape":
-        // Input 0 = tensor, Input 1 = target shape
-        const shapeInput = inputs[1]?.tryAs(TensorNode);
-        const shapeProto = shapeInput?.constantValue;
-        //console.log("Reshape shapeProto:", shapeProto);
-        //console.log("Reshape outShape:", shapeProto?.int64Data ? shapeProto.int64Data : "NO DATA");
-        if (shapeProto?.int64Data) {
-          outShape = Array.from(shapeProto.int64Data.map(n => Number(n)));
-        }
-        break;
-
-      case "Transpose": {
-        const inputShape = infos[0].shape;
-        const perm = node.getAttributes["perm"] ?? inputShape.map((_, i) => i); // default: reverse dims
-        outShape = perm.map((p: number) => inputShape[p] ?? 1);
-        break;
-      }
-
-      case "Concat": {
-        const axis = node.getAttributes["axis"] ?? 0;
-        const inputShapes = infos.map(i => i.shape);
-        if (inputShapes.length === 0) break;
-        const refShape = inputShapes.find(s => s.length) ?? [];
-
-        outShape = [...refShape];
-        outShape[axis] = inputShapes.reduce((sum, s) => sum + (s[axis] ?? 0), 0);
-        break;
-      }
-
-      case "Flatten": {
-        const inputShape = infos[0].shape;
-        const axis = node.getAttributes["axis"] ?? 1;
-
-        const d0 = inputShape.slice(0, axis).reduce((a, b) => a * b, 1);
-        const d1 = inputShape.slice(axis).reduce((a, b) => a * b, 1);
-        outShape = [d0, d1];
-        break;
-      }
-
-      case "Expand": {
-        const shapeInput = inputs[1]?.tryAs(TensorNode);
-        const targetShape = shapeInput?.constantValue?.int64Data?.map(Number);
-        if (targetShape && targetShape.length > 0) {
-          outShape = targetShape;
-        }
-        break;
-      }
-
-      case "Loop": {
-        // Inputs: [trip_count, cond, initial_state, ...scan inputs]
-        const initState = infos[2]; // the carry initializer
-        if (initState && initState.shape) {
-          outShape = initState.shape.slice();
-          outDtype = initState.dtype ?? outDtype;
-        } else {
-          // fallback: keep current edge shape by peeking at connected output tensor, if any
-          const outputs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
-          let firstOutT = null;
-          let ind = 0;
-          while(!firstOutT && ind < outputs.length){
-            firstOutT = outputs[ind];
-          }
-          outShape = firstOutT?.shape ?? [];
-          outDtype = firstOutT?.literalType ?? outDtype;
-        }
-        break;
-      }
-
-      case "Equal": {
-        // Output dtype is BOOL; shape is broadcast of the two inputs
-        const s0 = infos[0]?.shape ?? [];
-        const s1 = infos[1]?.shape ?? [];
-        outShape = broadcastShapes(s0, s1);
-        outDtype = DataType.BOOL;
-        break;
-      }
-
-      case "Where": {
-        // Inputs: condition (bool), x, y
-        // Output shape is broadcast(cond, x, y); dtype follows x/y
-        const sc = infos[0]?.shape ?? [];
-        const sx = infos[1]?.shape ?? [];
-        const sy = infos[2]?.shape ?? [];
-        outShape = broadcastShapes(sc, sx, sy);
-
-        // Prefer dtype of X (then Y) as per ONNX semantics
-        outDtype = infos[1]?.dtype ?? infos[2]?.dtype ?? outDtype;
-
-        // (Optional sanity)
-        if (infos[0]?.dtype !== DataType.BOOL) {
-          console.warn("Where: condition input is not BOOL (dtype:", infos[0]?.dtype, ")");
-        }
-        break;
-      }
-
-      default:
-        // Maintain input shape
-        //console.log(node.type, "infos:", infos);
-        const first = infos.find(i => i.shape !== undefined);
-        if (first) {
-          outShape = first.shape;
-          outDtype = first.dtype;
-        }
-        //console.log(node.type, "outshape:", outShape);
-    }
-
-    // Get current output TensorNodes
-    const outputs = node.getOutgoers.targets;
-    const outputTensors = outputs.filter(t => t.is(TensorNode));
-
-    // Clean old outgoing edges (to avoid duplicates)
-    node.getOutgoers.forEach(e => graph.getEdgeById(e.id).remove());
-
-    // Reconnect updated output edges with correct shape/dtype
-    for (const output of outputs) {
-      graph.addEdge(node, output).init(new OnnxEdge.Builder(outDtype, outShape));
-    }
-
-    // Also update the tensor node itself
-    for (const outTensor of outputTensors) {
-      const tensorNode = outTensor.tryAs(TensorNode);
-      if (tensorNode) {
-        // Optional: only override if intermediate or undefined
-        if (tensorNode.type === "intermediate" || tensorNode.shape?.length === 0) {
-          tensorNode.setShape(outShape);
-          tensorNode.setLiteralType(outDtype);
-        }
-      }
-    }
-  }
-}
-
-
-
-
 // Create the graph using the implemented classes
 export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.Class {
     const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -587,6 +306,7 @@ export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.C
     addInitializers(data, graph);
     addInputNodes(data, graph);
     addOutputNodes(data, graph);
+    addValueInfoNodes(data, graph);
 
     const mapNodeAndOutput: any[] = [];
     const mapNodeAndInputs: any[] = [];

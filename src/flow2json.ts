@@ -1,70 +1,12 @@
-import { inferShapes } from "./initGraph.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
-import OperationNode from "./Onnx/OperationNode.js";
 import TensorNode from "./Onnx/TensorNode.js";
+import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
 
 const IR_VERSION = 9;
-const OPSET_IMPORT = 17;
+const OPSET_IMPORT = 19;
 
-/**
- * Returns the topologically sorted operation nodes.
- */
-export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
-  const sorted: OperationNode.Class[] = [];
-  const visited = new Set<string>();
-  const temp = new Set<string>();
-
-  const opNodes = graph.getOperationNodes();
-
-  const visit = (node: OperationNode.Class) => {
-    if (visited.has(node.id) || !graph.hasNode(node.id)) return;
-    if (temp.has(node.id)) {
-      console.warn(`[TopoSort] Cycle or back-edge detected at node: ${node.id}`);
-      return;
-    }
-
-    temp.add(node.id);
-
-    function checkPred(n: TensorNode.Class | OperationNode.Class) {
-      if (n.is(OperationNode)) {
-        for (const input of n.as(OperationNode).getInputs()) {
-          if (input.tryAs(TensorNode).type === "intermediate") checkPred(input.as(TensorNode));
-        }
-      }
-
-      for (const edge of n.incomers?.toArray() ?? []) {
-        const pred = edge.source.is(OperationNode) ? edge.source.as(OperationNode) : null;
-        if (pred) visit(pred);
-        else if (edge.source.is(TensorNode)) {
-          const tensorPred = edge.source.as(TensorNode);
-          if (tensorPred && tensorPred.type === "intermediate") checkPred(tensorPred);
-        }
-      }
-    }
-
-    checkPred(node);
-
-    temp.delete(node.id);
-    visited.add(node.id);
-    sorted.push(node);
-  };
-
-  for (const node of opNodes) {
-    visit(node);
-  }
-
-  //Optional debug
-  /*
-  console.log("=== [topologicalSortOperationNodes] Final OPERATION node order ===");
-  sorted.forEach((node, i) => {
-    console.log(`[${i}] id: ${node.id}`);
-  });
-  */
-
-  return sorted;
-}
 
 export function prepareGraphForExport(graph: OnnxGraph.Class): void {
   const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];
@@ -90,7 +32,7 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
     const opNode = graph.getNodeById(nodeId);
     for (const inputId of inputs) {
       const inputNode = graph.getNodeById(inputId)?.tryAs(TensorNode);
-      if (inputNode && inputNode.type == "intermediate") {
+      if (inputNode && (inputNode.type === "input" || inputNode.type == "constant" || inputNode.type === "intermediate" || inputNode.type === "output")) {
         const alreadyConnected = inputNode.getOutgoers?.some(e =>
           e.target.id === opNode.id
         );
@@ -268,9 +210,37 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
     const inputs = opNode.getInputs().map(n => n.id);
     const outputs = opNode.getOutgoers.targets.toArray().map(n => n.id);
 
+    /*
+    if (outputs.length === 0) {
+      // Optional: debug log if you want to see them
+      console.warn(`[Export] Skipping op ${opNode.id} (${opType}) with no outputs`);
+      continue;
+    }
+    */
 
-    const baseAttrs = Object.entries(opNode.attributes || {}).map(([name, value]) => {
+    const baseAttrs: AttributeProto[] = [];
+
+    for (const [name, value] of Object.entries(opNode.attributes || {})) {
+      // 1) Pass-through: already looks like an AttributeProto
+      if (
+        value &&
+        typeof value === "object" &&
+        (
+          "type"   in (value as any) ||
+          "t"      in (value as any) ||
+          "i"      in (value as any) ||
+          "s"      in (value as any) ||
+          "ints"   in (value as any) ||
+          "floats" in (value as any)
+        )
+      ) {
+        baseAttrs.push({ name, ...(value as any) });
+        continue;
+      }
+
       const attr: any = { name };
+
+      // 2) Normal scalar / list attributes
       if (Array.isArray(value)) {
         attr.ints = value;
         attr.type = AttributeType.INTS;
@@ -280,12 +250,44 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
       } else if (typeof value === "string") {
         attr.s = value;
         attr.type = AttributeType.STRING;
-      } else if (value.type === "TENSOR") {
-        attr.t = value;
+      }
+      // 3) Legacy internal tensor wrapper: { type: "TENSOR", ...tensorFields }
+      else if (
+        value &&
+        typeof value === "object" &&
+        (value as any).type === "TENSOR"
+      ) {
+        const tensorLike = {
+          ...(value as any),
+          name: (value as any).name ?? name,
+        };
+        attr.t = sanitizeTensor(tensorLike);
         attr.type = AttributeType.TENSOR;
       }
-      return attr;
-    });
+      // 4) Raw TensorProto-like object: { dataType, dims, ... }
+      else if (
+        value &&
+        typeof value === "object" &&
+        (
+          "dataType" in (value as any) ||
+          "dims"     in (value as any)
+        )
+      ) {
+        const tensorLike = {
+          ...(value as any),
+          name: (value as any).name ?? name,
+        };
+        attr.t = sanitizeTensor(tensorLike);
+        attr.type = AttributeType.TENSOR;
+      }
+
+      // Only push attributes that have a valid type;
+      // skip anything we couldn't classify instead of emitting broken attrs.
+      if (attr.type !== undefined) {
+        baseAttrs.push(attr as AttributeProto);
+      }
+    }
+
 
     if (opType === "Loop") {
       const bodyGraph = opNode.getBodySubgraph?.();
@@ -293,12 +295,48 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
 
       const filteredAttrs = baseAttrs.filter(attr => attr.name !== "body");
 
-      if (bodyGraphJson) {
-        // Include valueInfo in the body subgraph if missing (helps Netron)
-        const valueInfo = (bodyGraphJson.output ?? []).map((out: any) => ({
+    if (bodyGraphJson) {
+        // Collect existing inputs / initializers / produced names in the body
+        const bodyInputs = new Set((bodyGraphJson.input ?? []).map((i: any) => i.name));
+        const bodyInits = new Set((bodyGraphJson.initializer ?? []).map((i: any) => i.name));
+        const produced = new Set<string>();
+
+        for (const n of bodyGraphJson.node ?? []) {
+          for (const out of n.output ?? []) {
+            if (out) produced.add(out);
+          }
+        }
+
+        // Find "free" names used as inputs but not defined in the body graph
+        const freeNames = new Set<string>();
+        for (const n of bodyGraphJson.node ?? []) {
+          for (const inp of n.input ?? []) {
+            if (!inp) continue;
+            if (!bodyInputs.has(inp) && !bodyInits.has(inp) && !produced.has(inp)) {
+              freeNames.add(inp);
+            }
+          }
+        }
+
+        // Turn free names into valueInfo entries so onnx.checker knows they exist.
+        const freeValueInfos = [...freeNames].map(name => ({
+          name,
+          // Type is mostly for tooling/checker; empty shape & float elem_type is fine here.
+          type: {
+            tensor_type: {
+              elem_type: DataType.FLOAT,
+              shape: { dim: [] },
+            },
+          },
+        }));
+
+        // Existing valueInfo from outputs (your original code)
+        const outputValueInfos = (bodyGraphJson.output ?? []).map((out: any) => ({
           name: out.name,
           type: out.type,
         }));
+
+        const valueInfo = [...outputValueInfos, ...freeValueInfos];
 
         filteredAttrs.push({
           name: "body",
@@ -316,7 +354,8 @@ export function convertFlowGraphToOnnxJson(graph: OnnxGraph.Class, name?: String
         output: outputs,
         attribute: filteredAttrs,
       });
-    } else if (opType === "If") {
+    }
+    else if (opType === "If") {
       const subgraphs = opNode.getSubgraphs();
       const filteredAttrs = baseAttrs.filter(attr => attr.name !== "then_branch" && attr.name !== "else_branch");
       const thenGraph = subgraphs["thenBranch"];

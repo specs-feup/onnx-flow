@@ -13,6 +13,7 @@ namespace OperationNode {
     D extends Data = Data,
     S extends ScratchData = ScratchData,
   > extends BaseNode.Class<D, S> {
+    getOutputs: any[];
 
     get type(): string {
       return this.data[TAG].type;

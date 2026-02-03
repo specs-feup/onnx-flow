@@ -25,11 +25,11 @@ digraph {
     loop0_3 -> loop0_4 [label="{1}"];
     loop0_4 [label=ScatterElements shape=box color="#0000FF"];
     loop0_5 [label=Identity shape=box color="#0000FF"];
-    loop0_iter_idx -> loop0_0 [label=""];
+    loop0_iter_idx -> loop0_0 [label=sc];
     loop0_4 -> loop0_carry_out [label="{4}"];
     loop0_carry -> loop0_4 [label="{4}"];
-    loop0_cond_in -> loop0_5 [label=""];
-    loop0_5 -> loop0_cond_out [label=""];
+    loop0_cond_in -> loop0_5 [label=sc];
+    loop0_5 -> loop0_cond_out [label=sc];
     A -> loop0_1 [style=dashed color=gray label="{4}"];
     B -> loop0_2 [style=dashed color=gray label="{4}"];
     graph [label="Loop 0"];
@@ -37,8 +37,8 @@ digraph {
     graph [color=gray];
   }
 
-  trip_count -> loop0_0 [label="" lhead=cluster_loop_0];
-  cond -> loop0_0 [label="" lhead=cluster_loop_0];
+  trip_count -> loop0_0 [label=sc lhead=cluster_loop_0];
+  cond -> loop0_0 [label=sc lhead=cluster_loop_0];
   init_carry -> loop0_0 [label="{4}" lhead=cluster_loop_0];
-  loop0_0 -> final_vec [label="" ltail=cluster_loop_0];
+  loop0_0 -> final_vec [label="{4}" ltail=cluster_loop_0];
 }
