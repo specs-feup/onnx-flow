@@ -30,13 +30,13 @@
     "build:watch": "tsc --watch",
     "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,js,json}\"",
-    "lint": "eslint \"src/**/*.{ts,js}\" --fix",
-    "lint:check": "eslint \"src/**/*.{ts,js}\"",
+    "format": "prettier --write \"{src,test}/**/*.{ts,js,json}\" package.json",
+    "lint": "eslint \"{src,test}/**/*.{ts,js}\" --fix",
+    "lint:check": "eslint \"{src,test}/**/*.{ts,js}\"",
     "pretest": "npm run build",
     "pretestcomp": "npm run build",
     "pretestpartition": "npm run build",
-    "test": "node ./out/test/testing.js",
+    "test": "node ./out/test/compatibility_test.js",
     "testcomp": "node ./out/test/compatibility_test.js",
     "testpartition": "node ./out/test/partition_test.js",
     "dev": "npm-run-all --parallel build:watch dev:testcomp",
@@ -46,7 +46,7 @@
     "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
     "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js"
   },
-  "author": "Nelson Neto, José Pedro Ferreira",
+  "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/specs-feup/onnx-flow.git"
@@ -81,9 +81,15 @@
     "typescript-eslint": "^8.54.0"
   },
   "lint-staged": {
-    "src/**/*.{ts,js,json}": [
+    "{src,test}/**/*.{ts,js}": [
       "prettier --write",
       "eslint --fix"
+    ],
+    "{src,test}/**/*.json": [
+      "prettier --write"
+    ],
+    "package.json": [
+      "prettier --write"
     ]
   },
   "parserOptions": {
