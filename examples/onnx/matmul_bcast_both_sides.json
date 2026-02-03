@@ -1,0 +1,91 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "A",
+          "B"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "MatMul"
+      }
+    ],
+    "name": "matmul_bcast_both_sides",
+    "input": [
+      {
+        "name": "A",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "4"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "4"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

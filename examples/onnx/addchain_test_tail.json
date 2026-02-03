@@ -1,0 +1,363 @@
+{
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "C",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "input"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "D",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "input"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "Y",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "output"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "1",
+          "__specs-onnx__operation_node": {
+            "version": "2",
+            "type": "Add",
+            "inputs": [
+              {},
+              {}
+            ],
+            "attributes": {},
+            "subgraphs": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "CD",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "intermediate"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "2",
+          "__specs-onnx__operation_node": {
+            "version": "2",
+            "type": "Add",
+            "inputs": [
+              {},
+              {}
+            ],
+            "attributes": {},
+            "subgraphs": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "AB",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "input"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "id": "52d6c00e-7cc4-4bdb-b272-0865e0b31413",
+          "source": "C",
+          "target": "1",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "4167f5d6-6232-4542-b320-ce67e17a990b",
+          "source": "D",
+          "target": "1",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "8ce110f2-71c1-48ea-a3bb-e35ec61f8c3b",
+          "source": "1",
+          "target": "CD",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "9e667513-ac38-4427-9b60-fd6e6e05700e",
+          "source": "AB",
+          "target": "2",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "61bc8451-b09f-49f3-ad65-7561e7a4084f",
+          "source": "CD",
+          "target": "2",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "a946d39a-8a23-440b-bf23-82173123c57a",
+          "source": "2",
+          "target": "Y",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      }
+    ]
+  },
+  "data": {
+    "__specs-onnx__onnx_graph": {
+      "version": "1"
+    }
+  },
+  "zoomingEnabled": true,
+  "userZoomingEnabled": true,
+  "zoom": 1,
+  "minZoom": 1e-50,
+  "maxZoom": 1e+50,
+  "panningEnabled": true,
+  "userPanningEnabled": true,
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "boxSelectionEnabled": true,
+  "renderer": {
+    "name": "null"
+  }
+}

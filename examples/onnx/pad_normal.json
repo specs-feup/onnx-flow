@@ -1,0 +1,101 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "X",
+          "pads",
+          "pad_val"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "Pad",
+        "attribute": [
+          {
+            "name": "mode",
+            "s": "Y29uc3RhbnQ=",
+            "type": "STRING"
+          }
+        ]
+      }
+    ],
+    "name": "pad_normal",
+    "initializer": [
+      {
+        "dims": [
+          "8"
+        ],
+        "data_type": 7,
+        "name": "pads",
+        "raw_data": "AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEAAAAAAAAAA=="
+      },
+      {
+        "data_type": 1,
+        "float_data": [
+          0.5
+        ],
+        "name": "pad_val"
+      }
+    ],
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "4"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "6"
+                },
+                {
+                  "dim_value": "11"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

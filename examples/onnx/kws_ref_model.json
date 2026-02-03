@@ -1,0 +1,3308 @@
+{
+  "ir_version": "7",
+  "producer_name": "tf2onnx",
+  "producer_version": "1.16.1 15c810",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "functional_1/dense/MatMul",
+          "scale__169",
+          "zero_point__170"
+        ],
+        "output": [
+          "functional_1/dense/MatMul_dequant"
+        ],
+        "name": "functional_1/dense/MatMul_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/dense/BiasAdd/ReadVariableOp/resource",
+          "scale__171",
+          "zero_point__172"
+        ],
+        "output": [
+          "functional_1/dense/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/dense/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/conv2d_4/Conv2D",
+          "scale__173",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/conv2d_4/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_4/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/conv2d_3/Conv2D",
+          "scale__175",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/conv2d_3/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_3/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/conv2d_2/Conv2D",
+          "scale__177",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/conv2d_2/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_2/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/conv2d_1/Conv2D",
+          "scale__179",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/conv2d_1/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_1/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/conv2d/Conv2D",
+          "scale__181",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/conv2d/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource",
+          "scale__183",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource",
+          "scale__185",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource",
+          "scale__187",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource",
+          "scale__189",
+          "zero_point__182"
+        ],
+        "output": [
+          "functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D",
+          "scale__191",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D_dequant"
+        ],
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource",
+          "scale__193",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D",
+          "scale__195",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D_dequant"
+        ],
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource",
+          "scale__197",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D",
+          "scale__199",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D_dequant"
+        ],
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource",
+          "scale__201",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D",
+          "scale__203",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D_dequant"
+        ],
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource",
+          "scale__205",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "input_1",
+          "new_shape__318"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209:0"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209",
+        "op_type": "Reshape",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209:0",
+          "scale__167",
+          "zero_point__168"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209_DequantizeLinear__344:0"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209_DequantizeLinear__344",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D",
+          "scale__207",
+          "zero_point__198"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D_dequant"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D_dequant",
+        "op_type": "DequantizeLinear",
+        "attribute": [
+          {
+            "name": "axis",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209_DequantizeLinear__344:0",
+          "functional_1/conv2d/Conv2D_dequant",
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D_dequant"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "2",
+              "2"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "10",
+              "4"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "4",
+              "1",
+              "5",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant"
+        ],
+        "output": [
+          "Relu__137:0"
+        ],
+        "name": "Relu__137",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__137:0",
+          "scale__216",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1",
+          "scale__216",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant__218_DequantizeLinear__362:0"
+        ],
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant__218_DequantizeLinear__362",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant__218_DequantizeLinear__362:0",
+          "functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant",
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "output": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "output": [
+          "Relu__140:0"
+        ],
+        "name": "Relu__140",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__140:0",
+          "scale__225",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1",
+          "scale__225",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant__229_DequantizeLinear__350:0"
+        ],
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant__229_DequantizeLinear__350",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant__229_DequantizeLinear__350:0",
+          "functional_1/conv2d_1/Conv2D_dequant",
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D_dequant"
+        ],
+        "output": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant"
+        ],
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant"
+        ],
+        "output": [
+          "Relu__143:0"
+        ],
+        "name": "Relu__143",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__143:0",
+          "scale__236",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1"
+        ],
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1",
+          "scale__236",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant__238_DequantizeLinear__348:0"
+        ],
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant__238_DequantizeLinear__348",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant__238_DequantizeLinear__348:0",
+          "functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant",
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "output": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "output": [
+          "Relu__146:0"
+        ],
+        "name": "Relu__146",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__146:0",
+          "scale__245",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1",
+          "scale__245",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant__249_DequantizeLinear__360:0"
+        ],
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant__249_DequantizeLinear__360",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant__249_DequantizeLinear__360:0",
+          "functional_1/conv2d_2/Conv2D_dequant",
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D_dequant"
+        ],
+        "output": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant"
+        ],
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant"
+        ],
+        "output": [
+          "Relu__149:0"
+        ],
+        "name": "Relu__149",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__149:0",
+          "scale__256",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1"
+        ],
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1",
+          "scale__256",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant__258_DequantizeLinear__346:0"
+        ],
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant__258_DequantizeLinear__346",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant__258_DequantizeLinear__346:0",
+          "functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant",
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "output": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "output": [
+          "Relu__152:0"
+        ],
+        "name": "Relu__152",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__152:0",
+          "scale__267",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1",
+          "scale__267",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant__269_DequantizeLinear__352:0"
+        ],
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant__269_DequantizeLinear__352",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant__269_DequantizeLinear__352:0",
+          "functional_1/conv2d_3/Conv2D_dequant",
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D_dequant"
+        ],
+        "output": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant"
+        ],
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant"
+        ],
+        "output": [
+          "Relu__155:0"
+        ],
+        "name": "Relu__155",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__155:0",
+          "scale__274",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1"
+        ],
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1",
+          "scale__274",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant__278_DequantizeLinear__354:0"
+        ],
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant__278_DequantizeLinear__354",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant__278_DequantizeLinear__354:0",
+          "functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant",
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "output": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant"
+        ],
+        "output": [
+          "Relu__158:0"
+        ],
+        "name": "Relu__158",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__158:0",
+          "scale__285",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1",
+          "scale__285",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant__289_DequantizeLinear__356:0"
+        ],
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant__289_DequantizeLinear__356",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant__289_DequantizeLinear__356:0",
+          "functional_1/conv2d_4/Conv2D_dequant",
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D_dequant"
+        ],
+        "output": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant"
+        ],
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant"
+        ],
+        "output": [
+          "Relu__161:0"
+        ],
+        "name": "Relu__161",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__161:0",
+          "scale__296",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1"
+        ],
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1",
+          "scale__296",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/average_pooling2d/AvgPool_prequant__298_DequantizeLinear__358:0"
+        ],
+        "name": "functional_1/average_pooling2d/AvgPool_prequant__298_DequantizeLinear__358",
+        "op_type": "DequantizeLinear",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/average_pooling2d/AvgPool_prequant__298_DequantizeLinear__358:0"
+        ],
+        "output": [
+          "functional_1/average_pooling2d/AvgPool_prequant"
+        ],
+        "name": "functional_1/average_pooling2d/AvgPool_prequant",
+        "op_type": "AveragePool",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "25",
+              "5"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "25",
+              "5"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/average_pooling2d/AvgPool_prequant",
+          "scale__296",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/average_pooling2d/AvgPool"
+        ],
+        "name": "functional_1/average_pooling2d/AvgPool_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/average_pooling2d/AvgPool",
+          "const_fold_opt__323"
+        ],
+        "output": [
+          "functional_1/flatten/Reshape_prequant"
+        ],
+        "name": "functional_1/flatten/Reshape_prequant",
+        "op_type": "Reshape"
+      },
+      {
+        "input": [
+          "functional_1/flatten/Reshape_prequant",
+          "scale__296",
+          "zero_point__217"
+        ],
+        "output": [
+          "functional_1/flatten/Reshape_dequant"
+        ],
+        "name": "functional_1/flatten/Reshape_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/flatten/Reshape_dequant",
+          "functional_1/dense/MatMul_dequant",
+          "functional_1/dense/BiasAdd/ReadVariableOp/resource_dequant"
+        ],
+        "output": [
+          "Add__165:0"
+        ],
+        "op_type": "Gemm",
+        "attribute": [
+          {
+            "name": "alpha",
+            "f": 1.0,
+            "type": "FLOAT"
+          },
+          {
+            "name": "beta",
+            "f": 1.0,
+            "type": "FLOAT"
+          },
+          {
+            "name": "transA",
+            "i": "0",
+            "type": "INT"
+          },
+          {
+            "name": "transB",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "Add__165:0",
+          "scale__311",
+          "zero_point__312"
+        ],
+        "output": [
+          "functional_1/dense/BiasAdd"
+        ],
+        "name": "functional_1/dense/BiasAdd_quantize",
+        "op_type": "QuantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/dense/BiasAdd",
+          "scale__311",
+          "zero_point__312"
+        ],
+        "output": [
+          "functional_1/dense/BiasAdd_dequant"
+        ],
+        "name": "functional_1/dense/BiasAdd_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/dense/BiasAdd_dequant"
+        ],
+        "output": [
+          "Identity_prequant"
+        ],
+        "name": "Identity_prequant",
+        "op_type": "Softmax"
+      },
+      {
+        "input": [
+          "Identity_prequant",
+          "scale__315",
+          "zero_point__217"
+        ],
+        "output": [
+          "Identity"
+        ],
+        "name": "Identity_quantize",
+        "op_type": "QuantizeLinear",
+        "domain": ""
+      }
+    ],
+    "name": "tf2onnx",
+    "initializer": [
+      {
+        "data_type": 3,
+        "name": "zero_point__312",
+        "raw_data": "Dg=="
+      },
+      {
+        "data_type": 3,
+        "name": "zero_point__217",
+        "raw_data": "gA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "zero_point__198",
+        "raw_data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 3,
+        "name": "zero_point__182",
+        "raw_data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+      },
+      {
+        "data_type": 6,
+        "name": "zero_point__172",
+        "raw_data": "AAAAAA=="
+      },
+      {
+        "data_type": 3,
+        "name": "zero_point__170",
+        "raw_data": "AA=="
+      },
+      {
+        "data_type": 3,
+        "name": "zero_point__168",
+        "raw_data": "Uw=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__315",
+        "raw_data": "AACAOw=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__311",
+        "raw_data": "RioUPg=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__296",
+        "raw_data": "21KkPQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__285",
+        "raw_data": "it8/PQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__274",
+        "raw_data": "WgwHPQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__267",
+        "raw_data": "wQI8PQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__256",
+        "raw_data": "njIZPQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__245",
+        "raw_data": "VIiAPQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__236",
+        "raw_data": "gd11PQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__225",
+        "raw_data": "6pqpPQ=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__216",
+        "raw_data": "yDqhPQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__207",
+        "raw_data": "7iNMOhvf4jlVppA5aduiOUuiiTl9BPA5N2h0OkOQzzn/f6E5AbolOUHvEToYOaY5yxYtOsH5ujnRn9I5FFFsOf5HcjrkA0M5jHJzObTwpDnw3Ik5T00TOmYvgjkiY5A6iux4OUcx3zn0TpE5E6L3OZDdGjoVsiU6xOq1OTPJEjrxg9Q5lyynOeDY7DkJ0c45TxhFOou7iDlEhkI554J7OQnVajlL0rQ5OY2kOS0FmzrN5jU6u6s6OjDwyzmHN6E51D/kOeDqbjr7A+I5af8ZOqRNGzr32ns5zu3tOUn7iToo5nw5OfXAOYsr9jnmeoE5LCm8OWifljlybws637l8OQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__205",
+        "raw_data": "JnswOoB/1Tn18T46bLWEOmToaTqxdJM6hj9JOgEV9Tm2jEw6QIHaOfBcQzpEaWY6CwtiOl1OcTpaxBs6anwrOuD2NDqft5Q65EGGOtIkjTqxq6A6NLsTOgDgzToElTc61oWZOoVt3TnPEz46oByROqydfDob1oo6e9MqOqpV8znMwkc6eglbOv6cPTpLNlg6rLwrOt5/vDnQeII6ZWdkOjS+xDqPd386pjOpOphLXDpFfyU6UOw1OtrCHzoIe+I5DmaqOtq9UjrxNVQ6VjTnOo/EZzq0+ho6C5AIOgbcBzpJKnw6TB0dOjGgsTrJdoY6vUlPOlrvBjoAynI69VCOOg=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__203",
+        "raw_data": "ubNIOZZgoDlK4oE5q1lJOe2yoDkodlA5lEgtOW+1jjkqU4Q5SlmpOSZ0kTkHdIA5BrC0ObgrhjlO0I05Ic5zOWbWVDnswoM5Cv2gOccGezlgD4c5cf6BOeJkzTmNjpA5gSlxOSI1kzmIUVE5WIthObHmbzkbJ5I5YQehOZ7xnjkCBH459bhpOeqGrjmb3Y45B5SPOTLcpzn3g6Q5SjR4Ofr1sjklbaE5FnOFOWrFqzlFU5Y5DsCIOQEfKjnoVpo5xntHOX7shjmo+IQ5Fol0ORNUZzm5VqE5xRajOQPpmDnIOi85R1N9OcD3dTmENkc5TueTOS30XDnn/Ik5cgiNOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__201",
+        "raw_data": "2TDNOR9byzl2vko6fa0ROj3JzzkZAGE6Bgu6ObPXsDmRakI6ahTQOZig6TnvE+s5yEXeOSYM1zl0NAs6xVgIOv9L9Dldk/g52MTPOSnMqTlXXpM5XmeROn+O3znEC9I5c8H0OcJuEzr6xvQ5n6O2OQCk3TnueAQ6YQKrOYVrzjm5NYI6IEraOZ5BzTngzi86LcCZOXxXqjkBwvU5rYyeOcBUCTrfByM6lSH+OQ18gzkMWMQ5vh8QOkT/KTp+0ck5DQzfOUPtuDkEyTA6dj1POtJRATpZV9c5Zom0OVhM4TmCghk6e4YUOsWIGjoIYuo5U5bpOY7O5jlRSdE522nrOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__199",
+        "raw_data": "0fhAOb6EVDn40EQ5xd9SOeP5aTntvZo51A+HOUbgSTkg5GI5O/YzOZhclzkeRjg5xVUqOXmfcjnnQsE5l5UwOWyohDl1SBg5owV7OXHHDzkQyZE5sOUbOTZ7Ljmjh6U5YF10Od6KXTmPV0g53yNPOWN9OzmG+zg5eeg9OXVwZjnKYIg5LRJsOU9yaDkixoA5bTs5OTTERznenVY50aRmOUTfTTl4GnI5i9NvOY1pOjmzIYA5QxRYOVymUTmLz2U5+2EhOTMEPDmWrUU5H7FLOQLbZTmEq4A53kU3OdyxXjl+vEU5324xOWUkWjnXYXo5/pRPOSAUZjl7kkA59QFAOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__197",
+        "raw_data": "NeTNOUYPaDksNZ45cKl4OYMqUDnqCc85al8gOVJokDnnGSY5Hp+rOQyWvjmIZJI58jBrOSo2gjmeYpI58ZqSOV5xtDnU0ao5JGqRObpePzmOpm4566GTOZR2JTl2Ybc5G/4kObkmOznnFog5SUiMOUrM4zmQh5g5wsM2ORmmlDk+rZg5tplHOSuydjl+uS856syvOUk7uTnC/245QjESOQB7VjkBvEM5ZbxgOd6yHDlqd0w5+2KGORcdcjmsB6c5oVpwOakcxDmTt3c5bU31OZLMOTlNwGY592GxOY15jjmB2pM5qB2ROb+IPTnsKpE5TOGgOVnHhjl9QNY521mWOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__195",
+        "raw_data": "+SojOYyyuDjVuis5sEZROYdaVjlmfBI5EUAzOfKOJDkRthM5XC3kOAbqHTkeZyo5g+wzOV2HIDkanQ456eYgOSyJADlDQe04gFzVOL1MBTmAkAs5cwM1OXV5QDkL7984hGg5OXCoqTjPygU5R/QGOQheMzkn1kE5l9oCOeEASjn4dgo5OwYNOU4JADnhYek4BTQTObsGBjmqpCY5tXUiOQiuFDkmJRo5QDwVOVAZHDnLXlU51j8uOXUZ8TgZAzc5du7WOAniNTlcLhU5/DsHOXtoFTm0cyo5NQ0qOYABFjmhTvU4dUdAOdrNIDm53kw5/pMVOc8SDzk+9NQ4S5gbOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__193",
+        "raw_data": "yJBeOa2itDijoic5QM7sONzXDjlHfI85q09pOT5OPzl4Y9E51BAcOakGsznBsgw5hbA/OTUlGjnjx4c5DCY0OQs8PTn89Eg5Ztw2OQf5oDnSIk85O2UVOeEf7zh2KkE5WR58OcrnHTnXgGg5LYsNOQqblDmNxVk5hVecOUfUGDl9zG45Nop4OQjioTnxsXY5+79RObMQNjnMYag552o3OZHMVDkEkok5BIEoORbmSzn70R45VpwcOYb00TlbAI05QLSZOXqaFjkNbvg5F0JGOQeGMjn618Q5ka+UOT5z1znkKoc5tgFZOQSLWTn8sUA5vQ2DORIsYDms1dI55GSHOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__191",
+        "raw_data": "bjDFOTCqwjkggq05Tc7KObhP7Dk6O/E5526/OXrW2DlWZ8A5G/rVOaoEtTk7VMo5VtLNOZWgmzmYigM6T8utOZ4PszlPGs85d/HtOSkCuDnMMqM5AOzpObNi5Dmt6AI61vSvOQEknzkvSME53H96Od2HyzmdbAA6HI2cOVfTtDkBduE5ie24Oc5CmDnHhtM5WWEfOsuXkjlHib456xbKOYLBsjllvrc5B8iWObTgnjnzT9s5KqusOVQMvjlCutE5E6eVOYk+yjmPjcA5i9TPOT2nxzmze9g5LkLEOWNlvDkUX985+JDfOeJh7Tm0gLo51DutOYXe4jnpRI05LuniOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__189",
+        "raw_data": "rBsMPPB+qTtUlxc867ZSPPmyOTxJIWo8SsUfPAKSwjtIZCI8hHitOzYZGzxV7DY8lHQzPJiSPzyTU/c7fSQIPNqqDzwHImw8bixVPJsbYDzOHH88PZHqO6VxozzgvhE8XcNzPJHKrzv35hY8f2hmPC2NSDyscVw8X54HPN4uwTsIlx48q+QtPKOIFjyIpis8gFcIPEemlTu7KU88X1Q1PKsxnDyi0Eo8PlSGPGXkLjxTYwM8tG0QPBmr/Tt8zbM7f0eHPLlOJzxNeSg8jY23PAwAODxnE/Y7etXYO6S31zuSMUg8SHf5O1IEjTxqgFU81JAkPNo/1jv9v0A8KfhhPA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__187",
+        "raw_data": "IKbVOwq90zvrGVM8wa4XPOdZ2DtrRmo8P7bBO9UhuDsmbko8LqjYO/NB8zuZxPQ7UW/nO3Dp3ztq8RA8kvcNPPFd/js7aQE8VFXYO/PLsDtzcZk7vmWXPJTF6DtHtNo7Pdj+O4uCGTz+3f477Cq+O97G5jvZ7gk89Q6yO8Xt1jvEk4c8oUnjO5a31TsYDjc8ohagOwRdsTte4/87xRWlO/D9DjxBwCk8p00EPIvniDv4b8w7nRAWPCoBMTwvI9I7wj3oO7SMwDuLEjg8XchXPHimBjy9N+A7hPq7O86V6jts1h88zKUaPH/nIDxcC/Q7QjfzOyZS8DvQ6dk7Dx71Ow=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__185",
+        "raw_data": "2AYsPA/kwTuaLwQ8KcPPO1/trTs+/Cw8r/6FO6lP8Tv3x4o7vWQPPCM9HzznoPQ734HEO9SW2TuznfQ70/v0O47DFjw3uQ48fP7yO8/knzvRZcc7RLP2O4E/ijvyNxk82dqJO3FenDtOaeM7+mrqO4RUPjwp4v47LrSYOwlm+DsgIf87PcWmO6sezjtZ0pI7k+ISPNbDGjxZsMc7OEt0O/szsztRiqM7jsW7O9bsgjsN1qo73ZDgO4lKyjuhjgs8K9LIOxPbIzwU+c47mvRMPDk9mzsuzMA7ATUUPOAU7jvTEfc7rn7yOyFcnjvYlPI7NGsGPJU44TsYAzM8Nj77Ow=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__183",
+        "raw_data": "IfPSOz41Kzvl4p47V3JgO1xjhzsz/wc8ciLdOz9StTvfdUY8q+uTO7uuKTzqWoU7Za+1O7QZkju/sQA8Hr+qO7hbszsKeL47O1GtO06SGDxSU8Q7MJmNO/ykYjudFbc72PXuOwyqlTtpXtw7CiiGO43ZDDzzZ847qy4UPFzakDvzVeI7hZHrOyZvGTzm0ek7js3GOyqQrDsUmB88TNitO2exyTv3YwI8q7WfO9ZBwTsEiJY75W+UO1v/Rjx3pAU8pK4RPEy+jjvVdms8NOm7O9A0qTv9kTo8Au0MPKg0TDzyHAA8VK7NO3gwzjtso7Y7hG34O/R41DvB1Ec861MAPA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__181",
+        "raw_data": "TZGuOnwBQjrgY/c5ykMLOipk6zlXP006RwDROq9+MTq0Ggo697eNOWyWeTqlJA46twOUOrDjHzq7HDQ6LRXKOeUuzzqsw6Y5My7QOdQLDTp2yOs5HO17Otym3jny8PY6GN3UORjcPjpEhPg5gMJTOlBuhDoxsY06TJAbOisLezq5ujU63vQOOk2JSjop2zA69oqoOoXZ6Tk/WKY5gRPXOTDQyDl1oBo6wrYMOjCQBDvojJs6+KCfOg5lLjq83Ak6HC9DOoZOzDoaRkE6WLCDOijOhDrPXtc5HXZLOl786zpLQ9g5TQElOjqCUjooct05J+cgOoHNADrceG46bB3YOQ=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__179",
+        "raw_data": "+ncXO1QScjuZC0Q7N/UXO52OcjsgUx07q8YCOyNnVzvGukc78px/O8+LWzvE4kE7Jl2IOwuESjtLDVY7lP83O5GgIDsP4UY7ev5yO75yPTur20s7FzZEO3wCmztBMVo77wA2O4AxXjuw+B07izcqO08NNTvsmVw7FQ5zO2/obztCtD87lWMwO+q2gzvFo1c7HrdYO7pdfTtYUXg7fFE7O4oPhzuxp3M7XG1JO3qigTsy5mI7v2hOO7BjADtM9Wg7jYwWOwOnSzuRtEg7rIw4OwuVLjvYhXM7Hyp2OwbNZjupPgQ74S4/O2ShOTtIWBY7bj5fO6fAJjv+RlA7oN9UOw=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__177",
+        "raw_data": "JCxAO1ajUzs3AEQ7GwBSO7gBaTvMGZo7k4CGOycKSTt582E7WzczOw28ljurgjc7G6EpOyKecTvrdcA7TNovO7gbhDvwphc7ZPt5O/EuDztvLpE7VkAbOybCLTsR2KQ7MFpzO+OfXDsRg0c7K0hOO4e2OjtSNzg7DB89Owt8ZTsk0Ic7yRdrO8R7ZzuMPYA79nY4O1LwRjs8ulU7L7BlO+gETTuuGXE7LNVuO9WjOTuYM387FC9XO/7HUDvL22Q7z7YgO8g8Ozvr20Q7E9lKOzbnZDsLI4A7e4M2O6jFXTvD6kQ7rbIwOwY9WTtGWHk70rhOOxggZTs7xj87TjY/Ow=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__175",
+        "raw_data": "XixeOxB9+zrb1Gk7THqOOz7vkTt0dUc7ThJ0OxERYDuNIEk7hlgbOw4FVztLBmg7G/10O3GUWjutL0I7ihZbO3sELzuqhiE7TEIROxKBNTvLCD476nh2O/cJgzvydBg71XR8O6kC5zq7LDY7xsE3Oxs7dDtd94M7fiwyO8GGiTt0iTw7rAVAO19WLju44x47eW9IO1J+NjvL52I7jjVdOy9ySjtB41E71TNLO0uMVDvcQ5E7HENtO7ckJDuXMXk79VMSO/+ndzvrIEs7aSM4Ow9wSztuF2g734tnO2pATDsRAic77eeCO2z0Wjtdeos7TqtLO/PPQjtR+xA7ntxTOw=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "scale__173",
+        "raw_data": "3IsDPL/cATxOf+c7E0sHPCKlHTxc7SA8uGn/O3GnEDyXWgA8374OPGOE8Tuk+QY8G04JPOGjzzshgS888+DnO+Hn7jvmKAo80LsePLmB9Tvgvdk7DQ0cPI9bGDwZqS48ecPqO+dT1DuX8AA8KRynO93GBzx0WCs8dt/QO5NC8TsZaBY8w7v2OxYmyztgHA08v6VUPCCWwztZN/47vdAGPKt/7jtOJ/U7tyzJOxz60zsJThI8gGDmO6SQ/Tsp6Qs8MKvHOyvrBjwXdAA8I6UKPK0wBTziahA87OwCPFhc+zs/AxU8hyQVPAdcHjys1fg7hCHnO5pYFzy/e7w7tl8XPA=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__171",
+        "raw_data": "lWEwOg=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__169",
+        "raw_data": "aGQJPA=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__167",
+        "raw_data": "F68VPw=="
+      },
+      {
+        "dims": [
+          "4"
+        ],
+        "data_type": 7,
+        "name": "new_shape__318",
+        "raw_data": "//////////8BAAAAAAAAADEAAAAAAAAACgAAAAAAAAA="
+      },
+      {
+        "dims": [
+          "64",
+          "12"
+        ],
+        "data_type": 3,
+        "name": "functional_1/dense/MatMul",
+        "raw_data": "sAw25wyiPMvh4Cr02kHdH+AQ1zLxrNXU2eIZ0sLpOOn/rk8oK9rMye1P6sXd+a83BiQONEO/106nDcAFBe7g2kM0s/Uo5LQK8RAjxDstN9MA46QJI9a+E+At5Uiurrsf+j/RDBbk/tHWxzgzKMf29sq091fDOyfauR7y1K8ISaHn5P4ZQvPHzLxC1Cmn4bEv4ho4N/zazuHNSrbd180hBCArHvY91NzkJR230QoFSeOx0ij6JfDB69To8vf21qY9u7xMvBjK8NO4HcMo3L05Nb20PAfJ9bsFutEz6hTRGlU49OPNEyC1AiRGJIvguAHxFzAYLbuz48ioSjQP9b490kGo7OsxKszTsAM82Cw+zscYIBMD2ucKOkQ/wbDZM9QGz64+vTzxK9vz7CwsFfLuvwlG9JzgzMY9qrjDyrbLNMn9AwRFEO3ZyNEn5+fhDuZF8OEJFp/jQcrQJUICNN26z0ETyjku8QEKVxoJ4Nrn6BjU56bp57Dfy7MtA7/+1iNICq0q2bYCMxLO0cIi6TssMxXBK9jG+6v8I9POMPju48DizJg99yD3zNy9z0ctoroY+dUNPdHC3MDFRo77JA32J7ohRMXOrOft5BTH3wkTw0/fUbrJrzgd99S5PTkk8+HY0tca2te13kExCMMm1zarv90qxjjh2d01B+zWqcrm/Nz1PUI6pLrIzgU8Hiu/+M4p9i7DRrrGvdv+u/LzVPv14gsctSL64Q7VKyu8OfjnxdY0k8vuvdLt7dwV9RZDyNkYpwqx9OHP5Pw0A88n491F/bWyPvUYxNPlL8DjELKxGKvITL8V1NvU3Cgk6uQ8sfDVUNjI4fJFq/IIzTz8tusI3i4gxvs4HenruMsd0iWvwdH7Q0EU1+/89Bu5Gjqz+OdGtNzF5EIo6CMuNkHbFzitNuXBxN70vbcILEW94sP9zfIDz8gU4tojKtjc5Ob/Ko5APB3Oy9YaASkhvNzc7LFE9gClyhcJHjLa3xrF5ArkG8QR66Q8IBnvPa/Zxp/lQIEC"
+      },
+      {
+        "dims": [
+          "12"
+        ],
+        "data_type": 6,
+        "name": "functional_1/dense/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "sv////D///++////qP////j///+k////Nv///yAAAADB////af///9X///+rAAAA"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_4/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_3/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_2/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_1/Conv2D",
+        "raw_data": "NbEDAt5O4gC/7v8J9loX9czVU/IZCcSaGDH10hzOoBInDb5TOG7+JdwZ4A7Y+8naxMufQkr4KBaBCJwzoebq1fL6/SwF2aveJMzvQ/bw3VwBHsUEpkccFj+4M8NICxIHIuJOQxJFDX8i203+Q9YiceXMCbPV0iTqNyMc6l+dPQkmLSaIDdgdo8IdNdxD2SmpTPvZPlzH/Nf5wJwKHepFCtavGlUhgRze2r3fBhoEKf/qWglYvqQIAP/MDPg6AQZM9v48FCLyA34ZKyLr6q7Rr9HDt8N/tQeU4jKb9CzNX13oigzoQ760BAo4AwcTBTJh97Xi1OVD3/iLlanaDxt9Ln/yMboZUd2evVEK9Q7wG+4ks7MtxOrHFNRB/iDpDvEg7GqeHyQK4df+kQbV78s72Pv4Jq3iFa++8gTZLdrSuCHjNxRIlvEQK5bUnQH489IWrM3VzSLH867dCNXAtdSlPkuntesfeekW9dvD/kmXL2D823+U9iHvu/+X9MhME4gwFvJN9BweAK9MXhTbWf1b9lDf+0v9BepiHCQeKg1pC0JbIBIB40sP4V+3mhQvXhLxQBYP8hIZNh3utt79f7nUBxOvA6oOHv+wBacQF1LhAeLzjOLryxku6twrtn/0Guj+E7oVLzZDw8j2wNAu00Hyz+vp4gsfT+cPz/HT7eX/DgCrTwj8MEcGN9YBBodAONj/1LLC/caBNwAZoQEPSevV3yHXOfYTAVJ0Fe2m//QPXhVFAVguDPS27yHNF9D45gQSDBG+Dxva2EwLLeAA2tnlDgwMMeQhDhE5seUW691OBM3wAxTGN98fvtPlTPe7B4EFCSAC+zAM2AOYI/pA8B8238+vTo77EvgO+tku9fwPwDOs1RX27+hEzuG4yOYyQguB+iL897rsFSgvHyz0EgI43Dg/LBiuMNj1ALIl6OHoRds+7IweXv0zfxM6CAvyw/va0exaOss9Cv/J7Bgm9zXgR/W9kjUH9bi21rvkxLcy9e610/0iaLsdB8XgthyCOMFT8Ny7DRnOPQb63wMl983A/hT0+D7zxPNI3dDqMvkgyFT8Fi8IWYEymOfr8yH0K6MfOgMZ0OPv7irczwyODtfqDtK9Gzv/DyXg6/s/DzvB1RWB4hgZGSwQtxLtNdzuDycpD5/i3PXQxR4eJ0MNxABUHQjf+jk8AAxEFOLYHwDj0r3w/uP5Htv1KOzX1AkVga/g7vkK/gIAG+g16e8UteYPDdzuKM/1xh/A9Pze/vzp1QcWIyEtzP3ZD/ex9cMUAfIUkAoRkxE/C+QtjTDd1MkAB9JLJtp+Ab771CP0Rv3fsszX9RcmQKwpDh4uf/EjRhztmhq0wA9A9unEOPX/IfCo2KLp1gez2NjJ/TpEHPLLwtvQBSctHB315hqwE+9hHOI3odxjHB0HGzH2Sh3ZIxQiRBof3+wER4HRSc7hsxHP8hHajujFBhg0YCHDMP6w18TnnEY5shRd/K+eEjDr2hjp3BTaGff7qj4myNRWGRp//EIK8zDJHzbGD6QK7+9HCdQIAMzFwqH6DLk7JN7z4hcyCNvMBkrFWukW6Q/2wtvGgS/9HD7ZBPvZwsf61OP45LT/9uvnDQsLIsoAuOHb6QcV5xHtPerz0Ca3XbziBuPcETkVMBqzDAD/RwAlSxgPG3DtVoEbxDk3qfEu99LRzfWu/wv0BxPv9TS5pz/ET+69JgMZu5uTALojj9DdHkIb4t+eUfEwTfY++U71zB3oxjqBTAUMI/3u2rUx2iz/AjoKmh4I+SecRRvQ9VUiTJwxxrMU5h3aOfvYKP63+OMgD7zSwvk4pgjfAq7TcagP8t+BAesMBOgF1s4o4IfJI/bVucX40wG2+BA9HmoZHQS29mf3nN+6/Cka7RsB+v8A6Br6MYH4APn2Eb3S4DHuFPglKhYcAA0AGysDEd7n8i0W2u3b6Az2o/EQ2QrjuQHo9MXCGTLrCCgIMbrWUzHY3jIcFJcvNE0dEvXl2dr/JkEdZPsRHvHxOdQIdrjoVujxrF/x4f0s0yJ/6zYHJgPlBACDNUQm0QL9BOcdz9/EECTbz4nF857uIy4r0OTwDDcr3T4w+xiBHfbp8sQo/A1N8x6Z4hstxubzlvpC+Q8j9S3XDbv9ti756M/zH9uoCsvy5hH4RQkvAemBFCQSPBgS6Ebh4vfhz9Ug2+jwJRvj8SBQ/NLoo/BGICfuM/BImD7SzeMzE946BCmS4wUrA+/73tQm3FcA+NeSHYFD6yHHL80TQPvv5LbHw1Ak5uwwy48AIef5Bj4G4PTt/Anm3tWzoPe8IETKDgFd9Foso2tPG745LdUSVUBAQrXx6PD0M6w1IfMpXOkYG2DI7CU9819bB/S77+CBzNMP/CrqIDSXQtcR+OEK4ErO2M047DocgQmr+DzhtJ1FAEs0Cu/sOqKs/uMqIdUD3UW28UvQAOfRHvzZNjFQZgG5TDbluqsWPDTzBPTN5EkXJwU7VQXCsh3X9SHUzh8pxC2mNOQexfBuzM7l5+vo6u8HDC+5gc0/OAUSTunmA34yzRDlCeLHS10xXfI0xQzQ7+XN8DImkLwJNb9/87YKUsoY/OLqYdf/Az/8GwP4ShYxRBju9EfWv/rm49A20sDY+bnPufTy5gMuMhkRDuYcPxD75QV//tm6CNX0MeNfy9IQQPbV/yoe7BjaRyf43Lk+ExAA8ushMu0Y0V0o+vrHifC7Df7fGU4MTAcwFOED8uECDCi/5P7qJ7oKzwr7C9Yepx3XktbK6sD7sSHx7rQLt/wq5t37MQMuGwAi+hK5NO3RMdUR+L8YCoEd6Bv6LCzoIBou4T9gNNTuXULUHZPpMoMxQykkJh/d997WCRQlvfjn58T3xMF3CpXZZC4WFyKBTR5nCLvipitNM1acMdmWB/YKyvV/FgRAHM7JBBHhzfW3IhznJdAy6ckc+w/2Kj4rvOUl36C/ANMA0O71oc4WJg9K1SO7QUX87egC6tweGRviwAf6+cLOrIH+yo0GIb/K6vLT/EHS9gAEOb6J3R674SDgIDMz4+9V7QDVDA0AIncSCLgo9cqvJAkp7CrlzB/lGRX1M+AL8/fB2wDwy18RwU/gxcmdq7Y75goiC/zm++kf8NQDLUnExcM0sLDjvB/V29bMDXPdTdMBFdwKgccE1SkDESTqGK/3RhkUHkby8+X4CPlSFQHU+dW5VvYF7Q9dOBo9ujUPx80oUibQLOoK4eHd1eUXm+jH2gBA1g/egQJa6i/tWhj95RcxCSlKzjD67638HrM/pSVC9d347YHC/dW8zM05ADEaFvnn4wYHq7YI5A0B2Qjj7QLf3jr1J/YDMCosH/vsCBUaKkTMGGcn7hLiOcREB1fv+1e+4EnmHPYCIGN/CR3a+TVHMybafdUf2esgvtVtOusACdc12v29n8dA7eMH38wABfsb+rEQ8SUdOdsbEEyQEAIIJdqo6Bn+3TkbEdfj4kQo8v0a9O6T8enPgfEUKuJWDDfnUPahCu3C/ir5CBHTINquBBkaCg7RGwLVGQyu+OxmEL1fvr/CROHlTP4dt/Ut4bHof9MS+R/oAvlv5zstRRAQL14AyEPkD+QEf8klHtAPR97b/bxwwNC4A2wO7asYCgWuPQYE9D/jSJgIA8j02pHh8lXfo+1BIrerYU0ByUXhLZDOybsHzuU6DBThBQO7M/EUMP7HGdrfAUUU6NAWEsau7CcsHiMN6gHoUvHsA/AJaEUVDi0lshQeDDsoAfrzFfxHgebP7B/gx9v4+eDiulM6RyDB8hGL5Nek3xQDq38c2RjhA+8wHqH5BybZ7L8qqPnqLQcmwRQ40f+s09YHIkZu+28VMP/lyBDcJZrvLPEc9Lv2J47tDYHkJk/05C8Opu1HpDTT3ykb7PHOsgaiXiLYB+JGErws1Z9N3lrf+2YZ6+YVe/ZG1CNoR+T7BRm6ig3YFrOCrkm1OSf7IehhpbrQ6NDAHvkVserIzebN0sc7Ru3q8vbuPjwvRDfl1oEVHso8BA8PMfwZ0FXp6tcrgVYmQb/12QIT7O0g3QAELwH9Ei0fFgEs0eKZwsYxvF9XS0Qz6hdAWSvbJicT+y/597koz+QbwhkXOMXRS5v37yvkMzsh6qrdN+HhbfoTeOMOJubwwqwtIMuuRubSf6iV7yErJpA7R9bD75tN1d2eFFvIl+lLJg1EZTccAfwiEqAfIoTn/JvWwAgJMAAENZlYJ+6eTyPYZj8lLr0VK9nRV7fiIivrQqW5gVhI/wTV3M7F6QpVNKzSHfn56DXbsx3k6dMbESnODjUDAI+2DAMrHLjn6+LhCAk4vurTAwf/J9ffKlktge7FRQcQI97f3qy13cMxE1LrNzPTygyUoNgAB73VEtL2UPwFKCqZrjDiCvV/BTD81V//Do7z86Fc1bUo4MLnnjrcLDwO1e0UtAiKkDgB7rj07anuuGNA3uqh0J8DTRwS4EjM7afk1p0Sg+AP8i7eC7rgtlu14vA06NW6ngthHkBi0dwoOtv75fICPfN/1kYYLhPn9BgSIgL+5Cv7EIEs6Or0JC4d5gUq+vQpI9JARfrB8PrzFD046hIBNv8VA+7qINKw/x2z69XS/PYXKPfh7iEX9kT5H3a+6hRHIIpNvvzubNUustIa93/Z9ioH0yEvI2jWxucO1Q43udI0RJDy0tnHAOcU7kIOPfG/6vBJrl2LC5UNIhcGg3QwZP3fpsjOPxHnAgDUKBjYCIFJPwrPFiDrEdKsD80MOhf8QECT/AkRFvMitdwHWRk8oRkmKN0yjwns9XmJOTkGgcaiJBT3LesQjxo/2PvAlMTfR1uIEqZXKDAroormE7IfEys7P0cy8NtAIEwz8fOJPtGNHYrMhOhI0WXB0wExzio+3MA43BI43PDoNOuolO/d3vUG7+2yy9jBEJqB2wZezDUhDhLNWPnHEUPxL/0O5LDtMwAdMDs3yqsu+tZKqzX3/R/vfzT7tTHPDkjp0AMa0jrY6guWG5MJ7cfyHf74DdbMC7rC5SxIry/1lrrVGvz/Aus+4yn1MBUivlMBLN/XuTyt6Hv6MZHN4kHVCwzaUg7s0DS26CUt/sLCMer+2FgmLbQ4Ai00KtvKPgBdoLrtHfcozXoc588F3+CBKtXHN/Uk/8YOH/b14783qFjS+QMDHYFEIfToHuTDJN4BGb/o/gn75uwW2QA/7AoaPiIPXDAK/hZBNNX3IAsj+yUi/744Fgj0CWGnkn5XGxEj1N4mpCbzBRougRgwhAK0DO2zKOwd9AzRuPpJHRg2limtNg4fOCFYfSlYODsT5Dlkkjg+3Eo5J8Hi4RbiPi/iI7EJIgFUlyRFE4HixarKYyOBrAMa3f56xqK4NSpf0Qc4S0YBzSPm3g2dQ0jURgEQ49d/eNATuvPswgc+1CBRvSnS/s6mu7/XQeiSv83c9xVB0NFV0Qo5WwvkmA/sImQ+t9g/ndEvOwg2DiwIMtY9EQ=="
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "10",
+          "4"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 3,
+        "name": "functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "Zmt/CgvWRy8OfywYXydtXGcvdj97HQ8NdFF/iIEKtbwxooP5lZaB0fLUurG7gbk9+9wdwIouY2RFA/Xxf2A+gZ68s73nt57xfyDDGffBdSLPzJS8zsXxgZnVOVRfCAAJVmF/4cSuxb7WgoGSkoG8GPLvxaumh42Sxda4gabh14EprL1VkVZ+lIGj8e8Fq5GBs8mBAhX2qq6hgauP1dn1tLPTks6wz6++zYyBmC1Wgeso3R1AxPClwQmkgquB28Hzstbdgbe3XUAxSicof3tyq4G0JhHFkcAiMSkf4MXbrIKBgaqB3DUUndqK2J6B0dLam5+wl7+26fbwyaiBMoFPFKg1RKVIbuWBEuiMQvCNOUt/EPjtdE1q05n7ysolgbAC1tPx0snvoYGGyoHaAhX8x7PpfFtDHh+BOi4XRB/yV9G2fxGPZ2p/EPoXa19vXnxuCN78f3Y0aGZQEBQvUGZ/P1FZL1BPWmR/s67A4+aZioGJgV+31B3TxUbSmuqB2enhjP60mZjTEAknl5OBkIG1x9XnkLrTNXJ/FQwKNXNTf1RxIRIWakxm/7XdEb3MGMGBaXp/Fg/xaHJ9f3pRISMVPGNn03/Y9xLo9WS7n6zA2sfTmYG6TH94+PDmSjZMOvfAH9reMNuBW01l0dvRf2hPf1jbGRvKCDW9V01gEPYDYn9Uv5bc3dvkgZf6u7uB7vICh5eSgYTNDi4Mn6O8nJ/eDv7ezIWBjVUjgRk3DWtud3R//QjubGhld39IHhYXYGs7"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 3,
+        "name": "functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "gSUVGBpNNCEHOhpDfxH2S0o373/N3x/t/wyt1w9TqS0lnft/gTfR2TmJ3G2FmN5/+OwoMeAxo4zlzAVSgceg4/KB3dGkpugDfzBFQm1MGDMHZ0l/IulKoOdHEcgqK7VX9dd/+Z7UL8SBJ58Ccii5YSvEf2I1DFcZ3CpFgSUPsD49rPi00d+B+emB/YWwtedFsvCB6i/p30sDjdU2+cITmd2B3sqNvN2By8ai5/OBoxqoxHodCeXLB6HVuIHrfxpPRgvu6OpcPn8od/FeUPU/0dY3/sksf81TPBkK+39XFXoqrpefwLvtgdnhYdmB16K1yToSG3+tTUvrJz5W8H8k00oO1m6oQzdIGi9lO/t/qpMJ1QAhgafj8O0THiE2fzkAfyO3WST3F+MRhYGorNL/0f7rfzx0Whwa1wFdhfejgRWpgx6uf6haN6gbEfPOESU69vssf1c3TEPCaje8W/mB2w4gfWs4dH+2GFKBGDoHWV/0gaQOx6KxkAChf1pOSipdyB77eUJ/QExLQYQqOYFdL83lcw8TSEcESzmpD2mBfxA+RgJJCQpAdd5VINotgR+hwqJy3NdhpIHsdfzEO/McfxvzNQX1PAUmUwN/fyEnHSwXBg7/f/g5SgEaUF1qcLYiVzAwfyc5smkLDCngIzWBQyM1SuRFCIE6LLul8zHrgdL/+tb3zvIDgcCYYEyBFF+6Ej7S1xl/7fBSoqnOIiJ/1EZo3voFFh+BOsylQqj20/zrDe/0tb2B6Ds2PCo1fyki"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 3,
+        "name": "functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "WP8mfwn0YS8yt8XWFL3NQIHEvQt/uBIt6NX9P7tHNA4If/E3zKV9kRx/+kAB3w4cxN7n2PSB/R27IDoCfxbXdr53bBOQIdyBCCsCHAvvf+T+mbgLxMY5getYTipoDzpUvSt/N1TXOujjbIEd5tl/k/c+pRcfUH/zSnkSI0JSf9UEUIl4zRh+on/fzizZJBLTEmYSyH/d51PRYB5/WSw6LCRRfyjVddHsQDcWzAvxuNrDgZSpZnSpVH/P9/ma9d6B/Obs0vfvT+dwWxTpbeGB8E3H6TKjgfTPA39Fo1pAg19O9fveGPwlVxd/TI3Qas+BbFeeD6YaM0huOlJ/b9DQf8wrVgtc0+m7fw4pPzN5r9HXifd6gexT6n//3i/e1Q+2CTS4JUELH38hVZgEOefGFk+BgXGNtzXakg4jHfwx/95d0sp/A9wZuKzHm8SBKcfrf9TYXqP5T3/k9DmeSH3+fwIi+XjI7kzH5LuRMh/rPF5//IHy+zTa7WRCu9Hb4c3k5IHdckC2QPuHf/O83N+0m76mgbjzLGG51kccyO9/JaoGU/oDf/qkVfXrf9cPFhD9+UKBfCKHVRbCZNTqbfD5f/TgNfCB/6fomAdYCFPp6yYugfcp1oXggb8y4d6+Cu3JwwCBlcSgpOXhlzWt4CSBxOB/6yMrpiIvLfzhNDgof2QZSOTvTAOXBiSBge0V9dw3SM1uzPX29eKaq6iBC+oAO9BETSR/5Nk8nbgP8euBFg7r9H+x62DJzoGr7rGaRwvs"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 3,
+        "name": "functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "Kv4evN4PO4HIAaCBxqvYmu1hwSC00RaOyx6B1n8CA7A2+DR8I91/yeR63+H30xsKf+3f8CTY98l/t+bWzPjuwajzir01gSX1f8uoudMr12I1gXBOilsA/U3E4uR8v3/N+diVzTa6PL8AGbx/uS3ZgWrbPbUtLeq3MfKB8/Xz3xrXIK/hf789BLAG2Hm0nX8i0hRNSsAiSneBFhKNM+eB3uKZNud9JbN/Arwk09sef7B+6O/ZQRb4DeqpHeeB9QjrzCOoyi6BLfMT8dba/X/gy98Pf9je5jT5whno4x2BANW4VOfQdboB1OaBKi+0E6uv9YHIvwRgSy5DAc2B21w5uNTYBz5/3QoczvAVf+sY9Dt4vhV/zry9RYHQNIvN47786QrE4Be9fxzy939V+en7AO7t5hv3gS7/wmMJ/PWI6vKBRPi+pu3hiu4Sf+sh9/acKq8PeoH1++y7Bf6BAQyZ9roW6dwe5QF/1CsF1ksHBfiBIJZEGcV/8U6rf/HYztYf+f4RFgepI92BB+Uav/sDf8DpBQyX/cBQ5X+U5RGHx7ISgbIyxgPVvNallskIsdB/0QGaJQR/ASguEoHQFnaT7CggIsGL+9SGFH+/BBGt9NN/AgspsrElvO5/AQfDP5yBBf3vHvIUOEO6f3Tmm5LXdwqBjNpQmyNpMPp/JvYMEM+hSIKtUEuBnQVG8/kDf95QxAPTyfP55v6eBPWB4CC2UfuB/OyWgQM9nMwnLbZVt93l0dt//e7P3d5/4U1QDvO4"
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D",
+        "raw_data": "O/j//4gFAAAm9f///AQAABUWAABYDgAA8P3//0AFAACyAwAAWxoAAJfo//+vCgAAnQsAAOD9//8ZAQAA8Q0AAJUFAACh/v//YgsAAJ4EAAD6CQAAtw0AAN39//+yCgAAyvn//2r7///1+f//hvz//+P8///oEgAA8RUAAHX6//+YAgAAgQEAADkLAAAbEAAAbgkAADcDAAAkEQAAbAMAAFELAABaBwAARP///+4FAAA1CAAAzhMAAG8LAADb+f//BgMAALf9//+TCAAAvwEAAM8GAAAMCQAA6AwAAIQBAABSCQAA9AwAAAQGAADOBQAAKAQAAA8SAADh/P//YBUAAA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "RPb//w7f//8E8P//FBoAAN0cAAAFCAAA9PP//74cAAAh+///jSIAAB72///CHAAAoBMAAGIlAADf/v//Eh8AABQZAADgGAAAmRQAAF4AAAAtEQAAGRcAAL/j///gDQAAeQsAABcTAADnGQAA2xoAABT9//+QCAAA1fb//6ATAACUGAAAZg4AANL2//+G/P//aPH//47y///r8v//gOX//04YAABqAAAACRQAAM8aAAAfGwAAYvD//wv6//9MCwAAq/b//2bu///h+///0yAAAOry//+3AwAAivL//6D6//9s7f//chUAAIcdAAC7GAAAVxQAAFX4//8O+///zPT//w=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D",
+        "raw_data": "Nw4AAMXz///H+v//ywoAAIgGAAClBQAAhAYAAA0GAABN/v//lSEAALcUAAAe+v//m/n///8EAADk9f//NQkAAB4CAACfGgAASQcAAK7+//85CgAA7ggAAGwIAADu2///ovf//8za//9ZHgAA/goAAC0LAABP+f//mwQAAFX1//+QEwAAX/3//zYFAACGCQAAE/f//4fw//+48v//PhsAANz2//9VDgAAG/z//x8LAABiDAAAHPT//+8BAAB+BQAAcRIAABcRAABwBAAAog4AAA37//+r8///xAIAABP9//8aDQAArxAAAIMHAAAT7P//zxYAADcLAADOAAAAKAcAAA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "y/r//93x//8P/f//1fv///oJAACI////ORgAAIYQAADS6v//fPn//8f8//8dDgAAGfD//5f9//+jDQAAzBEAAAMHAADWDwAA2BYAADsJAABJFAAAGvj//5nv//+N/v//OO7//78YAACkCQAA8fP//zj7//+O8v//nxQAALv0//+m9///WRYAAMjw///GGwAAUv///1H5//8r9///XfD//6D2//+PFgAAZvD//9Dt///1+///1/n//6by///R/f//ewsAAAr7//8K9P//N/f//3ft//+K9P//S/z//6z3//8LCwAA6g8AAD/6//+DBQAAmfr//wIKAAAMDQAA6/T//w=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D",
+        "raw_data": "6gsAAGzo//8Y9f//yOz//wYKAACHDgAANvD//zcHAADXBQAAOgYAAJoGAAANHAAASxAAAHH+//+FDQAA1Q4AAMr8///8DAAAEhMAAHADAAAN+///JgQAAJD1///Y/P//S+n//+j9//9x8P//RhcAAJz2//9eAAAACQIAAM/7//87CAAAuQMAAH4CAADiBQAAwg8AAD35//8hCwAAkv3//wYBAADLBAAAcAEAAIv0//+6AQAA8/v//7Xx///zBgAAuQ4AAC0BAADy/v//iQkAAFL4//8SDgAAMwcAADzz//+s8v//hff//1j0//+1/P//MgAAAPj8//+ICgAA/vn//w=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "Dfj//9EJAADZAAAAgvr//1n9///xBQAAKP3//w0AAADb+///YwgAANL5//+S/P//ZgIAAIj1//8W+///MQEAALz8//9h9f//RPn//7EMAABr/f//bgUAAPn6//9EBAAAlfj//9z7//+7AwAAoPv//6v6//8q+v//PgkAAOf///+X+///HQEAAIcEAABG/P//eAwAAB4AAACm+///4fr//6T8//9P////6AgAAKL6///ADAAAUPz//7H+//8k/f//f/z//4D7//+mBgAAgf7//zUJAAD1CgAANAkAAA/+//8Z+///WAIAAP8AAADWCwAAP/v//9EGAACk/f//dwkAAA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D",
+        "raw_data": "hgsAAK73//8DBAAARQcAAJ8KAADbCgAAl/X//y4MAABR////OgUAANIFAAC9BgAA7QoAAGgBAABpDgAAJwcAADoGAACgAAAAlREAAF0EAABjBwAAAQ0AAEAIAAAZ+f//gAgAAGcHAADEDQAAGPj//w0CAACH////DwUAAFr////PBQAALQAAADQCAADRCQAAZQoAAIAEAADjBAAAFPP//xUGAACO+v//MwsAAK4BAADTBAAARAcAAKkHAACe/P//YwcAAP8EAAChCgAAVA8AAFcHAAD9/f//agIAADwBAAB5BAAAFgsAAJMIAABqBQAARQIAAOP3//+P////uf///w=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "1QEAAL8GAACDAgAA2v///2UBAABS////GgEAAOYFAAD0////BwAAAF0AAAAwAAAAPwAAALUAAAD1AAAAjwAAAGz///+7AQAABwAAACAAAADGAAAAbAMAAIL///9J/v//wAEAAFoBAADTAgAA7f///xQAAAAPAAAAXAAAAI8DAAAV////Bf///6EAAABvAgAAGwEAAHwDAABmAwAARAIAAPj///+w////a////2gBAAAvAAAACQEAAAQFAADWBQAAZf///6IAAAAuAQAAAgAAAGsBAACqAAAAuv///0QAAACuAAAAWgEAAAgAAAC3AgAAEAIAABcDAACGAQAA9v///w=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 6,
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D",
+        "raw_data": "XP///13+//+RAAAAhPz//7L///8qAAAASgAAALr+///E/v//FAAAAIgAAABpAAAA6////wT+//9i////Vf///4n+///qAAAAP/7//x4AAAA3AAAAKgEAAFEAAAAnAAAAOwEAADD+//+c////uf///4L+//+RAAAAzv///1n///9FAAAAA/3//6f////9AQAA/////8L+//+bBQAAiv7//4r+//8JAAAAngEAAEMAAAD5////zAAAAAP+//9q/v//cf///1AAAAA0AAAAVf///4wAAACe/P//Pf3//x////8mAAAArQAAAIz///88/v//6AAAAAgBAACi////rf7//w=="
+      },
+      {
+        "dims": [
+          "2"
+        ],
+        "data_type": 7,
+        "name": "const_fold_opt__323",
+        "raw_data": "//////////9AAAAAAAAAAA=="
+      }
+    ],
+    "doc_string": "converted from kws_ref_model",
+    "input": [
+      {
+        "name": "input_1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "49"
+                },
+                {
+                  "dim_value": "10"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Identity",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "value_info": [
+      {
+        "name": "functional_1/dense/MatMul_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/dense/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_4/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_3/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_2/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_1/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "10"
+                },
+                {
+                  "dim_value": "4"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "49"
+                },
+                {
+                  "dim_value": "10"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant__209_DequantizeLinear__344:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "49"
+                },
+                {
+                  "dim_value": "10"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__137:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant__218_DequantizeLinear__362:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__140:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant__229_DequantizeLinear__350:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__143:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant__238_DequantizeLinear__348:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__146:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant__249_DequantizeLinear__360:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__149:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant__258_DequantizeLinear__346:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__152:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant__269_DequantizeLinear__352:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__155:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant__278_DequantizeLinear__354:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__158:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant__289_DequantizeLinear__356:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__161:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/average_pooling2d/AvgPool_prequant__298_DequantizeLinear__358:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/average_pooling2d/AvgPool_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/average_pooling2d/AvgPool",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/flatten/Reshape_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/flatten/Reshape_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Add__165:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/dense/BiasAdd",
+        "type": {
+          "tensor_type": {
+            "elem_type": 3,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/dense/BiasAdd_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Identity_prequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    },
+    {
+      "domain": "ai.onnx.ml",
+      "version": "2"
+    }
+  ]
+}
