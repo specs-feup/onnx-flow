@@ -1,0 +1,228 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "output": [
+          "W_ones"
+        ],
+        "name": "Const_W_ones",
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "2",
+                "1",
+                "3",
+                "3"
+              ],
+              "data_type": 1,
+              "float_data": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "name": "W_ones_t"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "input": [
+          "X",
+          "W_ones"
+        ],
+        "output": [
+          "SumOut"
+        ],
+        "name": "Conv_sum",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "group",
+            "i": "2",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "strides",
+            "ints": [
+              "2",
+              "2"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "X"
+        ],
+        "output": [
+          "ShX"
+        ],
+        "name": "Shape_X",
+        "op_type": "Shape"
+      },
+      {
+        "input": [
+          "ShX"
+        ],
+        "output": [
+          "OnesX"
+        ],
+        "name": "ConstOfShape_Ones",
+        "op_type": "ConstantOfShape",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "1"
+              ],
+              "data_type": 1,
+              "float_data": [
+                1.0
+              ],
+              "name": "OneVal_t"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "input": [
+          "OnesX",
+          "W_ones"
+        ],
+        "output": [
+          "Denom"
+        ],
+        "name": "Conv_mask",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "group",
+            "i": "2",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "strides",
+            "ints": [
+              "2",
+              "2"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "SumOut",
+          "Denom"
+        ],
+        "output": [
+          "Y"
+        ],
+        "name": "Div_mask",
+        "op_type": "Div"
+      }
+    ],
+    "name": "avgpool_decomposed_conv",
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "5"
+                },
+                {
+                  "dim_value": "6"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

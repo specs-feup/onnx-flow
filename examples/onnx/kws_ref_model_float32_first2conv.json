@@ -1,0 +1,279 @@
+{
+  "ir_version": "7",
+  "producer_name": "tf2onnx",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "functional_1/conv2d/Conv2D",
+          "scale__105",
+          "zero_point__104"
+        ],
+        "output": [
+          "functional_1/conv2d/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d/Conv2D_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "input_1",
+          "new_shape__184"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107:0"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107",
+        "op_type": "Reshape",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107:0",
+          "functional_1/conv2d/Conv2D_dequant",
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "2",
+              "2"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "10",
+              "4"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "4",
+              "1",
+              "5",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1"
+        ],
+        "output": [
+          "Relu__67:0"
+        ],
+        "name": "Relu__67",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__67:0",
+          "const_fold_opt__173",
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource"
+        ],
+        "output": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "output": [
+          "Relu__70:0"
+        ],
+        "name": "Relu__70",
+        "op_type": "Relu"
+      }
+    ],
+    "name": "tf2onnx_first2conv",
+    "initializer": [
+      {
+        "data_type": 3,
+        "name": "zero_point__104",
+        "raw_data": "AA=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__105",
+        "raw_data": "MJAEOw=="
+      },
+      {
+        "dims": [
+          "4"
+        ],
+        "data_type": 7,
+        "name": "new_shape__184",
+        "raw_data": "//////////8BAAAAAAAAADEAAAAAAAAACgAAAAAAAAA="
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "10",
+          "4"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "RY+hPqURND/M++8+E98evXI4oz4MsUi+/uNdPo+zND+wcx+8YGpGO1Syjj1nWC09SPlcPXNZKj51NBU+9Ua/PaW90L0GpAA/PBfuO/bMDj2+bHg+l9r8Pr6tSr6qfJ2+TUgGPyuYFT7nRAY/7GWqvPgLoTyYNoU8iQ11PWeX2D5lJze+svBWvphg7j2tlQM/lC0+PqgipD70ll0/nEgBP8hnPryMpqC9YM5Evr4Gmz4Q9vE8vo48PsJVSD9ELiU/pdVNvtGSBT50fXo+IGNsOxlnpD5GxM09Dl4VvXCRED07nys+JqFUPoBbNTzLpjY/MZXVPpaC0D5i1Lg+XC8xvA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D",
+        "raw_data": "SQMDvvfgOb7EzCM9MdiNvhCHp7w2DJ08LR2NPbcGBL61Uce9Pu1MOzHxmj0xYAg9FZtnvBqQOb6WKYK9zNEdvf2nsb65mjI9VYTVvVgRGDxi9G08CX0rPhHWozye3DA9ACKZPfcTSr7HzeK8ho4JveNWZ75XTrw9bMyOvEbwvr3kJeQ8Ac95vq9gJb0fsU0+rYpqukLSqb1ARIg+mcS3vau3q73FoUU7SeYEPrjroj1qIZS7juEUPu6LSr4X2f+9Dcl+vYQ8lj1sdbg8KkHNvVEEqj1GCFW+eDykvlqRcr7fhRY8o6mCPbfYXr32yeS9LC+qPc9Hmz1TAk29plKnvQ=="
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 1,
+        "name": "const_fold_opt__173",
+        "raw_data": "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"
+      }
+    ],
+    "input": [
+      {
+        "name": "input_1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "49"
+                },
+                {
+                  "dim_value": "10"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Relu__70:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    },
+    {
+      "domain": "ai.onnx.ml",
+      "version": "2"
+    }
+  ]
+}

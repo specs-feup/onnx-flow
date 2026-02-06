@@ -2,7 +2,6 @@ import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
 
 namespace OnnxInnerEdge {
-
     export const TAG = "__specs-onnx__onnx_inner_edge";
     export const VERSION = "1";
 
@@ -10,14 +9,12 @@ namespace OnnxInnerEdge {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseEdge.Class<D, S> {
-
         get order(): number {
             return this.data[TAG].order;
         }
-    }   
+    }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
-
         private order: number;
 
         constructor(order: number) {
@@ -42,7 +39,7 @@ namespace OnnxInnerEdge {
     }
 
     export const TypeGuard = Edge.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseEdge.Data {
         [TAG]: {
             version: typeof VERSION;
@@ -51,6 +48,5 @@ namespace OnnxInnerEdge {
     }
 
     export interface ScratchData extends BaseEdge.ScratchData {}
-
 }
 export default OnnxInnerEdge;

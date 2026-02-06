@@ -5,9 +5,9 @@ import decomposeRelu from "./decomposers/Relu.js";
 import TensorSplitter from "./TensorSplitter.js";
 
 const decomposers = {
-  "MatMul": decomposeMatMul,
-  "Add": decomposeAdd,
-  "Relu": decomposeRelu,
+    MatMul: decomposeMatMul,
+    Add: decomposeAdd,
+    Relu: decomposeRelu,
 };
 
 /**
@@ -21,22 +21,22 @@ const decomposers = {
  * @returns The transformed ONNX graph.
  */
 export default function transformForCgra(g: OnnxGraph.Class): OnnxGraph.Class {
-  let anyDivided = true;
-  const tensorSplitter = new TensorSplitter(g);
+    let anyDivided = true;
+    const tensorSplitter = new TensorSplitter(g);
 
-  while (anyDivided) {
-    anyDivided = false;
-    const operationNodes = g.getOperationNodes();
+    while (anyDivided) {
+        anyDivided = false;
+        const operationNodes = g.getOperationNodes();
 
-    for (const node of operationNodes) {
-      const decomposer = decomposers[node.type];
-      if (decomposer !== undefined && decomposer(node, g, tensorSplitter)) {
-        anyDivided = true;
-      }
+        for (const node of operationNodes) {
+            const decomposer = decomposers[node.type];
+            if (decomposer !== undefined && decomposer(node, g, tensorSplitter)) {
+                anyDivided = true;
+            }
+        }
     }
-  }
 
-  tensorSplitter.clearTensors();
+    tensorSplitter.clearTensors();
 
-  return g;
+    return g;
 }

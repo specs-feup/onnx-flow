@@ -7,7 +7,6 @@ import OnnxEdge from "./OnnxEdge.js";
 import { TensorProto } from "./OnnxTypes.js";
 
 namespace OnnxGraph {
-
     export const TAG = "__specs-onnx__onnx_graph";
     export const VERSION = "1";
 
@@ -15,24 +14,24 @@ namespace OnnxGraph {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseGraph.Class<D, S> {
-        addInitializer(X_indicesTensor: TensorProto) {
+        addInitializer(_X_indicesTensor: TensorProto) {
             throw new Error("Method not implemented.");
         }
-        setInputs(arg0: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
+        setInputs(_arg0: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
             throw new Error("Method not implemented.");
         }
-        setOutputs(bodyOutputs: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
+        setOutputs(_bodyOutputs: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
             throw new Error("Method not implemented.");
         }
 
         // Retrieve all TensorNodes with type 'input'
         getInputTensorNodes(): NodeCollection<TensorNode.Class> {
-            return this.nodes.filterIs(TensorNode).filter(n => n.type === "input");
+            return this.nodes.filterIs(TensorNode).filter((n) => n.type === "input");
         }
 
         // Retrieve all TensorNodes with type 'output'
         getOutputTensorNodes(): NodeCollection<TensorNode.Class> {
-            return this.nodes.filterIs(TensorNode).filter(n => n.type === "output");
+            return this.nodes.filterIs(TensorNode).filter((n) => n.type === "output");
         }
 
         // Retrieve all TensorNodes
@@ -55,18 +54,30 @@ namespace OnnxGraph {
             if (!source || !target) return undefined;
 
             return source.outgoers
-                .filterIs(OnnxEdge).toArray()
-                .find(edge => edge.target === target);
+                .filterIs(OnnxEdge)
+                .toArray()
+                .find((edge) => edge.target === target);
         }
-    }   
+
+        /**
+         * Resolves a node by its type and instance number (e.g., "MatMul", 2).
+         * Instance is 1-based (first occurrence is 1).
+         */
+        getNodeByTypeAndInstance(type: string, instance: number): OperationNode.Class | undefined {
+            const matchingOps = this.getOperationNodes()
+                .toArray()
+                .filter((op) => op.type === type);
+
+            return matchingOps[instance - 1]; // 1-based to 0-based
+        }
+    }
 
     export class Builder implements Graph.Builder<Data, ScratchData> {
-
         buildData(data: BaseGraph.Data): Data {
             return {
                 ...data,
                 [TAG]: {
-                    version: VERSION
+                    version: VERSION,
                 },
             };
         }
@@ -78,7 +89,7 @@ namespace OnnxGraph {
     }
 
     export const TypeGuard = Graph.TagTypeGuard<Data, ScratchData>(TAG, VERSION);
-    
+
     export interface Data extends BaseGraph.Data {
         [TAG]: {
             version: typeof VERSION;
@@ -86,6 +97,5 @@ namespace OnnxGraph {
     }
 
     export interface ScratchData extends BaseGraph.ScratchData {}
-
 }
 export default OnnxGraph;

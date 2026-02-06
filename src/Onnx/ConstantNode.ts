@@ -2,7 +2,6 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
 
 namespace ConstantNode {
-
     export const TAG = "__specs-onnx__constant_node";
     export const VERSION = "1";
 
@@ -10,20 +9,19 @@ namespace ConstantNode {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseNode.Class<D, S> {
-
         get value(): number {
             return this.data[TAG].value;
         }
-
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
-
         private value: number;
 
-        constructor(value: number | String) {
-            if (value instanceof String) {
-                value = null;
+        constructor(value: number | string) {
+            if (typeof value === "string") {
+                // Attempt to parse string to number, default to 0 if invalid
+                const parsed = Number(value);
+                this.value = isNaN(parsed) ? 0 : parsed;
             } else {
                 this.value = value;
             }
@@ -34,7 +32,7 @@ namespace ConstantNode {
                 ...data,
                 [TAG]: {
                     version: VERSION,
-                    value: this.value
+                    value: this.value,
                 },
             };
         }
@@ -55,7 +53,6 @@ namespace ConstantNode {
         };
     }
 
-    export interface ScratchData extends BaseNode.ScratchData { }
-
+    export interface ScratchData extends BaseNode.ScratchData {}
 }
 export default ConstantNode;

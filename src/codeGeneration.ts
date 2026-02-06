@@ -8,55 +8,68 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "./Onnx/OnnxInnerEdge.js";
 
-
-
 const variables = new Map<string, string>();
 const operations = new Map<string, string[]>();
 let indentationValue = "       ";
 
-
-function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, target : BaseNode.Class, outputName : string) : string {
-
-    let code : string = '';
+function handleOperation(
+    graph: OnnxGraph.Class,
+    source: OperationNode.Class,
+    target: BaseNode.Class,
+    outputName: string,
+): string {
+    let code: string = "";
 
     switch (source.type) {
-        case 'Addition':
-        case 'Add':
+        case "Addition":
+        case "Add":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
-                    variables.set(source.id, `(${variables.get(inputs[0])} + ${variables.get(inputs[1])})`);
+                    variables.set(
+                        source.id,
+                        `(${variables.get(inputs[0])} + ${variables.get(inputs[1])})`,
+                    );
                 }
             }
             break;
-        case 'Subtraction':
-        case 'Sub':
+        case "Subtraction":
+        case "Sub":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
-                    variables.set(source.id, `(${variables.get(inputs[0])} - ${variables.get(inputs[1])})`);
+                    variables.set(
+                        source.id,
+                        `(${variables.get(inputs[0])} - ${variables.get(inputs[1])})`,
+                    );
                 }
             }
             break;
-        case 'Multiplication':
-        case 'Mul':
+        case "Multiplication":
+        case "Mul":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
-                    variables.set(source.id, `(${variables.get(inputs[0])} * ${variables.get(inputs[1])})`);
+                    variables.set(
+                        source.id,
+                        `(${variables.get(inputs[0])} * ${variables.get(inputs[1])})`,
+                    );
                 }
             }
             break;
-        case 'Division':
-        case 'Div':
+        case "Division":
+        case "Div":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
-                    variables.set(source.id, `(${variables.get(inputs[0])} / ${variables.get(inputs[1])})`);
+                    variables.set(
+                        source.id,
+                        `(${variables.get(inputs[0])} / ${variables.get(inputs[1])})`,
+                    );
                 }
             }
             break;
-        case 'Load':
+        case "Load":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
@@ -65,22 +78,33 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
 
                     if (input0Node && input1Node) {
                         if (input0Node.is(VariableNode)) {
-                            if (input0Node.as(VariableNode).type === 'output') {
-                                variables.set(source.id, `${outputName}[${variables.get(input1Node.id)}]`);
-                            }
-                            else variables.set(source.id, `${variables.get(input0Node.id)}[${variables.get(input1Node.id)}]`);
+                            if (input0Node.as(VariableNode).type === "output") {
+                                variables.set(
+                                    source.id,
+                                    `${outputName}[${variables.get(input1Node.id)}]`,
+                                );
+                            } else
+                                variables.set(
+                                    source.id,
+                                    `${variables.get(input0Node.id)}[${variables.get(input1Node.id)}]`,
+                                );
                         } else if (input1Node.is(VariableNode)) {
-                            if (input1Node.as(VariableNode).type === 'output') {
-                                variables.set(source.id, `${outputName}[${variables.get(input0Node.id)}]`);
-                            } 
-                            else variables.set(source.id, `${variables.get(input1Node.id)}[${variables.get(input0Node.id)}]`);
+                            if (input1Node.as(VariableNode).type === "output") {
+                                variables.set(
+                                    source.id,
+                                    `${outputName}[${variables.get(input0Node.id)}]`,
+                                );
+                            } else
+                                variables.set(
+                                    source.id,
+                                    `${variables.get(input1Node.id)}[${variables.get(input0Node.id)}]`,
+                                );
                         }
                     }
-
                 }
             }
             break;
-        case 'Not': 
+        case "Not":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
@@ -88,25 +112,39 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
                 }
             }
             break;
-        case 'Equality':
+        case "Equality":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
-                    variables.set(source.id, `(${variables.get(inputs[0])} === ${variables.get(inputs[1])})`);
+                    variables.set(
+                        source.id,
+                        `(${variables.get(inputs[0])} === ${variables.get(inputs[1])})`,
+                    );
                 }
             }
             break;
-        case 'Store':
+        case "Store":
             if (!variables.get(source.id)) {
                 const inputs = operations.get(source.id);
                 if (inputs) {
-                    if (target.is(VariableNode) && target.as(VariableNode).type === 'output') {
-                        variables.set(source.id, indentationValue +  `${target.id}[${variables.get(inputs[1])}] = ${variables.get(inputs[0])}\n`);
-                        code += indentationValue +  `${outputName}[${variables.get(inputs[0])}] = ${variables.get(inputs[1])}\n`;
-                    }
-                    else {
-                        variables.set(source.id, indentationValue +  `${target.id}[${variables.get(inputs[1])}] = ${variables.get(inputs[0])}\n`);
-                        code += indentationValue +  `${outputName}[${variables.get(inputs[0])}] = ${variables.get(inputs[1])}\n`;
+                    if (target.is(VariableNode) && target.as(VariableNode).type === "output") {
+                        variables.set(
+                            source.id,
+                            indentationValue +
+                                `${target.id}[${variables.get(inputs[1])}] = ${variables.get(inputs[0])}\n`,
+                        );
+                        code +=
+                            indentationValue +
+                            `${outputName}[${variables.get(inputs[0])}] = ${variables.get(inputs[1])}\n`;
+                    } else {
+                        variables.set(
+                            source.id,
+                            indentationValue +
+                                `${target.id}[${variables.get(inputs[1])}] = ${variables.get(inputs[0])}\n`,
+                        );
+                        code +=
+                            indentationValue +
+                            `${outputName}[${variables.get(inputs[0])}] = ${variables.get(inputs[1])}\n`;
                     }
                 }
             }
@@ -114,31 +152,30 @@ function handleOperation(graph : OnnxGraph.Class, source : OperationNode.Class, 
     }
 
     return code;
-
 }
 
-
-function handleEdges(edge : BaseEdge.Class, graph : OnnxGraph.Class, outputName : string) : string  {
-
-    let code : string = "";
+function handleEdges(edge: BaseEdge.Class, graph: OnnxGraph.Class, outputName: string): string {
+    let code: string = "";
 
     const source = edge.source;
     const target = edge.target;
 
-
     if (source.is(OperationNode)) {
         code += handleOperation(graph, source.as(OperationNode), target, outputName);
-        if (target.is(VariableNode) && (target.as(VariableNode).type === 'index_aux' || target.as(VariableNode).type === 'index')) {
-            code += `       ${target.id} = ${variables.get(source.id)}\n`
+        if (
+            target.is(VariableNode) &&
+            (target.as(VariableNode).type === "index_aux" ||
+                target.as(VariableNode).type === "index")
+        ) {
+            code += `       ${target.id} = ${variables.get(source.id)}\n`;
         }
     } else if (source.is(ConstantNode)) {
         variables.set(source.id, source.as(ConstantNode).value.toString());
     } else if (source.is(VariableNode)) {
-        if (source.as(VariableNode).type === 'input') {
+        if (source.as(VariableNode).type === "input") {
             variables.set(source.id, `tensor_${source.as(VariableNode).name.substring(1)}`);
-        }
-        else variables.set(source.id, source.id);
-    } 
+        } else variables.set(source.id, source.id);
+    }
 
     const targetOperation = target.tryAs(OperationNode);
 
@@ -151,43 +188,41 @@ function handleEdges(edge : BaseEdge.Class, graph : OnnxGraph.Class, outputName 
         }
     }
     return code;
+}
 
-}   
-
-function handleOuterOperationNode(node : OperationNode.Class, graph: OnnxGraph.Class) : string {
-
-    let code : string = "";
+function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Class): string {
+    let code: string = "";
     const loopIterationsNode = graph.getNodeById(`Loop_iterations_${node.id}`)?.tryAs(ConstantNode);
-    const outputOutgoers = node.outgoers.filter(edge => edge.target.is(TensorNode) && edge.target.as(TensorNode).type === 'output');
+    const outputOutgoers = node.outgoers.filter(
+        (edge) => edge.target.is(TensorNode) && edge.target.as(TensorNode).type === "output",
+    );
     const outgoers = node.outgoers;
     let outputName = "tensor_" + node.id;
 
-    const orderedEdges = graph.edges.filter(edge => edge.source.parent?.tryAs(OperationNode)?.id === node.id)
-    .filterIs(OnnxInnerEdge).sort((a, b) => a.order - b.order);
-    
+    const orderedEdges = graph.edges
+        .filter((edge) => edge.source.parent?.tryAs(OperationNode)?.id === node.id)
+        .filterIs(OnnxInnerEdge)
+        .sort((a, b) => a.order - b.order);
 
     if (loopIterationsNode && node.children.length) {
-    
         let shape;
-        if (outgoers.length && outgoers[0].is(OnnxEdge)) shape = outgoers[0].as(OnnxEdge).shape
+        if (outgoers.length && outgoers[0].is(OnnxEdge)) shape = outgoers[0].as(OnnxEdge).shape;
 
         if (outputOutgoers.length) {
             outputName = outputOutgoers[0].target.id;
-            
+
             if (outputOutgoers[0].is(OnnxEdge)) {
                 shape = outputOutgoers[0].as(OnnxEdge).shape;
             }
-            
-        } 
-        
+        }
+
         const displacementInMemoryNode = graph.getNodeById(`displacementInMemory_${node.id}`);
-        
+
         if (displacementInMemoryNode && shape) {
-            
             if (displacementInMemoryNode.is(ConstantNode)) {
                 const displacementInMemory = displacementInMemoryNode.as(ConstantNode).value;
-                
-                const totalElements = shape.reduce((acc, val) => acc * val, 1); 
+
+                const totalElements = shape.reduce((acc, val) => acc * val, 1);
                 code += `   let ${outputName} = {`;
                 for (let i = 0; i < totalElements; i++) {
                     const index = i * displacementInMemory;
@@ -199,72 +234,71 @@ function handleOuterOperationNode(node : OperationNode.Class, graph: OnnxGraph.C
             code += `   let ${outputName} = {};\n`;
         }
 
-        const indexNode = node.children.filterIs(VariableNode).filter(node => node.type === 'index');
+        const indexNode = node.children
+            .filterIs(VariableNode)
+            .filter((node) => node.type === "index");
         if (indexNode && indexNode.length === 1) {
             code += `   let ${indexNode[0].id} = 0\n`;
         } else return "";
 
-        const indexAuxNodes = node.children.filterIs(VariableNode).filter(node => node.type === 'index_aux');
+        const indexAuxNodes = node.children
+            .filterIs(VariableNode)
+            .filter((node) => node.type === "index_aux");
         if (indexAuxNodes) {
-            indexAuxNodes.forEach(node => code += `   let ${node.id} = 0\n`);
+            indexAuxNodes.forEach((node) => (code += `   let ${node.id} = 0\n`));
         }
 
-        
         if (loopIterationsNode) {
             code += `   while (${indexNode[0].id} < ${loopIterationsNode?.value}) {\n`;
         }
- 
-        orderedEdges.forEach(edge => {
+
+        orderedEdges.forEach((edge) => {
             code += handleEdges(edge, graph, outputName);
-        })
+        });
 
-        code += "   }\n\n"
-
-
+        code += "   }\n\n";
     } else {
         indentationValue = "   ";
 
         if (outputOutgoers.length) {
-            outputName = outputOutgoers[0].target.id; 
+            outputName = outputOutgoers[0].target.id;
         }
 
         code += `   let ${outputName}= {0: 0};\n`;
-        
-        orderedEdges.forEach(edge => {
-            code += handleEdges(edge, graph, outputName);
-        })
 
-        indentationValue = "        "
-        
+        orderedEdges.forEach((edge) => {
+            code += handleEdges(edge, graph, outputName);
+        });
+
+        indentationValue = "        ";
     }
     return code;
-
 }
 
-//posso dar replace do k pelo index na otimização do matmul
-//ver ordem dos nos quando dou replace de nos
+export function generateCode(graph: OnnxGraph.Class): string {
+    let code: string = "function onnxGraph(";
 
+    graph.nodes
+        .filterIs(TensorNode)
+        .filter((node) => node.type === "input" && node.parent === undefined)
+        .forEach((node) => (code += `tensor_${node.id}, `));
 
-export function generateCode(graph: OnnxGraph.Class) : string {
-    let code : string = "function onnxGraph(";
-    
-    graph.nodes.filterIs(TensorNode).filter(node => node.type === 'input' && node.parent === undefined)
-               .forEach(node => code += `tensor_${node.id}, ` );
+    code = code.slice(0, -2) + ") {\n\n";
 
-    code = code.slice(0, -2) + ') {\n\n';
-
-    const outerNodes = graph.nodes.filterIs(OperationNode).filter(node => node.parent === undefined)
-    outerNodes.forEach(node => {
+    const outerNodes = graph.nodes
+        .filterIs(OperationNode)
+        .filter((node) => node.parent === undefined);
+    outerNodes.forEach((node) => {
         code += handleOuterOperationNode(node, graph);
     });
 
-    code += "   return "
+    code += "   return ";
 
-    const outputNodes = graph.nodes.filterIs(TensorNode).filter(node => node.type === 'output');
+    const outputNodes = graph.nodes.filterIs(TensorNode).filter((node) => node.type === "output");
 
     if (outputNodes.length > 1) {
         code += "{";
-        outputNodes.forEach(node => {
+        outputNodes.forEach((node) => {
             code += `${node.id}, `;
         });
         code = code.slice(0, -2);
@@ -278,6 +312,6 @@ export function generateCode(graph: OnnxGraph.Class) : string {
     variables.clear();
     operations.clear();
     indentationValue = "       ";
-    
+
     return code;
 }

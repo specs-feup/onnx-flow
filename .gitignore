@@ -19,13 +19,21 @@
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# Virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 
-# 
+# Other
 package-lock.json
 node_modules
 /out
 .idea
 /graph.dot
 .DS_Store
+.env
+agents/
+comparison_test/
+demo/
+onnx_out/
+python scripts/
+
+examples/

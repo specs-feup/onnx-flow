@@ -1,0 +1,128 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "X"
+        ],
+        "output": [
+          "XT"
+        ],
+        "op_type": "Transpose",
+        "attribute": [
+          {
+            "name": "perm",
+            "ints": [
+              "1",
+              "0"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "output": [
+          "axes_unsq"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "1"
+              ],
+              "data_type": 7,
+              "name": "axes_unsq",
+              "raw_data": "AQAAAAAAAAA="
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "input": [
+          "Y",
+          "axes_unsq"
+        ],
+        "output": [
+          "Ycol"
+        ],
+        "op_type": "Unsqueeze"
+      },
+      {
+        "input": [
+          "XT",
+          "Ycol"
+        ],
+        "output": [
+          "Z"
+        ],
+        "op_type": "Add"
+      }
+    ],
+    "name": "transpose_broadcast_2d",
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Z",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

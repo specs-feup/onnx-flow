@@ -1,0 +1,1663 @@
+{
+  "ir_version": "7",
+  "producer_name": "tf2onnx",
+  "producer_version": "1.16.1 15c810",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "functional_1/conv2d_4/Conv2D",
+          "scale__97",
+          "zero_point__104"
+        ],
+        "output": [
+          "functional_1/conv2d_4/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_4/Conv2D_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/conv2d_3/Conv2D",
+          "scale__99",
+          "zero_point__104"
+        ],
+        "output": [
+          "functional_1/conv2d_3/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_3/Conv2D_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/conv2d_2/Conv2D",
+          "scale__101",
+          "zero_point__104"
+        ],
+        "output": [
+          "functional_1/conv2d_2/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_2/Conv2D_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/conv2d_1/Conv2D",
+          "scale__103",
+          "zero_point__104"
+        ],
+        "output": [
+          "functional_1/conv2d_1/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d_1/Conv2D_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "functional_1/conv2d/Conv2D",
+          "scale__105",
+          "zero_point__104"
+        ],
+        "output": [
+          "functional_1/conv2d/Conv2D_dequant"
+        ],
+        "name": "functional_1/conv2d/Conv2D_dequant",
+        "op_type": "DequantizeLinear"
+      },
+      {
+        "input": [
+          "input_1",
+          "new_shape__184"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107:0"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107",
+        "op_type": "Reshape",
+        "domain": ""
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107:0",
+          "functional_1/conv2d/Conv2D_dequant",
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D"
+        ],
+        "output": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1"
+        ],
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "2",
+              "2"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "10",
+              "4"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "4",
+              "1",
+              "5",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1"
+        ],
+        "output": [
+          "Relu__67:0"
+        ],
+        "name": "Relu__67",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__67:0",
+          "const_fold_opt__173",
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource"
+        ],
+        "output": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "output": [
+          "Relu__70:0"
+        ],
+        "name": "Relu__70",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__70:0",
+          "functional_1/conv2d_1/Conv2D_dequant",
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D"
+        ],
+        "output": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1"
+        ],
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1"
+        ],
+        "output": [
+          "Relu__73:0"
+        ],
+        "name": "Relu__73",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__73:0",
+          "const_fold_opt__180",
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource"
+        ],
+        "output": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "output": [
+          "Relu__76:0"
+        ],
+        "name": "Relu__76",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__76:0",
+          "functional_1/conv2d_2/Conv2D_dequant",
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D"
+        ],
+        "output": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1"
+        ],
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1"
+        ],
+        "output": [
+          "Relu__79:0"
+        ],
+        "name": "Relu__79",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__79:0",
+          "const_fold_opt__183",
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource"
+        ],
+        "output": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "output": [
+          "Relu__82:0"
+        ],
+        "name": "Relu__82",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__82:0",
+          "functional_1/conv2d_3/Conv2D_dequant",
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D"
+        ],
+        "output": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1"
+        ],
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1"
+        ],
+        "output": [
+          "Relu__85:0"
+        ],
+        "name": "Relu__85",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__85:0",
+          "const_fold_opt__178",
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource"
+        ],
+        "output": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "3",
+              "3"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "64",
+            "type": "INT"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "1",
+              "1",
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1"
+        ],
+        "output": [
+          "Relu__88:0"
+        ],
+        "name": "Relu__88",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__88:0",
+          "functional_1/conv2d_4/Conv2D_dequant",
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D"
+        ],
+        "output": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1"
+        ],
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1",
+        "op_type": "Conv",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "dilations",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "1",
+              "1"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "pads",
+            "ints": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "group",
+            "i": "1",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1"
+        ],
+        "output": [
+          "Relu__91:0"
+        ],
+        "name": "Relu__91",
+        "op_type": "Relu"
+      },
+      {
+        "input": [
+          "Relu__91:0"
+        ],
+        "output": [
+          "functional_1/average_pooling2d/AvgPool"
+        ],
+        "name": "functional_1/average_pooling2d/AvgPool",
+        "op_type": "AveragePool",
+        "attribute": [
+          {
+            "name": "strides",
+            "ints": [
+              "25",
+              "5"
+            ],
+            "type": "INTS"
+          },
+          {
+            "name": "kernel_shape",
+            "ints": [
+              "25",
+              "5"
+            ],
+            "type": "INTS"
+          }
+        ]
+      },
+      {
+        "input": [
+          "functional_1/average_pooling2d/AvgPool",
+          "const_fold_opt__171"
+        ],
+        "output": [
+          "functional_1/flatten/Reshape"
+        ],
+        "name": "functional_1/flatten/Reshape",
+        "op_type": "Reshape"
+      },
+      {
+        "input": [
+          "functional_1/flatten/Reshape",
+          "const_fold_opt__176",
+          "functional_1/dense/BiasAdd/ReadVariableOp/resource"
+        ],
+        "output": [
+          "Add__95:0"
+        ],
+        "op_type": "Gemm",
+        "attribute": [
+          {
+            "name": "alpha",
+            "f": 1.0,
+            "type": "FLOAT"
+          },
+          {
+            "name": "beta",
+            "f": 1.0,
+            "type": "FLOAT"
+          },
+          {
+            "name": "transA",
+            "i": "0",
+            "type": "INT"
+          },
+          {
+            "name": "transB",
+            "i": "0",
+            "type": "INT"
+          }
+        ]
+      },
+      {
+        "input": [
+          "Add__95:0"
+        ],
+        "output": [
+          "Identity"
+        ],
+        "name": "Identity",
+        "op_type": "Softmax",
+        "domain": ""
+      }
+    ],
+    "name": "tf2onnx",
+    "initializer": [
+      {
+        "data_type": 3,
+        "name": "zero_point__104",
+        "raw_data": "AA=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__99",
+        "raw_data": "Pu+ROw=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__97",
+        "raw_data": "vaVUPA=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__105",
+        "raw_data": "MJAEOw=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__103",
+        "raw_data": "ewKbOw=="
+      },
+      {
+        "data_type": 1,
+        "name": "scale__101",
+        "raw_data": "63XAOw=="
+      },
+      {
+        "dims": [
+          "4"
+        ],
+        "data_type": 7,
+        "name": "new_shape__184",
+        "raw_data": "//////////8BAAAAAAAAADEAAAAAAAAACgAAAAAAAAA="
+      },
+      {
+        "dims": [
+          "12"
+        ],
+        "data_type": 1,
+        "name": "functional_1/dense/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "8qFVvQkAMbzjmDS97ZRzvTbcpbuXI329eTkLvgeisDyeiC69JhDQvW3K7LwRsOs9"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_4/Conv2D",
+        "raw_data": "Me//FsrzPiPpOhf/9Qz2BucDEOj/M/P8Affn6RQJMwgW1dP35vIBCvUQBfUsBdonAQoGHAsHT/Pv5fAfxAbj6AHx1O36JewPDPJOBBD/ChXB9OwU/wwd4OUG3yoiGOnJAfvf6tzv8ArtJOcfB+fqCPw99fkaJPD1JRgR7/gMGvwc3C09C+88IA0T3eMdMvfV/Tga7g0x3ucb9b7RA+5CRfcC/Qnf/jHhGwcr2tHwCzr3BvgnAv0I3hjouxDw7ucdyPg2/Tob6xVD9OoJ29P5/dLo8A76Ae/f9+UXJdUD8vkU7QcHEPgHDSHyB9r17lEB9v71+RoR5/7nCC/1ARj6Gj347dkE+AXz5vwBFaL9Ae/oI8cQNCooEQf0Cx4KEt8Q8ur85MLP2ASjD8A28AHb7/8sKurU6EYMzBzbtTPpBx7I/iD06irfMwjd+ycExjzp1rX0D+rVCfrsAP775fTp9ggNBOXsC/P6FvbyDdj5Ju9g8zbL6AwJLNUPGhVHFgX55v/UC8kRRA4bBPQL198z6ePn/eQM4+LJ9+QyAePcHe0wAAAM6QT3MPgAKRAgIBlGTBEH+xH+SQe61RlB7y3g1g/m1vtWF/fzBrzdLdM5BPPY+OYXAxIq2wAPJCPvA/4G8xgpAc3t7e0IGCDw4yIV+Nsy69QG+uLvCVIHryjrDChN2jr85uP/HPVELQ/oBgEZ//rmCBQcDeYU+voiBCkW9x744/X2vhPqyiYCvt0a3g4V3BEOLQj33e/+6d3OEsIe+vPCD1HwHKvz9OTxuRfvB9UdGPQiHywy6uk+yQnz8hO87RrwDBciAgYEwwfh2vrr1jHq1cfh9Q8LA/XIOvYIExbH+B7w70g6Fu0sGgoG68sCFPT08x7w6iDo8PkS8ycCPAX0FCsDCQb+GSMIFRMbHvsYAy4n/uXhBgHvH8wD3ALk8v03NhDn/xPO7BzL8u0J5AD0I/Al+e386zT76h/d9OEBDwvjGQH6/wYV89oePxbMUenR+fbv8fAaL7kVB90U4Pv/6vcW2uIFKy/s0L3xGxAd/uz0BBQp19n17/wIA/EKA9b5GevzLPcVzhIb+ujwAPwDIBcILxrh7hm6+xxS48gI9QAHFv4DCej+/AkZKdrC8xj79wv759/t/t/r5zLeBRAM9OEL6AYwCAUXGwX+ESnyBPEVHhz6NA8pNQP4FOVPvd8uE+Rp7QYPKP/o6hEhwPoODw4W78kN6DzpIBsME/bu9PcGPTHz1vgL/t8M9goDLvz54AfY5eb5BTQHH6baBhdFDfHvBPEL+Pb2DAHvKgLoCgj79Qj7I/MT890FCQvj6Qrn/eHa89oNGtoDGir48ePn/+fk7fL0Jc3hE/7bMxXrNgjs/tg57RbI//jyBLkPGuHrCiXm/CvY4+jz3ioGF9kPOCXV8yTyCvwGDvMkIvglCB/m2EcAwuPe3OwP7g32BvsT/PI16P7w3hTiIPYNGR0I7fUMKQMEBRbs495T8CDwH/3k+rgkIj7+AQ336vTT7+g18fYE7Bc8vdX3/jgL5iDV/AEND/H28A/z9kD75qH5GvITGB377hD20QjkD+TiBxL26QfjAgD51yQ6xPjv+wn41ODxRPcnFfokEe4LDxy36vEGGxQgJAMhCdLLPQHDCtwHEOrz2NjVICj4IxbNGPXo5OpBA/gCCRDuEwwMAEQDDOQ0M+H54u1IP+cp8M1B5iML/trL9AMzG9bd2OgM4zb8+gop6g740xn3FCwMAPjp6go3/x4Q6h8Q5fkO2QTkG+sy/PzwDvEB7cv3Hxvh8Q8HAOz29tn2E/DbBgsQ5PEMKvLy/Pw1A/0HqPb18w/X4gHvIRz0Dhjpvh4l/APkKNgN4N/kXRX04yH7Hvn078wnFA2yLKU2PA0CDOcEM+G7B+8N3BrSCObS3CPs3hL58CbtARfwJigDAivy9/woRkwS6yUpN03ky9895wwtHd/N/f+6ADbWGyYE7ROt1S8E6fTQ/vX4Bhvz2w0U0Nj91ykK+vvl1QMcBxcT3vYcBeZI7TclHxMZ8MEFFdsQDmj7CfI3Aub/MS0BEdIU/xIFzwoh7+sjPAT8L/Hf0unVQRUFzwcH7tf2Hgj7H9P9EhcsFdwfL/3qRtvk3u367hLkIPbvPxUCCvwaH/rrKPL3C+378fYFCQb33fnl/gbc+ewGLu0JCg35/wcE/B3fAPY9GA0SAwQdAfr35BUU5O4S7wzy6Bz6/vFNOgkD6hQKEPzYDvz6/g0F8OQ07QHmBNoB+TnxDxUh6QgYIPkS3QfzHgD14wkG++j31Qr92gnjAAo+7f8y/h8CAA8n/PMR7Qf55fXm/gX8Bv7t/+EKAO784w0q+REvEPoBLQkCFOAR8S0L2QP2HQ3rA/fl9+334AL1JvP64BccD1EFCCnu6+YH/PQXQRbYDBj38Qj5C9/65yYdIOT5/x0ETOkAFhvj4P72+fYK7ikP+NrhKf/K8eH/MPHxABXzGvj75Obc6PTrKxXv4rL/LRoRG/0a5SnB+vvlIsr8LO3fGwTMENTNG878FfI43zOaye4JKPIPHwJTBtYoAOz8Mfbf+dzq9vD01fnbOOTkCB36HfsU7/gw5QsxDiDH1PX08jX8/fkD1x72PgkH1C3a5dH9Chj43inOChjG4Ob0NQ8LBRYkMPrr/vUJ+OYGAQMDBBvY4RLg9/bq3u4FJPYTGALiCBMs+SPZ/+tICO0K+A0P/P7kBQn47dsADTXeERkl6eQkBA4F0xfaGf4C9wUB8AIN9uoU8A0H8u9a/QLoCQLaFtcYFRML9OsaKRnFDdYi4eQe8vgt69/yAuwVMugIA8r5HBn6NEr56MPjLe8L5u//GQH44+vvHxEZN/0t28fu6vTTJ9kq7w0aCc35+QEQIw0UNQHZ9/vz3QYZ3AwSHer/6wXmBPfdHAcMCxj70+4GDOjn+y31FxjV7AAgEuEt9NDl6P4IIgPMDzUo2AXPEQT44gPV9z3K2/v5MywIBzEZ5uPUDuOsIiE1Fc/x8dcSPPQM+fQM0xb9QB7mB9sxARTc6uXn7QL0R87vFQy5MPPUzPAq1Bk1zsP0AcYl1jof8RUD5PkPEOPowN7yCywM/9wGAPcgAsgi+N3nC/kN9fn/Gdj0Lxch7vT6+PHJ4dUIJ/Hy6gQJEO6xGQN/ARzd3xMmCiEGD/P9/+b2/STaBPH66gsN8O36JQvgDzrxGfzz8dc43fsMLgL88BgB9Pf57AYUF94FCwsU+dYBC9TY/sbmAhUA6AkARufi+gbt6QsH8i8YNRfgBhzlH/jQ2uYb5/FMDRwc3PPFPgzE7fchHwLg8w7zHNsAD8EWCA4CAQPSCwH9I/LzAFEBJA3p9MocFAURFRPe4vb34DYQCeUJ+On3DAnoB+YO3C0lzuT43SDy+fwAGPo2G/oM4fj48Ob/Iv8N7+AP/uX2FvcW7MXU0BMABvL72kfi4SIR2/z42BgdJBvu7Rw7+w4e+eUc9sQkAOPN4SHnJivg7h/o7z7tDhUJ8xb5DQ7SOCX5E/Pr8/kKFhQ0+fYA3RQOGyK37QAW/gwR7gD8+/z28PvcBxbZLQLlIAH63NAK/8zbDu8o+Os5E/jxGCQDFvLpEv3+/fn/E/X8Hd7vIfQO1wjx3f0h8wE8OgIyAPv0+e/q+RoT8hL7Aebi+Ozr+Nj59yH0KssA4gv1GCssF/b7P9UODsPq7eMHHgsB3/7uLw351ufjMiwYDwDyCyIG8/jvAfcpGPsWCgQS8ubc4hfx2+3qBzs76B3wB/XhGQH+GusT8e8p4BLDBOL+6fQF+dUaFTX9AfPt6OfG49Dl8zwEFt4D7vj19/brGw7w/Twa+uj0BFcCBeL4De/41+b+5tTs+RUHDdfx+Bj+ERoG7+wo4vYaFBbAC+jm3UH8/goBzwftGQ0MHCHu3cweDBv/10XhIiLu2h4KLPAB6dYM/+gS4i7o/hjQ7PMX3wP1/vf16RQGKwEU+vLx3bQg3dH5IO8O4yT+8RbdAtHyFQESPQIdDAAWMu7OEywECAoAMwes+es1NurACukPLvIV4toH4ub1DOLz4x1AFwfn+PPiPOYWEvbXSQ/q3BXB9SwQ30Y65x79ByUyARM49CX/CSX16y/4G+rj7efp+QYD8uHnJMr+8iQHxBIdFgsKHdjt1R/1IPP15gMC79oq7AQMCdksIeEb298KO/r7BiX/Bhrs8gn57gIp7gHeDivu6Rr17+j2/d/x+lED/e35+PT61AEjGPQSE/D/DOMQ5wH58yD3OA78HPb2+OwiBSUcOOcs+A8atfPR2/0EAgMX4wIF+Q0AzEf13ekBFgToEwNNAQL/BwsC8usZ/PDr2/QK4efY6woK2eEoBhj/4AL31QYn+yoJ6wrvDRY/1bnV/RfnCATY6d7y1/b5Cun3I/zv4RP97S3zKCoV7xP2U9gbyf0zAAARASxPCvkZ/wHTBzA6DsABBPK76hLjESi7A/ci+fT0AgP5KdTUIgwltBoW8sNIRdstCgwBsBNMHRUo5MfrIt8PG/FD6icg+ObP//Tp3yjR/A3pBeX5+S7Wx/sCBPzv/gjr2d3r/t3r5wEcAPgmCBIHI/QUJxnmBwdWAhboFBg0ARr5IQwYDhry/Q8p/fj38h/tMu7TDhQLxggT5vIPGOUJC+HdyhDn6hzpzf8TJ+weAPjs9eHq6A0DFv0xK/PVTv3c6vjh8gkLKiDuGAEX8xYq6ePvNc8VDeYC+9wDDg8kBSX4Fd8S3w//FAwWHQTH9RjV/BzrC+0S9/AGOBLb3QTi2h7Z0Rvu30vWAczUCDL9/gUQGukRIjPYvAP1HiUUHgwJ7gu+EtnY7eQTDuwd+lnj/N3s/fTJ+fRJ6yrfAyD6/Qv2CCwg/CYTWRw24gPn3QYG7SHxD+XrH+EWuxL0CezvCfHgOBI48Qv5zejlz/TO3b03BwjhHen59/AP4/v+AwIFGRnc7hUt7SjfVA4D2s7QFOtJFy3Q2wsGJvsa7B/U9ALiGu8XX+bn9Prn9gVF4+TKMtf05AgeG+0p5Ofx8wry8hUTAdc5veEKEzL9AwPXGAzn3Qbr4vPlLxXr7wfr2vUJ6u738+AWAxj4B/YF0NMcABkk0u0WF+vvAQAw4twQ4wMb0QYR+Uo17/n1LwPxAN8O3CHyKfXpIcTzFjr3JRHu8t4i1xUmC/3Q9/Hg60UE+QEL7h7vDQ8M+hzsyPYr7g0qCTAPAhPU4uv1BAcK79fW+Ajr2/Is++/IIh/hBhsFLOr1A70A6Q0YzQgG7fQMDBEYBMEBCOT8APob+ebf7loIEvvr3S8CAQkk+i/74+EmM/gCByAJ3Ar48vUE/wkQ5fsH4/QcF+Xk9xb39TUY6evbEgkWABMTDvwHAxkL+/H17vgOyA/lF9orDPEj/Qbo1dkaGgbW3rDtIwAV4vb/7OUM2t0CDe0w+eMD6+TmHg36+/0x5O4CH/Xp5vjy7wcF5RAFIhLDBCJa2w=="
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_3/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_2/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "64",
+          "1",
+          "1"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d_1/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "10",
+          "4"
+        ],
+        "data_type": 3,
+        "name": "functional_1/conv2d/Conv2D",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D",
+        "raw_data": "M40/v2qXBj/SVGu/man8PlUQI0BZRdg/KI9Fvr5TDj93zbE+5z0wQKBuBMCBGYc/eGKVP3BBJb5rmRA+6muXPy7l+T4x2Q2+kE6pP65u1D74g0s/0YbIPwYZdL5IB68/G5oIv1J8tr4l/BG/KqlZvjB3nr6qvhdA2LLWP66h+r6MLJI+FiYLPj2ZVT+C59Q/xuK7P0iWaz6XIcw/9eesPuzafD8N1yg/I5pdvYB96z4P8GA/jLXVPzvRhz9TDSG/sidiPtkNZ75zV04/Am01PljwKT+szXQ/PlKeP8DxDj63JII/Uf20P5WKMj8LWgc/DQK0PocHAEC/cFy+844XQA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "QGcHv3P5Ob+/die/xftAPzvZgD9D3A8/ZK0vv6TWqz+9Df++zIOoP28xXb8+33w/AxtrP0IRtD8yhZm9NumuPwVLlD8/N5w/N2xrPwmE7TxNWl4/Sq5XP1IiU79HfSc/RMg0PwRjPD96Nbw/xZZtP4T5WL41Eek+CCszv2F4Oz9+aLc/PatfP0TIOb/qZFa+/1I/v18AGb9xsIm/5+KXv/ChoT/MmuQ8DfxSP3LQqj/UnIY/tN0Yv8tZHL9YGEc/mkUzv1KpJb/K9v++11rLP3QBEr8Tu7Y+nCl6v2vHEL8F8Jy/g2uRP/K4yD/+7JQ/TZmmPx7U1r6iXwK/yqA9vw=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D",
+        "raw_data": "N/oQP3Yyjb4EQ2C+hS0NP0gLrz4mvk4+NQKSPt3eeD6VHXu9CXhvP8dzTD/7iHq+1sWPvkx2SD4ZNbS+djC5PrwCiD0mYUU/BE9CPuAdML2vU7I+/wHKPi6Vyj4zbXy/e+/Bvo4/Rb89w30/z225Po6I+j6ZHKK+c7gWPkuyBr/wSyk/n0u5vbHJJj7N6Yo+sDukvvmdAb+8Tgq/iVCKP5bhqb5CEQo/ojwRvqr+2D5eIyU/6H8Bv5ojaT2mOXs+ILX3PhhHQj/MkCU+bFz3PrLdOL5yXQO/kALrPWlb270I3sg+KYJIP7D7lj6WHn+//j1VP+aSyD7WcKs8iTWLPg=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "BfoFv7AITb8cnmi+O4GBvuTOAT+2oEG9fslyPxMflT/T21u/R70LvzKcmb4YJYE/XsJpv9v2HL52hnk/+hKjP9QlHj+pEqk/jqDPPyjR3D54SZc/sb4Rv8mdKb9U/AS+PFo3v8a6kD8N+iM/PXtTv34xCL/MLIC/aJJrPwRnUb/RaB+/lWeLPwmqar8Thpg/qBNvvQK2Gr8N8AO/YuEOvw5T+77f/Ik/7yBbvzAgMr8ClU6+TOzOvpgMSr9wbDa++nksP7sz876DNjm//a6Gv1U4V7//UCW/ClKkvthSFL+QEEw/11aQP9RYiL5i/Mc+B1fZvoOhKD8usa4/gEFQvw=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D",
+        "raw_data": "SLQPPwaYnL/BJwa/GUx9v12TEj93gIw/KUuFv7wbtj5fqKU+BhuMPsTV+T4mhqE/Um8tP5TavL1lSKM/1rEjPxHcVL68JPc+QpyVP2kI9z18VLS+YKQhPouq475JjYK+qWStv9y4573CykK/zaOWP6gU3L5UGYg8VFXBPfCIcb67Rww/Pq9bPt3SED5UV70+83I2P1jbqL4+SBU/1iIMvlRWUj3GCJE+AlOsPRl5Bb8B+9w9bMtavlpEO7+Fncc+mX8UPw8lXT3qHFC9F77yPkyi3L5nT2I/bPKkPmWvMb83tyS/NRa8vrvwHr8kJE6+sC0iPGByLr5Ch/0+aTSQvg=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "Q+RLvwCMeT/zhis+4hJIv3Sxib7QI6c/uFGEvtByizsPeEm/IihaPyB0NL8Vdsm+G1CFPgG3jL8WBSu/6lsiPoCNx75GCaW/g90uv5qxhj9MMj6+dWzFP6aIDL8E+98+CQFjv2mLGL+CQ+Q+TsnHvvrFE78uOUG/6IdFP1RPH7wnm4+/zwzzPQ1k6D5GuiO/zqpvP0SmIDxuuAW//wPLvqjA5r6uceG9f3iNP6FcsL4Ld5w/x9kEv8JCXr4RVZC+gmTDvkb2z77l7JI//g6bvhTVlD/6e5M/M6xPP//fWr6TMzy/3iKuPlc0Gj4UZ60/Y9gKv7epRD+CzHa+9D6LPw=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D",
+        "raw_data": "TJEQP1zLJr/ZU4I+gPW2PhBTVT/Wbg0/aHrhvnpEWT/c6TS98lbdPqeT0z5iaNg+QsZ2P5R1vD0HbX8/5ffZPnaypT64ryQ92+SwP9PpiD7DW/k+sU9TP2THUz/1a/m+pBsAPzk2CD+oEjQ/WOrevh/x9T2Ewwm9xqPLPtrNTb1Vebg+ZtMjPKhkQD4vTy8/ZpE6PxbhvD6i/8g+wnRIv2gKCD9jw9u+ytY6P4ArED6kUbU+z2P4Phjeoj7VkYK+ES24Ps2DqD62rDA/xUtqPzhB1D5oMiK+VvJEPv39vD3G20M+ZIUvP1fPAz9I2YY+8vInPr0h4L5CN/O82vScvA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource",
+        "raw_data": "RY+hPqURND/M++8+E98evXI4oz4MsUi+/uNdPo+zND+wcx+8YGpGO1Syjj1nWC09SPlcPXNZKj51NBU+9Ua/PaW90L0GpAA/PBfuO/bMDj2+bHg+l9r8Pr6tSr6qfJ2+TUgGPyuYFT7nRAY/7GWqvPgLoTyYNoU8iQ11PWeX2D5lJze+svBWvphg7j2tlQM/lC0+PqgipD70ll0/nEgBP8hnPryMpqC9YM5Evr4Gmz4Q9vE8vo48PsJVSD9ELiU/pdVNvtGSBT50fXo+IGNsOxlnpD5GxM09Dl4VvXCRED07nys+JqFUPoBbNTzLpjY/MZXVPpaC0D5i1Lg+XC8xvA=="
+      },
+      {
+        "dims": [
+          "64"
+        ],
+        "data_type": 1,
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D",
+        "raw_data": "SQMDvvfgOb7EzCM9MdiNvhCHp7w2DJ08LR2NPbcGBL61Uce9Pu1MOzHxmj0xYAg9FZtnvBqQOb6WKYK9zNEdvf2nsb65mjI9VYTVvVgRGDxi9G08CX0rPhHWozye3DA9ACKZPfcTSr7HzeK8ho4JveNWZ75XTrw9bMyOvEbwvr3kJeQ8Ac95vq9gJb0fsU0+rYpqukLSqb1ARIg+mcS3vau3q73FoUU7SeYEPrjroj1qIZS7juEUPu6LSr4X2f+9Dcl+vYQ8lj1sdbg8KkHNvVEEqj1GCFW+eDykvlqRcr7fhRY8o6mCPbfYXr32yeS9LC+qPc9Hmz1TAk29plKnvQ=="
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 1,
+        "name": "const_fold_opt__183",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 1,
+        "name": "const_fold_opt__180",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 1,
+        "name": "const_fold_opt__178",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "12"
+        ],
+        "data_type": 1,
+        "name": "const_fold_opt__176",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "64",
+          "1",
+          "3",
+          "3"
+        ],
+        "data_type": 1,
+        "name": "const_fold_opt__173",
+        "raw_data": "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"
+      },
+      {
+        "dims": [
+          "2"
+        ],
+        "data_type": 7,
+        "name": "const_fold_opt__171",
+        "raw_data": "//////////9AAAAAAAAAAA=="
+      }
+    ],
+    "doc_string": "converted from kws_ref_model_float32",
+    "input": [
+      {
+        "name": "input_1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "49"
+                },
+                {
+                  "dim_value": "10"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Identity",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "value_info": [
+      {
+        "name": "functional_1/conv2d_4/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_3/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_2/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d_1/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/conv2d/Conv2D_dequant",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "10"
+                },
+                {
+                  "dim_value": "4"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1__107:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "49"
+                },
+                {
+                  "dim_value": "10"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation/Relu;functional_1/batch_normalization/FusedBatchNormV3;functional_1/conv2d/BiasAdd/ReadVariableOp/resource;functional_1/conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__67:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_1/Relu;functional_1/batch_normalization_1/FusedBatchNormV3;functional_1/depthwise_conv2d/depthwise;functional_1/depthwise_conv2d/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__70:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_2/Relu;functional_1/batch_normalization_2/FusedBatchNormV3;functional_1/conv2d_1/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_1/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__73:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_3/Relu;functional_1/batch_normalization_3/FusedBatchNormV3;functional_1/depthwise_conv2d_1/depthwise;functional_1/depthwise_conv2d_1/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_1/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__76:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_4/Relu;functional_1/batch_normalization_4/FusedBatchNormV3;functional_1/conv2d_2/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_2/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__79:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_5/Relu;functional_1/batch_normalization_5/FusedBatchNormV3;functional_1/depthwise_conv2d_2/depthwise;functional_1/depthwise_conv2d_2/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_2/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__82:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_6/Relu;functional_1/batch_normalization_6/FusedBatchNormV3;functional_1/conv2d_3/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/conv2d_3/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__85:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_7/Relu;functional_1/batch_normalization_7/FusedBatchNormV3;functional_1/depthwise_conv2d_3/depthwise;functional_1/depthwise_conv2d_3/BiasAdd;functional_1/conv2d_4/Conv2D;functional_1/depthwise_conv2d_3/BiasAdd/ReadVariableOp/resource1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__88:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/activation_8/Relu;functional_1/batch_normalization_8/FusedBatchNormV3;functional_1/conv2d_4/BiasAdd/ReadVariableOp/resource;functional_1/conv2d_4/BiasAdd;functional_1/conv2d_4/Conv2D1",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Relu__91:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "25"
+                },
+                {
+                  "dim_value": "5"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/average_pooling2d/AvgPool",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                },
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "functional_1/flatten/Reshape",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "64"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "Add__95:0",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "1"
+                },
+                {
+                  "dim_value": "12"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    },
+    {
+      "domain": "ai.onnx.ml",
+      "version": "2"
+    }
+  ]
+}

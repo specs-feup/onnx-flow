@@ -1,0 +1,3054 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "output": [
+          "rd_init_out_sm_rmax_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "8"
+              ],
+              "data_type": 1,
+              "float_data": [
+                -3.4028235e+38,
+                -3.4028235e+38,
+                -3.4028235e+38,
+                -3.4028235e+38,
+                -3.4028235e+38,
+                -3.4028235e+38,
+                -3.4028235e+38,
+                -3.4028235e+38
+              ],
+              "name": "rd_init_out_sm_rmax_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "sm_axes_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "1"
+              ],
+              "data_type": 7,
+              "int64_data": [
+                "1"
+              ],
+              "name": "sm_axes_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "trip_count_sm_rmax_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 7,
+              "int64_data": [
+                "24"
+              ],
+              "name": "trip_count_sm_rmax_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "cond_sm_rmax_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 9,
+              "int32_data": [
+                1
+              ],
+              "name": "cond_sm_rmax_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "reshape_shape_sm_rmax_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "2"
+              ],
+              "data_type": 7,
+              "int64_data": [
+                "8",
+                "1"
+              ],
+              "name": "reshape_shape_sm_rmax_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "rd_init_out_sm_rsum_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "8"
+              ],
+              "data_type": 1,
+              "float_data": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "name": "rd_init_out_sm_rsum_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "trip_count_sm_sub_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 7,
+              "int64_data": [
+                "24"
+              ],
+              "name": "trip_count_sm_sub_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "cond_sm_sub_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 9,
+              "int32_data": [
+                1
+              ],
+              "name": "cond_sm_sub_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "reshape_shape_sm_sub_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "2"
+              ],
+              "data_type": 7,
+              "int64_data": [
+                "8",
+                "3"
+              ],
+              "name": "reshape_shape_sm_sub_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "trip_count_sm_rsum_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 7,
+              "int64_data": [
+                "24"
+              ],
+              "name": "trip_count_sm_rsum_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "cond_sm_rsum_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 9,
+              "int32_data": [
+                1
+              ],
+              "name": "cond_sm_rsum_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "reshape_shape_sm_rsum_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "2"
+              ],
+              "data_type": 7,
+              "int64_data": [
+                "8",
+                "1"
+              ],
+              "name": "reshape_shape_sm_rsum_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "trip_count_sm_div_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 7,
+              "int64_data": [
+                "24"
+              ],
+              "name": "trip_count_sm_div_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "cond_sm_div_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "data_type": 9,
+              "int32_data": [
+                1
+              ],
+              "name": "cond_sm_div_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "output": [
+          "reshape_shape_sm_div_0"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "2"
+              ],
+              "data_type": 7,
+              "int64_data": [
+                "8",
+                "3"
+              ],
+              "name": "reshape_shape_sm_div_0"
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "input": [
+          "trip_count_sm_rmax_0",
+          "cond_sm_rmax_0",
+          "rd_init_out_sm_rmax_0"
+        ],
+        "output": [
+          "loop_out"
+        ],
+        "op_type": "Loop",
+        "attribute": [
+          {
+            "name": "body",
+            "g": {
+              "node": [
+                {
+                  "output": [
+                    "axes_sm_rmax_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "axes_sm_rmax_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "flat_shape_X"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "-1"
+                        ],
+                        "name": "flat_shape_X"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_rd_sm_rmax_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "mr_dim_rd_sm_rmax_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_rd_sm_rmax_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "8"
+                        ],
+                        "name": "mr_dim_rd_sm_rmax_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_rd_inlin_sm_rmax_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_rd_inlin_sm_rmax_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_inlin_sm_rmax_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "lin_stride_rd_inlin_sm_rmax_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_inlin_sm_rmax_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_rd_inlin_sm_rmax_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "rd_zero_sm_rmax_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "rd_zero_sm_rmax_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_rd_outlin_sm_rmax_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_rd_outlin_sm_rmax_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_outlin_sm_rmax_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_rd_outlin_sm_rmax_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_outlin_sm_rmax_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_rd_outlin_sm_rmax_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "g_max_acc_prev_sm_rmax_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "7"
+                        ],
+                        "name": "g_max_acc_prev_sm_rmax_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "X",
+                    "flat_shape_X"
+                  ],
+                  "output": [
+                    "X_flat"
+                  ],
+                  "op_type": "Reshape"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_rd_sm_rmax_0_1"
+                  ],
+                  "output": [
+                    "mr_mod_out_rd_sm_rmax_0_1"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_rd_sm_rmax_0_1"
+                  ],
+                  "output": [
+                    "mr_div_out_rd_sm_rmax_0_1"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_div_out_rd_sm_rmax_0_1",
+                    "mr_dim_rd_sm_rmax_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_rd_sm_rmax_0_0"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "mr_div_out_rd_sm_rmax_0_1",
+                    "mr_dim_rd_sm_rmax_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_rd_sm_rmax_0_0"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_rd_sm_rmax_0_0",
+                    "lin_stride_rd_inlin_sm_rmax_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_inlin_sm_rmax_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_rd_inlin_sm_rmax_0",
+                    "lin_mul_out_rd_inlin_sm_rmax_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_inlin_sm_rmax_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_rd_sm_rmax_0_1",
+                    "lin_stride_rd_inlin_sm_rmax_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_inlin_sm_rmax_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_inlin_sm_rmax_0_0",
+                    "lin_mul_out_rd_inlin_sm_rmax_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_inlin_sm_rmax_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_inlin_sm_rmax_0_1",
+                    "axes_sm_rmax_0"
+                  ],
+                  "output": [
+                    "rd_inlinU_sm_rmax_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "X_flat",
+                    "rd_inlinU_sm_rmax_0_out"
+                  ],
+                  "output": [
+                    "gather_x_sm_rmax_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "gather_x_sm_rmax_0_out",
+                    "axes_sm_rmax_0"
+                  ],
+                  "output": [
+                    "sq_x_sq_sm_rmax_0_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_rd_sm_rmax_0_0",
+                    "lin_stride_rd_outlin_sm_rmax_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_outlin_sm_rmax_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_rd_outlin_sm_rmax_0",
+                    "lin_mul_out_rd_outlin_sm_rmax_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_outlin_sm_rmax_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "rd_zero_sm_rmax_0_1",
+                    "lin_stride_rd_outlin_sm_rmax_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_outlin_sm_rmax_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_outlin_sm_rmax_0_0",
+                    "lin_mul_out_rd_outlin_sm_rmax_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_outlin_sm_rmax_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_outlin_sm_rmax_0_1",
+                    "axes_sm_rmax_0"
+                  ],
+                  "output": [
+                    "rd_outlinU_sm_rmax_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "rd_outlinU_sm_rmax_0_out",
+                    "g_max_acc_prev_sm_rmax_0"
+                  ],
+                  "output": [
+                    "g_idx_min_acc_prev_sm_rmax_0_out"
+                  ],
+                  "op_type": "Min"
+                },
+                {
+                  "input": [
+                    "carry",
+                    "g_idx_min_acc_prev_sm_rmax_0_out"
+                  ],
+                  "output": [
+                    "acc_prev_sm_rmax_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "acc_prev_sm_rmax_0_out",
+                    "axes_sm_rmax_0"
+                  ],
+                  "output": [
+                    "sq_acc_sq_sm_rmax_0_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "sq_acc_sq_sm_rmax_0_out",
+                    "sq_x_sq_sm_rmax_0_out"
+                  ],
+                  "output": [
+                    "max_out_sm_rmax_0"
+                  ],
+                  "op_type": "Max"
+                },
+                {
+                  "input": [
+                    "max_out_sm_rmax_0",
+                    "axes_sm_rmax_0"
+                  ],
+                  "output": [
+                    "combined_unsq_sm_rmax_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "op_type": "Identity"
+                },
+                {
+                  "input": [
+                    "carry",
+                    "rd_outlinU_sm_rmax_0_out",
+                    "combined_unsq_sm_rmax_0_out"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "op_type": "ScatterElements",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                }
+              ],
+              "name": "loop_body_0",
+              "input": [
+                {
+                  "name": "iter",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 7,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "8"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "8"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "value_info": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "8"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "type": "GRAPH"
+          }
+        ]
+      },
+      {
+        "input": [
+          "loop_out",
+          "reshape_shape_sm_rmax_0"
+        ],
+        "output": [
+          "sm_maxT_0"
+        ],
+        "op_type": "Reshape"
+      },
+      {
+        "input": [
+          "trip_count_sm_sub_0",
+          "cond_sm_sub_0",
+          "init_carry"
+        ],
+        "output": [
+          "loop_out_1"
+        ],
+        "op_type": "Loop",
+        "attribute": [
+          {
+            "name": "body",
+            "g": {
+              "node": [
+                {
+                  "output": [
+                    "axes"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "axes"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_X_sm_sub_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "mr_dim_mr_X_sm_sub_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_X_sm_sub_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "8"
+                        ],
+                        "name": "mr_dim_mr_X_sm_sub_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_gb_lin_X_sm_sub_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_gb_lin_X_sm_sub_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_X_sm_sub_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "lin_stride_gb_lin_X_sm_sub_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_X_sm_sub_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_gb_lin_X_sm_sub_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "flat_shape_X"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "-1"
+                        ],
+                        "name": "flat_shape_X"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "mr_dim_mr_sm_maxT_0_sm_sub_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "8"
+                        ],
+                        "name": "mr_dim_mr_sm_maxT_0_sm_sub_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_gb_lin_sm_maxT_0_sm_sub_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_gb_lin_sm_maxT_0_sm_sub_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_gb_lin_sm_maxT_0_sm_sub_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_stride_gb_lin_sm_maxT_0_sm_sub_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "flat_shape_sm_maxT_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "-1"
+                        ],
+                        "name": "flat_shape_sm_maxT_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "iter",
+                    "axes"
+                  ],
+                  "output": [
+                    "unsq_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_X_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_X_sm_sub_0_1"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_X_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_X_sm_sub_0_1"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_X_sm_sub_0_1",
+                    "mr_dim_mr_X_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_X_sm_sub_0_0"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_X_sm_sub_0_1",
+                    "mr_dim_mr_X_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_X_sm_sub_0_0"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_X_sm_sub_0_0",
+                    "lin_stride_gb_lin_X_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_X_sm_sub_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_gb_lin_X_sm_sub_0",
+                    "lin_mul_out_gb_lin_X_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_X_sm_sub_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_X_sm_sub_0_1",
+                    "lin_stride_gb_lin_X_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_X_sm_sub_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_X_sm_sub_0_0",
+                    "lin_mul_out_gb_lin_X_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_X_sm_sub_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_X_sm_sub_0_1",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_X_sm_sub_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "X",
+                    "flat_shape_X"
+                  ],
+                  "output": [
+                    "X_flat"
+                  ],
+                  "op_type": "Reshape"
+                },
+                {
+                  "input": [
+                    "X_flat",
+                    "gb_linU_X_sm_sub_0_out"
+                  ],
+                  "output": [
+                    "gb_g_X_sm_sub_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_sm_maxT_0_sm_sub_0_1",
+                    "mr_dim_mr_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_sm_maxT_0_sm_sub_0_1",
+                    "mr_dim_mr_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_sm_maxT_0_sm_sub_0_0",
+                    "lin_stride_gb_lin_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_gb_lin_sm_maxT_0_sm_sub_0",
+                    "lin_mul_out_gb_lin_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_sm_maxT_0_sm_sub_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_sm_maxT_0_sm_sub_0_1",
+                    "lin_stride_gb_lin_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_sm_maxT_0_sm_sub_0_0",
+                    "lin_mul_out_gb_lin_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_sm_maxT_0_sm_sub_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_sm_maxT_0_sm_sub_0_1",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_sm_maxT_0_sm_sub_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "sm_maxT_0",
+                    "flat_shape_sm_maxT_0"
+                  ],
+                  "output": [
+                    "sm_maxT_0_flat"
+                  ],
+                  "op_type": "Reshape"
+                },
+                {
+                  "input": [
+                    "sm_maxT_0_flat",
+                    "gb_linU_sm_maxT_0_sm_sub_0_out"
+                  ],
+                  "output": [
+                    "gb_g_sm_maxT_0_sm_sub_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "gb_g_X_sm_sub_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_sm_sub_0_in0_scalar_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "gb_g_sm_maxT_0_sm_sub_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_sm_sub_0_in1_scalar_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "sq_sm_sub_0_in0_scalar_out",
+                    "sq_sm_sub_0_in1_scalar_out"
+                  ],
+                  "output": [
+                    "sm_sub_0_out"
+                  ],
+                  "op_type": "Sub"
+                },
+                {
+                  "input": [
+                    "sm_sub_0_out"
+                  ],
+                  "output": [
+                    "sm_exp_0_out"
+                  ],
+                  "op_type": "Exp"
+                },
+                {
+                  "input": [
+                    "sm_exp_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "updateUnsq_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "op_type": "Identity"
+                },
+                {
+                  "input": [
+                    "carry",
+                    "unsq_out",
+                    "updateUnsq_out"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "op_type": "ScatterElements",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                }
+              ],
+              "name": "loop_body_0",
+              "input": [
+                {
+                  "name": "iter",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 7,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "24"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "24"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "value_info": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "24"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "type": "GRAPH"
+          }
+        ]
+      },
+      {
+        "input": [
+          "loop_out_1",
+          "reshape_shape_sm_sub_0"
+        ],
+        "output": [
+          "sm_exT_0"
+        ],
+        "op_type": "Reshape"
+      },
+      {
+        "input": [
+          "trip_count_sm_rsum_0",
+          "cond_sm_rsum_0",
+          "rd_init_out_sm_rsum_0"
+        ],
+        "output": [
+          "loop_out_2"
+        ],
+        "op_type": "Loop",
+        "attribute": [
+          {
+            "name": "body",
+            "g": {
+              "node": [
+                {
+                  "output": [
+                    "axes_sm_rsum_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "axes_sm_rsum_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "flat_shape_sm_exT_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "-1"
+                        ],
+                        "name": "flat_shape_sm_exT_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_rd_sm_rsum_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "mr_dim_rd_sm_rsum_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_rd_sm_rsum_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "8"
+                        ],
+                        "name": "mr_dim_rd_sm_rsum_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_rd_inlin_sm_rsum_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_rd_inlin_sm_rsum_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_inlin_sm_rsum_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "lin_stride_rd_inlin_sm_rsum_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_inlin_sm_rsum_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_rd_inlin_sm_rsum_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "rd_zero_sm_rsum_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "rd_zero_sm_rsum_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_rd_outlin_sm_rsum_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_rd_outlin_sm_rsum_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_outlin_sm_rsum_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_rd_outlin_sm_rsum_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_rd_outlin_sm_rsum_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_rd_outlin_sm_rsum_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "g_max_acc_prev_sm_rsum_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "7"
+                        ],
+                        "name": "g_max_acc_prev_sm_rsum_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "sm_exT_0",
+                    "flat_shape_sm_exT_0"
+                  ],
+                  "output": [
+                    "sm_exT_0_flat"
+                  ],
+                  "op_type": "Reshape"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_rd_sm_rsum_0_1"
+                  ],
+                  "output": [
+                    "mr_mod_out_rd_sm_rsum_0_1"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_rd_sm_rsum_0_1"
+                  ],
+                  "output": [
+                    "mr_div_out_rd_sm_rsum_0_1"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_div_out_rd_sm_rsum_0_1",
+                    "mr_dim_rd_sm_rsum_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_rd_sm_rsum_0_0"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "mr_div_out_rd_sm_rsum_0_1",
+                    "mr_dim_rd_sm_rsum_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_rd_sm_rsum_0_0"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_rd_sm_rsum_0_0",
+                    "lin_stride_rd_inlin_sm_rsum_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_inlin_sm_rsum_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_rd_inlin_sm_rsum_0",
+                    "lin_mul_out_rd_inlin_sm_rsum_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_inlin_sm_rsum_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_rd_sm_rsum_0_1",
+                    "lin_stride_rd_inlin_sm_rsum_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_inlin_sm_rsum_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_inlin_sm_rsum_0_0",
+                    "lin_mul_out_rd_inlin_sm_rsum_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_inlin_sm_rsum_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_inlin_sm_rsum_0_1",
+                    "axes_sm_rsum_0"
+                  ],
+                  "output": [
+                    "rd_inlinU_sm_rsum_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "sm_exT_0_flat",
+                    "rd_inlinU_sm_rsum_0_out"
+                  ],
+                  "output": [
+                    "gather_x_sm_rsum_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "gather_x_sm_rsum_0_out",
+                    "axes_sm_rsum_0"
+                  ],
+                  "output": [
+                    "sq_x_sq_sm_rsum_0_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_rd_sm_rsum_0_0",
+                    "lin_stride_rd_outlin_sm_rsum_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_outlin_sm_rsum_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_rd_outlin_sm_rsum_0",
+                    "lin_mul_out_rd_outlin_sm_rsum_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_outlin_sm_rsum_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "rd_zero_sm_rsum_0_1",
+                    "lin_stride_rd_outlin_sm_rsum_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_rd_outlin_sm_rsum_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_outlin_sm_rsum_0_0",
+                    "lin_mul_out_rd_outlin_sm_rsum_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_rd_outlin_sm_rsum_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_rd_outlin_sm_rsum_0_1",
+                    "axes_sm_rsum_0"
+                  ],
+                  "output": [
+                    "rd_outlinU_sm_rsum_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "rd_outlinU_sm_rsum_0_out",
+                    "g_max_acc_prev_sm_rsum_0"
+                  ],
+                  "output": [
+                    "g_idx_min_acc_prev_sm_rsum_0_out"
+                  ],
+                  "op_type": "Min"
+                },
+                {
+                  "input": [
+                    "carry",
+                    "g_idx_min_acc_prev_sm_rsum_0_out"
+                  ],
+                  "output": [
+                    "acc_prev_sm_rsum_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "acc_prev_sm_rsum_0_out",
+                    "axes_sm_rsum_0"
+                  ],
+                  "output": [
+                    "sq_acc_sq_sm_rsum_0_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "sq_acc_sq_sm_rsum_0_out",
+                    "sq_x_sq_sm_rsum_0_out"
+                  ],
+                  "output": [
+                    "sum_out_sm_rsum_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "sum_out_sm_rsum_0",
+                    "axes_sm_rsum_0"
+                  ],
+                  "output": [
+                    "combined_unsq_sm_rsum_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "op_type": "Identity"
+                },
+                {
+                  "input": [
+                    "carry",
+                    "rd_outlinU_sm_rsum_0_out",
+                    "combined_unsq_sm_rsum_0_out"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "op_type": "ScatterElements",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                }
+              ],
+              "name": "loop_body_0",
+              "input": [
+                {
+                  "name": "iter",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 7,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "8"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "8"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "value_info": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "8"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "type": "GRAPH"
+          }
+        ]
+      },
+      {
+        "input": [
+          "loop_out_2",
+          "reshape_shape_sm_rsum_0"
+        ],
+        "output": [
+          "sm_denT_0"
+        ],
+        "op_type": "Reshape"
+      },
+      {
+        "input": [
+          "trip_count_sm_div_0",
+          "cond_sm_div_0",
+          "init_carry_1"
+        ],
+        "output": [
+          "loop_out_3"
+        ],
+        "op_type": "Loop",
+        "attribute": [
+          {
+            "name": "body",
+            "g": {
+              "node": [
+                {
+                  "output": [
+                    "axes"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "axes"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_sm_exT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "mr_dim_mr_sm_exT_0_sm_div_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_sm_exT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "8"
+                        ],
+                        "name": "mr_dim_mr_sm_exT_0_sm_div_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_gb_lin_sm_exT_0_sm_div_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_gb_lin_sm_exT_0_sm_div_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_sm_exT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "lin_stride_gb_lin_sm_exT_0_sm_div_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_sm_exT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_gb_lin_sm_exT_0_sm_div_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "flat_shape_sm_exT_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "-1"
+                        ],
+                        "name": "flat_shape_sm_exT_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_sm_denT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "3"
+                        ],
+                        "name": "mr_dim_mr_sm_denT_0_sm_div_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "mr_dim_mr_sm_denT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "8"
+                        ],
+                        "name": "mr_dim_mr_sm_denT_0_sm_div_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_zero_gb_lin_sm_denT_0_sm_div_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_zero_gb_lin_sm_denT_0_sm_div_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_sm_denT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "1"
+                        ],
+                        "name": "lin_stride_gb_lin_sm_denT_0_sm_div_0_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "lin_stride_gb_lin_sm_denT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "data_type": 7,
+                        "int64_data": [
+                          "0"
+                        ],
+                        "name": "lin_stride_gb_lin_sm_denT_0_sm_div_0_1"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "output": [
+                    "flat_shape_sm_denT_0"
+                  ],
+                  "op_type": "Constant",
+                  "attribute": [
+                    {
+                      "name": "value",
+                      "t": {
+                        "dims": [
+                          "1"
+                        ],
+                        "data_type": 7,
+                        "int64_data": [
+                          "-1"
+                        ],
+                        "name": "flat_shape_sm_denT_0"
+                      },
+                      "type": "TENSOR"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "iter",
+                    "axes"
+                  ],
+                  "output": [
+                    "unsq_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_sm_exT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_sm_exT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_sm_exT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_sm_exT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_sm_exT_0_sm_div_0_1",
+                    "mr_dim_mr_sm_exT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_sm_exT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_sm_exT_0_sm_div_0_1",
+                    "mr_dim_mr_sm_exT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_sm_exT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_sm_exT_0_sm_div_0_0",
+                    "lin_stride_gb_lin_sm_exT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_sm_exT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_gb_lin_sm_exT_0_sm_div_0",
+                    "lin_mul_out_gb_lin_sm_exT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_sm_exT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_sm_exT_0_sm_div_0_1",
+                    "lin_stride_gb_lin_sm_exT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_sm_exT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_sm_exT_0_sm_div_0_0",
+                    "lin_mul_out_gb_lin_sm_exT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_sm_exT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_sm_exT_0_sm_div_0_1",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_sm_exT_0_sm_div_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "sm_exT_0",
+                    "flat_shape_sm_exT_0"
+                  ],
+                  "output": [
+                    "sm_exT_0_flat"
+                  ],
+                  "op_type": "Reshape"
+                },
+                {
+                  "input": [
+                    "sm_exT_0_flat",
+                    "gb_linU_sm_exT_0_sm_div_0_out"
+                  ],
+                  "output": [
+                    "gb_g_sm_exT_0_sm_div_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_sm_denT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_sm_denT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "iter",
+                    "mr_dim_mr_sm_denT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_sm_denT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_sm_denT_0_sm_div_0_1",
+                    "mr_dim_mr_sm_denT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "mr_mod_out_mr_sm_denT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Mod"
+                },
+                {
+                  "input": [
+                    "mr_div_out_mr_sm_denT_0_sm_div_0_1",
+                    "mr_dim_mr_sm_denT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "mr_div_out_mr_sm_denT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_sm_denT_0_sm_div_0_0",
+                    "lin_stride_gb_lin_sm_denT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_sm_denT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_zero_gb_lin_sm_denT_0_sm_div_0",
+                    "lin_mul_out_gb_lin_sm_denT_0_sm_div_0_0"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_sm_denT_0_sm_div_0_0"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "mr_mod_out_mr_sm_denT_0_sm_div_0_1",
+                    "lin_stride_gb_lin_sm_denT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "lin_mul_out_gb_lin_sm_denT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Mul"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_sm_denT_0_sm_div_0_0",
+                    "lin_mul_out_gb_lin_sm_denT_0_sm_div_0_1"
+                  ],
+                  "output": [
+                    "lin_add_out_gb_lin_sm_denT_0_sm_div_0_1"
+                  ],
+                  "op_type": "Add"
+                },
+                {
+                  "input": [
+                    "lin_add_out_gb_lin_sm_denT_0_sm_div_0_1",
+                    "axes"
+                  ],
+                  "output": [
+                    "gb_linU_sm_denT_0_sm_div_0_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "sm_denT_0",
+                    "flat_shape_sm_denT_0"
+                  ],
+                  "output": [
+                    "sm_denT_0_flat"
+                  ],
+                  "op_type": "Reshape"
+                },
+                {
+                  "input": [
+                    "sm_denT_0_flat",
+                    "gb_linU_sm_denT_0_sm_div_0_out"
+                  ],
+                  "output": [
+                    "gb_g_sm_denT_0_sm_div_0_out"
+                  ],
+                  "op_type": "Gather",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                },
+                {
+                  "input": [
+                    "gb_g_sm_exT_0_sm_div_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_sm_div_0_in0_scalar_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "gb_g_sm_denT_0_sm_div_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "sq_sm_div_0_in1_scalar_out"
+                  ],
+                  "op_type": "Squeeze"
+                },
+                {
+                  "input": [
+                    "sq_sm_div_0_in0_scalar_out",
+                    "sq_sm_div_0_in1_scalar_out"
+                  ],
+                  "output": [
+                    "sm_div_0_out"
+                  ],
+                  "op_type": "Div"
+                },
+                {
+                  "input": [
+                    "sm_div_0_out",
+                    "axes"
+                  ],
+                  "output": [
+                    "updateUnsq_out"
+                  ],
+                  "op_type": "Unsqueeze"
+                },
+                {
+                  "input": [
+                    "cond_in"
+                  ],
+                  "output": [
+                    "cond_out"
+                  ],
+                  "op_type": "Identity"
+                },
+                {
+                  "input": [
+                    "carry",
+                    "unsq_out",
+                    "updateUnsq_out"
+                  ],
+                  "output": [
+                    "carry_out"
+                  ],
+                  "op_type": "ScatterElements",
+                  "attribute": [
+                    {
+                      "name": "axis",
+                      "i": "0",
+                      "type": "INT"
+                    }
+                  ]
+                }
+              ],
+              "name": "loop_body_0",
+              "input": [
+                {
+                  "name": "iter",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 7,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "cond_in",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "24"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "output": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "24"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "value_info": [
+                {
+                  "name": "cond_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 9,
+                      "shape": {}
+                    }
+                  }
+                },
+                {
+                  "name": "carry_out",
+                  "type": {
+                    "tensor_type": {
+                      "elem_type": 1,
+                      "shape": {
+                        "dim": [
+                          {
+                            "dim_value": "24"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "type": "GRAPH"
+          }
+        ]
+      },
+      {
+        "input": [
+          "loop_out_3",
+          "reshape_shape_sm_div_0"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "Reshape"
+      }
+    ],
+    "name": "Graph",
+    "initializer": [
+      {
+        "dims": [
+          "24"
+        ],
+        "data_type": 1,
+        "float_data": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "name": "init_carry_1"
+      },
+      {
+        "dims": [
+          "24"
+        ],
+        "data_type": 1,
+        "float_data": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "name": "init_carry"
+      }
+    ],
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "8"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "8"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "version": "17"
+    }
+  ]
+}

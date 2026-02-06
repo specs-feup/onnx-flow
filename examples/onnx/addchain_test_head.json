@@ -1,0 +1,208 @@
+{
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "A",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "input"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "B",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "input"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "0",
+          "__specs-onnx__operation_node": {
+            "version": "2",
+            "type": "Add",
+            "inputs": [
+              {},
+              {}
+            ],
+            "attributes": {},
+            "subgraphs": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "AB",
+          "__specs-onnx__tensor_node": {
+            "version": "2",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "type": "output"
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "id": "e18a68ae-9e7a-4678-874f-e4d67af33662",
+          "source": "A",
+          "target": "0",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "5892f7fc-9b01-436a-aaee-d2433fac11da",
+          "source": "B",
+          "target": "0",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "e7692b36-9ffb-4b55-adf2-df0ab4a6b46f",
+          "source": "0",
+          "target": "AB",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      }
+    ]
+  },
+  "data": {
+    "__specs-onnx__onnx_graph": {
+      "version": "1"
+    }
+  },
+  "zoomingEnabled": true,
+  "userZoomingEnabled": true,
+  "zoom": 1,
+  "minZoom": 1e-50,
+  "maxZoom": 1e+50,
+  "panningEnabled": true,
+  "userPanningEnabled": true,
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "boxSelectionEnabled": true,
+  "renderer": {
+    "name": "null"
+  }
+}

@@ -1,120 +1,62 @@
-# onnx-flow
-Tool to convert an ONNX graph into a data-flow graph, decomposing its high-level operations into low-level operations and performing a set of optimizations. The resulting graph maintains its initial structure, that is (as in all ONNX graphs), the nodes represent operations, initial inputs, and final outputs.
+# @specs-feup/onnx-flow
+
+**A high-performance tool for decomposing and optimizing ONNX models into hardware-aware data-flow representations.**
+
+`onnx-flow` transforms high-level neural network operations (like `AveragePool`, `Conv`, or `Softmax`) into lower-level operations (suitable for offloading). It enables decompositions, explicit loop-lowering, optimizations (such as loop fusion), and graph partitioning for distributed workloads. Outputs can be generated in ONNX, JSON and DOT formats with multiple visualization options.
+
+---
+
+## Key Features
+
+* **Operation Decomposition**: Transforms high-level neural network operations (like `AveragePool`, `Conv`, or `Softmax`) into lower-level primitives suitable for offloading.
+* **Optimizations**: Applies advanced optimizations, such as loop fusion, to streamline execution.
+* **Graph Partitioning**: Supports splitting graphs into partitions to facilitate distributed workloads, automatically managing boundary tensors.
+* **Multi-Format Output**: Generates processed graphs in ONNX, JSON, and DOT formats to suit various integration needs.
+* **Visualization**: Provides multiple visualization options, including static SVG rendering and interactive Graphviz Online links.
+
+---
 
 ## Installation
 
-To install the package:
+To install the package via npm:
 
 ```bash
 npm install @specs-feup/onnx-flow
 ```
 
+---
+
 ## CLI Usage
 
-```
-Usage: onnx-flow <input_file> [options]
+The CLI is the primary way to transform models. It supports both `.onnx` binaries and `.json` flow-graph exports.
 
-Options:
-      --version                Show version number                      [boolean]
-  -o, --output                 Output resulting graph to a file         [string]
-  -f, --format                 Output format (json or dot)              [string] [choices: "json", "dot"] [default: "json"]
-  -v, --verbosity              Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)                          [number] [default: 1]
-      --noLowLevel, --nl       Disable the low-level conversion         [boolean] [default: false]
-      --noOptimize, --no       Disable optimization steps               [boolean] [default: false]
-      --noCodegen, --nc        Disable code generation step             [boolean] [default: false]
-      --visualization, --vz    Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)    [number] [default: 2]
-      --help                   Show help                                [boolean]
-
-You need to provide an input file (ONNX or JSON)
+```bash
+onnx-flow <input_file> [options]
 ```
 
-## Programmatic Usage
+### 1. Partitioning Options
+*Overrides transformation options to ensure split-point stability.*
+* `--partition, --pt <nodeId | OpType Instance>`: Partition the graph into head/tail at a specific node (e.g., `--pt 12` or `--pt MatMul 2`).
 
-In addition to the CLI, `onnx-flow` can be used programmatically by importing its functions in your project. This allows you to parse ONNX files, manipulate data-flow graphs, and generate outputs programmatically. The available functions are the following:
+### 2. Transformation & Optimization
+* `-f, --fuse`: Fuse supported operators into a single Loop (Default: `true`).
+* `-c, --coalesce`: Use coalesced scalar MAC for `MatMul` inside Loop bodies (Default: `true`).
+* `-r, --recurse`: Recursively decompose generated loop bodies (Default: `false`).
+* `--ll, --loopLowering`: Enable explicit Loop node generation (Default: `true`).
+* `--dgc, --decomposeForCgra`: Apply CGRA-specific decomposition logic.
 
-### `onnxFileParser`
-Parses an ONNX file or JSON graph into an ONNX object.
- - Input:
-    - Path of input file (`string`)
- - Output: ONNX graph parsed into a JSON file (`json`)
+### 3. Output & Visualization
+* `-o, --output <path>`: Save the resulting graph to a specific file.
+* `--fm, --format <json|dot>`: Choose output format, besides reconverted ONNX (Default: `json`).
+* `--vz, --visualization <0|1|2>`: `0` = None, `1` = Graphviz Online link, `2` = Local server.
+* `--fmtr, --formatter <default|cgra>`: Choose the DOT styling engine.
 
-```typescript
-import { onnxFileParser } from "@specs-feup/onnx-flow";
-
-const onnxObject = await onnxFileParser("path/to/file.onnx");
-console.log(onnxObject);
-```
-
----
-
-### `loadGraph`
-Loads an ONNX object into a data-flow graph and optionally applies low-level transformations and optimizations.
- - Input:
-    - ONNX graph parsed into a JSON file (`json`)
-    - Enable low-level operation decomposition (`boolean`)
-    - Enable optimizations (`boolean`)
-    - Convert output to DOT format (`boolean`)
- - Output: Resulting flow graph, either the object or in DOT format depending on the option chosen (`flow graph` or `string`)
-
-```typescript
-import { loadGraph } from "@specs-feup/onnx-flow";
-
-const dotGraph = loadGraph(onnxObject, true, true, true); // Enable both low-level and optimization steps and convert output to DOT format
-console.log(dotGraph);
-```
-
----
-
-### `renderDotToSVG`
-Converts a DOT graph string into an SVG string for rendering or embedding.
- - Input:
-    - Source graph in DOT format (`string`)
- - Output: SVG image of the graph (`string`)
-
-```typescript
-import { renderDotToSVG } from "@specs-feup/onnx-flow";
-
-const dotGraph = "digraph { a -> b }";
-const svgContent = await renderDotToSVG(dotGraph);
-console.log(svgContent);
-```
-
----
-
-### `generateGraphvizOnlineLink`
-Generates a link to visualize a DOT graph on [Graphviz Online](https://dreampuf.github.io/GraphvizOnline/).
- - Input:
-    - Source graph in DOT format (`string`)
-- Output: Link to open the given graph in Graphviz Online (`string`)
-
-```typescript
-import { generateGraphvizOnlineLink } from "@specs-feup/onnx-flow";
-
-const dotGraph = "digraph { a -> b }";
-const link = generateGraphvizOnlineLink(dotGraph);
-console.log(link); // Outputs: https://dreampuf.github.io/GraphvizOnline/#...
-```
-
----
-
-### `generateGraphCode`
-Generates code from a data-flow graph.
- - Input:
-    - Source flow graph (with low-level decomposition applied) (`flow graph`)
- - Output: Code corresponding to the source graph (`string`)
-
-```typescript
-import { generateGraphCode } from "@specs-feup/onnx-flow";
-
-const code = generateGraphCode(graph);
-console.log(code);
-```
+### 4. Other
+* `--version`: Show version number.
+* `--help`: Show detailed usage.
 
 ---
 
 ## License
 
-Licensed under the Apache 2.0 License.
-
-
-
+Licensed under the **Apache 2.0 License**.
