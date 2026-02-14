@@ -871,6 +871,22 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 break;
             }
 
+            case "DequantizeLinear": {
+                // Output shape matches input shape
+                outShape = infos[0]?.shape ?? [];
+                // Output dtype matches the scale (input 1), which is Float
+                outDtype = infos[1]?.dtype ?? DataType.FLOAT;
+                break;
+            }
+
+            case "QuantizeLinear": {
+                // Output shape matches input shape
+                outShape = infos[0]?.shape ?? [];
+                // Output dtype matches zero_point (input 2), usually UINT8 or INT8
+                outDtype = infos[2]?.dtype ?? DataType.UINT8;
+                break;
+            }
+
             default: {
                 const first = infos.find((i) => i.shape !== undefined);
                 if (first) {
