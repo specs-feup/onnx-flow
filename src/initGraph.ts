@@ -5,6 +5,7 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
 import inferShapes from "./Onnx/InferShapes.js";
+import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 
 function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
     if (!data.graph.valueInfo) return;
@@ -350,6 +351,8 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 
 // Create the graph using the implemented classes
 export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.Class {
+    applyAdapters(data);
+    
     const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
 
     addInitializers(data, graph);

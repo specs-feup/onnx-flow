@@ -14,145 +14,152 @@ import {
 export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class): boolean {
     if (sl.type !== "Slice") return false;
 
+    // 1. Inputs (Standard Opset 10+: data, starts, ends, axes?, steps?)
     const ins = sl.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    if (ins.length < 3) return false; // Must have at least data, starts, ends
 
     const Xn = ins[0];
     if (!Xn?.is?.(TensorNode)) return false;
-
     const Xin = Xn.as(TensorNode);
     const inShape = Xin.shape.map((d) => (typeof d === "number" ? d : 1));
     const rank = inShape.length;
 
-    // 1) Read params (attributes first, then from Constant producers on input slots 1..4)
-    const inputs = sl.getInputs?.() ?? [];
-    const readVec = (idx: number) =>
-        inputs[idx]?.is?.(TensorNode)
-            ? readConstIntegerVectorFromTensorNode(inputs[idx].as(TensorNode))
-            : undefined;
+    // 2. Read Parameters (Strictly from Inputs)
+    // The Adapter ensures attributes are moved to inputs.
+    const readVec = (idx: number) => {
+        const t = ins[idx];
+        return t?.is?.(TensorNode) ? readConstIntegerVectorFromTensorNode(t.as(TensorNode)) : undefined;
+    };
 
     const starts = readVec(1);
     const ends = readVec(2);
     let axes = readVec(3);
     let steps = readVec(4);
 
+    // If starts/ends are dynamic (not constant), we cannot compile this static slice logic.
     if (!starts || !ends) {
-        // dynamic Slice → leave as-is (handler returns false so TransformChain will process normally)
-        //console.log("Unable to read attributes of the Slice", sl.id);
         return false;
     }
 
+    // Defaults
     if (!axes) axes = Array.from({ length: starts.length }, (_, i) => i);
     if (!steps) steps = new Array(axes.length).fill(1);
 
-    // 2) Expand per-axis parameters; normalize; require positive steps
+    // 3. Normalize to full rank vectors
+    // We build arrays of size [rank] where indices NOT in 'axes' correspond to full slices (0, dim, 1).
     const fullStarts = new Array(rank).fill(0);
     const fullEnds = inShape.slice();
     const fullSteps = new Array(rank).fill(1);
 
     for (let i = 0; i < axes.length; i++) {
         const ax = axes[i];
-        const dim = inShape[ax] > 0 ? inShape[ax] : 1;
+        if (ax < 0 || ax >= rank) continue; // Should not happen in valid ONNX
+
+        const dim = inShape[ax]; // Dimension size
+        const dimVal = dim > 0 ? dim : 2147483647; // Handle unknown dim safely if needed
 
         let s = Number(starts[i]);
         let e = Number(ends[i]);
         const stp = Number(steps[i]);
 
-        if (!(stp > 0)) {
-            // v1: only positive steps; give up and keep Slice
-            return false;
+        if (stp === 0) return false; // Invalid step
+
+        // Normalize negatives
+        if (s < 0) s += dimVal;
+        if (e < 0) e += dimVal;
+
+        // Clamp
+        if (stp > 0) {
+            s = Math.max(0, Math.min(s, dimVal));
+            e = Math.max(0, Math.min(e, dimVal));
+        } else {
+            s = Math.min(dimVal - 1, Math.max(s, 0));
+            e = Math.min(dimVal - 1, Math.max(e, -1));
         }
-        if (s < 0) s = dim + s;
-        if (e < 0) e = dim + e;
-        s = Math.max(0, Math.min(s, dim));
-        e = Math.max(0, Math.min(e, dim));
 
         fullStarts[ax] = s;
         fullEnds[ax] = e;
         fullSteps[ax] = stp;
     }
 
-    // 3) Get the original Slice output tensor Y (we’ll write into it at the end via Identity)
+    // 4. Output
     const outs = sl.getOutgoers.targets ?? [];
     if (outs.length !== 1 || !outs[0].is?.(TensorNode)) return false;
     const Y = outs[0].as(TensorNode);
 
-    // Which axes actually change something?
-    const changingAxes = [...new Set(axes)]
-        .sort((a, b) => a - b)
-        .filter((ax) => {
-            const s = fullStarts[ax],
-                e = fullEnds[ax],
-                stp = fullSteps[ax];
-            return !(s === 0 && e === inShape[ax] && stp === 1);
-        });
+    // 5. Determine affected axes
+    const changingAxes: number[] = [];
+    for (let ax = 0; ax < rank; ax++) {
+        const s = fullStarts[ax];
+        const e = fullEnds[ax];
+        const stp = fullSteps[ax];
+        const dim = inShape[ax];
 
-    let curT: TensorNode.Class = Xin;
-    if (changingAxes.length === 0) {
-        // True no-op → single Identity(X → Y)
-        const id = g
-            .addNode(uniq(g, `sl_id_${sl.id}`))
-            .init(new OperationNode.Builder("Identity", [Xin], {}))
-            .as(OperationNode);
-        g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        g.getNodeById(sl.id).remove();
-        return true;
-    }
-
-    // Build Range→Gather chain; last Gather writes straight into Y
-    for (let i = 0; i < changingAxes.length; i++) {
-        const ax = changingAxes[i];
-        const s = fullStarts[ax],
-            e = fullEnds[ax],
-            stp = fullSteps[ax];
-        const len = Math.max(0, Math.ceil((e - s) / stp));
-
-        const cS = scalarI64(g, `sl_s_${sl.id}_${ax}`, s);
-        const cE = scalarI64(g, `sl_e_${sl.id}_${ax}`, e);
-        const cT = scalarI64(g, `sl_t_${sl.id}_${ax}`, stp);
-
-        const range = g
-            .addNode(uniq(g, `sl_range_${sl.id}_${ax}`))
-            .init(new OperationNode.Builder("Range", [cS, cE, cT]))
-            .as(OperationNode);
-        const idx = g
-            .addNode(uniq(g, `sl_idx_${sl.id}_${ax}`))
-            .init(new TensorNode.Builder(DataType.INT64, [len], "intermediate"))
-            .as(TensorNode);
-        g.addEdge(range, idx).init(new OnnxEdge.Builder(idx.literalType, idx.shape)).as(OnnxEdge);
-
-        const gather = g
-            .addNode(uniq(g, `sl_gather_${sl.id}_${ax}`))
-            .init(new OperationNode.Builder("Gather", [curT, idx], { axis: ax }))
-            .as(OperationNode);
-
-        const isLast = i === changingAxes.length - 1;
-        if (isLast) {
-            // final producer → Y (no Identity, no shape mutation)
-            g.addEdge(gather, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        } else {
-            // intermediate hop
-            const mid = g
-                .addNode(uniq(g, `sl_mid_${sl.id}_${ax}`))
-                .init(new TensorNode.Builder(curT.literalType, [], "intermediate"))
-                .as(TensorNode);
-            g.addEdge(gather, mid)
-                .init(new OnnxEdge.Builder(mid.literalType, mid.shape))
-                .as(OnnxEdge);
-            curT = mid;
+        // Is this a no-op slice on this axis? (Start=0, End=Dim, Step=1)
+        const isNoOp = (s === 0 && e === dim && stp === 1);
+        if (!isNoOp) {
+            changingAxes.push(ax);
         }
     }
 
-    g.getNodeById(sl.id).remove();
-    const paramTensor = (i: number) => {
-        const v = ins[i];
-        return v?.is?.(TensorNode) ? v.as(TensorNode) : undefined;
-    };
+    // 6. Rewrite
+    if (changingAxes.length === 0) {
+        // Identity Rewrite
+        const id = g.addNode(uniq(g, `Slice_Id_${sl.id}`))
+            .init(new OperationNode.Builder("Identity", [Xin], {}))
+            .as(OperationNode);
+        g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
+    } else {
+        // Chain of Range + Gather
+        let curT: TensorNode.Class = Xin;
 
-    maybeRemoveOrphanConstant(g, paramTensor(1)); // starts
-    maybeRemoveOrphanConstant(g, paramTensor(2)); // ends
-    maybeRemoveOrphanConstant(g, paramTensor(3)); // axes
-    maybeRemoveOrphanConstant(g, paramTensor(4)); // steps
+        for (let i = 0; i < changingAxes.length; i++) {
+            const ax = changingAxes[i];
+            const s = fullStarts[ax];
+            const e = fullEnds[ax];
+            const stp = fullSteps[ax];
+
+            const cS = scalarI64(g, `Slice_S_${sl.id}_${ax}`, s);
+            const cE = scalarI64(g, `Slice_E_${sl.id}_${ax}`, e);
+            const cStep = scalarI64(g, `Slice_Step_${sl.id}_${ax}`, stp);
+
+            const range = g.addNode(uniq(g, `Slice_Range_${sl.id}_${ax}`))
+                .init(new OperationNode.Builder("Range", [cS, cE, cStep], {}))
+                .as(OperationNode);
+            
+            // Length calculation
+            const len = Math.max(0, Math.ceil((e - s) / stp));
+            const idx = g.addNode(uniq(g, `Slice_Idx_${sl.id}_${ax}`))
+                .init(new TensorNode.Builder(DataType.INT64, [len], "intermediate"))
+                .as(TensorNode);
+            g.addEdge(range, idx).init(new OnnxEdge.Builder(DataType.INT64, [len])).as(OnnxEdge);
+
+            const gather = g.addNode(uniq(g, `Slice_Gather_${sl.id}_${ax}`))
+                .init(new OperationNode.Builder("Gather", [curT, idx], { axis: ax }))
+                .as(OperationNode);
+
+            const isLast = (i === changingAxes.length - 1);
+            if (isLast) {
+                g.addEdge(gather, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
+            } else {
+                const mid = g.addNode(uniq(g, `Slice_Mid_${sl.id}_${ax}`))
+                    .init(new TensorNode.Builder(curT.literalType, [], "intermediate")) // Shape inferred later or ignored
+                    .as(TensorNode);
+                g.addEdge(gather, mid).init(new OnnxEdge.Builder(mid.literalType, mid.shape)).as(OnnxEdge);
+                curT = mid;
+            }
+        }
+    }
+
+    // 7. Clean up
+    g.getNodeById(sl.id).remove();
+    
+    // Cleanup orphaned constant inputs
+    const getInput = (i: number) => ins[i]?.is?.(TensorNode) ? ins[i].as(TensorNode) : undefined;
+    maybeRemoveOrphanConstant(g, getInput(1)); // starts
+    maybeRemoveOrphanConstant(g, getInput(2)); // ends
+    maybeRemoveOrphanConstant(g, getInput(3)); // axes
+    maybeRemoveOrphanConstant(g, getInput(4)); // steps
 
     return true;
 }

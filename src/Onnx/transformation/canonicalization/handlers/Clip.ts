@@ -20,33 +20,13 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
-    // Gather min/max from inputs (preferred) or attributes (fallback)
-    const a = (op as any).getAttributes?.() ?? (op as any).attributes ?? {};
-
+    // --- Gather min/max ONLY from inputs ---
     let minT: TensorNode.Class | undefined;
     let maxT: TensorNode.Class | undefined;
 
-    // input[1] = min?, input[2] = max?
+    // input[1] = min, input[2] = max
     if (ins[1]?.is?.(TensorNode)) minT = ins[1].as(TensorNode);
     if (ins[2]?.is?.(TensorNode)) maxT = ins[2].as(TensorNode);
-
-    // If missing, use attributes if present (older opsets)
-    if (!minT && a.min !== undefined) {
-        const minV = Number(a.min);
-        const minConst = g
-            .addNode(uniq(g, `clip_min_${op.id}`))
-            .init(new TensorNode.Builder(dtype, [], "constant", makeTensorProto(dtype, [], [minV])))
-            .as(TensorNode);
-        minT = minConst;
-    }
-    if (!maxT && a.max !== undefined) {
-        const maxV = Number(a.max);
-        const maxConst = g
-            .addNode(uniq(g, `clip_max_${op.id}`))
-            .init(new TensorNode.Builder(dtype, [], "constant", makeTensorProto(dtype, [], [maxV])))
-            .as(TensorNode);
-        maxT = maxConst;
-    }
 
     // Build: cur = X; if (min) cur = Max(cur, min); if (max) cur = Min(cur, max)
     let cur: TensorNode.Class = X;

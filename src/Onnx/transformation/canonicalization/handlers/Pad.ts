@@ -328,14 +328,15 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     const Xin = Xn.as(TensorNode);
     const rank = Xin.shape.length;
 
-    // read pads (constant only)
+    // --- Strictly read pads from Input[1] ---
     let pads: number[] | undefined = undefined;
     const padsNode = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    if (padsNode) pads = readPadsVectorFromTensorInput(g, padsNode);
-    if (!pads) {
-        const a = op.getAttributes?.() ?? op.attributes ?? {};
-        if (Array.isArray(a.pads)) pads = a.pads.map((x) => Number(x));
+    
+    if (padsNode) {
+        pads = readPadsVectorFromTensorInput(g, padsNode);
     }
+    
+    // If pads are missing, we fail. The Adapter is responsible for ensuring this exists.
     if (!pads || pads.length !== 2 * rank) return false;
 
     // mode
