@@ -6,6 +6,7 @@ import Graph from "@specs-feup/flow/graph/Graph";
 import { AttributeProto, AttributeType, TensorProto } from "./Onnx/OnnxTypes.js";
 import inferShapes from "./Onnx/InferShapes.js";
 import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
+import ConstantNode from "./Onnx/ConstantNode.js";
 
 function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
     if (!data.graph.valueInfo) return;
@@ -67,13 +68,7 @@ function addInitializers(data: any, graph: OnnxGraph.Class) {
     }
 
     data.graph.initializer.forEach((tensor: any) => {
-        const shape = tensor.dims.map((d: number) => Number(d));
-        const elemType = tensor.dataType;
-
-        graph
-            .addNode(tensor.name)
-            .init(new TensorNode.Builder(elemType, shape, "initializer", undefined, tensor))
-            .as(TensorNode);
+        graph.addNode(tensor.name).init(new ConstantNode.Builder(tensor)).as(ConstantNode);
 
         definedVars.push(tensor.name);
     });
@@ -137,23 +132,13 @@ function addNodes(
                     }
                 }
 
-                const dataType = constantValue?.dataType ?? AttributeType.UNDEFINED;
-                const shape = constantValue?.dims ?? [];
-
                 if (!graph.hasNode(name)) {
-                    graph
-                        .addNode(name)
-                        .init(
-                            new TensorNode.Builder(
-                                dataType,
-                                shape,
-                                "constant",
-                                constantValue,
-                                undefined,
-                                extraAttrs,
-                            ),
-                        )
-                        .as(TensorNode);
+                    if (!graph.hasNode(name) && constantValue) {
+                        graph
+                            .addNode(name)
+                            .init(new ConstantNode.Builder(constantValue))
+                            .as(ConstantNode);
+                    }
                 }
 
                 definedVars.push(name);
@@ -306,38 +291,34 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
         const opNode = graph.getNodeById(node.nodeId);
         if (opNode && node.inputs) {
             node.inputs.forEach((input: string) => {
-                const inputNode = graph.getNodeById(input)?.tryAs(TensorNode);
-                if (inputNode && !inputNode.isConstant()) {
-                    const sourceShape = inputNode.shape;
-                    const sourceElemType = inputNode.literalType;
-                    graph
-                        .addEdge(inputNode, opNode)
-                        .init(new OnnxEdge.Builder(sourceElemType, sourceShape))
-                        .as(OnnxEdge);
-                } else {
-                    const nodeWithCorrespondingOutput = mapNodeAndOutput.find(
-                        (elem) => elem.output === input,
-                    );
-                    if (nodeWithCorrespondingOutput) {
-                        const outputNode = graph
-                            .getNodeById(nodeWithCorrespondingOutput.nodeId)
-                            ?.tryAs(TensorNode);
-                        if (outputNode && !outputNode.isConstant()) {
-                            graph
-                                .addEdge(outputNode, opNode)
-                                .init(
-                                    new OnnxEdge.Builder(outputNode.literalType, outputNode.shape),
-                                )
-                                .as(OnnxEdge);
-                        }
+                const inputNode = graph.getNodeById(input);
+
+                if (inputNode) {
+                    // Handle standard TensorNodes (Inputs, Intermediates)
+                    if (inputNode.is(TensorNode)) {
+                        const tNode = inputNode.as(TensorNode);
+                        graph
+                            .addEdge(tNode, opNode)
+                            .init(new OnnxEdge.Builder(tNode.literalType, tNode.shape))
+                            .as(OnnxEdge);
+                    }
+                    // Handle Phase 3 ConstantNodes (Initializers, Constants)
+                    else if (inputNode.is(ConstantNode)) {
+                        const cNode = inputNode.as(ConstantNode);
+                        graph
+                            .addEdge(cNode, opNode)
+                            .init(new OnnxEdge.Builder(cNode.literalType, cNode.shape))
+                            .as(OnnxEdge);
                     }
                 }
             });
 
+            // Handle Outputs (Operation -> Tensor)
             mapNodeAndOutput.forEach((nodeAndOutput) => {
                 if (nodeAndOutput.nodeId === opNode.id) {
+                    // Outputs are always TensorNodes
                     const outputNode = graph.getNodeById(nodeAndOutput.output)?.tryAs(TensorNode);
-                    if (outputNode && !outputNode.isConstant()) {
+                    if (outputNode) {
                         graph
                             .addEdge(opNode, outputNode)
                             .init(new OnnxEdge.Builder(outputNode.literalType, outputNode.shape))
@@ -352,7 +333,7 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 // Create the graph using the implemented classes
 export function createGraph(data: any, mainGraph?: OnnxGraph.Class): OnnxGraph.Class {
     applyAdapters(data);
-    
+
     const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
 
     addInitializers(data, graph);

@@ -2,20 +2,14 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
 import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import { AttributeProto, TensorProto } from "./OnnxTypes.js";
+import { AttributeProto } from "./OnnxTypes.js";
 
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
-    export const VERSION = "2";
+    export const VERSION = "3"; // Bumped version
 
-    export type TensorKind =
-        | "input"
-        | "output"
-        | "initializer"
-        | "intermediate"
-        | "constant"
-        | "index"
-        | "index_aux";
+    export type TensorKind = "input" | "output" | "intermediate" | "index" | "index_aux";
+    // Removed: "initializer", "constant"
 
     export class Class<
         D extends Data = Data,
@@ -45,20 +39,8 @@ namespace TensorNode {
             return this.data[TAG].address;
         }
 
-        get constantValue(): TensorProto | undefined {
-            return this.data[TAG].constantValue;
-        }
-
-        get originalInitializer(): TensorProto | undefined {
-            return this.data[TAG].originalInitializer;
-        }
-
         get extraAttrs(): AttributeProto[] | undefined {
             return this.data[TAG].extraAttrs;
-        }
-
-        isConstant(): boolean {
-            return this.data[TAG].type === "constant" && !!this.data[TAG].constantValue;
         }
 
         get getIncomers(): EdgeCollection<OnnxEdge.Class> {
@@ -75,24 +57,18 @@ namespace TensorNode {
         private shape: (number | string)[];
         private type: TensorKind;
         private address: number;
-        private constantValue?: TensorProto;
-        private originalInitializer?: TensorProto;
         private extraAttrs?: AttributeProto[];
 
         constructor(
             literalType: number,
             shape: (number | string)[],
             type: TensorKind,
-            constantValue?: TensorProto,
-            originalInitializer?: TensorProto,
             extraAttrs?: AttributeProto[],
         ) {
             this.literalType = literalType;
             this.shape = shape;
             this.type = type;
-            this.address = 0; // TODO(Process-ing): Allow reading addresses
-            this.constantValue = constantValue;
-            this.originalInitializer = originalInitializer;
+            this.address = 0;
             this.extraAttrs = extraAttrs;
         }
 
@@ -105,8 +81,6 @@ namespace TensorNode {
                     shape: this.shape,
                     type: this.type,
                     address: this.address,
-                    constantValue: this.constantValue,
-                    originalInitializer: this.originalInitializer,
                     extraAttrs: this.extraAttrs,
                 },
             };
@@ -128,8 +102,6 @@ namespace TensorNode {
             shape: (number | string)[];
             type: TensorKind;
             address: number;
-            constantValue?: TensorProto;
-            originalInitializer?: TensorProto;
             extraAttrs?: AttributeProto[];
         };
     }

@@ -5,6 +5,8 @@ import TensorNode from "./TensorNode.js";
 import OperationNode from "./OperationNode.js";
 import OnnxEdge from "./OnnxEdge.js";
 import { TensorProto } from "./OnnxTypes.js";
+import ConstantNode from "./ConstantNode.js";
+import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 namespace OnnxGraph {
     export const TAG = "__specs-onnx__onnx_graph";
@@ -22,6 +24,16 @@ namespace OnnxGraph {
         }
         setOutputs(_bodyOutputs: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
             throw new Error("Method not implemented.");
+        }
+
+        /** Retrieves all nodes in the graph (Operation, Tensor, and Constant). */
+        getNodes(): NodeCollection<BaseNode.Class> {
+            return this.nodes;
+        }
+
+        /** Retrieves all ConstantNodes (Phase 3). */
+        getConstantNodes(): NodeCollection<ConstantNode.Class> {
+            return this.nodes.filterIs(ConstantNode);
         }
 
         // Retrieve all TensorNodes with type 'input'

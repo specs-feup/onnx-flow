@@ -21,6 +21,7 @@ import {
     squeezeIfLen1,
     decodeMixedRadix,
 } from "../BuildLoop.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ============================== Local Helpers ============================== */
 
@@ -31,19 +32,19 @@ import {
  */
 function sliceBatchThenReshape2D(
     g: OnnxGraph.Class,
-    t: TensorNode.Class,
+    t: TensorNode.Class | ConstantNode.Class,
     srcBatch: number[],
     batch: number[],
     batchDigits: TensorNode.Class[],
-    axesConst: TensorNode.Class,
-    M: TensorNode.Class,
-    K_or_N: TensorNode.Class,
+    axesConst: TensorNode.Class | ConstantNode.Class,
+    M: TensorNode.Class | ConstantNode.Class,
+    K_or_N: TensorNode.Class | ConstantNode.Class,
     tag: string,
 ): TensorNode.Class {
     let cur = t;
 
     if (batch.length > 0) {
-        const zero = makeTensorConst(g, `bz_${tag}`, DataType.INT64, "constant", scalarInt64(0));
+        const zero = makeTensorConst(g, `bz_${tag}`, scalarInt64(0));
 
         for (let ax = 0; ax < batch.length; ax++) {
             if (ax >= srcBatch.length) continue;
@@ -88,13 +89,13 @@ function isKnownDim(d: number | undefined) {
 }
 
 function scalarI64(g: OnnxGraph.Class, name: string, v: number) {
-    return makeTensorConst(g, name, DataType.INT64, "constant", scalarInt64(v));
+    return makeTensorConst(g, name, scalarInt64(v));
 }
 
 function gatherDim(
     g: OnnxGraph.Class,
     tag: string,
-    src: TensorNode.Class, // e.g., A2D or B2D
+    src: TensorNode.Class | ConstantNode.Class, // e.g., A2D or B2D
     negAxis: -2 | -1, // which trailing dim to read
 ): TensorNode.Class {
     const shape = g
@@ -118,7 +119,7 @@ function gatherDim(
         .init(new OnnxEdge.Builder(shapeO.literalType, shapeO.shape))
         .as(OnnxEdge);
 
-    const idx = makeTensorConst(g, `idx_${tag}`, DataType.INT64, "constant", int64Vec([negAxis]));
+    const idx = makeTensorConst(g, `idx_${tag}`, int64Vec([negAxis]));
     const gather = g
         .addNode(uniq(g, `g_${tag}`))
         .init(new OperationNode.Builder("Gather", [shapeO, idx], { axis: 0 }))
@@ -131,16 +132,16 @@ function gatherDim(
     return out;
 }
 
-function as1D(g: OnnxGraph.Class, name: string, scalarI64T: TensorNode.Class) {
-    const axes = makeTensorConst(g, `axes_${name}`, DataType.INT64, "constant", int64Vec([0]));
+function as1D(g: OnnxGraph.Class, name: string, scalarI64T: TensorNode.Class | ConstantNode.Class) {
+    const axes = makeTensorConst(g, `axes_${name}`, int64Vec([0]));
     return unsqueezeIdx(g, scalarI64T, axes, `${name}_u`); // 1-D [1] from scalar
 }
 
 function shapeVec2(
     g: OnnxGraph.Class,
     name: string,
-    d0: TensorNode.Class, // INT64 scalar
-    d1: TensorNode.Class, // INT64 scalar
+    d0: TensorNode.Class | ConstantNode.Class, // INT64 scalar
+    d1: TensorNode.Class | ConstantNode.Class, // INT64 scalar
 ) {
     const d0v = as1D(g, `${name}_d0`, d0);
     const d1v = as1D(g, `${name}_d1`, d1);
@@ -255,8 +256,8 @@ export default function handleMatMul(
     let A2D = lhsTensor;
     let B2D = rhsTensor;
 
-    let bIdx: TensorNode.Class | null = null; // INT64 scalar
-    let tIn: TensorNode.Class | null = null; // INT64 scalar: within-batch-and-(i,j,k)
+    let bIdx: TensorNode.Class | ConstantNode.Class | null = null; // INT64 scalar
+    let tIn: TensorNode.Class | ConstantNode.Class | null = null; // INT64 scalar: within-batch-and-(i,j,k)
 
     if (batch.length > 0) {
         // b = floor(t / (M*K*N))
@@ -338,20 +339,8 @@ export default function handleMatMul(
 
     if (!ctx.coalesce) {
         // ================= NON-COALESCED =================
-        const shape1 = makeTensorConst(
-            g,
-            `shape1_${op.id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([1]),
-        );
-        const shapeK = makeTensorConst(
-            g,
-            `shapeK_${op.id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([K]),
-        );
+        const shape1 = makeTensorConst(g, `shape1_${op.id}`, int64Vec([1]));
+        const shapeK = makeTensorConst(g, `shapeK_${op.id}`, int64Vec([K]));
 
         // A2D: [M,K] -> row i -> [1,K]
         const [, rowGathered] = gatherFrom(g, A2D, `gather_${A2D.id}_${op.id}`, iU, 0);

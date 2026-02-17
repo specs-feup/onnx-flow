@@ -4,14 +4,16 @@ import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import TensorSplitter from "../TensorSplitter.js";
 import { int64Vec } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export function decomposeMatMul(
     node: OperationNode.Class,
     g: OnnxGraph.Class,
     tensorSplitter: TensorSplitter,
 ): boolean {
-    const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
+    const inputs = node.getInputs();
+    const input1 = inputs[0].is(TensorNode) ? inputs[0].as(TensorNode) : inputs[0].as(ConstantNode);
+    const input2 = inputs[1].is(TensorNode) ? inputs[1].as(TensorNode) : inputs[1].as(ConstantNode);
     const literalType = input1.literalType;
 
     if (input1.shape.length > 2 || input2.shape.length > 2) {
@@ -27,21 +29,30 @@ export function decomposeMatMul(
     }
 
     // Create new input1 nodes
-    const newInputs1: TensorNode.Class[] = tensorSplitter.getSplit(input1, false).splits;
+    const newInputs1: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
+        input1,
+        false,
+    ).splits;
     const numRows = newInputs1.length;
 
     // Create new input2 nodes
-    const newInputs2: TensorNode.Class[] = tensorSplitter.getSplit(input2, true).splits;
+    const newInputs2: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
+        input2,
+        true,
+    ).splits;
     const numCols = newInputs2.length;
 
     const output = node.outgoers.at(0).target.as(TensorNode);
 
     // Create constant zero (for unsqueezes)
-    const zeroBuilder = new TensorNode.Builder(DataType.INT64, [1], "constant", int64Vec([0]));
-    const zeroNode = g.addNode(`${node.id}_zero`, node.parent).init(zeroBuilder).as(TensorNode);
+    const zeroBuilder = new ConstantNode.Builder(int64Vec([0]));
+    const zeroNode = g.addNode(`${node.id}_zero`, node.parent).init(zeroBuilder).as(ConstantNode);
 
     // Organize outputs
-    const newOutputs: TensorNode.Class[] = tensorSplitter.getSplit(output, false).splits;
+    const newOutputs: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
+        output,
+        false,
+    ).splits;
 
     for (let row = 0; row < numRows; row++) {
         const unsqueezes: OperationNode.Class[] = [];

@@ -9,6 +9,7 @@ import {
     maybeRemoveOrphanConstant,
     scalarI64,
 } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 // ---------- Handler ----------
 export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class): boolean {
@@ -19,8 +20,8 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     if (ins.length < 3) return false; // Must have at least data, starts, ends
 
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode)) return false;
-    const Xin = Xn.as(TensorNode);
+    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) return false;
+    const Xin = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
     const inShape = Xin.shape.map((d) => (typeof d === "number" ? d : 1));
     const rank = inShape.length;
 
@@ -28,7 +29,12 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     // The Adapter ensures attributes are moved to inputs.
     const readVec = (idx: number) => {
         const t = ins[idx];
-        return t?.is?.(TensorNode) ? readConstIntegerVectorFromTensorNode(t.as(TensorNode)) : undefined;
+        if (t?.is?.(ConstantNode)) {
+            return readConstIntegerVectorFromTensorNode(t.as(ConstantNode));
+        }
+        return t?.is?.(TensorNode)
+            ? readConstIntegerVectorFromTensorNode(t.as(TensorNode))
+            : undefined;
     };
 
     const starts = readVec(1);
@@ -96,7 +102,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
         const dim = inShape[ax];
 
         // Is this a no-op slice on this axis? (Start=0, End=Dim, Step=1)
-        const isNoOp = (s === 0 && e === dim && stp === 1);
+        const isNoOp = s === 0 && e === dim && stp === 1;
         if (!isNoOp) {
             changingAxes.push(ax);
         }
@@ -105,13 +111,14 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     // 6. Rewrite
     if (changingAxes.length === 0) {
         // Identity Rewrite
-        const id = g.addNode(uniq(g, `Slice_Id_${sl.id}`))
+        const id = g
+            .addNode(uniq(g, `Slice_Id_${sl.id}`))
             .init(new OperationNode.Builder("Identity", [Xin], {}))
             .as(OperationNode);
         g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     } else {
         // Chain of Range + Gather
-        let curT: TensorNode.Class = Xin;
+        let curT: TensorNode.Class | ConstantNode.Class = Xin;
 
         for (let i = 0; i < changingAxes.length; i++) {
             const ax = changingAxes[i];
@@ -123,29 +130,39 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
             const cE = scalarI64(g, `Slice_E_${sl.id}_${ax}`, e);
             const cStep = scalarI64(g, `Slice_Step_${sl.id}_${ax}`, stp);
 
-            const range = g.addNode(uniq(g, `Slice_Range_${sl.id}_${ax}`))
+            const range = g
+                .addNode(uniq(g, `Slice_Range_${sl.id}_${ax}`))
                 .init(new OperationNode.Builder("Range", [cS, cE, cStep], {}))
                 .as(OperationNode);
-            
+
             // Length calculation
             const len = Math.max(0, Math.ceil((e - s) / stp));
-            const idx = g.addNode(uniq(g, `Slice_Idx_${sl.id}_${ax}`))
+            const idx = g
+                .addNode(uniq(g, `Slice_Idx_${sl.id}_${ax}`))
                 .init(new TensorNode.Builder(DataType.INT64, [len], "intermediate"))
                 .as(TensorNode);
-            g.addEdge(range, idx).init(new OnnxEdge.Builder(DataType.INT64, [len])).as(OnnxEdge);
+            g.addEdge(range, idx)
+                .init(new OnnxEdge.Builder(DataType.INT64, [len]))
+                .as(OnnxEdge);
 
-            const gather = g.addNode(uniq(g, `Slice_Gather_${sl.id}_${ax}`))
+            const gather = g
+                .addNode(uniq(g, `Slice_Gather_${sl.id}_${ax}`))
                 .init(new OperationNode.Builder("Gather", [curT, idx], { axis: ax }))
                 .as(OperationNode);
 
-            const isLast = (i === changingAxes.length - 1);
+            const isLast = i === changingAxes.length - 1;
             if (isLast) {
-                g.addEdge(gather, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
+                g.addEdge(gather, Y)
+                    .init(new OnnxEdge.Builder(Y.literalType, Y.shape))
+                    .as(OnnxEdge);
             } else {
-                const mid = g.addNode(uniq(g, `Slice_Mid_${sl.id}_${ax}`))
+                const mid = g
+                    .addNode(uniq(g, `Slice_Mid_${sl.id}_${ax}`))
                     .init(new TensorNode.Builder(curT.literalType, [], "intermediate")) // Shape inferred later or ignored
                     .as(TensorNode);
-                g.addEdge(gather, mid).init(new OnnxEdge.Builder(mid.literalType, mid.shape)).as(OnnxEdge);
+                g.addEdge(gather, mid)
+                    .init(new OnnxEdge.Builder(mid.literalType, mid.shape))
+                    .as(OnnxEdge);
                 curT = mid;
             }
         }
@@ -153,9 +170,14 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
 
     // 7. Clean up
     g.getNodeById(sl.id).remove();
-    
+
     // Cleanup orphaned constant inputs
-    const getInput = (i: number) => ins[i]?.is?.(TensorNode) ? ins[i].as(TensorNode) : undefined;
+    const getInput = (i: number) =>
+        ins[i]?.is?.(TensorNode)
+            ? ins[i].as(TensorNode)
+            : ins[i]?.is?.(ConstantNode)
+              ? ins[i].as(ConstantNode)
+              : undefined;
     maybeRemoveOrphanConstant(g, getInput(1)); // starts
     maybeRemoveOrphanConstant(g, getInput(2)); // ends
     maybeRemoveOrphanConstant(g, getInput(3)); // axes

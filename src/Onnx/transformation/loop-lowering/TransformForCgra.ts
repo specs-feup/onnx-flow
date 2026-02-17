@@ -2,8 +2,8 @@ import OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
-import { DataType } from "../../OnnxTypes.js";
 import { int64Vec } from "../../Utils.js";
+import ConstantNode from "../../ConstantNode.js";
 
 function splitInput(
     input: TensorNode.Class,
@@ -14,7 +14,7 @@ function splitInput(
     const literalType = input.literalType;
 
     if (input.type !== "input") {
-        const edgeBuilder = new OnnxEdge.Builder();
+        const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
         const numDivs = rowWise ? (input.shape[0] as number) : (input.shape[1] as number);
         const newShape = rowWise ? [input.shape[1]] : [input.shape[0]];
@@ -99,18 +99,13 @@ function mergeOutputs(
 ) {
     const literalType = originalOutput.literalType;
 
-    const edgeBuilder = new OnnxEdge.Builder();
+    const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
-    const oneConstBuilder = new TensorNode.Builder(DataType.INT64, [1], "constant", int64Vec([1]));
-    const oneConst = g.addNode(`${originalOutput.id}_one`).init(oneConstBuilder).as(TensorNode);
+    const oneConstBuilder = new ConstantNode.Builder(int64Vec([1]));
+    const oneConst = g.addNode(`${originalOutput.id}_one`).init(oneConstBuilder).as(ConstantNode);
 
-    const shapeBuilder = new TensorNode.Builder(
-        DataType.INT64,
-        [2],
-        "constant",
-        int64Vec(originalOutput.shape as number[]),
-    );
-    const shapeConst = g.addNode(`${originalOutput.id}_shape`).init(shapeBuilder).as(TensorNode);
+    const shapeBuilder = new ConstantNode.Builder(int64Vec(originalOutput.shape as number[]));
+    const shapeConst = g.addNode(`${originalOutput.id}_shape`).init(shapeBuilder).as(ConstantNode);
 
     // Add Unsqueeze nodes
     const unsqOuts: TensorNode.Class[] = [];
@@ -155,7 +150,7 @@ function mergeOutputs(
 function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
     const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
     const literalType = input1.literalType;
-    const edgeBuilder = new OnnxEdge.Builder();
+    const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
     const canDivideFirst = input1.shape.length === 2;
     const canDivideSecond = input2.shape.length === 2;

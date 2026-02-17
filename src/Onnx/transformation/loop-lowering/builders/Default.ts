@@ -21,12 +21,17 @@ import { LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx, broadcastShapes } from
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleTranspose from "../handlers/Transpose.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class DefaultBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]) {
         // No Slice, no Range → handled here
         return !chain.some(
-            (op) => op.type === "Slice" || op.type === "Range" || op.type === "MatMul",
+            (op) =>
+                op.type === "Scan" ||
+                op.type === "Slice" ||
+                op.type === "Range" ||
+                op.type === "MatMul",
         );
     }
 
@@ -39,12 +44,12 @@ export default class DefaultBuilder implements LoopBuilder {
         let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
         // Collect all tensor inputs for this chain (we'll use them for type inference)
-        const inputs = new Map<string, TensorNode.Class>();
+        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
         chain.forEach((op) =>
             op
                 .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((t) => inputs.set(t.id, t.as(TensorNode))),
+                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
+                .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))),
         );
 
         // Prefer a floating-point element type when available (important for DQL)
@@ -100,9 +105,12 @@ export default class DefaultBuilder implements LoopBuilder {
             const inputShapes = [
                 ...new Map(
                     chain.flatMap((op) =>
-                        (op.getInputs()?.filter((n) => n.is(TensorNode)) ?? []).map((t) => [
+                        (
+                            op.getInputs()?.filter((n) => n.is(TensorNode) || n.is(ConstantNode)) ??
+                            []
+                        ).map((t) => [
                             t.id,
-                            t.as(TensorNode),
+                            t.is(TensorNode) ? t.as(TensorNode) : t.as(ConstantNode),
                         ]),
                     ),
                 ).values(),
@@ -149,11 +157,9 @@ export default class DefaultBuilder implements LoopBuilder {
             .as(TensorNode);
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(
-                new TensorNode.Builder(elemTy, [carryLen], "input", zeroTensor(elemTy, [carryLen])),
-            )
+            .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
-        const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
+        const axes = makeTensorConst(body, "axes", int64Vec([0]));
 
         const unsq = body
             .addNode(uniq(body, "unsq"))
@@ -212,27 +218,9 @@ export default class DefaultBuilder implements LoopBuilder {
         inferShapes(body);
 
         // Loop inputs for outer graph
-        const trip = makeTensorConst(
-            outer,
-            `trip_count_${chain[0].id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(totalIters),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `cond_${chain[0].id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
-        const v_initial = makeTensorConst(
-            outer,
-            "init_carry",
-            elemTy,
-            "initializer",
-            zeroTensor(elemTy, [carryLen]),
-        );
+        const trip = makeTensorConst(outer, `trip_count_${chain[0].id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `cond_${chain[0].id}`, bool(true));
+        const v_initial = makeTensorConst(outer, "init_carry", zeroTensor(elemTy, [carryLen]));
 
         return {
             body,

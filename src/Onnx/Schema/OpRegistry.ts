@@ -28,7 +28,7 @@ export class OpRegistry {
      * Register multiple schemas at once.
      */
     public registerAll(schemas: OpSchema[]): void {
-        schemas.forEach(s => this.register(s));
+        schemas.forEach((s) => this.register(s));
     }
 
     /**

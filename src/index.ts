@@ -331,7 +331,7 @@ if (isPartitioning) {
                 if (isNaN(instance)) {
                     throw new Error(`Invalid instance number: ${argv.partition[1]}`);
                 }
-                const resolvedNode = (graph as any).getNodeByTypeAndInstance(opType, instance);
+                const resolvedNode = graph.getNodeByTypeAndInstance(opType, instance);
                 if (!resolvedNode) {
                     throw new Error(`Could not find instance ${instance} of operation '${opType}'`);
                 }

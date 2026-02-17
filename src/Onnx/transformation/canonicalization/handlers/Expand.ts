@@ -3,6 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { uniq, addEdge, toArrayLike } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Expand") return false;
@@ -12,10 +13,14 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     const xIn = ins[0];
     const shapeIn = ins[1];
-    if (!xIn?.is?.(TensorNode) || !shapeIn?.is?.(TensorNode)) return false;
+    if (
+        (!xIn?.is?.(TensorNode) && !xIn?.is?.(ConstantNode)) ||
+        (!shapeIn?.is?.(TensorNode) && !shapeIn?.is?.(ConstantNode))
+    )
+        return false;
 
-    const X = xIn.as(TensorNode);
-    const shape = shapeIn.as(TensorNode);
+    const X = xIn.is(TensorNode) ? xIn.as(TensorNode) : xIn.as(ConstantNode);
+    const shape = shapeIn.is(TensorNode) ? shapeIn.as(TensorNode) : shapeIn.as(ConstantNode);
 
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
     if (outs.length !== 1) return false;

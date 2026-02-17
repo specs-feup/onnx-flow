@@ -1,3 +1,4 @@
+import ConstantNode from "../../ConstantNode.js";
 import TensorNode from "../../TensorNode.js";
 
 /**
@@ -7,7 +8,10 @@ import TensorNode from "../../TensorNode.js";
  * @param tensor2 The second tensor node to compare.
  * @returns True if the shapes are equal, false otherwise.
  */
-export function shapesEqual(tensor1: TensorNode.Class, tensor2: TensorNode.Class): boolean {
+export function shapesEqual(
+    tensor1: TensorNode.Class | ConstantNode.Class,
+    tensor2: TensorNode.Class | ConstantNode.Class,
+): boolean {
     if (tensor1.shape.length !== tensor2.shape.length) {
         return false;
     }

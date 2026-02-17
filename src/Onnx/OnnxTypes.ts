@@ -34,32 +34,51 @@ export enum DataType {
     COMPLEX64 = 14,
     COMPLEX128 = 15,
     BFLOAT16 = 16,
+    // --- Newer ONNX Types (Opset 19+) ---
+    FLOAT8E4M3FN = 17,
+    FLOAT8E4M3FNUZ = 18,
+    FLOAT8E5M2 = 19,
+    FLOAT8E5M2FNUZ = 20,
+    UINT4 = 21,
+    INT4 = 22,
 }
 
 // ONNX-compatible TensorProto definition
 export type TensorProto = {
     name?: string;
     dataType?: DataType;
-    dims?: number[];
-    rawData?: { type: string; data: number[] | Buffer | bigint[] }; // Buffer
+    dims?: (number | string)[];
+    rawData?: { type: string; data: number[] | Buffer | bigint[] };
+
+    // Field mapping for specific types:
+    // FLOAT -> floatData
+    // DOUBLE, COMPLEX128 -> doubleData
+    // INT64 -> int64Data
+    // UINT64 -> uint64Data
+    // STRING -> stringData
+    // INT32, INT16, UINT16, INT8, UINT8, BOOL, FLOAT16, BFLOAT16, FLOAT8*, INT4* -> int32Data
     floatData?: number[];
     int32Data?: number[];
     int64Data?: (number | bigint)[];
     stringData?: string[];
     doubleData?: number[];
     uint64Data?: number[];
-    externalData?: any; // Should be ExternalDataProto if needed
+
+    externalData?: any;
 };
 
 // ONNX-compatible AttributeProto definition
 export type AttributeProto = {
     name: string;
     type: AttributeType;
-    i?: number;
-    f?: number;
-    s?: string;
-    ints?: number[];
-    floats?: number[];
-    t?: TensorProto;
-    g?: any; // Should be GraphProto if needed
+    i?: number; // INT
+    f?: number; // FLOAT
+    s?: string; // STRING
+    ints?: number[]; // INTS
+    floats?: number[]; // FLOATS
+    strings?: string[]; // STRINGS
+    t?: TensorProto; // TENSOR
+    tensors?: TensorProto[]; // TENSORS
+    g?: any; // GRAPH
+    graphs?: any[]; // GRAPHS
 };

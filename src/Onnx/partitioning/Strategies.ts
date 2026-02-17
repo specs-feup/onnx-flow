@@ -34,7 +34,7 @@ export function splitByAncestor(graph: OnnxGraph.Class, splitNodeId: string): Pa
 
         if (curr.is(TensorNode)) {
             const t = curr.as(TensorNode);
-            if (t.type === "input" || t.type === "initializer" || t.type === "constant") {
+            if (t.type === "input") {
                 continue;
             }
         }

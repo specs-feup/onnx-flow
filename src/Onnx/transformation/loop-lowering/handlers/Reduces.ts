@@ -5,6 +5,7 @@ import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import { uniq, makeTensorConst } from "@specs-feup/onnx-flow/Onnx/Utils";
 import { LoopCtx } from "../BuildLoop.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /**
  * Per-element reducer: returns a scalar [] equal to the bin's value to write this iteration.
@@ -29,8 +30,8 @@ export default function handleReduceElem(
     op: OperationNode.Class,
     g: OnnxGraph.Class,
     ctx: LoopCtx,
-    accScalar: TensorNode.Class, // []
-    xScalar: TensorNode.Class, // []
+    accScalar: TensorNode.Class | ConstantNode.Class, // []
+    xScalar: TensorNode.Class | ConstantNode.Class, // []
 ): TensorNode.Class {
     const elemTy =
         accScalar.literalType !== DataType.UNDEFINED
@@ -39,7 +40,11 @@ export default function handleReduceElem(
               ? xScalar.literalType
               : DataType.FLOAT;
 
-    const unary = (type: string, a: TensorNode.Class, name: string): TensorNode.Class => {
+    const unary = (
+        type: string,
+        a: TensorNode.Class | ConstantNode.Class,
+        name: string,
+    ): TensorNode.Class => {
         const n = g
             .addNode(uniq(g, `${name}_${op.id}`))
             .init(new OperationNode.Builder(type, [a], {}))
@@ -54,8 +59,8 @@ export default function handleReduceElem(
 
     const bin = (
         type: string,
-        a: TensorNode.Class,
-        b: TensorNode.Class,
+        a: TensorNode.Class | ConstantNode.Class,
+        b: TensorNode.Class | ConstantNode.Class,
         name: string,
     ): TensorNode.Class => {
         const n = g
@@ -72,8 +77,8 @@ export default function handleReduceElem(
 
     const where = (
         cond: TensorNode.Class,
-        a: TensorNode.Class,
-        b: TensorNode.Class,
+        a: TensorNode.Class | ConstantNode.Class,
+        b: TensorNode.Class | ConstantNode.Class,
         name: string,
     ): TensorNode.Class => {
         const n = g
@@ -130,17 +135,17 @@ export default function handleReduceElem(
             // Recurrence: acc' = log( exp(acc) + x )
             // Edge case: at first step acc==0 and if x==1 then log(1)=0 -> stays 0 forever.
 
-            const zeroF = makeTensorConst(g, `f0_${op.id}`, DataType.FLOAT, "constant", {
+            const zeroF = makeTensorConst(g, `f0_${op.id}`, {
                 dataType: DataType.FLOAT,
                 dims: [],
                 floatData: [0],
             });
-            const oneF = makeTensorConst(g, `f1_${op.id}`, DataType.FLOAT, "constant", {
+            const oneF = makeTensorConst(g, `f1_${op.id}`, {
                 dataType: DataType.FLOAT,
                 dims: [],
                 floatData: [1],
             });
-            const tinyF = makeTensorConst(g, `feps_${op.id}`, DataType.FLOAT, "constant", {
+            const tinyF = makeTensorConst(g, `feps_${op.id}`, {
                 dataType: DataType.FLOAT,
                 dims: [],
                 floatData: [1e-7],
@@ -222,7 +227,7 @@ export default function handleReduceElem(
 
         case "ReduceLogSumExp": {
             // carry keeps log(sum_exp); start acc==0 meaning "no sum yet"
-            const zero = makeTensorConst(g, `rd0_${op.id}`, DataType.FLOAT, "constant", {
+            const zero = makeTensorConst(g, `rd0_${op.id}`, {
                 dataType: DataType.FLOAT,
                 dims: [],
                 floatData: [0],

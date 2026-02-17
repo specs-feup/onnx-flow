@@ -2,6 +2,7 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 import TensorNode from "./Onnx/TensorNode.js";
+import ConstantNode from "./Onnx/ConstantNode.js";
 import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
 
 const IR_VERSION = 9;
@@ -16,21 +17,23 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
         mapNodeAndInputs.push({ nodeId: opNode.id, inputs });
 
         opNode.getOutgoers.targets.forEach((target) => {
-            if (target.is(TensorNode)) {
+            if (target.is(TensorNode) || target.is(ConstantNode)) {
                 mapNodeAndOutput.push({ nodeId: opNode.id, output: target.id });
             }
         });
     }
 
-    //Optional Debug
-    //mapNodeAndInputs.forEach(({ nodeId, inputs }) => { console.log("MINP:", nodeId, inputs) });
-    //mapNodeAndOutput.forEach(({ nodeId, output }) => { console.log("MOUT:", nodeId, output) });
-
     // Add missing edges
     mapNodeAndInputs.forEach(({ nodeId, inputs }) => {
         const opNode = graph.getNodeById(nodeId);
         for (const inputId of inputs) {
-            const inputNode = graph.getNodeById(inputId)?.tryAs(TensorNode);
+            const rawNode = graph.getNodeById(inputId);
+
+            // Phase 3 Support: Input can be TensorNode OR ConstantNode
+            let inputNode: TensorNode.Class | ConstantNode.Class | undefined = undefined;
+            if (rawNode?.is(TensorNode)) inputNode = rawNode.as(TensorNode);
+            else if (rawNode?.is(ConstantNode)) inputNode = rawNode.as(ConstantNode);
+
             if (inputNode) {
                 const alreadyConnected = inputNode.getOutgoers?.some(
                     (e) => e.target.id === opNode.id,
@@ -55,6 +58,7 @@ export function convertFlowGraphToOnnxJson(
 ): any {
     const modelInputs: any[] = [];
     const modelOutputs: any[] = [];
+    // 1. Export all ConstantNodes as Initializers
     const modelInitializers = convertInitializers(graph);
     const modelNodes: any[] = [];
 
@@ -123,23 +127,21 @@ export function convertFlowGraphToOnnxJson(
     function convertInitializers(graph: OnnxGraph.Class): any[] {
         const initializers: any[] = [];
 
-        for (const node of graph.getTensorNodes()) {
-            if (node.type !== "initializer") continue;
-            const original = node.originalInitializer;
-
+        // Phase 3: Export ALL ConstantNodes as Initializers
+        for (const node of graph.getConstantNodes()) {
+            const original = node.constantValue;
             if (!original) {
-                console.warn(`[Convert] Missing original initializer data for '${node.id}'`);
+                console.warn(`[Convert] Missing constant value for '${node.id}'`);
                 continue;
             }
-
             const serialized = sanitizeTensor({ ...original, name: node.id });
-
             initializers.push(serialized);
         }
 
         return initializers;
     }
 
+    // 2. Export Inputs
     for (const node of graph.getInputTensorNodes()) {
         modelInputs.push({
             name: node.id,
@@ -160,6 +162,31 @@ export function convertFlowGraphToOnnxJson(
         });
     }
 
+    // 2b. Export ConstantNodes marked as Inputs (Overridable Initializers)
+    // If a ConstantNode is flagged as an input, it must appear in both input and initializer lists.
+    for (const node of graph.getConstantNodes()) {
+        if (node.isInput) {
+            modelInputs.push({
+                name: node.id,
+                type: {
+                    tensorType: {
+                        elemType: node.literalType,
+                        shape: {
+                            dim: node.shape.map((d) => {
+                                if (typeof d === "string") {
+                                    return { dimParam: d };
+                                } else {
+                                    return d == null ? {} : { dimValue: d };
+                                }
+                            }),
+                        },
+                    },
+                },
+            });
+        }
+    }
+
+    // 3. Export Outputs
     for (const node of graph.getOutputTensorNodes()) {
         modelOutputs.push({
             name: node.id,
@@ -180,39 +207,11 @@ export function convertFlowGraphToOnnxJson(
         });
     }
 
-    for (const tensorNode of graph.getTensorNodes()) {
-        if (tensorNode.isConstant()) {
-            const original = tensorNode.constantValue!;
-            const serialized = sanitizeTensor({ ...original, name: tensorNode.id });
-
-            const attrs: AttributeProto[] = [
-                {
-                    name: "value",
-                    type: AttributeType.TENSOR,
-                    t: serialized,
-                },
-            ];
-
-            // Include any other preserved attributes
-            for (const attr of tensorNode.extraAttrs ?? []) {
-                attrs.push(attr);
-            }
-
-            modelNodes.push({
-                opType: "Constant",
-                input: [],
-                output: [tensorNode.id],
-                attribute: attrs,
-            });
-        }
-    }
-
     // Prepare graph (e.g. rebuild edges)
     prepareGraphForExport(graph);
 
     // Use sorted op nodes
     const opNodes = topologicalSortOperationNodes(graph);
-    //const opNodes = graph.getOperationNodes();
 
     for (const opNode of opNodes) {
         const opType = opNode.type ?? "UnknownOp";

@@ -4,6 +4,7 @@ import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { toArrayLike, uniq, addEdge, scalarOfType } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ------------------------------ Handler ------------------------------- */
 export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
@@ -13,9 +14,21 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     const ins = op.getInputs?.() ?? [];
     if (ins.length < 2) return false;
 
-    const A = ins[0]?.is?.(TensorNode) ? ins[0].as(TensorNode) : undefined;
-    const B = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    const C = ins[2]?.is?.(TensorNode) ? ins[2].as(TensorNode) : undefined;
+    const A = ins[0]?.is?.(TensorNode)
+        ? ins[0].as(TensorNode)
+        : ins[0]?.is?.(ConstantNode)
+          ? ins[0].as(ConstantNode)
+          : undefined;
+    const B = ins[1]?.is?.(TensorNode)
+        ? ins[1].as(TensorNode)
+        : ins[1]?.is?.(ConstantNode)
+          ? ins[1].as(ConstantNode)
+          : undefined;
+    const C = ins[2]?.is?.(TensorNode)
+        ? ins[2].as(TensorNode)
+        : ins[2]?.is?.(ConstantNode)
+          ? ins[2].as(ConstantNode)
+          : undefined;
     if (!A || !B) return false;
 
     // Single output tensor Y
@@ -35,8 +48,8 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     const dtypeRight = (C?.literalType ?? dtypeLeft) as DataType;
 
     /* ---------- optional Transpose on A/B ---------- */
-    let A_in: TensorNode.Class = A;
-    let B_in: TensorNode.Class = B;
+    let A_in: TensorNode.Class | ConstantNode.Class = A;
+    let B_in: TensorNode.Class | ConstantNode.Class = B;
 
     if (transA) {
         const tA = g
@@ -95,7 +108,7 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     let producedToY = false;
 
     if (C && beta !== 0.0) {
-        let cTerm: TensorNode.Class = C;
+        let cTerm: TensorNode.Class | ConstantNode.Class = C;
         if (beta !== 1.0) {
             const bC = scalarOfType(g, `Gemm_beta_${op.id}`, beta, dtypeRight);
             const mulB = g

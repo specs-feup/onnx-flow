@@ -1,5 +1,4 @@
 import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
-import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import {
@@ -20,19 +19,14 @@ import {
     gatherFrom,
 } from "../BuildLoop.js";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ============================== HANDLER ================================== */
 
 function toScalar(g: OnnxGraph.Class, t: TensorNode.Class, tag: string): TensorNode.Class {
     if (t.shape && t.shape.length === 0) return t;
 
-    const shapeConst = makeTensorConst(
-        g,
-        uniq(g, `${tag}_shape`),
-        DataType.INT64,
-        "constant",
-        int64Vec([]),
-    );
+    const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
     const reshape = g
         .addNode(uniq(g, `${tag}_reshape`))
         .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
@@ -93,29 +87,17 @@ export default function handleTranspose(
     const oDigits = decodeMixedRadix(g, ctx.iter, decodeDims, `tp_${op.id}`);
 
     // Map back to input digits, honoring broadcast (input dim == 1 → use 0)
-    const iDigits: TensorNode.Class[] = [];
+    const iDigits: (ConstantNode.Class | TensorNode.Class)[] = [];
     for (let k = 0; k < rank; k++) {
         const inDim = inShapeNum[k] > 0 ? inShapeNum[k] : 1;
         if (inDim === 1) {
-            const z = makeTensorConst(
-                g,
-                `tp_zero_${op.id}_${k}`,
-                DataType.INT64,
-                "constant",
-                scalarInt64(0),
-            );
+            const z = makeTensorConst(g, `tp_zero_${op.id}_${k}`, scalarInt64(0));
             iDigits.push(z);
         } else {
             const outPos = inversePerm[k]; // where input axis k appears after transpose
             // Guard against malformed perms just in case
             if (outPos === undefined) {
-                const z = makeTensorConst(
-                    g,
-                    `tp_safezero_${op.id}_${k}`,
-                    DataType.INT64,
-                    "constant",
-                    scalarInt64(0),
-                );
+                const z = makeTensorConst(g, `tp_safezero_${op.id}_${k}`, scalarInt64(0));
                 iDigits.push(z);
             } else {
                 iDigits.push(oDigits[outPos]);

@@ -5,7 +5,8 @@ import ConstantNode from "../../ConstantNode.js";
 import VariableNode from "../../VariableNode.js";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "../../OnnxInnerEdge.js";
-import { formatId } from "../../Utils.js";
+import { formatId, makeTensorProto } from "../../Utils.js";
+import { DataType } from "../../OnnxTypes.js";
 
 export default function optimizeSimpleLoopOperations(
     node: OperationNode.Class,
@@ -79,7 +80,7 @@ export default function optimizeSimpleLoopOperations(
                 .as(OperationNode);
             const zero = graph
                 .addNode(formatId("zero_offset", nodeId), node)
-                .init(new ConstantNode.Builder(0))
+                .init(new ConstantNode.Builder(makeTensorProto(DataType.INT64, [], [0])))
                 .as(ConstantNode);
             const storeNode = graph
                 .addNode(formatId("Store", nodeId), node)

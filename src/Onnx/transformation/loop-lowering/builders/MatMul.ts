@@ -18,6 +18,7 @@ import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleMatMul from "../handlers/MatMul.js";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class MatMulBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]) {
@@ -53,8 +54,10 @@ export default class MatMulBuilder implements LoopBuilder {
         inferShapes(outer);
 
         const mm = chain[matmulIndex];
-        const lhs = mm.getInputs()![0].as(TensorNode);
-        const rhs = mm.getInputs()![1].as(TensorNode);
+        const lhsRaw = mm.getInputs()![0];
+        const lhs = lhsRaw.is(TensorNode) ? lhsRaw.as(TensorNode) : lhsRaw.as(ConstantNode);
+        const rhsRaw = mm.getInputs()![1];
+        const rhs = rhsRaw.is(TensorNode) ? rhsRaw.as(TensorNode) : rhsRaw.as(ConstantNode);
 
         // Use shared helper to normalise vector/matrix shapes
         const { K, N, A2, B2, ...dims } = getMatDims(lhs.shape, rhs.shape);
@@ -106,12 +109,12 @@ export default class MatMulBuilder implements LoopBuilder {
 
         const matmulDims = { M, K, N, batchProd, batchDims };
 
-        const inputs = new Map<string, TensorNode.Class>();
+        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
         chain.forEach((op) =>
             op
                 .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((t) => inputs.set(t.id, t.as(TensorNode))),
+                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
+                .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))),
         );
 
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -126,12 +129,10 @@ export default class MatMulBuilder implements LoopBuilder {
         // carry buffer flat [M*N]
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(
-                new TensorNode.Builder(elemTy, [carryLen], "input", zeroTensor(elemTy, [carryLen])),
-            )
+            .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
 
-        const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
+        const axes = makeTensorConst(body, "axes", int64Vec([0]));
         // Flat index (i,j,k) decoding + cached unsqueezed indices provided by handler
         const ctx: LoopCtx = {
             opMap: new Map(),
@@ -182,7 +183,7 @@ export default class MatMulBuilder implements LoopBuilder {
             Max: handleElementWiseOperation,
         };
 
-        let indicesOut: TensorNode.Class | null = null;
+        let indicesOut: TensorNode.Class | ConstantNode.Class | null = null;
 
         for (const op of chain) {
             const h = handlers[op.type];
@@ -203,27 +204,9 @@ export default class MatMulBuilder implements LoopBuilder {
         inferShapes(body);
 
         // Loop inputs
-        const trip = makeTensorConst(
-            outer,
-            `trip_count_${chain[0].id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(totalIters),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `cond_${chain[0].id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
-        const v_initial = makeTensorConst(
-            outer,
-            "init_carry",
-            elemTy,
-            "initializer",
-            zeroTensor(elemTy, [carryLen]),
-        );
+        const trip = makeTensorConst(outer, `trip_count_${chain[0].id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `cond_${chain[0].id}`, bool(true));
+        const v_initial = makeTensorConst(outer, "init_carry", zeroTensor(elemTy, [carryLen]));
 
         return {
             body,

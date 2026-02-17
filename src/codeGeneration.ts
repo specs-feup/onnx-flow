@@ -7,6 +7,7 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "./Onnx/OnnxInnerEdge.js";
+import { readConstIntegerVectorFromTensorNode, readTensorData } from "./Onnx/Utils.js";
 
 const variables = new Map<string, string>();
 const operations = new Map<string, string[]>();
@@ -170,7 +171,7 @@ function handleEdges(edge: BaseEdge.Class, graph: OnnxGraph.Class, outputName: s
             code += `       ${target.id} = ${variables.get(source.id)}\n`;
         }
     } else if (source.is(ConstantNode)) {
-        variables.set(source.id, source.as(ConstantNode).value.toString());
+        variables.set(source.id, readTensorData(source).toString());
     } else if (source.is(VariableNode)) {
         if (source.as(VariableNode).type === "input") {
             variables.set(source.id, `tensor_${source.as(VariableNode).name.substring(1)}`);
@@ -220,12 +221,13 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
 
         if (displacementInMemoryNode && shape) {
             if (displacementInMemoryNode.is(ConstantNode)) {
-                const displacementInMemory = displacementInMemoryNode.as(ConstantNode).value;
+                const displacementInMemory =
+                    readConstIntegerVectorFromTensorNode(displacementInMemoryNode);
 
                 const totalElements = shape.reduce((acc, val) => acc * val, 1);
                 code += `   let ${outputName} = {`;
                 for (let i = 0; i < totalElements; i++) {
-                    const index = i * displacementInMemory;
+                    const index = i * displacementInMemory[0];
                     code += `${index}: 0, `;
                 }
                 code = code.slice(0, -2) + "};\n";
@@ -249,7 +251,7 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
         }
 
         if (loopIterationsNode) {
-            code += `   while (${indexNode[0].id} < ${loopIterationsNode?.value}) {\n`;
+            code += `   while (${indexNode[0].id} < ${readConstIntegerVectorFromTensorNode(loopIterationsNode)[0]}) {\n`;
         }
 
         orderedEdges.forEach((edge) => {

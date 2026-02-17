@@ -15,6 +15,7 @@ import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
+import { readTensorData } from "../Utils.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -49,7 +50,8 @@ export default class OnnxDotFormatter<
                 attrs.color = node.type === "input" ? "lime" : "red";
             }),
             Node.Case(ConstantNode, (node) => {
-                attrs.label = node.value.toString();
+                const val = readTensorData(node);
+                attrs.label = val ? val.slice(0, 5).toString() : "const";
                 attrs.shape = "box";
                 attrs.color = "maroon";
             }),
@@ -230,7 +232,7 @@ export default class OnnxDotFormatter<
         const tensorNode = node.tryAs(TensorNode);
         if (tensorNode === undefined) return undefined;
 
-        if (!["intermediate", "constant"].includes(tensorNode.type)) return undefined;
+        if (tensorNode.type !== "intermediate") return undefined;
 
         return tensorNode;
     }
@@ -277,7 +279,7 @@ export default class OnnxDotFormatter<
             .filter((input) => !node.graph.as(OnnxGraph).hasNode(input.id));
 
         for (const input of extInputs) {
-            const tensor = input.tryAs(TensorNode);
+            const tensor = input.tryAs(TensorNode) ?? input.tryAs(ConstantNode);
             if (tensor === undefined) continue;
 
             const targetId = this.idPrefix + node.id;
@@ -378,16 +380,14 @@ export default class OnnxDotFormatter<
                     opNode.type,
                 )
             ) {
-                const inputTensors = opNode.getInputs().filter((n) => !graph.hasNode(n.id));
-                for (const ext of inputTensors) {
+                const inputNodes = opNode.getInputs().filter((n) => !graph.hasNode(n.id));
+                for (const ext of inputNodes) {
+                    const shape =
+                        ext.is(TensorNode) || ext.is(ConstantNode) ? (ext as any).shape : undefined;
                     dot.statements(
                         Dot.edge(ext.id, this.idPrefix + opNode.id, {
-                            style: "dashed",
-                            color: "gray",
-                            label:
-                                ext.is(TensorNode) && ext.as(TensorNode).shape
-                                    ? `{${ext.as(TensorNode).shape.join(",")}}`
-                                    : "",
+                            // ...
+                            label: shape ? `{${shape.join(",")}}` : "",
                         }),
                     );
                 }

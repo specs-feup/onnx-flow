@@ -4,6 +4,7 @@ import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import { toArrayLike, uniq, addEdge, scalarOfType, constI64 } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ------------------------------ Handler ------------------------------- */
 /**
@@ -26,9 +27,21 @@ export default function dequantizeLinearHandler(
     const ins = op.getInputs?.() ?? [];
     if (ins.length < 2) return false;
 
-    const X = ins[0]?.is?.(TensorNode) ? ins[0].as(TensorNode) : undefined;
-    const S = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    const Z = ins[2]?.is?.(TensorNode) ? ins[2].as(TensorNode) : undefined;
+    const X = ins[0]?.is?.(TensorNode)
+        ? ins[0].as(TensorNode)
+        : ins[0]?.is?.(ConstantNode)
+          ? ins[0].as(ConstantNode)
+          : undefined;
+    const S = ins[1]?.is?.(TensorNode)
+        ? ins[1].as(TensorNode)
+        : ins[1]?.is?.(ConstantNode)
+          ? ins[1].as(ConstantNode)
+          : undefined;
+    const Z = ins[2]?.is?.(TensorNode)
+        ? ins[2].as(TensorNode)
+        : ins[2]?.is?.(ConstantNode)
+          ? ins[2].as(ConstantNode)
+          : undefined;
     if (!X || !S) return false;
 
     // Single output tensor Y
@@ -79,7 +92,7 @@ export default function dequantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, castS, Sf, floatT, S.shape);
 
-    let Zf: TensorNode.Class;
+    let Zf: TensorNode.Class | ConstantNode.Class;
     if (Z) {
         const castZ = g
             .addNode(uniq(g, `DQL_CastZ_${op.id}`))
@@ -115,7 +128,7 @@ export default function dequantizeLinearHandler(
     const perAxis = !perTensor && sRank === 1;
 
     let Sx: TensorNode.Class = Sf;
-    let Zx: TensorNode.Class = Zf;
+    let Zx: TensorNode.Class | ConstantNode.Class = Zf;
 
     if (perAxis) {
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;

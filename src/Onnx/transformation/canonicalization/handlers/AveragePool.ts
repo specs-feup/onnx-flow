@@ -1,9 +1,9 @@
 import OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import OnnxEdge from "../../../OnnxEdge.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { addEdge, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "AveragePool") return false;
@@ -31,7 +31,7 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
 
     // 4. Parse Attributes (Strictly)
     const attrs = op.getAttributes?.() ?? op.attributes ?? {};
-    
+
     // Kernel Shape (Required)
     const kernelShape = attrs.kernel_shape as number[] | undefined;
     if (!kernelShape || kernelShape.length !== 2) return false;
@@ -45,25 +45,31 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     // Note: AutoPad logic handling is simplified here for clarity
     const pads = (attrs.pads as number[]) ?? [0, 0, 0, 0];
     const [pT, pL, pB, pR] = pads.length === 4 ? pads.map(Number) : [0, 0, 0, 0];
-    
+
     const autoPad = (attrs.auto_pad as string) ?? "NOTSET";
     const countIncludePad = Number(attrs.count_include_pad ?? 0);
     const ceilMode = Number(attrs.ceil_mode ?? 0);
 
     // 5. Optimization Heuristic: Tiled Global Pool
     // If this looks like a global pool split into tiles, leave it for the loop-lowering pass.
-    if (autoPad === "NOTSET" && ceilMode === 0 && pads.every(p => p === 0) && kH === sH && kW === sW) {
-        return false; 
+    if (
+        autoPad === "NOTSET" &&
+        ceilMode === 0 &&
+        pads.every((p) => p === 0) &&
+        kH === sH &&
+        kW === sW
+    ) {
+        return false;
     }
 
     // 6. Rewrite to Conv
     // Strategy: Sum = Conv(X, Ones); Count = Conv(OnesLikeX, Ones) or Const; Y = Sum / Count
-    
+
     // A. Create Weight Tensor (Ones) -> [C, 1, kH, kW]
     const Wones = tensorOnesConst(g, `AvgPool_W_${op.id}`, dtype, [C, 1, kH, kW]);
 
     // B. Conv Attributes
-    const convAttrs: any = { 
+    const convAttrs: any = {
         group: C,
         strides: [sH, sW],
     };
@@ -74,17 +80,19 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     }
 
     // C. Compute Sum
-    const convSum = g.addNode(uniq(g, `AvgPool_Sum_${op.id}`))
+    const convSum = g
+        .addNode(uniq(g, `AvgPool_Sum_${op.id}`))
         .init(new OperationNode.Builder("Conv", [X, Wones], convAttrs))
         .as(OperationNode);
-    
-    const sumOut = g.addNode(uniq(g, `AvgPool_SumT_${op.id}`))
+
+    const sumOut = g
+        .addNode(uniq(g, `AvgPool_SumT_${op.id}`))
         .init(new TensorNode.Builder(dtype, Y.shape, "intermediate"))
         .as(TensorNode);
     addEdge(g, convSum, sumOut, dtype, Y.shape);
 
     // D. Compute Divisor
-    let divisor: TensorNode.Class;
+    let divisor: ConstantNode.Class | TensorNode.Class;
 
     if (countIncludePad === 1 || autoPad === "VALID") {
         // Simple case: Divide by kernel area
@@ -93,42 +101,49 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     } else {
         // Complex case: We must count valid pixels (excluding padding)
         // 1. Create a mask of Ones with shape X
-        const shapeOp = g.addNode(uniq(g, `AvgPool_Shape_${op.id}`))
+        const shapeOp = g
+            .addNode(uniq(g, `AvgPool_Shape_${op.id}`))
             .init(new OperationNode.Builder("Shape", [X], {}))
             .as(OperationNode);
-        const shapeT = g.addNode(uniq(g, `AvgPool_ShapeT_${op.id}`))
+        const shapeT = g
+            .addNode(uniq(g, `AvgPool_ShapeT_${op.id}`))
             .init(new TensorNode.Builder(DataType.INT64, [rank], "intermediate"))
             .as(TensorNode);
         addEdge(g, shapeOp, shapeT, DataType.INT64, [rank]);
 
         const oneSc = scalarOfType(g, `AvgPool_OneSc_${op.id}`, 1, dtype);
-        const expand = g.addNode(uniq(g, `AvgPool_Expand_${op.id}`))
+        const expand = g
+            .addNode(uniq(g, `AvgPool_Expand_${op.id}`))
             .init(new OperationNode.Builder("Expand", [oneSc, shapeT], {}))
             .as(OperationNode);
-        const mask = g.addNode(uniq(g, `AvgPool_Mask_${op.id}`))
+        const mask = g
+            .addNode(uniq(g, `AvgPool_Mask_${op.id}`))
             .init(new TensorNode.Builder(dtype, X.shape, "intermediate"))
             .as(TensorNode);
         addEdge(g, expand, mask, dtype, X.shape);
 
         // 2. Convolve Mask with OnesKernel (counts valid overlaps)
-        const convCount = g.addNode(uniq(g, `AvgPool_Count_${op.id}`))
+        const convCount = g
+            .addNode(uniq(g, `AvgPool_Count_${op.id}`))
             .init(new OperationNode.Builder("Conv", [mask, Wones], convAttrs))
             .as(OperationNode);
-        
-        divisor = g.addNode(uniq(g, `AvgPool_CountT_${op.id}`))
+
+        divisor = g
+            .addNode(uniq(g, `AvgPool_CountT_${op.id}`))
             .init(new TensorNode.Builder(dtype, Y.shape, "intermediate"))
             .as(TensorNode);
         addEdge(g, convCount, divisor, dtype, Y.shape);
     }
 
     // E. Final Divide
-    const divOp = g.addNode(uniq(g, `AvgPool_Div_${op.id}`))
+    const divOp = g
+        .addNode(uniq(g, `AvgPool_Div_${op.id}`))
         .init(new OperationNode.Builder("Div", [sumOut, divisor], {}))
         .as(OperationNode);
 
     // Replace old edge
     addEdge(g, divOp, Y, dtype, Y.shape);
-    
+
     // Remove original node
     g.getNodeById(op.id).remove();
 

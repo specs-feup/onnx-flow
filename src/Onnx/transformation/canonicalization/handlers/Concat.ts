@@ -11,6 +11,7 @@ import {
     scalarI64,
     scalarZeroOfType,
 } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* --------------------- Squeeze/Unsqueeze Aux (minding opset) -------------------- */
 // In opset >= 13, Squeeze/Unsqueeze take axes as 2nd input, not attribute.
@@ -41,7 +42,7 @@ function makeSqueeze(
 
 function makeUnsqueeze(
     g: OnnxGraph.Class,
-    x: TensorNode.Class,
+    x: TensorNode.Class | ConstantNode.Class,
     axes: number[],
     outDtype: DataType,
     outShape: Array<number | string | undefined> | undefined,
@@ -81,8 +82,14 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     if (rawIns.length < 2) return false;
 
     const inputs = rawIns
-        .map((n) => (n?.is?.(TensorNode) ? n.as(TensorNode) : undefined))
-        .filter(Boolean) as TensorNode.Class[];
+        .map((n) =>
+            n?.is?.(TensorNode)
+                ? n.as(TensorNode)
+                : n.is(ConstantNode)
+                  ? n.as(ConstantNode)
+                  : undefined,
+        )
+        .filter(Boolean) as (TensorNode.Class | ConstantNode.Class)[];
     if (inputs.length < 2) return false;
 
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
@@ -159,7 +166,11 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     }
 
     // Sum axis sizes via Add chain (INT64 scalar)
-    let sumAxis: TensorNode.Class = scalarI64(g, `Concat_sum_init_${op.id}`, 0);
+    let sumAxis: ConstantNode.Class | TensorNode.Class = scalarI64(
+        g,
+        `Concat_sum_init_${op.id}`,
+        0,
+    );
     for (let i = 0; i < sizeScalars.length; i++) {
         const add = g
             .addNode(uniq(g, `Concat_sum_add_${i}_${op.id}`))
@@ -214,7 +225,11 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     addEdge(g, expandOp, curY, dtype, Y.shape);
 
     /* -------------- For each Xi: build indices and ScatterElements -------------- */
-    let offsetSc: TensorNode.Class = scalarI64(g, `Concat_off_init_${op.id}`, 0); // INT64 scalar
+    let offsetSc: ConstantNode.Class | TensorNode.Class = scalarI64(
+        g,
+        `Concat_off_init_${op.id}`,
+        0,
+    ); // INT64 scalar
     const oneSc = scalarI64(g, `Concat_one_${op.id}`, 1);
 
     for (let i = 0; i < inputs.length; i++) {

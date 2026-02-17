@@ -8,6 +8,7 @@ import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 import { toStaticShape } from "../../Utils.js";
+import ConstantNode from "../../ConstantNode.js";
 
 function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
     const rI = inDims.length;
@@ -65,15 +66,15 @@ function isBroadcastSafeSegment(seg: OperationNode.Class[]): boolean {
     }
 
     for (const op of seg) {
-        const tensorInputs =
+        const dataInputs =
             op
                 .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .map((n) => n.as(TensorNode)) ?? [];
+                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
+                .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))) ?? [];
 
-        for (const t of tensorInputs) {
+        for (const t of dataInputs) {
             // Index helpers never go through gatherWithBroadcast
-            if (t.type === "index" || t.type === "index_aux") continue;
+            if (t.is(TensorNode) && (t.type === "index" || t.type === "index_aux")) continue;
 
             const s = t.shape ?? [];
             if (!s.length) continue; // scalar or unknown, fine
@@ -249,17 +250,17 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     );
     if (edgeHasShape) return true;
 
-    const tensorInputs =
+    const dataInputs =
         op
             .getInputs()
-            ?.filter((n) => n.is(TensorNode))
-            .map((n) => n.as(TensorNode)) ?? [];
+            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
+            .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))) ?? [];
 
-    const inputHasShape = tensorInputs.some((t) => t.shape && t.shape.length >= 1);
+    const inputHasShape = dataInputs.some((t) => t.shape && t.shape.length >= 1);
     if (inputHasShape) return true;
 
-    for (const t of tensorInputs) {
-        if (t.type !== "intermediate") continue;
+    for (const t of dataInputs) {
+        if (t.is(TensorNode) && t.type !== "intermediate") continue;
         const interIncs = t.getIncomers ?? [];
         for (const edge of interIncs) {
             if (

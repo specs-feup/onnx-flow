@@ -47,7 +47,7 @@ function moveAttributeToInput(
         if (init) {
             graphProto.initializer = graphProto.initializer || [];
             graphProto.initializer.push(init);
-            
+
             // Ensure inputs array is large enough
             while (node.input.length < inputIndex) node.input.push("");
             node.input[inputIndex] = name;
@@ -59,6 +59,31 @@ function moveAttributeToInput(
 }
 
 // --- Adapters ---
+/**
+ * Adapter: FreezeOverridableInputs
+ * * Problem: ONNX allows "Overridable Initializers" (nodes present in both 'initializer' and 'input').
+ * We strictly split Data (ConstantNode) vs Flow (TensorNode).
+ * A node cannot be both.
+ * * Fix: If a node is in 'initializer', we remove it from 'input'.
+ * This treats the value as a compile-time ConstantNode, preventing initGraph from
+ * overwriting it with an empty TensorNode.
+ */
+export function freezeOverridableInputs(data: any) {
+    if (!data?.graph?.input || !data?.graph?.initializer) return;
+
+    const initializerNames = new Set(data.graph.initializer.map((init: any) => init.name));
+
+    // Filter out inputs that are actually initializers
+    const newInputs = data.graph.input.filter((input: any) => {
+        if (initializerNames.has(input.name)) {
+            // console.log(`[Adapter] Freezing overridable input '${input.name}' to its constant initializer value.`);
+            return false; // Remove from input list
+        }
+        return true; // Keep purely dynamic inputs
+    });
+
+    data.graph.input = newInputs;
+}
 
 function adaptPad(node: any, graph: any) {
     if (node.opType !== "Pad") return;
@@ -108,7 +133,7 @@ function adaptSplit(node: any, graph: any) {
 /**
  * Upgrades "BatchNormalization" (Opset < 9 used 'spatial' attribute)
  */
-function adaptBatchNormalization(node: any, graph: any) {
+function adaptBatchNormalization(node: any, _graph: any) {
     if (node.opType !== "BatchNormalization") return;
     // Opset 9: 'spatial' attribute removed (it's ignored/implied now).
     // We just remove it so strict Schema validation doesn't fail.
@@ -126,34 +151,30 @@ function adaptBatchNormalization(node: any, graph: any) {
 function adaptResize(node: any, graph: any) {
     if (node.opType !== "Upsample" && node.opType !== "Resize") return;
 
-    // Opset 7 Upsample used 'scales' attribute. 
+    // Opset 7 Upsample used 'scales' attribute.
     // Opset 9 Upsample used 'scales' input.
     // Opset 10 Resize used 'scales' input.
-    moveAttributeToInput(node, graph, "scales", 1, "float"); // usually float array, handled by helper if we tweak it?
-    
-    // Note: The helper `moveAttributeToInput` I gave earlier defaulted to 'ints', 'int', 'float'.
-    // 'scales' is usually FLOATS (plural). 
-    // You might need to update `moveAttributeToInput` to handle "floats" type if you haven't yet.
-    // Logic:
+    moveAttributeToInput(node, graph, "scales", 1, "float"); // usually float array, handled by helper
+
     const idx = node.attribute?.findIndex((a: any) => a.name === "scales");
     if (idx !== undefined && idx !== -1) {
         const attr = node.attribute[idx];
         const vals = attr.floats || [];
         const name = `${node.name ?? "Resize"}_scales_${Math.random().toString(36).substr(2, 5)}`;
-        
+
         const init = {
             name: name,
             dataType: DataType.FLOAT,
             dims: [vals.length],
-            floatData: vals
+            floatData: vals,
         };
-        
+
         graph.initializer = graph.initializer || [];
         graph.initializer.push(init);
-        
+
         while (node.input.length < 2) node.input.push("");
         node.input[1] = name; // input[1] is scales in older opsets (Input[2] in Opset 11+)
-        
+
         node.attribute.splice(idx, 1);
     }
 }
@@ -162,8 +183,9 @@ function adaptResize(node: any, graph: any) {
 export function applyAdapters(data: any) {
     if (!data || !data.graph || !data.graph.node) return;
     const graph = data.graph;
-    
+
     for (const node of graph.node) {
+        freezeOverridableInputs(data);
         adaptPad(node, graph);
         adaptClip(node, graph);
         adaptSlice(node, graph);

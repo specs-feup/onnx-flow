@@ -3,6 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { uniq, addEdge, toArrayLike, makeI64ShapeConst } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /**
  * Softmax(X, axis)  ≡  exp(X - reduce_max(X, axis)) / reduce_sum(exp(...), axis)
@@ -22,9 +23,10 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
 
     // ---- Inputs / outputs
     const ins = op.getInputs?.() ?? [];
-    if (ins.length < 1 || !ins[0]?.is?.(TensorNode)) return false;
+    if (ins.length < 1 || (!ins[0]?.is?.(TensorNode) && !ins[0]?.is?.(ConstantNode))) return false;
 
-    const X = ins[0].as(TensorNode);
+    const XRaw = ins[0];
+    const X = XRaw.is(TensorNode) ? XRaw.as(TensorNode) : XRaw.as(ConstantNode);
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];

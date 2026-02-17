@@ -5,13 +5,15 @@ import OnnxEdge from "../../../OnnxEdge.js";
 import { makeTensorProto } from "../../../Utils.js";
 import { DataType } from "../../../OnnxTypes.js";
 import TensorSplitter from "../TensorSplitter.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default function decomposeRelu(
     node: OperationNode.Class,
     g: OnnxGraph.Class,
     tensorSplitter: TensorSplitter,
 ): boolean {
-    const [input] = node.getInputs().map((inp) => inp.as(TensorNode));
+    const rawInput = node.getInputs()[0];
+    const input = rawInput.is(TensorNode) ? rawInput.as(TensorNode) : rawInput.as(ConstantNode);
     const literalType = input.literalType;
 
     if (input.shape.length > 2) {
@@ -20,20 +22,26 @@ export default function decomposeRelu(
         );
     }
 
-    const inputs: TensorNode.Class[] = tensorSplitter.getSplit(input, false).splits;
+    const inputs: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
+        input,
+        false,
+    ).splits;
 
     // Create constant zero (for comparisons)
-    const reluZeroBuilder = new TensorNode.Builder(
-        literalType,
-        input.shape.slice(1),
-        "constant",
+    const reluZeroBuilder = new ConstantNode.Builder(
         makeTensorProto(literalType, input.shape.slice(1) as number[], [0]),
     );
 
-    const reluZero = g.addNode(`${node.id}_zero`, node.parent).init(reluZeroBuilder).as(TensorNode);
+    const reluZero = g
+        .addNode(`${node.id}_zero`, node.parent)
+        .init(reluZeroBuilder)
+        .as(ConstantNode);
 
     const output = node.outgoers.at(0).target.as(TensorNode);
-    const outputs: TensorNode.Class[] = tensorSplitter.getSplit(output, false).splits;
+    const outputs: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
+        output,
+        false,
+    ).splits;
 
     for (let i = 0; i < inputs.length; i++) {
         // Create Greater node (serving as ">0" node)

@@ -5,6 +5,7 @@ import TensorNode from "../TensorNode.js";
 import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
 import { PartitionSets } from "./Strategies.js";
+import ConstantNode from "../ConstantNode.js";
 
 /**
  * Clones a TensorNode into the target graph.
@@ -12,16 +13,7 @@ import { PartitionSets } from "./Strategies.js";
 function cloneTensor(t: TensorNode.Class, targetGraph: OnnxGraph.Class): TensorNode.Class {
     return targetGraph
         .addNode(t.id)
-        .init(
-            new TensorNode.Builder(
-                t.literalType,
-                t.shape,
-                t.type,
-                t.constantValue,
-                t.originalInitializer,
-                t.extraAttrs,
-            ),
-        )
+        .init(new TensorNode.Builder(t.literalType, t.shape, t.type, t.extraAttrs))
         .as(TensorNode);
 }
 
@@ -40,6 +32,13 @@ function cloneOp(op: OperationNode.Class, targetGraph: OnnxGraph.Class): Operati
             ),
         )
         .as(OperationNode);
+}
+
+function cloneConstant(c: ConstantNode.Class, targetGraph: OnnxGraph.Class): ConstantNode.Class {
+    return targetGraph
+        .addNode(c.id)
+        .init(new ConstantNode.Builder(c.constantValue, c.isInput))
+        .as(ConstantNode);
 }
 
 /**
@@ -68,12 +67,16 @@ export function partitionGraph(
                 headMap.set(node.id, cloneTensor(node.as(TensorNode), headGraph));
             } else if (node.is(OperationNode)) {
                 headMap.set(node.id, cloneOp(node.as(OperationNode), headGraph));
+            } else if (node.is(ConstantNode)) {
+                headMap.set(node.id, cloneConstant(node.as(ConstantNode), headGraph));
             }
         } else if (tailIds.has(node.id)) {
             if (node.is(TensorNode)) {
                 tailMap.set(node.id, cloneTensor(node.as(TensorNode), tailGraph));
             } else if (node.is(OperationNode)) {
                 tailMap.set(node.id, cloneOp(node.as(OperationNode), tailGraph));
+            } else if (node.is(ConstantNode)) {
+                tailMap.set(node.id, cloneConstant(node.as(ConstantNode), tailGraph));
             }
         }
     });
@@ -81,9 +84,8 @@ export function partitionGraph(
     // 2. Handle Shared Initializers
     const headInitializers = new Set<string>();
     headMap.forEach((node, id) => {
-        if (node.is(TensorNode)) {
-            const t = node.as(TensorNode);
-            if (t.type === "initializer" || t.type === "constant") headInitializers.add(id);
+        if (node.is(ConstantNode)) {
+            headInitializers.add(id);
         }
     });
 
@@ -162,8 +164,18 @@ export function partitionGraph(
                     if (headInitializers.has(input.id)) {
                         // Clone shared initializer into Tail if missing
                         if (!tailMap.has(input.id)) {
-                            const origTensor = originalGraph.getNodeById(input.id).as(TensorNode);
-                            tailMap.set(input.id, cloneTensor(origTensor, tailGraph));
+                            const origNode = originalGraph.getNodeById(input.id);
+                            if (origNode.is(ConstantNode)) {
+                                tailMap.set(
+                                    input.id,
+                                    cloneConstant(origNode.as(ConstantNode), tailGraph),
+                                );
+                            } else {
+                                tailMap.set(
+                                    input.id,
+                                    cloneTensor(origNode.as(TensorNode), tailGraph),
+                                );
+                            }
                         }
                         const clonedInput = tailMap.get(input.id)!;
                         newInputs.push(clonedInput);
@@ -177,8 +189,8 @@ export function partitionGraph(
                     }
 
                     // Boundary Tensor
-                    const headNode = headMap.get(input.id)!.as(TensorNode);
-                    if (headNode.type !== "constant" && headNode.type !== "initializer") {
+                    const headNode = headMap.get(input.id);
+                    if (headNode.is(ConstantNode)) {
                         (headNode.data as any)[TensorNode.TAG].type = "output";
                     }
 

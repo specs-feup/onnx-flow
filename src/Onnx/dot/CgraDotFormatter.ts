@@ -8,7 +8,7 @@ import TensorNode from "../TensorNode.js";
 import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
-import { typeSizeMap } from "../Utils.js";
+import { readConstIntegerVectorFromTensorNode, readTensorData, typeSizeMap } from "../Utils.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -57,7 +57,8 @@ export default class CgraDotFormatter<
                 // attrs.size = '1';
             }),
             Node.Case(ConstantNode, (node) => {
-                attrs.label = node.value.toString();
+                const val = readTensorData(node);
+                attrs.label = val ? val.slice(0, 5).toString() : "const";
                 // attrs.size = node;
             }),
             Node.Case(OperationNode, (node) => {
@@ -178,7 +179,7 @@ export default class CgraDotFormatter<
         const tensorNode = node.tryAs(TensorNode);
         if (tensorNode === undefined) return undefined;
 
-        if (!["intermediate", "constant"].includes(tensorNode.type)) return undefined;
+        if (tensorNode.type !== "intermediate") return undefined;
 
         return tensorNode;
     }
@@ -245,11 +246,11 @@ export default class CgraDotFormatter<
             throw new Error("Greater node must have two inputs.");
         }
 
-        const isZeroConstVector = (tensor: TensorNode.Class): boolean => {
-            if (tensor.type !== "constant") return false;
+        const isZeroConstVector = (tensor: BaseNode.Class): boolean => {
+            if (!tensor.is(ConstantNode)) return false;
 
             // TODO(Process-ing): STRELA only supports operations on integers, but add support to other types if needed
-            return tensor.constantValue.int32Data?.every((val) => val === 0);
+            return readConstIntegerVectorFromTensorNode(tensor).every((val) => val === 0);
         };
 
         const secondInput = node.getInputs()[1].as(TensorNode);
@@ -277,11 +278,15 @@ export default class CgraDotFormatter<
     }
 
     safeNodeToDot(node: BaseNode.Class): DotStatement[] {
+        if (node.is(ConstantNode)) {
+            return [this.nodeToDot(node.as(ConstantNode))];
+        }
+
         const tensorNode = node.tryAs(TensorNode);
         if (tensorNode !== undefined) {
             this.validateTensorNode(tensorNode);
 
-            if (["intermediate", "constant"].includes(tensorNode.type)) {
+            if (tensorNode.type == "intermediate") {
                 return this.intermediateTensorToDot(tensorNode);
             }
 

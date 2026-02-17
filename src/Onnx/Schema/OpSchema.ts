@@ -17,8 +17,8 @@ export interface AttributeDefinition {
 export interface IOInterface {
     name: string;
     typeConstraint?: string; // e.g., "T" (matches a defined type constraint)
-    variadic?: boolean;      // If true, this input accepts multiple tensors (e.g., Concat)
-    optional?: boolean;      // If true, this input can be omitted
+    variadic?: boolean; // If true, this input accepts multiple tensors (e.g., Concat)
+    optional?: boolean; // If true, this input can be omitted
 }
 
 /**
@@ -26,14 +26,14 @@ export interface IOInterface {
  */
 export interface OpSchema {
     opType: string;
-    domain?: string;         // Default is 'ai.onnx' (empty string)
-    sinceVersion: number;    // The opset version where this definition became valid
-    
+    domain?: string; // Default is 'ai.onnx' (empty string)
+    sinceVersion: number; // The opset version where this definition became valid
+
     inputs: IOInterface[];
     outputs: IOInterface[];
-    
+
     attributes: Record<string, AttributeDefinition>;
-    
+
     typeConstraints?: Record<string, string[]>; // e.g. { "T": ["tensor(float)", "tensor(int64)"] }
 
     /**

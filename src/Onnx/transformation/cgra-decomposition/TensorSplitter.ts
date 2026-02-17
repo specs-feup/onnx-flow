@@ -1,17 +1,18 @@
 import OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
+import ConstantNode from "../../ConstantNode.js";
+import { TensorProto } from "../../OnnxTypes.js";
+import { makeTensorProto, readTensorData } from "../../Utils.js";
 
 export type TensorSplit = {
-    splits: TensorNode.Class[];
+    // Phase 3: splits can contain either TensorNodes or ConstantNodes
+    splits: (TensorNode.Class | ConstantNode.Class)[];
     columnWise: boolean;
 };
 
 /**
  * @class TensorSplitter
  * @brief Manages the splitting of tensors into smaller tensors for CGRA mapping.
- *
- * The TensorSplitter class provides functionality to split tensors, which is
- * useful for converting
  */
 export default class TensorSplitter {
     tensorSplits: Map<string, TensorSplit>;
@@ -23,37 +24,91 @@ export default class TensorSplitter {
     }
 
     /**
-     * @brief Gives a split of the given tensor, creating it if it does not already exist.
-     *
-     * @param tensor The tensor to be split.
-     * @param columnWise Whether to split the tensor column-wise or row-wise.
-     * @returns The TensorSplit object containing the splits.
+     * @brief Slices the underlying data of a ConstantNode.
      */
-    getSplit(tensor: TensorNode.Class, columnWise: boolean): TensorSplit {
+    private splitConstantData(
+        node: ConstantNode.Class,
+        splitIdx: number,
+        numSplits: number,
+        columnWise: boolean,
+    ): TensorProto {
+        const data = readTensorData(node) ?? [];
+        const shape = node.shape as number[];
+        const [rows, cols] = shape.length === 2 ? shape : [1, shape[0]];
+
+        let subData: number[] = [];
+        let newShape: number[] = [];
+
+        if (columnWise) {
+            // Split [R, C] into C tensors of [R]
+            // Each split gets one column
+            for (let r = 0; r < rows; r++) {
+                subData.push(data[r * cols + splitIdx]);
+            }
+            newShape = [rows];
+        } else {
+            // Split [R, C] into R tensors of [C]
+            // Each split gets one row
+            const start = splitIdx * cols;
+            subData = data.slice(start, start + cols);
+            newShape = [cols];
+        }
+
+        return makeTensorProto(node.literalType, newShape, subData);
+    }
+
+    /**
+     * @brief Gives a split of the given tensor, creating it if it does not already exist.
+     * Supports both TensorNode and ConstantNode.
+     */
+    getSplit(tensor: TensorNode.Class | ConstantNode.Class, columnWise: boolean): TensorSplit {
         const existingSplit = this.tensorSplits.get(tensor.id);
         if (existingSplit !== undefined) {
             if (existingSplit.columnWise !== columnWise) {
-                throw new Error("Tensor has already been split in a different orientation.");
+                throw new Error(`Tensor ${tensor.id} already split in a different orientation.`);
             }
-
             return existingSplit;
         }
 
+        const shape = tensor.shape as number[];
+        // Determine number of resulting nodes and their internal shapes
         const [numSplits, splitShape] = columnWise
-            ? [tensor.shape[1] as number, [tensor.shape[0]]]
-            : [tensor.shape[0] as number, [tensor.shape[1]]];
-        const splitBuilder = new TensorNode.Builder(tensor.literalType, splitShape, tensor.type);
+            ? [shape[1] ?? 1, [shape[0]]]
+            : [shape[0] ?? 1, [shape[1]]];
 
-        const splits =
-            numSplits == 1
-                ? [tensor.init(splitBuilder).as(TensorNode)]
-                : Array.from({ length: numSplits }, (_, i) => {
-                      const split = this.graph
-                          .addNode(`${tensor.id}${i}`, tensor.parent)
-                          .init(splitBuilder)
-                          .as(TensorNode);
-                      return split;
-                  });
+        const splits: (TensorNode.Class | ConstantNode.Class)[] = [];
+
+        for (let i = 0; i < numSplits; i++) {
+            const splitId = `${tensor.id}_split${i}`;
+
+            if (tensor.is(ConstantNode)) {
+                // Phase 3: Create a new ConstantNode with sliced data
+                const slicedProto = this.splitConstantData(
+                    tensor.as(ConstantNode),
+                    i,
+                    numSplits,
+                    columnWise,
+                );
+                const split = this.graph
+                    .addNode(splitId, tensor.parent)
+                    .init(new ConstantNode.Builder(slicedProto))
+                    .as(ConstantNode);
+                splits.push(split);
+            } else {
+                // Handle standard TensorNode (intermediate/input/output)
+                const tNode = tensor.as(TensorNode);
+                const splitBuilder = new TensorNode.Builder(
+                    tNode.literalType,
+                    splitShape,
+                    tNode.type === "input" ? "input" : "intermediate",
+                );
+                const split = this.graph
+                    .addNode(splitId, tensor.parent)
+                    .init(splitBuilder)
+                    .as(TensorNode);
+                splits.push(split);
+            }
+        }
 
         const tensorSplit: TensorSplit = {
             splits: splits,
@@ -69,8 +124,9 @@ export default class TensorSplitter {
      */
     clearTensors(): void {
         this.tensorSplits.forEach((split, oldTensorId) => {
+            // Only remove if the original node wasn't reused as one of the splits
             if (
-                split.splits.every((split) => split.id != oldTensorId) &&
+                split.splits.every((s) => s.id !== oldTensorId) &&
                 this.graph.hasNode(oldTensorId)
             ) {
                 this.graph.getNodeById(oldTensorId).remove();
