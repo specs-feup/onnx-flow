@@ -24,7 +24,7 @@ const FAILURES = {
 };
 
 /* ============================== HELPERS ================================== */
-// Helper to recursively collect stats from a graph and its subgraphs
+// Helper to recursively collect stats from a graph and its regions
 function collectStatsRecursive(
     graph: OnnxGraph.Class,
     stats: { total: number; ops: Record<string, number> },
@@ -36,22 +36,12 @@ function collectStatsRecursive(
         // 1. Count current node
         stats.ops[node.type] = (stats.ops[node.type] || 0) + 1;
 
-        // 2. Check for subgraphs (Loop/Scan/If)
-        // OperationNode exposes subgraphs via getSubgraphs() map OR getBodySubgraph() accessor
-        const subgraphs = node.getSubgraphs() || {};
-        const body = node.getBodySubgraph();
-
-        // Collect distinct subgraphs to avoid double counting if body is also in the map
-        const graphsToVisit = new Set<OnnxGraph.Class>();
-
-        if (body) graphsToVisit.add(body);
-        for (const key of Object.keys(subgraphs)) {
-            if (subgraphs[key]) graphsToVisit.add(subgraphs[key]);
-        }
-
-        // 3. Recurse
-        for (const subGraph of graphsToVisit) {
-            collectStatsRecursive(subGraph, stats);
+        // 2. Recurse into regions
+        // Instead of checking specific subgraphs (body, thenBranch), we iterate the regions array.
+        for (const region of node.regions) {
+            if (region) {
+                collectStatsRecursive(region, stats);
+            }
         }
     }
 }

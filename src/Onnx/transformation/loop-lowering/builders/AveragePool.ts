@@ -15,8 +15,11 @@ import {
 import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
-function resolveShape(t: TensorNode.Class | ConstantNode.Class): number[] {
+function resolveShape(
+    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
+): number[] {
     // If the tensor already has a shape, just use it.
     if (t.shape && t.shape.length) {
         return t.shape as number[];
@@ -107,8 +110,14 @@ class AveragePoolBuilder implements LoopBuilder {
 
         const inputsArr = avg
             .getInputs()
-            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-            .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode)));
+            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode))
+            .map((n) =>
+                n.is(TensorNode)
+                    ? n.as(TensorNode)
+                    : n.is(ConstantNode)
+                      ? n.as(ConstantNode)
+                      : n.as(RegionArgumentNode),
+            );
         if (inputsArr.length < 1) {
             throw new Error("AveragePoolBuilder: AveragePool must have at least X as input");
         }
@@ -209,10 +218,6 @@ class AveragePoolBuilder implements LoopBuilder {
 
         const elemTy = (Y.literalType ?? DataType.FLOAT) as DataType;
         const carryLen = totalIters;
-
-        // ---- Loop context / inputs ----------------------------------------------
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        inputs.set(X.id, X);
 
         // ---- Build loop body graph ----------------------------------------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -794,7 +799,6 @@ class AveragePoolBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

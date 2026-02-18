@@ -6,6 +6,7 @@ import { TensorProto, DataType } from "./OnnxTypes.js";
 import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
+import RegionArgumentNode from "./RegionArgumentNode.js";
 
 // =====================================================================================
 // SECTION 1: TYPES & CONSTANTS
@@ -760,7 +761,9 @@ export function getSmallestRankShape(tensors: TensorNode.Class[]): Shape {
     return smallest;
 }
 
-export function getLargestRankShape(tensors: (TensorNode.Class | ConstantNode.Class)[]): Shape {
+export function getLargestRankShape(
+    tensors: (TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class)[],
+): Shape {
     if (tensors.length === 0) return [];
     let largest = tensors[0].shape;
     for (let i = 1; i < tensors.length; i++) {
@@ -790,38 +793,27 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
     }
 
-    // Extra deps from implicit subgraph captures
+    // Extra deps from implicit subgraph captures (Phase 4: Explicit RegionArgumentNode)
     const extraDeps = new Map<string, Set<OperationNode.Class>>();
 
     for (const op of opNodes) {
-        const subgraphs: Record<string, OnnxGraph.Class> = { ...(op.getSubgraphs?.() ?? {}) };
-        const body = op.getBodySubgraph?.();
-        if (body) subgraphs["__body"] = body;
+        // Iterate over strict regions
+        const regions = op.regions ?? [];
 
-        for (const key of Object.keys(subgraphs)) {
-            const sg = subgraphs[key];
+        for (const sg of regions) {
             if (!sg) continue;
-            const sgOps = sg.getOperationNodes().toArray();
 
-            // Map local producers
-            const sgTensorProducers = new Map<string, OperationNode.Class>();
-            for (const bOp of sgOps) {
-                const outTensors =
-                    bOp.getOutgoers?.targets?.filter((n) => n.is(TensorNode)).toArray?.() ?? [];
-                for (const t of outTensors as TensorNode.Class[]) sgTensorProducers.set(t.id, bOp);
-            }
+            // Find explicit captures via RegionArgumentNode
+            const nodes = sg.getNodes().toArray();
+            for (const node of nodes) {
+                if (node.is(RegionArgumentNode)) {
+                    const arg = node.as(RegionArgumentNode);
+                    const parentName = arg.originalName;
 
-            // Find implicit captures
-            for (const bOp of sgOps) {
-                const inputs = (bOp.getInputs?.() ?? []) as BaseNode.Class[];
-                for (const inp of inputs) {
-                    if (!inp || !inp.is(TensorNode)) continue; // ConstantNode does not imply dependency on Op
-                    const t = inp as TensorNode.Class;
+                    const parentProd = tensorProducers.get(parentName);
 
-                    const localProd = sgTensorProducers.get(t.id);
-                    const parentProd = tensorProducers.get(t.id);
-
-                    if (!localProd && parentProd && parentProd.id !== op.id) {
+                    // If the parent node is produced by an op in the current graph, we depend on it.
+                    if (parentProd && parentProd.id !== op.id) {
                         let deps = extraDeps.get(op.id);
                         if (!deps) {
                             deps = new Set<OperationNode.Class>();
@@ -842,11 +834,11 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
         temp.add(node.id);
 
-        // 1. Implicit dependencies
+        // 1. Explicit Captures dependencies
         const implicitPreds = extraDeps.get(node.id);
         if (implicitPreds) implicitPreds.forEach(visit);
 
-        // 2. Explicit dependencies
+        // 2. Explicit dependencies (Inputs)
         const checkPred = (n: BaseNode.Class) => {
             if (n.is(OperationNode)) {
                 const op = n.as(OperationNode);

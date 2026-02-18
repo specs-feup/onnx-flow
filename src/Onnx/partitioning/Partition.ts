@@ -28,7 +28,7 @@ function cloneOp(op: OperationNode.Class, targetGraph: OnnxGraph.Class): Operati
                 op.type,
                 [], // Inputs populated later to preserve order
                 op.attributes,
-                op.getSubgraphs(),
+                op.regions,
             ),
         )
         .as(OperationNode);

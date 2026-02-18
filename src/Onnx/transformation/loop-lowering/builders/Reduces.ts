@@ -29,6 +29,7 @@ import {
 import handleReduceElem from "../handlers/Reduces.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 function normalizeAxes(axes: number[] | undefined, rank: number): number[] {
     if (!axes || axes.length === 0) return Array.from({ length: rank }, (_, i) => i);
@@ -143,7 +144,9 @@ export default class ReducesBuilder implements LoopBuilder {
         const xInputRaw = op.getInputs()![0];
         const xInput = xInputRaw.is(TensorNode)
             ? xInputRaw.as(TensorNode)
-            : xInputRaw.as(ConstantNode);
+            : xInputRaw.is(ConstantNode)
+              ? xInputRaw.as(ConstantNode)
+              : xInputRaw.as(RegionArgumentNode);
 
         inferShapes(outer);
 
@@ -195,20 +198,6 @@ export default class ReducesBuilder implements LoopBuilder {
             1,
             outStatic.length ? outStatic.reduce((a, b) => a * (b > 0 ? b : 1), 1) : 1,
         );
-
-        // Outer inputs (skip axes constants)
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        chain.forEach((o) => {
-            o.getInputs()
-                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-                .forEach((tn) => {
-                    const t = tn.is(TensorNode) ? tn.as(TensorNode) : tn.as(ConstantNode);
-                    const maybeAxes =
-                        t.literalType === DataType.INT64 && (t.shape?.length ?? 0) <= 1;
-                    if (maybeAxes) return;
-                    inputs.set(t.id, t);
-                });
-        });
 
         // ------------- Body graph -------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -414,7 +403,6 @@ export default class ReducesBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape: finalShape,
-            inputs,
             outTensor,
             trip,
             cond,

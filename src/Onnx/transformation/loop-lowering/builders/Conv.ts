@@ -12,11 +12,21 @@ import {
     bool,
     zeroTensor,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
+import {
+    LoopBuilder,
+    BuildResult,
+    unsqueezeIdx,
+    LoopCtx,
+    decodeMixedRadix,
+    createCapturedInput,
+} from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
-function resolveShape(t: TensorNode.Class | ConstantNode.Class): number[] {
+function resolveShape(
+    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
+): number[] {
     if (t.shape && t.shape.length) {
         return t.shape.map((d) => Number(d));
     }
@@ -78,8 +88,14 @@ export default class ConvBuilder implements LoopBuilder {
         // ---- Basic tensor plumbing ------------------------------------------------
         const inputsArr = conv
             .getInputs()
-            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-            .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode)));
+            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode))
+            .map((n) =>
+                n.is(TensorNode)
+                    ? n.as(TensorNode)
+                    : n.is(ConstantNode)
+                      ? n.as(ConstantNode)
+                      : n.as(RegionArgumentNode),
+            );
         if (inputsArr.length < 2) {
             throw new Error("ConvBuilder: Conv must have at least X and W as inputs");
         }
@@ -373,12 +389,6 @@ export default class ConvBuilder implements LoopBuilder {
             outTensor.setShape(outShape);
         }
 
-        // `inputs` map used by BuildLoop for captured outer inputs
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        inputs.set(X.id, X);
-        inputs.set(W.id, W);
-        if (B) inputs.set(B.id, B);
-
         // ---- Build loop body graph -----------------------------------------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
 
@@ -388,7 +398,7 @@ export default class ConvBuilder implements LoopBuilder {
             .init(new TensorNode.Builder(DataType.INT64, [], "input"))
             .as(TensorNode);
 
-        // cond_in: BOOL scalar (ignored internally, just forwarded)
+        // cond_in: BOOL scalar
         const _condIn = body
             .addNode(uniq(body, "cond_in"))
             .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
@@ -400,24 +410,10 @@ export default class ConvBuilder implements LoopBuilder {
             .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
 
-        // Captured inputs (use same IDs as outer so BuildLoop can wire them)
-        const X_in = body
-            .addNode(X.id)
-            .init(new TensorNode.Builder(X.literalType, X.shape, "intermediate"))
-            .as(TensorNode);
-
-        const W_in = body
-            .addNode(W.id)
-            .init(new TensorNode.Builder(W.literalType, W.shape, "intermediate"))
-            .as(TensorNode);
-
-        let B_in: TensorNode.Class | undefined;
-        if (B) {
-            B_in = body
-                .addNode(B.id)
-                .init(new TensorNode.Builder(B.literalType, B.shape, "intermediate"))
-                .as(TensorNode);
-        }
+        // Captured inputs: Use RegionArgumentNode proxies via helper
+        const X_in = createCapturedInput(body, X);
+        const W_in = createCapturedInput(body, W);
+        const B_in = B ? createCapturedInput(body, B) : undefined;
 
         // axes=[0] constant
         const axes0 = makeTensorConst(body, `conv_axes_${conv.id}`, int64Vec([0]));
@@ -426,7 +422,7 @@ export default class ConvBuilder implements LoopBuilder {
         const iterUnsq = unsqueezeIdx(body, iter, axes0, `conv_unsq_iter_${conv.id}`); // shape [1]
 
         // Optionally pad X_in spatially (H, W) before flattening
-        let X_src = X_in;
+        let X_src: TensorNode.Class | RegionArgumentNode.Class = X_in;
         if (pads.some((p) => p !== 0)) {
             // ONNX Pad uses [N_begin, C_begin, H_begin, W_begin, N_end, C_end, H_end, W_end]
             const padVec = [0, 0, padTop, padLeft, 0, 0, padBottom, padRight];
@@ -1077,7 +1073,7 @@ export default class ConvBuilder implements LoopBuilder {
         //  - "perChannel4D": B is [1,M,1,1], gather along axis=1 and squeeze.
         let yVec = accVec;
         if (B_in && biasKind !== "none") {
-            let biasScalar: TensorNode.Class;
+            let biasScalar: TensorNode.Class | RegionArgumentNode.Class;
 
             if (biasKind === "scalar") {
                 // B is effectively a scalar.
@@ -1167,7 +1163,6 @@ export default class ConvBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

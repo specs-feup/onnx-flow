@@ -44,16 +44,6 @@ export default class GenerativeBuilder implements LoopBuilder {
         // out shape is unknown-length 1D (Range defines its length at runtime)
         const outShape: (number | string)[] = [undefined];
 
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-                .forEach((t) =>
-                    inputs.set(t.id, t.is(TensorNode) ? t.as(TensorNode) : t.as(ConstantNode)),
-                ),
-        );
-
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const iter = body
             .addNode(uniq(body, "iter"))
@@ -306,7 +296,6 @@ export default class GenerativeBuilder implements LoopBuilder {
             indicesOut: unsqOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

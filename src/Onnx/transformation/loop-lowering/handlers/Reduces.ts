@@ -6,6 +6,7 @@ import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import { uniq, makeTensorConst } from "@specs-feup/onnx-flow/Onnx/Utils";
 import { LoopCtx } from "../BuildLoop.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /**
  * Per-element reducer: returns a scalar [] equal to the bin's value to write this iteration.
@@ -30,8 +31,8 @@ export default function handleReduceElem(
     op: OperationNode.Class,
     g: OnnxGraph.Class,
     ctx: LoopCtx,
-    accScalar: TensorNode.Class | ConstantNode.Class, // []
-    xScalar: TensorNode.Class | ConstantNode.Class, // []
+    accScalar: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class, // []
+    xScalar: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class, // []
 ): TensorNode.Class {
     const elemTy =
         accScalar.literalType !== DataType.UNDEFINED
@@ -42,7 +43,7 @@ export default function handleReduceElem(
 
     const unary = (
         type: string,
-        a: TensorNode.Class | ConstantNode.Class,
+        a: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
         name: string,
     ): TensorNode.Class => {
         const n = g
@@ -59,8 +60,8 @@ export default function handleReduceElem(
 
     const bin = (
         type: string,
-        a: TensorNode.Class | ConstantNode.Class,
-        b: TensorNode.Class | ConstantNode.Class,
+        a: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
+        b: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
         name: string,
     ): TensorNode.Class => {
         const n = g

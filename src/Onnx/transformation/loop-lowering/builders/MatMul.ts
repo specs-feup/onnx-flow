@@ -109,14 +109,6 @@ export default class MatMulBuilder implements LoopBuilder {
 
         const matmulDims = { M, K, N, batchProd, batchDims };
 
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-                .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))),
-        );
-
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const iter = body
             .addNode(uniq(body, "iter"))
@@ -215,7 +207,6 @@ export default class MatMulBuilder implements LoopBuilder {
             indicesOut: indicesOut!,
             elemTy,
             outShape: finalOutShape,
-            inputs,
             outTensor,
             trip,
             cond,

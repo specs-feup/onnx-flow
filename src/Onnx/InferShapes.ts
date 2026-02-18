@@ -2,6 +2,7 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import OnnxGraph from "./OnnxGraph.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
+import RegionArgumentNode from "./RegionArgumentNode.js"; // <--- ADD IMPORT
 import { AttributeType, DataType, TensorProto } from "./OnnxTypes.js";
 import {
     broadcastShapes,
@@ -20,6 +21,11 @@ function resolveTensorShape(t: BaseNode.Class): (number | string)[] {
     if (t.is(ConstantNode)) {
         return t.as(ConstantNode).shape;
     }
+    // <--- ADD START --->
+    if (t.is(RegionArgumentNode)) {
+        return t.as(RegionArgumentNode).shape;
+    }
+    // <--- ADD END --->
     if (t.is(TensorNode)) {
         const tn = t.as(TensorNode);
         if (tn.shape && tn.shape.length) return tn.shape as (number | string)[];
@@ -31,7 +37,7 @@ function resolveTensorShape(t: BaseNode.Class): (number | string)[] {
     return [];
 }
 
-/** Helper: read int array from a TensorProto, including rawData */
+// ... (tensorProtoToIntArray remains the same) ...
 function tensorProtoToIntArray(t?: TensorProto): number[] {
     if (!t) return [];
 
@@ -99,7 +105,15 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const cn = inp.as(ConstantNode);
                 shape = cn.shape;
                 dtype = cn.literalType;
-            } else if (inp.is(TensorNode)) {
+            }
+            // <--- ADD START --->
+            else if (inp.is(RegionArgumentNode)) {
+                const ra = inp.as(RegionArgumentNode);
+                shape = ra.shape;
+                dtype = ra.literalType;
+            }
+            // <--- ADD END --->
+            else if (inp.is(TensorNode)) {
                 const tns = inp.as(TensorNode);
                 let interEdge;
                 if (tns.type === "intermediate") {
@@ -125,6 +139,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             };
         });
 
+        // ... (rest of the file is unchanged) ...
         let outShape: (number | string)[] = [];
         let outDtype = infos[0]?.dtype ?? DataType.UNDEFINED;
 

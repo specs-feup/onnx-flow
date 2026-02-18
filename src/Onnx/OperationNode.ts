@@ -6,14 +6,12 @@ import OnnxGraph from "./OnnxGraph.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";
-    export const VERSION = "2";
+    export const VERSION = "3"; // Bumped version for regions
 
     export class Class<
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseNode.Class<D, S> {
-        getOutputs: any[];
-
         get type(): string {
             return this.data[TAG].type;
         }
@@ -50,24 +48,31 @@ namespace OperationNode {
             return this.data[TAG].inputs;
         }
 
-        getBodySubgraph(): OnnxGraph.Class | undefined {
-            return this.data[TAG].bodyGraph ?? this.data[TAG].subgraphs?.body;
+        // --- Region Management ---
+
+        get regions(): OnnxGraph.Class[] {
+            return this.data[TAG].regions ?? [];
         }
 
-        getSubgraph(name: string): OnnxGraph.Class | undefined {
-            return this.data[TAG].subgraphs?.[name];
+        getRegion(index: number): OnnxGraph.Class | undefined {
+            return this.regions[index];
+        }
+
+        // Backward compatibility helpers (mapped to regions)
+
+        getBodySubgraph(): OnnxGraph.Class | undefined {
+            // "body" is usually the first/only region in Loop/Scan
+            return this.regions[0];
         }
 
         getThenBranch(): OnnxGraph.Class | undefined {
-            return this.getSubgraph("thenBranch");
+            // "then_branch" is usually region 0 in If
+            return this.regions[0];
         }
 
         getElseBranch(): OnnxGraph.Class | undefined {
-            return this.getSubgraph("elseBranch");
-        }
-
-        getSubgraphs(): Record<string, OnnxGraph.Class> {
-            return this.data[TAG].subgraphs ?? {};
+            // "else_branch" is usually region 1 in If
+            return this.regions[1];
         }
     }
 
@@ -75,24 +80,18 @@ namespace OperationNode {
         private type: string;
         private attributes?: Record<string, any>;
         private inputs?: BaseNode.Class[];
-        private bodyGraph?: OnnxGraph.Class;
-        private subgraphs?: Record<string, OnnxGraph.Class>;
+        private regions?: OnnxGraph.Class[];
 
         constructor(
             type: string,
             inputs?: BaseNode.Class[],
             attributes?: Record<string, any>,
-            bodyGraphOrSubgraphs?: OnnxGraph.Class | Record<string, OnnxGraph.Class>,
+            regions?: OnnxGraph.Class[],
         ) {
             this.type = type;
             this.attributes = attributes;
             this.inputs = inputs;
-
-            if (bodyGraphOrSubgraphs instanceof OnnxGraph.Class) {
-                this.bodyGraph = bodyGraphOrSubgraphs;
-            } else if (bodyGraphOrSubgraphs && typeof bodyGraphOrSubgraphs === "object") {
-                this.subgraphs = bodyGraphOrSubgraphs;
-            }
+            this.regions = regions;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -103,8 +102,7 @@ namespace OperationNode {
                     type: this.type,
                     inputs: this.inputs || [],
                     attributes: this.attributes || {},
-                    bodyGraph: this.bodyGraph,
-                    subgraphs: this.subgraphs,
+                    regions: this.regions || [],
                 },
             };
         }
@@ -124,8 +122,7 @@ namespace OperationNode {
             type: string;
             inputs?: BaseNode.Class[];
             attributes?: Record<string, any>;
-            bodyGraph?: OnnxGraph.Class;
-            subgraphs?: Record<string, OnnxGraph.Class>;
+            regions?: OnnxGraph.Class[];
         };
     }
 

@@ -43,15 +43,6 @@ export default class DefaultBuilder implements LoopBuilder {
         const lastOp = chain.at(-1)!;
         let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
 
-        // Collect all tensor inputs for this chain (we'll use them for type inference)
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-                .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))),
-        );
-
         // Prefer a floating-point element type when available (important for DQL)
         const floatSet = new Set<DataType>([
             DataType.FLOAT,
@@ -72,16 +63,6 @@ export default class DefaultBuilder implements LoopBuilder {
             for (const op of chain) {
                 const t = op.getOutgoers.targets.filterIs(TensorNode).first();
                 if (t && floatSet.has(t.literalType)) {
-                    elemTy = t.literalType;
-                    break;
-                }
-            }
-        }
-
-        // 3) If still non-float, infer from *inputs* of the whole chain
-        if (!floatSet.has(elemTy)) {
-            for (const t of inputs.values()) {
-                if (floatSet.has(t.literalType)) {
                     elemTy = t.literalType;
                     break;
                 }
@@ -229,7 +210,6 @@ export default class DefaultBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape: staticOut,
-            inputs,
             outTensor,
             trip,
             cond,

@@ -26,6 +26,7 @@ import {
 } from "../BuildLoop.js";
 import handleTranspose from "../handlers/Transpose.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /**
  * Local getAttr helper – identical to the one used in the Transpose handler.
@@ -48,9 +49,9 @@ function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | u
 
 function toScalar(
     g: OnnxGraph.Class,
-    t: TensorNode.Class | ConstantNode.Class,
+    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
     tag: string,
-): TensorNode.Class | ConstantNode.Class {
+): TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class {
     if (t.shape && t.shape.length === 0) return t;
     const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
     const reshape = g
@@ -107,18 +108,26 @@ export default class TransposeBuilder implements LoopBuilder {
         } else {
             const xInNodeRaw = transposeOp
                 .getInputs()
-                ?.find((n) => n.is(TensorNode) || n.is(ConstantNode));
+                ?.find((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode));
             const xInNode = xInNodeRaw.is(TensorNode)
                 ? xInNodeRaw.as(TensorNode)
-                : xInNodeRaw.as(ConstantNode);
+                : xInNodeRaw.is(ConstantNode)
+                  ? xInNodeRaw.as(ConstantNode)
+                  : xInNodeRaw.as(RegionArgumentNode);
             if (xInNode) {
                 elemTy = xInNode.literalType;
             }
         }
 
         // ---- Compute transpose output shape from input+perm ---------------
-        const xInRaw = transposeOp.getInputs()?.find((n) => n.is(TensorNode) || n.is(ConstantNode));
-        const xIn = xInRaw.is(TensorNode) ? xInRaw.as(TensorNode) : xInRaw.as(ConstantNode);
+        const xInRaw = transposeOp
+            .getInputs()
+            ?.find((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode));
+        const xIn = xInRaw.is(TensorNode)
+            ? xInRaw.as(TensorNode)
+            : xInRaw.is(ConstantNode)
+              ? xInRaw.as(ConstantNode)
+              : xInRaw.as(RegionArgumentNode);
 
         const inShape = xIn ? toStaticShape(xIn.shape as Shape) : [];
         let outShape: (number | string)[] = [];
@@ -159,15 +168,6 @@ export default class TransposeBuilder implements LoopBuilder {
         const totalIters =
             safeOut.length <= 1 ? (safeOut[0] ?? 1) : safeOut.reduce((a, b) => a * b, 1);
         const carryLen = totalIters;
-
-        // Captured tensor inputs for Loop wiring later
-        const inputs = new Map<string, TensorNode.Class | ConstantNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-                .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))),
-        );
 
         // ---- Body graph skeleton ------------------------------------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -290,7 +290,6 @@ export default class TransposeBuilder implements LoopBuilder {
             indicesOut: unsqOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

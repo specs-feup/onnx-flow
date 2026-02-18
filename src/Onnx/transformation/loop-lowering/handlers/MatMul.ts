@@ -22,6 +22,7 @@ import {
     decodeMixedRadix,
 } from "../BuildLoop.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /* ============================== Local Helpers ============================== */
 
@@ -32,7 +33,7 @@ import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
  */
 function sliceBatchThenReshape2D(
     g: OnnxGraph.Class,
-    t: TensorNode.Class | ConstantNode.Class,
+    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
     srcBatch: number[],
     batch: number[],
     batchDigits: TensorNode.Class[],
@@ -95,7 +96,7 @@ function scalarI64(g: OnnxGraph.Class, name: string, v: number) {
 function gatherDim(
     g: OnnxGraph.Class,
     tag: string,
-    src: TensorNode.Class | ConstantNode.Class, // e.g., A2D or B2D
+    src: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class, // e.g., A2D or B2D
     negAxis: -2 | -1, // which trailing dim to read
 ): TensorNode.Class {
     const shape = g
