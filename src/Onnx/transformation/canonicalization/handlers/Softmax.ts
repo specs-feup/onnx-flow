@@ -23,7 +23,13 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
 
     // ---- Inputs / outputs
     const ins = op.getInputs?.() ?? [];
-    if (ins.length < 1 || (!ins[0]?.is?.(TensorNode) && !ins[0]?.is?.(ConstantNode))) return false;
+    if (ins.length < 1) {
+        throw new Error(`[SoftmaxHandler] Node ${op.id} missing required input (X).`);
+    }
+
+    if (!ins[0]?.is?.(TensorNode) && !ins[0]?.is?.(ConstantNode)) {
+        throw new Error(`[SoftmaxHandler] Node ${op.id} input[0] is invalid.`);
+    }
 
     const XRaw = ins[0];
     const X = XRaw.is(TensorNode) ? XRaw.as(TensorNode) : XRaw.as(ConstantNode);

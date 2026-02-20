@@ -6,7 +6,7 @@ import OnnxEdge from "./OnnxEdge.js";
 
 namespace ConstantNode {
     export const TAG = "__specs-onnx__constant_node";
-    export const VERSION = "3"; // Bumped version for isInput field
+    export const VERSION = "4";
 
     export class Class<
         D extends Data = Data,
@@ -52,15 +52,33 @@ namespace ConstantNode {
         get getOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }
+
+        get metadata(): Record<string, any> {
+            return this.data[TAG].metadata;
+        }
+
+        getMetadata<T = any>(key: string): T | undefined {
+            return this.data[TAG].metadata[key];
+        }
+
+        setMetadata(key: string, value: any): void {
+            this.data[TAG].metadata[key] = value;
+        }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private value: TensorProto;
         private isInput: boolean;
+        private metadata: Record<string, any>;
 
-        constructor(value: TensorProto, isInput: boolean = false) {
+        constructor(
+            value: TensorProto,
+            isInput: boolean = false,
+            metadata: Record<string, any> = {},
+        ) {
             this.value = value;
             this.isInput = isInput;
+            this.metadata = metadata;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -70,6 +88,7 @@ namespace ConstantNode {
                     version: VERSION,
                     value: this.value,
                     isInput: this.isInput,
+                    metadata: this.metadata,
                 },
             };
         }
@@ -87,7 +106,8 @@ namespace ConstantNode {
         [TAG]: {
             version: typeof VERSION;
             value: TensorProto;
-            isInput: boolean; // New field
+            isInput: boolean;
+            metadata: Record<string, any>;
         };
     }
 

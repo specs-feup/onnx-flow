@@ -79,6 +79,9 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     if (op.type !== "Concat") return false;
 
     const rawIns = op.getInputs?.() ?? [];
+    if (rawIns.length === 0) {
+        throw new Error(`[ConcatHandler] Node ${op.id} has 0 inputs.`);
+    }
     if (rawIns.length < 2) return false;
 
     const inputs = rawIns
@@ -90,7 +93,9 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
                   : undefined,
         )
         .filter(Boolean) as (TensorNode.Class | ConstantNode.Class)[];
-    if (inputs.length < 2) return false;
+    if (inputs.length !== rawIns.length) {
+        throw new Error(`[ConcatHandler] Node ${op.id} has undefined/invalid inputs.`);
+    }
 
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
     if (outs.length !== 1) return false;

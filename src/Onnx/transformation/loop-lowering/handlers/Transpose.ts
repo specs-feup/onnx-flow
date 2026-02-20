@@ -8,6 +8,7 @@ import {
     computeStrides,
     int64Vec,
     uniq,
+    getAttr,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import {
     LoopCtx,
@@ -44,22 +45,6 @@ export default function handleTranspose(
     g: OnnxGraph.Class,
     ctx: LoopCtx,
 ): TensorNode.Class {
-    function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | undefined {
-        const anyOp: any = op as any;
-        if (typeof anyOp.getAttributes === "function") {
-            const obj = anyOp.getAttributes();
-            if (obj && key in obj) return obj[key];
-        }
-        if (typeof anyOp.getAttribute === "function") {
-            const v = anyOp.getAttribute(key);
-            if (v !== undefined) return v;
-        }
-        if (anyOp.attributes && key in anyOp.attributes) {
-            return anyOp.attributes[key];
-        }
-        return dflt;
-    }
-
     const xIn = op.getInputs()![0];
     const X = resolveFusedInput(g, xIn, ctx, op, /*flatten*/ false, /*returnGather*/ false);
 
@@ -67,7 +52,7 @@ export default function handleTranspose(
     const rank = inShapeNum.length;
 
     // Read perm safely, default to reverse if missing or wrong length
-    let perm = getAttr<number[]>(op, "perm");
+    let perm = getAttr(op, "perm");
     if (!Array.isArray(perm) || perm.length !== rank) {
         perm = Array.from({ length: rank }, (_, i) => rank - 1 - i);
     }

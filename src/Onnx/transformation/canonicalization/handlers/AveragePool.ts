@@ -10,9 +10,16 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
 
     // 1. Validate Inputs
     const ins = op.getInputs?.() ?? [];
-    if (ins.length !== 1) return false; // AveragePool has 1 input X
+    if (ins.length !== 1) {
+        throw new Error(
+            `[AveragePoolHandler] Node ${op.id} must have exactly 1 input (X). Got ${ins.length}.`,
+        );
+    }
+
     const X = ins[0]?.tryAs(TensorNode);
-    if (!X) return false;
+    if (!X) {
+        throw new Error(`[AveragePoolHandler] Node ${op.id} input is not a TensorNode.`);
+    }
 
     // 2. Validate Outputs
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
@@ -69,7 +76,7 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     const Wones = tensorOnesConst(g, `AvgPool_W_${op.id}`, dtype, [C, 1, kH, kW]);
 
     // B. Conv Attributes
-    const convAttrs: any = {
+    const convAttrs: Record<string, any> = {
         group: C,
         strides: [sH, sW],
     };

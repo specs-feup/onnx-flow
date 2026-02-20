@@ -616,7 +616,7 @@ export function resolveFusedInput(
     }
 
     if (!returnGather) {
-        return flatten ? ensureFlatInput(g, tInner) : (tInner as any);
+        return flatten ? ensureFlatInput(g, tInner) : tInner;
     }
 
     const idxToUse: TensorNode.Class | ConstantNode.Class | null = ctx.unsqIdx;
@@ -626,12 +626,12 @@ export function resolveFusedInput(
     if (ctx.coalesce && (ctx.iU || ctx.jU || ctx.flatU)) {
         const s = tInner.shape;
 
-        if (s.length === 0) return tInner as any;
+        if (s.length === 0) return tInner;
 
         if (s.length === 1) {
             const len = s[0];
             // If vector length is 1, treat as scalar
-            if (len === 1) return tInner as any;
+            if (len === 1) return tInner;
 
             let idxScalar: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class | null =
                 null;
@@ -660,7 +660,7 @@ export function resolveFusedInput(
             const flatT = ensureFlatInput(g, tInner);
             const idxU = ctx.flatU ?? idxToUse!;
 
-            if (!returnGather) return flatT as any;
+            if (!returnGather) return flatT;
 
             const idxScalar = squeezeIfLen1(g, idxU, ctx.axes, `idx2d_${tInner.id}_${op.id}`);
             return safeGather1D(g, flatT, idxScalar, ctx.axes, `gather2d_${tInner.id}_${op.id}`);

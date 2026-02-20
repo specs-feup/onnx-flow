@@ -11,8 +11,14 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     if (op.type !== "Clip") return false;
 
     const ins = op.getInputs?.() ?? [];
+    if (ins.length < 1) {
+        throw new Error(`[ClipHandler] Node ${op.id} missing required input (data).`);
+    }
+
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) return false;
+    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) {
+        throw new Error(`[ClipHandler] Node ${op.id} input[0] invalid.`);
+    }
     const X = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
     const dtype = X.literalType as DataType;
 
@@ -21,16 +27,16 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
-    // --- Gather min/max ONLY from inputs ---
+    // --- Gather min/max ONLY from inputs (Inputs 1 and 2 are optional in ONNX) ---
     let minT: TensorNode.Class | ConstantNode.Class | undefined;
     let maxT: TensorNode.Class | ConstantNode.Class | undefined;
 
-    // input[1] = min, input[2] = max
     if (ins[1]?.is?.(TensorNode)) {
         minT = ins[1].as(TensorNode);
     } else if (ins[1]?.is?.(ConstantNode)) {
         minT = ins[1].as(ConstantNode);
     }
+
     if (ins[2]?.is?.(TensorNode)) {
         maxT = ins[2].as(TensorNode);
     } else if (ins[2]?.is?.(ConstantNode)) {
@@ -76,7 +82,7 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
             .as(OperationNode);
         g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     } else if (cur !== Y) {
-        // Had only min or only max → connect last op to Y
+        // Had only min or only max -> connect last op to Y
         const lastOp = toArrayLike<OperationNode.Class>(
             cur.getIncomers?.sources?.filterIs?.(OperationNode),
         )[0];

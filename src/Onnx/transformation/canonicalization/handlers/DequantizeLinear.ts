@@ -25,7 +25,11 @@ export default function dequantizeLinearHandler(
     if (op.type !== "DequantizeLinear") return false;
 
     const ins = op.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    if (ins.length < 2) {
+        throw new Error(
+            `[DequantizeLinearHandler] Node ${op.id} missing required inputs (x, x_scale).`,
+        );
+    }
 
     const X = ins[0]?.is?.(TensorNode)
         ? ins[0].as(TensorNode)
@@ -42,7 +46,9 @@ export default function dequantizeLinearHandler(
         : ins[2]?.is?.(ConstantNode)
           ? ins[2].as(ConstantNode)
           : undefined;
-    if (!X || !S) return false;
+    if (!X || !S) {
+        throw new Error(`[DequantizeLinearHandler] Node ${op.id} has invalid inputs.`);
+    }
 
     // Single output tensor Y
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));

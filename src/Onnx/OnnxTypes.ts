@@ -1,5 +1,7 @@
 // enums for ONNX attribute and tensor types
 
+import OnnxGraph from "./OnnxGraph.js";
+
 export enum AttributeType {
     UNDEFINED = 0,
     FLOAT = 1,
@@ -79,6 +81,6 @@ export type AttributeProto = {
     strings?: string[]; // STRINGS
     t?: TensorProto; // TENSOR
     tensors?: TensorProto[]; // TENSORS
-    g?: any; // GRAPH
-    graphs?: any[]; // GRAPHS
+    g?: OnnxGraph.Class; // GRAPH
+    graphs?: OnnxGraph.Class[]; // GRAPHS
 };

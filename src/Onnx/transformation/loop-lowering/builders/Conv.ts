@@ -11,6 +11,7 @@ import {
     scalarInt64,
     bool,
     zeroTensor,
+    resolveShapeToNumbers,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import {
     LoopBuilder,
@@ -24,40 +25,6 @@ import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
-function resolveShape(
-    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-): number[] {
-    if (t.shape && t.shape.length) {
-        return t.shape.map((d) => Number(d));
-    }
-
-    // Try incoming edges first
-    if (t.is(TensorNode)) {
-        const incs = t.getIncomers ?? [];
-        for (const e of incs) {
-            if (e.shape && e.shape.length) {
-                const s = e.shape.slice();
-                // Cache it on the tensor so later passes see it as well
-                t.setShape(s);
-                return s;
-            }
-        }
-
-        // Fallback: try outgoing edges (sometimes only consumers got a shape)
-        const outs = t.getOutgoers ?? [];
-        for (const e of outs) {
-            if (e.shape && e.shape.length) {
-                const s = e.shape.slice();
-
-                t.setShape(s);
-                return s;
-            }
-        }
-    }
-
-    // Still unknown
-    return [];
-}
 
 /**
  * Conv loop-lowering builder.
@@ -113,8 +80,8 @@ export default class ConvBuilder implements LoopBuilder {
                 : fallbackElemTy;
 
         console.log("XSHAPE raw:", X.shape);
-        const xShape = resolveShape(X);
-        const wShape = resolveShape(W);
+        const xShape = resolveShapeToNumbers(X);
+        const wShape = resolveShapeToNumbers(W);
         console.log("XSHAPE resolved:", xShape, "WSHAPE resolved:", wShape);
 
         const is2D = xShape.length === 4 && wShape.length === 4;
@@ -156,7 +123,7 @@ export default class ConvBuilder implements LoopBuilder {
 
         // Bias shape: allow scalar [1] or per-output-channel [M]
         // Also accept common "expanded" forms like [1, M, 1, 1] or [M, 1, 1].
-        const bShape = B ? resolveShape(B) : [];
+        const bShape = B ? resolveShapeToNumbers(B) : [];
 
         function classifyBiasShape(
             shape: number[],
@@ -323,7 +290,7 @@ export default class ConvBuilder implements LoopBuilder {
         // 2. Deduce M (Output Channels) from Bias if unknown
         // If Weights have M=-1, but Bias is known, infer M from Bias.
         if ((!M || M < 0) && B) {
-            const bShape = resolveShape(B);
+            const bShape = resolveShapeToNumbers(B);
             const bSize = bShape.reduce((a, b) => a * Number(b), 1);
             // Heuristic: Bias is usually [M] or [1, M, 1, 1]. If scalar, it doesn't help.
             if (bSize > 1) {
@@ -1146,7 +1113,7 @@ export default class ConvBuilder implements LoopBuilder {
 
         // ---- Outer: trip_count, cond, v_initial ------------------------------
         inferShapes(outer); // align with other builders
-        const trip = makeTensorConst(outer, `conv_trip_${conv.id}`, scalarInt64(Number(numOut)));
+        const trip = makeTensorConst(outer, `conv_trip_${conv.id}`, scalarInt64(numOut));
         const cond = makeTensorConst(outer, `conv_cond_${conv.id}`, bool(true));
         const v_initial = makeTensorConst(
             outer,

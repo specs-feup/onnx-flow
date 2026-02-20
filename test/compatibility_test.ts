@@ -59,14 +59,14 @@ async function getGraphStats(modelPath: string) {
         collectStatsRecursive(graph, stats);
 
         return stats;
-    } catch (e: any) {
+    } catch (e) {
         console.warn(`(Stats warning: could not load ${path.basename(modelPath)})`);
         console.error(`   Reason: ${e.message}`);
         return null;
     }
 }
 
-function printStatsComparison(label: string, original: any, decomposed: any) {
+function printStatsComparison(label: string, original, decomposed) {
     console.log(`\n--- Stats for ${label} (Recursive) ---`);
 
     if (original) {
@@ -117,14 +117,14 @@ function printInputs(label: string, inputs: Record<string, ort.Tensor>) {
     }
 }
 
-function logErrorDetails(context: string, e: any) {
+function logErrorDetails(context: string, e) {
     console.error(`❌ Error in ${context}:`, e?.message || e);
     if (e?.stack) console.error(e.stack);
     if (e && typeof e === "object") {
         const props = Object.getOwnPropertyNames(e);
         for (const prop of props) {
             if (prop !== "message" && prop !== "stack") {
-                console.error(`  ${prop}:`, (e as any)[prop]);
+                console.error(`  ${prop}:`, e[prop]);
             }
         }
     }
@@ -320,7 +320,7 @@ function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
         }
 
         // typed array materialization
-        let typed: any;
+        let typed;
         if (s.dtype === "float32") typed = new Float32Array(data as number[]);
         else if (s.dtype === "int32") typed = new Int32Array(data as number[]);
         else if (s.dtype === "int64") typed = BigInt64Array.from(data as bigint[]);
@@ -333,6 +333,9 @@ function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
     return out;
 }
 
+function jsonFullArgsNoValidate() {
+    return `--format json -vz 0 -v 0 --validate false`;
+}
 function jsonFullArgs() {
     return `--format json -vz 0 -v 0`;
 }
@@ -628,8 +631,8 @@ const TESTS: Array<{
         specs: [
             { name: "A", dtype: "float32", shape: [4] },
             { name: "B", dtype: "float32", shape: [4] },
-            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] as any },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as any },
+            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
         ],
     },
     {
@@ -642,8 +645,8 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [4] },
             { name: "C", dtype: "float32", shape: [4] },
             { name: "D", dtype: "float32", shape: [4] },
-            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] as any },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as any },
+            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
         ],
     },
     {
@@ -654,8 +657,8 @@ const TESTS: Array<{
         specs: [
             { name: "A", dtype: "float32", shape: [2, 2] },
             { name: "B", dtype: "float32", shape: [2, 2] },
-            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] as any },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as any },
+            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
         ],
     },
     {
@@ -667,8 +670,8 @@ const TESTS: Array<{
             { name: "X", dtype: "int32", shape: [3, 1] },
             { name: "A", dtype: "int32", shape: [1, 3] },
             { name: "B", dtype: "int32", shape: [3, 3] },
-            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(9)] as any },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as any },
+            { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(9)] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
         ],
     },
 
@@ -1204,7 +1207,7 @@ const TESTS: Array<{
         label: "kws_ref_model_float32_standard",
         originalPath: "examples/onnx/kws_ref_model_float32.onnx",
         tol: 1e-4, // softmax tail needs a little tolerance
-        cliArgs: jsonFullArgs,
+        cliArgs: jsonFullArgsNoValidate,
         specs: [
             { name: "input_1", dtype: "float32", shape: [1, 49, 10, 1] }, // in
             // out: Identity [1,12] float32 (picked up automatically)

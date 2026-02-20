@@ -21,6 +21,7 @@ import { DecompositionOptions, defaultDecompositionOptions } from "./Decompositi
 import { splitByAncestor } from "./Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "./Onnx/partitioning/Partition.js";
 import OnnxGraph from "./Onnx/OnnxGraph.js";
+import validateGraph from "./Onnx/validation/ValidateGraph.js";
 
 export async function parseOnnxFile(inputFilePath: string) {
     return await onnx2json(inputFilePath);
@@ -31,7 +32,7 @@ export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string) {
 }
 
 export function loadGraph(
-    onnxObject: any,
+    onnxObject,
     enableLowLevel: boolean = true,
     enableOptimize: boolean = true,
     dotOutput: boolean = true,
@@ -40,8 +41,14 @@ export function loadGraph(
     coalesce: boolean = defaultDecompositionOptions.coalesce,
     loopLowering: boolean = defaultDecompositionOptions.loopLowering,
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
+    validate: boolean = true,
 ) {
     let graph = createGraph(onnxObject);
+
+    // Initial Validation (Post-Adapter)
+    if (validate) {
+        validateGraph(graph);
+    }
 
     if (enableLowLevel) {
         const decompOptions: DecompositionOptions = {
@@ -52,10 +59,16 @@ export function loadGraph(
             decomposeForCgra,
         };
         graph = graph.apply(new OnnxGraphTransformer(decompOptions));
+
+        // Validation after Transformer
+        if (validate) validateGraph(graph);
     }
 
     if (enableLowLevel && enableOptimize) {
         graph = graph.apply(new OnnxGraphOptimizer());
+
+        // Validation after Optimizer
+        if (validate) validateGraph(graph);
     }
 
     if (dotOutput) {
@@ -73,7 +86,7 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
     return baseUrl + encodeURIComponent(dotGraph);
 }
 
-export function generateGraphCode(graph: any): string {
+export function generateGraphCode(graph: OnnxGraph.Class): string {
     return generateCode(graph);
 }
 
@@ -217,6 +230,12 @@ const argv = await yargs(hideBin(process.argv))
         type: "string",
         array: true,
     })
+    .option("validate", {
+        alias: "val",
+        describe: "Run structural validation after graph loading and transformations",
+        type: "boolean",
+        default: true, // Recommended: Always strictly validate by default
+    })
     // Enforce mutual exclusion at the CLI level
     .check((argv) => {
         if (argv.partition !== undefined) {
@@ -241,6 +260,7 @@ const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
 const dotFormatter = argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
+const validate = argv.validate;
 
 // --- Transformation Control ---
 // If partitioning is active, we override and disable other transformations
@@ -291,6 +311,17 @@ if (isPartitioning) {
                 loopLowering: argv.loopLowering,
             };
             graph.apply(new OnnxGraphTransformer(decompOptions));
+
+            if (validate) {
+                try {
+                    if (verbosity > 0) console.log("Running Graph Validation...");
+                    validateGraph(graph);
+                    if (verbosity > 0) console.log("Graph Validation Passed.");
+                } catch (e) {
+                    console.error("Graph Validation Failed:");
+                    throw e;
+                }
+            }
         }
 
         if (verbosity > 1) {
@@ -343,7 +374,7 @@ if (isPartitioning) {
                 const sets = splitByAncestor(graph, targetNodeId);
                 partitions = partitionGraph(graph, sets);
 
-                const exportPartition = async (g: any, suffix: string) => {
+                const exportPartition = async (g: OnnxGraph.Class, suffix: string) => {
                     const base = outputFilePath
                         ? outputFilePath.split(".").slice(0, -1).join(".")
                         : inputFilePath.split(".").slice(0, -1).join(".");

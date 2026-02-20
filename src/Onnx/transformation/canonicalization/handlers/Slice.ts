@@ -17,18 +17,31 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
 
     // 1. Inputs (Standard Opset 10+: data, starts, ends, axes?, steps?)
     const ins = sl.getInputs?.() ?? [];
-    if (ins.length < 3) return false; // Must have at least data, starts, ends
+
+    // Strict Input Check (Phase 5.2): Slice MUST have at least 3 inputs (data, starts, ends).
+    if (ins.length < 3) {
+        throw new Error(
+            `[SliceHandler] Node ${sl.id} is missing required inputs. Expected 3 (data, starts, ends), got ${ins.length}. Adapter failure?`,
+        );
+    }
 
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) return false;
+    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) {
+        throw new Error(`[SliceHandler] Node ${sl.id} input[0] (data) is invalid.`);
+    }
+
     const Xin = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
     const inShape = Xin.shape.map((d) => (typeof d === "number" ? d : 1));
     const rank = inShape.length;
 
     // 2. Read Parameters (Strictly from Inputs)
-    // The Adapter ensures attributes are moved to inputs.
     const readVec = (idx: number) => {
         const t = ins[idx];
+        // If the node should exist (idx 1 or 2) but is undefined, it's a structural error
+        if (!t && (idx === 1 || idx === 2)) {
+            throw new Error(`[SliceHandler] Node ${sl.id} missing required input at index ${idx}.`);
+        }
+
         if (t?.is?.(ConstantNode)) {
             return readConstIntegerVectorFromTensorNode(t.as(ConstantNode));
         }
@@ -43,6 +56,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     let steps = readVec(4);
 
     // If starts/ends are dynamic (not constant), we cannot compile this static slice logic.
+    // We return false here (optimization failure), but we DO NOT throw, because valid ONNX allows dynamic slice.
     if (!starts || !ends) {
         return false;
     }

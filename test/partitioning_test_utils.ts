@@ -7,6 +7,7 @@ import { convertFlowGraphToOnnxJson } from "../src/flow2json.js";
 import { json2onnx } from "../src/json2onnx.js";
 import { splitByAncestor } from "../src/Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../src/Onnx/partitioning/Partition.js";
+import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 
 export interface InputSpec {
     name: string;
@@ -24,7 +25,7 @@ export interface PartitionTestCase {
 
 function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     const size = spec.shape.reduce((a, b) => a * b, 1);
-    let data: any;
+    let data;
 
     if (spec.dtype === "float32") {
         data = new Float32Array(size).map(() => Math.random());
@@ -41,7 +42,7 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     return new ort.Tensor(spec.dtype, data, spec.shape);
 }
 
-async function saveGraphToTempOnnx(graph: any, prefix: string): Promise<string> {
+async function saveGraphToTempOnnx(graph: OnnxGraph.Class, prefix: string): Promise<string> {
     const json = convertFlowGraphToOnnxJson(graph);
     const tmpJson = path.resolve(`temp_${prefix}.json`);
     const tmpOnnx = path.resolve(`temp_${prefix}.onnx`);
@@ -165,7 +166,7 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
         }
 
         console.log(`   ✅ Success! Max diff: ${0} (or within ${tol})`);
-    } catch (e: any) {
+    } catch (e) {
         console.error(`   ❌ Failed: ${e.message}`);
         if (e.stack) console.error(e.stack);
         throw e;

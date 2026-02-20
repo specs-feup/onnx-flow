@@ -36,6 +36,14 @@ namespace RegionArgumentNode {
             return this.data[TAG].shape;
         }
 
+        setLiteralType(dtype: DataType): void {
+            this.data[TAG].literalType = dtype;
+        }
+
+        setShape(shape: (number | string)[]): void {
+            this.data[TAG].shape = shape;
+        }
+
         get getOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }

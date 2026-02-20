@@ -15,13 +15,16 @@ import { uniq } from "./Onnx/Utils.js";
 function parseShape(shape: any): (number | string)[] {
     if (!shape?.dim) return [];
     return shape.dim.map((dim: any) => {
-        if (typeof dim.dimParam === "string") {
-            return dim.dimParam;
+        // Handle both camelCase and snake_case formats
+        const dimParam = dim.dimParam ?? dim.dim_param;
+        const dimValue = dim.dimValue ?? dim.dim_value;
+
+        if (typeof dimParam === "string" && dimParam !== "") {
+            return dimParam; // symbolic dimension, e.g., "batch"
         }
-        if (dim.dimValue !== undefined && dim.dimValue !== null) {
-            return Number(dim.dimValue);
-        } else if (dim.dimParam !== undefined && dim.dimParam !== "") {
-            return dim.dimParam; // symbolic dimension, e.g., "batch"
+
+        if (dimValue !== undefined && dimValue !== null) {
+            return Number(dimValue); // explicitly cast to number
         } else {
             return undefined; // unknown dimension size
         }
@@ -290,11 +293,11 @@ function addNodes(
                                 break;
                             case AttributeType.FLOATS:
                             case "FLOATS":
-                                attributes[attr.name] = attr.floats;
+                                attributes[attr.name] = attr.floats.map(Number);
                                 break;
                             case AttributeType.INTS:
                             case "INTS":
-                                attributes[attr.name] = attr.ints;
+                                attributes[attr.name] = attr.ints.map(Number);
                                 break;
                             case AttributeType.TENSOR:
                             case "TENSOR":

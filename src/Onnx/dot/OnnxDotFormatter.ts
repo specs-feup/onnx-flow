@@ -141,7 +141,7 @@ export default class OnnxDotFormatter<
         const idPrefix = `loop${node.id}_`;
         const statements = [];
 
-        const body = node.getBodySubgraph();
+        const body = node.regions[0];
         if (body !== undefined) {
             const subFormatter = new OnnxDotFormatter(idPrefix);
             const bodyDot = subFormatter.toDot(body);
@@ -169,7 +169,7 @@ export default class OnnxDotFormatter<
         const ifDot = this.nodeToDot(node);
         statements.push(ifDot);
 
-        const thenBranch = node.getThenBranch();
+        const thenBranch = node.regions[0];
         if (thenBranch !== undefined) {
             const thenIdPrefix = `${idPrefix}then_`;
             const thenFormatter = new OnnxDotFormatter(thenIdPrefix);
@@ -194,7 +194,7 @@ export default class OnnxDotFormatter<
             statements.push(thenEdge);
         }
 
-        const elseBranch = node.getElseBranch();
+        const elseBranch = node.regions[1];
         if (elseBranch !== undefined) {
             const elseIdPrefix = `${idPrefix}else_`;
             const elseFormatter = new OnnxDotFormatter(elseIdPrefix);
@@ -382,8 +382,11 @@ export default class OnnxDotFormatter<
             ) {
                 const inputNodes = opNode.getInputs().filter((n) => !graph.hasNode(n.id));
                 for (const ext of inputNodes) {
-                    const shape =
-                        ext.is(TensorNode) || ext.is(ConstantNode) ? (ext as any).shape : undefined;
+                    const shape = ext.is(TensorNode)
+                        ? ext.as(TensorNode).shape
+                        : ext.is(ConstantNode)
+                          ? ext.as(ConstantNode).shape
+                          : undefined;
                     dot.statements(
                         Dot.edge(ext.id, this.idPrefix + opNode.id, {
                             // ...

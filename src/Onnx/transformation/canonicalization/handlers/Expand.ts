@@ -9,15 +9,17 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     if (op.type !== "Expand") return false;
 
     const ins = op.getInputs?.() ?? [];
-    if (ins.length !== 2) return false;
+    if (ins.length !== 2) {
+        throw new Error(
+            `[ExpandHandler] Node ${op.id} invalid inputs. Expected 2 (data, shape), got ${ins.length}.`,
+        );
+    }
 
     const xIn = ins[0];
     const shapeIn = ins[1];
-    if (
-        (!xIn?.is?.(TensorNode) && !xIn?.is?.(ConstantNode)) ||
-        (!shapeIn?.is?.(TensorNode) && !shapeIn?.is?.(ConstantNode))
-    )
-        return false;
+    if (!xIn || !shapeIn) {
+        throw new Error(`[ExpandHandler] Node ${op.id} has undefined inputs.`);
+    }
 
     const X = xIn.is(TensorNode) ? xIn.as(TensorNode) : xIn.as(ConstantNode);
     const shape = shapeIn.is(TensorNode) ? shapeIn.as(TensorNode) : shapeIn.as(ConstantNode);
@@ -74,7 +76,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     const zerosF = g
         .addNode(uniq(g, `${op.id}_expand_fill_out`))
-        .init(new TensorNode.Builder(DataType.FLOAT, outShape as any, "intermediate"))
+        .init(new TensorNode.Builder(DataType.FLOAT, outShape, "intermediate"))
         .as(TensorNode);
 
     addEdge(g, cosOp, zerosF, DataType.FLOAT, outShape);
@@ -89,7 +91,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
         const zerosCast = g
             .addNode(uniq(g, `${op.id}_expand_cast_out`))
-            .init(new TensorNode.Builder(dt, outShape as any, "intermediate"))
+            .init(new TensorNode.Builder(dt, outShape, "intermediate"))
             .as(TensorNode);
 
         addEdge(g, castOp, zerosCast, dt, outShape);

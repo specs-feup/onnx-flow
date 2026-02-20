@@ -6,7 +6,7 @@ import OnnxGraph from "./OnnxGraph.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";
-    export const VERSION = "3"; // Bumped version for regions
+    export const VERSION = "4"; // Bumped version for regions
 
     export class Class<
         D extends Data = Data,
@@ -58,21 +58,16 @@ namespace OperationNode {
             return this.regions[index];
         }
 
-        // Backward compatibility helpers (mapped to regions)
-
-        getBodySubgraph(): OnnxGraph.Class | undefined {
-            // "body" is usually the first/only region in Loop/Scan
-            return this.regions[0];
+        get metadata(): Record<string, any> {
+            return this.data[TAG].metadata;
         }
 
-        getThenBranch(): OnnxGraph.Class | undefined {
-            // "then_branch" is usually region 0 in If
-            return this.regions[0];
+        getMetadata<T = any>(key: string): T | undefined {
+            return this.data[TAG].metadata[key];
         }
 
-        getElseBranch(): OnnxGraph.Class | undefined {
-            // "else_branch" is usually region 1 in If
-            return this.regions[1];
+        setMetadata(key: string, value: any): void {
+            this.data[TAG].metadata[key] = value;
         }
     }
 
@@ -81,17 +76,20 @@ namespace OperationNode {
         private attributes?: Record<string, any>;
         private inputs?: BaseNode.Class[];
         private regions?: OnnxGraph.Class[];
+        private metadata: Record<string, any>;
 
         constructor(
             type: string,
             inputs?: BaseNode.Class[],
             attributes?: Record<string, any>,
             regions?: OnnxGraph.Class[],
+            metadata: Record<string, any> = {},
         ) {
             this.type = type;
             this.attributes = attributes;
             this.inputs = inputs;
             this.regions = regions;
+            this.metadata = metadata;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -103,6 +101,7 @@ namespace OperationNode {
                     inputs: this.inputs || [],
                     attributes: this.attributes || {},
                     regions: this.regions || [],
+                    metadata: this.metadata,
                 },
             };
         }
@@ -123,6 +122,7 @@ namespace OperationNode {
             inputs?: BaseNode.Class[];
             attributes?: Record<string, any>;
             regions?: OnnxGraph.Class[];
+            metadata: Record<string, any>;
         };
     }
 

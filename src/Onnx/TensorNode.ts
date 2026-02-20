@@ -6,7 +6,7 @@ import { AttributeProto } from "./OnnxTypes.js";
 
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
-    export const VERSION = "3"; // Bumped version
+    export const VERSION = "4"; // Bumped version
 
     export type TensorKind = "input" | "output" | "intermediate" | "index" | "index_aux";
     // Removed: "initializer", "constant"
@@ -35,10 +35,6 @@ namespace TensorNode {
             return this.data[TAG].type;
         }
 
-        get address(): number {
-            return this.data[TAG].address;
-        }
-
         get extraAttrs(): AttributeProto[] | undefined {
             return this.data[TAG].extraAttrs;
         }
@@ -50,26 +46,48 @@ namespace TensorNode {
         get getOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }
+
+        get metadata(): Record<string, any> {
+            return this.data[TAG].metadata;
+        }
+
+        getMetadata<T = any>(key: string): T | undefined {
+            return this.data[TAG].metadata[key];
+        }
+
+        setMetadata(key: string, value: any): void {
+            this.data[TAG].metadata[key] = value;
+        }
+
+        // Helper for legacy 'address' support (optional, if you want to keep the API logic)
+        get address(): number | undefined {
+            return this.getMetadata<number>("address");
+        }
+
+        setAddress(addr: number): void {
+            this.setMetadata("address", addr);
+        }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private literalType: number;
         private shape: (number | string)[];
         private type: TensorKind;
-        private address: number;
         private extraAttrs?: AttributeProto[];
+        private metadata: Record<string, any>;
 
         constructor(
             literalType: number,
             shape: (number | string)[],
             type: TensorKind,
             extraAttrs?: AttributeProto[],
+            metadata: Record<string, any> = {},
         ) {
             this.literalType = literalType;
             this.shape = shape;
             this.type = type;
-            this.address = 0;
             this.extraAttrs = extraAttrs;
+            this.metadata = metadata;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -80,8 +98,8 @@ namespace TensorNode {
                     literalType: this.literalType,
                     shape: this.shape,
                     type: this.type,
-                    address: this.address,
                     extraAttrs: this.extraAttrs,
+                    metadata: this.metadata,
                 },
             };
         }
@@ -101,8 +119,8 @@ namespace TensorNode {
             literalType: number;
             shape: (number | string)[];
             type: TensorKind;
-            address: number;
             extraAttrs?: AttributeProto[];
+            metadata: Record<string, any>;
         };
     }
 

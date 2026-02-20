@@ -15,6 +15,7 @@ import {
     makeTensorConst,
     scalarInt64,
     asStaticDims,
+    getAttr,
 } from "../../../Utils.js";
 
 import {
@@ -27,25 +28,6 @@ import {
 import handleTranspose from "../handlers/Transpose.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
-
-/**
- * Local getAttr helper – identical to the one used in the Transpose handler.
- */
-function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | undefined {
-    const anyOp: any = op as any;
-    if (typeof anyOp.getAttributes === "function") {
-        const obj = anyOp.getAttributes();
-        if (obj && key in obj) return obj[key];
-    }
-    if (typeof anyOp.getAttribute === "function") {
-        const v = anyOp.getAttribute(key);
-        if (v !== undefined) return v;
-    }
-    if (anyOp.attributes && key in anyOp.attributes) {
-        return anyOp.attributes[key];
-    }
-    return dflt;
-}
 
 function toScalar(
     g: OnnxGraph.Class,
@@ -136,7 +118,7 @@ export default class TransposeBuilder implements LoopBuilder {
             const rank = inShape.length;
 
             // Use the *same* perm-reading logic as the handler
-            let perm = getAttr<number[]>(transposeOp, "perm");
+            let perm = getAttr(transposeOp, "perm");
             if (!Array.isArray(perm) || perm.length !== rank) {
                 // ONNX default for Transpose: reverse axes
                 perm = Array.from({ length: rank }, (_, i) => rank - 1 - i);
@@ -221,7 +203,7 @@ export default class TransposeBuilder implements LoopBuilder {
         // ---- 2) Optional Add after Transpose (CHAIN: [Transpose, Add]) ----
         if (hasAdd && addOp) {
             const addInputs = addOp.getInputs?.() ?? [];
-            let otherInput: any = null;
+            let otherInput = null;
 
             // Find the Add input that is *not* produced by the Transpose op
             for (const inp of addInputs) {

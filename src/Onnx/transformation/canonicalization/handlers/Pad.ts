@@ -18,8 +18,7 @@ import {
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 function readPadsVectorFromTensorInput(
-    g: OnnxGraph.Class,
-    tn?: TensorNode.Class | ConstantNode.Class,
+    tn: TensorNode.Class | ConstantNode.Class,
 ): number[] | undefined {
     if (!tn) return undefined;
 
@@ -295,26 +294,42 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     if (op.type !== "Pad") return false;
 
     const ins = op.getInputs?.() ?? [];
+    // Pad must have at least 'data' and 'pads' (after adapter)
+    if (ins.length < 2) {
+        throw new Error(
+            `[PadHandler] Node ${op.id} missing required inputs. Pad must have at least 2 inputs (data, pads). Adapter failure?`,
+        );
+    }
+
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) return false;
+    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) {
+        throw new Error(`[PadHandler] Node ${op.id} input[0] (data) is invalid or missing.`);
+    }
 
     const Xin = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
     const rank = Xin.shape.length;
 
     // --- Strictly read pads from Input[1] ---
-    let pads: number[] | undefined = undefined;
     const padsNode = ins[1]?.is?.(TensorNode)
         ? ins[1].as(TensorNode)
         : ins[1]?.is?.(ConstantNode)
           ? ins[1].as(ConstantNode)
           : undefined;
 
-    if (padsNode) {
-        pads = readPadsVectorFromTensorInput(g, padsNode);
+    if (!padsNode) {
+        throw new Error(`[PadHandler] Node ${op.id} input[1] (pads) is missing. Adapter failure?`);
     }
 
-    // If pads are missing, we fail. The Adapter is responsible for ensuring this exists.
-    if (!pads || pads.length !== 2 * rank) return false;
+    const pads = readPadsVectorFromTensorInput(padsNode);
+
+    // If pads are dynamic (not constant), we cannot canonicalize to Split/Concat slices.
+    if (!pads) return false;
+
+    if (pads.length !== 2 * rank) {
+        throw new Error(
+            `[PadHandler] Node ${op.id} pads length (${pads.length}) does not match 2 * rank (${2 * rank}).`,
+        );
+    }
 
     // mode
     const attr = op.getAttributes?.() ?? op.attributes ?? {};
@@ -337,6 +352,8 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     const Y = outs[0];
     const dtype = Xin.literalType as DataType;
 
+    // ... [Rest of the function logic remains the same] ...
+
     // Prepare working tensor (may be cropped if negative pads)
     let cur = Xin;
     // Maintain current shape for intermediate updates
@@ -347,6 +364,8 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     // Negative pads => crop via Slice, then zero-out those pads in the array
     const beg = pads.slice(0, rank);
     const end = pads.slice(rank);
+
+    // ... [Copy logic loop for negative pads] ...
     for (let ax = 0; ax < rank; ax++) {
         const negB = Math.max(0, -beg[ax]);
         const negE = Math.max(0, -end[ax]);
@@ -454,7 +473,6 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
         }
     }
 
-    // If nothing changed, route X -> Y via Identity
     if (cur === Xin) {
         const id = g
             .addNode(uniq(g, `pad_identity_${op.id}`))
@@ -466,18 +484,15 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     g.getNodeById(op.id).remove();
 
     // Cleanup constant inputs
-    const padsTN = ins[1]?.is?.(TensorNode)
-        ? ins[1].as(TensorNode)
-        : ins[1]?.is?.(ConstantNode)
-          ? ins[1].as(ConstantNode)
-          : undefined;
-    const valTN = ins[2]?.is?.(TensorNode)
-        ? ins[2].as(TensorNode)
-        : ins[2]?.is?.(ConstantNode)
-          ? ins[2].as(ConstantNode)
-          : undefined;
-    maybeRemoveOrphanConstant(g, padsTN);
-    maybeRemoveOrphanConstant(g, valTN);
+    maybeRemoveOrphanConstant(g, padsNode);
+    maybeRemoveOrphanConstant(
+        g,
+        ins[2]?.is?.(TensorNode)
+            ? ins[2].as(TensorNode)
+            : ins[2]?.is?.(ConstantNode)
+              ? ins[2].as(ConstantNode)
+              : undefined,
+    );
 
     return true;
 }

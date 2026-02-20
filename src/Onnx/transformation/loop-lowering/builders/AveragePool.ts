@@ -11,61 +11,12 @@ import {
     scalarInt64,
     bool,
     zeroTensor,
+    resolveShapeToNumbers,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
-
-function resolveShape(
-    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-): number[] {
-    // If the tensor already has a shape, just use it.
-    if (t.shape && t.shape.length) {
-        return t.shape as number[];
-    }
-
-    if (t.is(TensorNode)) {
-        // Try incoming edges first
-        const incs = t.getIncomers ?? [];
-        for (const e of incs) {
-            if (e.shape && e.shape.length) {
-                const s = e.shape.slice();
-                // Cache it on the tensor so later passes see it as well
-                t.setShape(s);
-                return s;
-            }
-        }
-
-        // Fallback: try outgoing edges (sometimes only consumers got a shape)
-        const outs = t.getOutgoers ?? [];
-        for (const e of outs) {
-            if (e.shape && e.shape.length) {
-                const s = e.shape.slice();
-
-                t.setShape(s);
-                return s;
-            }
-        }
-    }
-
-    // Still unknown
-    return [];
-}
-
-/*
-function getAttr<T>(op: OperationNode.Class, name: string, def: T): T | number[] | undefined {
-    if (!op.attributes) return def;
-    const attr = op.attributes.find((a) => a.name === name);
-    if (!attr) return def;
-
-    if (attr.type === "INTS") return attr.ints ?? def;
-    if (attr.type === "INT") return attr.i ?? def;
-    if (attr.type === "FLOAT") return attr.f ?? def;
-
-    return def;
-}
-*/
 
 class AveragePoolBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]): boolean {
@@ -126,7 +77,7 @@ class AveragePoolBuilder implements LoopBuilder {
         const output = avg.getOutgoers.targets.filterIs(TensorNode).first();
         const Y = output;
 
-        const xShape = resolveShape(X);
+        const xShape = resolveShapeToNumbers(X);
         if (xShape.length < 3) {
             throw new Error(
                 `AveragePoolBuilder: expected at least 3D input (N,C,H,...) but got ${xShape}`,
@@ -779,7 +730,7 @@ class AveragePoolBuilder implements LoopBuilder {
 
         // ---- Outer: trip_count, cond, v_initial ------------------------------
         inferShapes(outer);
-        const trip = makeTensorConst(outer, `avg_trip_${avg.id}`, scalarInt64(Number(totalIters)));
+        const trip = makeTensorConst(outer, `avg_trip_${avg.id}`, scalarInt64(totalIters));
         const cond = makeTensorConst(outer, `avg_cond_${avg.id}`, bool(true));
         const v_initial = makeTensorConst(
             outer,

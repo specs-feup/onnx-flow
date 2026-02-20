@@ -12,7 +12,9 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
 
     // Inputs in topo order
     const ins = op.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    if (ins.length < 2) {
+        throw new Error(`[GemmHandler] Node ${op.id} missing required inputs (A, B).`);
+    }
 
     const A = ins[0]?.is?.(TensorNode)
         ? ins[0].as(TensorNode)
@@ -29,7 +31,9 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
         : ins[2]?.is?.(ConstantNode)
           ? ins[2].as(ConstantNode)
           : undefined;
-    if (!A || !B) return false;
+    if (!A || !B) {
+        throw new Error(`[GemmHandler] Node ${op.id} has invalid A or B inputs.`);
+    }
 
     // Single output tensor Y
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));

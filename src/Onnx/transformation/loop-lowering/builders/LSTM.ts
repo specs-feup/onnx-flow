@@ -59,7 +59,7 @@ export default function lowerLSTM(g: OnnxGraph.Class): void {
 
         if (!X || !W || !R) continue;
 
-        const attrs = (op.getAttributes?.() ?? (op as any).attributes ?? {}) as Record<
+        const attrs = (op.getAttributes?.() ?? op.attributes ?? {}) as Record<
             string,
             unknown
         >;
@@ -432,7 +432,7 @@ function lowerOneDir(
     );
 
     // --- Build Loop body graph
-    const body = new (OnnxGraph as any).Class(
+    const body = new OnnxGraph.Class(
         uniq(g, `lstm_body_${op.id}_${direction}`),
     ) as OnnxGraph.Class;
 

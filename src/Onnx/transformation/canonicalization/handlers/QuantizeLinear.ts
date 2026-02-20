@@ -24,7 +24,11 @@ export default function quantizeLinearHandler(
     if (op.type !== "QuantizeLinear") return false;
 
     const ins = op.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    if (ins.length < 2) {
+        throw new Error(
+            `[QuantizeLinearHandler] Node ${op.id} missing required inputs (x, y_scale).`,
+        );
+    }
 
     const X = ins[0]?.is?.(TensorNode)
         ? ins[0].as(TensorNode)
@@ -43,7 +47,9 @@ export default function quantizeLinearHandler(
           ? ins[2].as(ConstantNode)
           : undefined;
 
-    if (!X || !S) return false;
+    if (!X || !S) {
+        throw new Error(`[QuantizeLinearHandler] Node ${op.id} has invalid inputs.`);
+    }
 
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
     if (outs.length !== 1) return false;

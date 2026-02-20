@@ -9,6 +9,7 @@ export interface AttributeDefinition {
     required: boolean;
     defaultValue?: any;
     description?: string;
+    structural?: boolean;
 }
 
 /**

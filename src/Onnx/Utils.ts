@@ -683,6 +683,56 @@ export function toStaticShape(shape: Shape): number[] {
     });
 }
 
+/**
+ * Resolves the shape of a node, strictly coercing all dimensions to numbers.
+ * Handles TensorNode, ConstantNode, and RegionArgumentNode.
+ * * - Tries the node's own .shape property first.
+ * - If empty/missing, tries incoming/outgoing edges (for TensorNodes).
+ * - Converts all dimensions to numbers.
+ * - Non-finite or <= 0 values (like "batch" or -1) are coerced to 1 for safety in loop bounds.
+ */
+export function resolveShapeToNumbers(
+    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
+): number[] {
+    let rawShape: (number | string)[] = [];
+
+    // 1. Try internal shape
+    if (t.shape && t.shape.length > 0) {
+        rawShape = t.shape;
+    }
+    // 2. Try edges if it's a TensorNode
+    else if (t.is(TensorNode)) {
+        const tn = t.as(TensorNode);
+        const incs = tn.getIncomers ?? [];
+        // Try incoming edges
+        for (const e of incs) {
+            if (e.shape && e.shape.length) {
+                rawShape = e.shape;
+                tn.setShape(rawShape); // Cache it
+                break;
+            }
+        }
+        // Fallback: try outgoing edges
+        if (!rawShape.length) {
+            const outs = tn.getOutgoers ?? [];
+            for (const e of outs) {
+                if (e.shape && e.shape.length) {
+                    rawShape = e.shape;
+                    tn.setShape(rawShape); // Cache it
+                    break;
+                }
+            }
+        }
+    }
+
+    // 3. Strict conversion
+    return rawShape.map((d) => {
+        const n = Number(d);
+        // Treat NaN/strings/<=0 as 1 for safety
+        return Number.isFinite(n) && n > 0 ? n : 1;
+    });
+}
+
 export function prodSafe(dims: number[]): number {
     return dims.reduce((a, b) => a * (b > 0 ? b : 1), 1);
 }

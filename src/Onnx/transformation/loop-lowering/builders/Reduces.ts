@@ -167,7 +167,7 @@ export default class ReducesBuilder implements LoopBuilder {
             axesFromInput = readConstIntegerVectorFromTensorNode(axesNode);
         }
 
-        const atts = op.getAttributes?.() ?? (op as any).attributes ?? {};
+        const atts = op.getAttributes?.() ?? op.attributes ?? {};
         const axesAttr: number[] | undefined =
             axesFromInput ??
             (Array.isArray(atts.axes)

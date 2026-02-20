@@ -4,7 +4,6 @@ import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import TensorNode from "./TensorNode.js";
 import OperationNode from "./OperationNode.js";
 import OnnxEdge from "./OnnxEdge.js";
-import { TensorProto } from "./OnnxTypes.js";
 import ConstantNode from "./ConstantNode.js";
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 
@@ -16,16 +15,6 @@ namespace OnnxGraph {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseGraph.Class<D, S> {
-        addInitializer(_X_indicesTensor: TensorProto) {
-            throw new Error("Method not implemented.");
-        }
-        setInputs(_arg0: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
-            throw new Error("Method not implemented.");
-        }
-        setOutputs(_bodyOutputs: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
-            throw new Error("Method not implemented.");
-        }
-
         /** Retrieves all nodes in the graph (Operation, Tensor, and Constant). */
         getNodes(): NodeCollection<BaseNode.Class> {
             return this.nodes;

@@ -118,8 +118,8 @@ async function runTests() {
 
     // Create a list of inputs dynamically based on the model's input specifications
     const listOfInputs: Record<string, Tensor> = {};
-    onnxObject.graph.input.forEach((input: any) => {
-        const shape = input.type.tensorType.shape.dim.map((dim: any) => parseInt(dim.dimValue, 10));
+    onnxObject.graph.input.forEach((input) => {
+        const shape = input.type.tensorType.shape.dim.map((dim) => parseInt(dim.dimValue, 10));
         const elemType = getArrayType(input.type.tensorType.elemType);
         listOfInputs[input.name] = new Tensor(
             elemType as keyof Tensor.DataTypeMap,
@@ -155,8 +155,8 @@ async function runTests() {
     // Convert the randomly generated inputs to a format accepted by the generated code
     const formattedInputs: Record<string, any> = {};
     for (const [key, tensor] of Object.entries(listOfInputs)) {
-        const elemType = onnxObject.graph.input.find((input: any) => input.name === key).type
-            .tensorType.elemType;
+        const elemType = onnxObject.graph.input.find((input) => input.name === key).type.tensorType
+            .elemType;
         const displacement = typeSizeMap[elemType];
         formattedInputs[`tensor_${key}`] = {};
         for (let i = 0; i < tensor.dims.reduce((a, b) => a * b, 1); i++) {
@@ -190,12 +190,8 @@ async function runTests() {
 
     // Convert values to strings for comparison
     const outputData = Array.from(outputTensor.data as any[]).map((value) => value.toString());
-    const generatedOutputValues1 = Object.values(generatedOutput1).map((value: any) =>
-        value.toString(),
-    );
-    const generatedOutputValues2 = Object.values(generatedOutput2).map((value: any) =>
-        value.toString(),
-    );
+    const generatedOutputValues1 = Object.values(generatedOutput1).map((value) => value.toString());
+    const generatedOutputValues2 = Object.values(generatedOutput2).map((value) => value.toString());
 
     // Compare the results (no optimizations)
     const tolerance = 1e-6;
