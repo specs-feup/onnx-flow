@@ -1,7 +1,8 @@
+import type { TensorProto, RawOnnxModel, RawOnnxGraph, RawOnnxNode } from "../OnnxTypes.js";
 import { DataType } from "../OnnxTypes.js";
 
 // --- Helpers ---
-function createInt64Initializer(name: string, values: number[]): any {
+function createInt64Initializer(name: string, values: (number | string | bigint)[]): TensorProto {
     return {
         name: name,
         dataType: DataType.INT64,
@@ -10,7 +11,7 @@ function createInt64Initializer(name: string, values: number[]): any {
     };
 }
 
-function createFloatInitializer(name: string, value: number): any {
+function createFloatInitializer(name: string, value: number): TensorProto {
     return {
         name: name,
         dataType: DataType.FLOAT,
@@ -20,27 +21,31 @@ function createFloatInitializer(name: string, value: number): any {
 }
 
 function moveAttributeToInput(
-    node: any,
-    graphProto: any,
+    node: RawOnnxNode,
+    graphProto: RawOnnxGraph,
     attrName: string,
     inputIndex: number,
     type: "int" | "float" | "ints" = "ints",
 ) {
-    const idx = node.attribute?.findIndex((a: any) => a.name === attrName);
-    if (idx !== undefined && idx !== -1) {
+    if (!node.attribute) return;
+
+    const idx = node.attribute.findIndex((a) => a.name === attrName);
+    if (idx !== -1) {
         const attr = node.attribute[idx];
-        let val: any;
-        let init: any;
-        const name = `${node.name ?? node.opType}_${attrName}_${Math.random().toString(36).substr(2, 5)}`;
+        let init: TensorProto | undefined;
+
+        // Safely get opType (handling snake_case fallback)
+        const opType = node.opType ?? node.op_type ?? "UnknownOp";
+        const name = `${node.name ?? opType}_${attrName}_${Math.random().toString(36).substr(2, 5)}`;
 
         if (type === "ints") {
-            val = attr.ints || [];
+            const val = attr.ints || [];
             init = createInt64Initializer(name, val);
         } else if (type === "int") {
-            val = [Number(attr.i)];
+            const val = [Number(attr.i ?? 0)];
             init = createInt64Initializer(name, val);
         } else if (type === "float") {
-            val = Number(attr.f);
+            const val = Number(attr.f ?? 0);
             init = createFloatInitializer(name, val);
         }
 
@@ -48,7 +53,8 @@ function moveAttributeToInput(
             graphProto.initializer = graphProto.initializer || [];
             graphProto.initializer.push(init);
 
-            // Ensure inputs array is large enough
+            // Ensure inputs array is initialized and large enough
+            node.input = node.input || [];
             while (node.input.length < inputIndex) node.input.push("");
             node.input[inputIndex] = name;
         }
@@ -68,43 +74,39 @@ function moveAttributeToInput(
  * This treats the value as a compile-time ConstantNode, preventing initGraph from
  * overwriting it with an empty TensorNode.
  */
-export function freezeOverridableInputs(data: any) {
+export function freezeOverridableInputs(data: RawOnnxModel): void {
     if (!data?.graph?.input || !data?.graph?.initializer) return;
 
-    const initializerNames = new Set(data.graph.initializer.map((init: any) => init.name));
+    const initializerNames = new Set(data.graph.initializer.map((init) => init.name));
 
     // Filter out inputs that are actually initializers
-    const newInputs = data.graph.input.filter((input: any) => {
-        if (initializerNames.has(input.name)) {
-            // console.log(`[Adapter] Freezing overridable input '${input.name}' to its constant initializer value.`);
-            return false; // Remove from input list
-        }
-        return true; // Keep purely dynamic inputs
-    });
-
-    data.graph.input = newInputs;
+    data.graph.input = data.graph.input.filter((input) => !initializerNames.has(input.name));
 }
 
-function adaptPad(node: any, graph: any) {
-    if (node.opType !== "Pad") return;
+function adaptPad(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Pad") return;
     moveAttributeToInput(node, graph, "pads", 1, "ints");
     moveAttributeToInput(node, graph, "value", 2, "float");
 }
 
-function adaptClip(node: any, graph: any) {
-    if (node.opType !== "Clip") return;
+function adaptClip(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Clip") return;
     moveAttributeToInput(node, graph, "min", 1, "float");
     moveAttributeToInput(node, graph, "max", 2, "float");
 }
 
-function adaptSqueezeUnsqueeze(node: any, graph: any) {
-    if (node.opType !== "Squeeze" && node.opType !== "Unsqueeze") return;
+function adaptSqueezeUnsqueeze(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Squeeze" && opType !== "Unsqueeze") return;
     // Opset 13: axes moved from attribute to input[1]
     moveAttributeToInput(node, graph, "axes", 1, "ints");
 }
 
-function adaptSlice(node: any, graph: any) {
-    if (node.opType !== "Slice") return;
+function adaptSlice(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Slice") return;
     // Opset 10: starts/ends/axes/steps moved to inputs
     moveAttributeToInput(node, graph, "starts", 1, "ints");
     moveAttributeToInput(node, graph, "ends", 2, "ints");
@@ -115,8 +117,9 @@ function adaptSlice(node: any, graph: any) {
 /**
  * Upgrades "Reshape" (Opset < 5 used 'shape' attribute)
  */
-function adaptReshape(node: any, graph: any) {
-    if (node.opType !== "Reshape") return;
+function adaptReshape(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Reshape") return;
     // Opset 5: shape moved from attribute to input[1]
     moveAttributeToInput(node, graph, "shape", 1, "ints");
 }
@@ -124,8 +127,9 @@ function adaptReshape(node: any, graph: any) {
 /**
  * Upgrades "Split" (Opset < 13 used 'split' attribute)
  */
-function adaptSplit(node: any, graph: any) {
-    if (node.opType !== "Split") return;
+function adaptSplit(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Split") return;
     // Opset 13: split lengths moved from attribute to input[1]
     moveAttributeToInput(node, graph, "split", 1, "ints");
 }
@@ -133,36 +137,36 @@ function adaptSplit(node: any, graph: any) {
 /**
  * Upgrades "BatchNormalization" (Opset < 9 used 'spatial' attribute)
  */
-function adaptBatchNormalization(node: any, _graph: any) {
-    if (node.opType !== "BatchNormalization") return;
+function adaptBatchNormalization(node: RawOnnxNode, _graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "BatchNormalization" || !node.attribute) return;
+
     // Opset 9: 'spatial' attribute removed (it's ignored/implied now).
-    // We just remove it so strict Schema validation doesn't fail.
-    const idx = node.attribute?.findIndex((a: any) => a.name === "spatial");
-    if (idx !== undefined && idx !== -1) {
+    const idx = node.attribute.findIndex((a) => a.name === "spatial");
+    if (idx !== -1) {
         node.attribute.splice(idx, 1);
     }
 }
 
 /**
  * Upgrades "Upsample" (Opset 7) to "Resize" standards
- * Note: Real Resize (Opset 10/11/13) is complex. This handles the simple
- * case of old Upsample models using 'scales' as an attribute.
  */
-function adaptResize(node: any, graph: any) {
-    if (node.opType !== "Upsample" && node.opType !== "Resize") return;
+function adaptResize(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "Upsample" && opType !== "Resize") return;
 
-    // Opset 7 Upsample used 'scales' attribute.
-    // Opset 9 Upsample used 'scales' input.
-    // Opset 10 Resize used 'scales' input.
-    moveAttributeToInput(node, graph, "scales", 1, "float"); // usually float array, handled by helper
+    // Fast path: if the attribute is a single float
+    moveAttributeToInput(node, graph, "scales", 1, "float");
 
-    const idx = node.attribute?.findIndex((a: any) => a.name === "scales");
-    if (idx !== undefined && idx !== -1) {
+    // Fallback path: if the attribute was a float array (floats)
+    if (!node.attribute) return;
+    const idx = node.attribute.findIndex((a) => a.name === "scales");
+    if (idx !== -1) {
         const attr = node.attribute[idx];
         const vals = attr.floats || [];
         const name = `${node.name ?? "Resize"}_scales_${Math.random().toString(36).substr(2, 5)}`;
 
-        const init = {
+        const init: TensorProto = {
             name: name,
             dataType: DataType.FLOAT,
             dims: [vals.length],
@@ -172,6 +176,7 @@ function adaptResize(node: any, graph: any) {
         graph.initializer = graph.initializer || [];
         graph.initializer.push(init);
 
+        node.input = node.input || [];
         while (node.input.length < 2) node.input.push("");
         node.input[1] = name; // input[1] is scales in older opsets (Input[2] in Opset 11+)
 
@@ -180,12 +185,16 @@ function adaptResize(node: any, graph: any) {
 }
 
 // --- Main Entry Point ---
-export function applyAdapters(data: any) {
-    if (!data || !data.graph || !data.graph.node) return;
+export function applyAdapters(data: RawOnnxModel): void {
+    if (!data?.graph?.node) return;
     const graph = data.graph;
 
     for (const node of graph.node) {
+        // We call freezeOverridableInputs once per graph, not per node, to be safe.
+        // It was inside the loop in the original code, but it operates on `data`,
+        // so doing it on the first iteration is enough (or pulling it out of the loop).
         freezeOverridableInputs(data);
+
         adaptPad(node, graph);
         adaptClip(node, graph);
         adaptSlice(node, graph);

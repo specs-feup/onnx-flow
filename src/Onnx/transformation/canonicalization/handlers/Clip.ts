@@ -1,8 +1,8 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { DataType } from "../../../OnnxTypes.js";
+import type { DataType } from "../../../OnnxTypes.js";
 import { toArrayLike, uniq, maybeRemoveOrphanConstant } from "../../../Utils.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 

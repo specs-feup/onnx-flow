@@ -1,4 +1,4 @@
-import OnnxGraph from "../OnnxGraph.js";
+import type OnnxGraph from "../OnnxGraph.js";
 import OperationNode from "../OperationNode.js";
 
 /**

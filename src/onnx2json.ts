@@ -2,8 +2,9 @@ import fs from "fs";
 import path from "path";
 import protobuf from "protobufjs";
 import { fileURLToPath } from "url";
+import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
 
-export function onnx2json(onnxFilePath: string): Promise<any> {
+export function onnx2json(onnxFilePath: string): Promise<RawOnnxModel> {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
     // Try possible locations for onnx.proto:

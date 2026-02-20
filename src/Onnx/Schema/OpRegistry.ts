@@ -1,4 +1,4 @@
-import { OpSchema } from "./OpSchema.js";
+import type { OpSchema } from "./OpSchema.js";
 
 export class OpRegistry {
     private static instance: OpRegistry;

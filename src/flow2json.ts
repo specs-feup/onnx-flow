@@ -1,6 +1,13 @@
 import OnnxEdge from "./Onnx/OnnxEdge.js";
-import OnnxGraph from "./Onnx/OnnxGraph.js";
-import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
+import type OnnxGraph from "./Onnx/OnnxGraph.js";
+import type {
+    RawOnnxAttribute,
+    RawOnnxModel,
+    RawOnnxNode,
+    RawOnnxValueInfo,
+    TensorProto,
+} from "./Onnx/OnnxTypes.js";
+import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 import TensorNode from "./Onnx/TensorNode.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
@@ -56,16 +63,16 @@ export function convertFlowGraphToOnnxJson(
     graph: OnnxGraph.Class,
     name?: string,
     bodyCount: number = 0,
-): any {
-    const modelInputs: any[] = [];
-    const modelOutputs: any[] = [];
+): RawOnnxModel {
+    const modelInputs: RawOnnxValueInfo[] = [];
+    const modelOutputs: RawOnnxValueInfo[] = [];
 
     // 1. Convert Initializers (Constants)
     const modelInitializers = convertInitializers(graph);
 
-    const modelNodes: any[] = [];
+    const modelNodes: RawOnnxNode[] = [];
 
-    function sanitizeTensor(tensor: any): any {
+    function sanitizeTensor(tensor: Partial<TensorProto>): TensorProto {
         // TensorProto keys except name and rawData (handled differently)
         const allowedKeys = [
             "dataType",
@@ -79,7 +86,7 @@ export function convertFlowGraphToOnnxJson(
             "externalData",
         ];
 
-        const sanitized: any = { name: tensor.name };
+        const sanitized: Record<string, unknown> = { name: tensor.name };
 
         for (const key of allowedKeys) {
             const value = tensor[key];
@@ -93,22 +100,27 @@ export function convertFlowGraphToOnnxJson(
                 ) {
                     // Try decoding rawData if value array is empty
                     const dtype = tensor.dataType ?? DataType.INT64;
-                    const buffer = Buffer.from(tensor.rawData.data);
+                    const buffer = Buffer.isBuffer(tensor.rawData.data)
+                        ? tensor.rawData.data
+                        : Buffer.from(tensor.rawData.data as number[]);
                     if (dtype === DataType.INT64) {
-                        sanitized.int64Data = [];
+                        const arr: bigint[] = [];
                         for (let i = 0; i < buffer.length; i += 8) {
-                            sanitized.int64Data.push(buffer.readBigInt64LE(i));
+                            arr.push(buffer.readBigInt64LE(i));
                         }
+                        sanitized.int64Data = arr;
                     } else if (dtype === DataType.INT32) {
-                        sanitized.int32Data = [];
+                        const arr: number[] = [];
                         for (let i = 0; i < buffer.length; i += 4) {
-                            sanitized.int32Data.push(buffer.readInt32LE(i));
+                            arr.push(buffer.readInt32LE(i));
                         }
+                        sanitized.int32Data = arr;
                     } else if (dtype === DataType.FLOAT) {
-                        sanitized.floatData = [];
+                        const arr: number[] = [];
                         for (let i = 0; i < buffer.length; i += 4) {
-                            sanitized.floatData.push(buffer.readFloatLE(i));
+                            arr.push(buffer.readFloatLE(i));
                         }
+                        sanitized.floatData = arr;
                     }
                 } else {
                     sanitized[key] = value;
@@ -124,11 +136,11 @@ export function convertFlowGraphToOnnxJson(
             };
         }
 
-        return sanitized;
+        return sanitized as TensorProto;
     }
 
-    function convertInitializers(graph: OnnxGraph.Class): any[] {
-        const initializers: any[] = [];
+    function convertInitializers(graph: OnnxGraph.Class): TensorProto[] {
+        const initializers: TensorProto[] = [];
         for (const node of graph.getConstantNodes()) {
             const original = node.constantValue;
             if (!original) continue;
@@ -210,21 +222,27 @@ export function convertFlowGraphToOnnxJson(
 
         const outputs = opNode.getOutgoers.targets.toArray().map((n) => n.id);
 
-        const baseAttrs: AttributeProto[] = [];
+        const baseAttrs: RawOnnxAttribute[] = [];
 
         // Serialize attributes
         for (const [name, value] of Object.entries(opNode.attributes || {})) {
             // Skip handled regions logic
             if (value && typeof value === "object" && ("g" in value || "type" in value)) {
-                baseAttrs.push({ name, ...value });
+                const valObj = value as Record<string, unknown>;
+
+                baseAttrs.push({
+                    name,
+                    // Explicitly provide 'type', falling back to GRAPH
+                    type: (valObj.type as number | string) ?? AttributeType.GRAPH,
+                    ...valObj,
+                } as unknown as RawOnnxAttribute); // Safe cast to raw attribute
+
                 continue;
             }
-            // ... (Your standard attribute serialization logic) ...
-            // e.g. ints, i, s, t, etc.
-            // (Copying your previous logic simplified for brevity)
-            const attr: any = { name };
+
+            const attr: RawOnnxAttribute = { name };
             if (Array.isArray(value)) {
-                attr.ints = value;
+                attr.ints = value as (number | string)[];
                 attr.type = AttributeType.INTS;
             } else if (typeof value === "number") {
                 attr.i = value;
@@ -232,8 +250,15 @@ export function convertFlowGraphToOnnxJson(
             } else if (typeof value === "string") {
                 attr.s = value;
                 attr.type = AttributeType.STRING;
-            } else if (value && (value as any).type === "TENSOR") {
-                attr.t = sanitizeTensor(value);
+            } else if (
+                typeof value === "object" &&
+                value !== null &&
+                "type" in value &&
+                (value as Record<string, unknown>).type === "TENSOR"
+            ) {
+                // Prove to TypeScript it's an object with a 'type' property,
+                // and explicitly cast it for the sanitize function
+                attr.t = sanitizeTensor(value as Partial<TensorProto>);
                 attr.type = AttributeType.TENSOR;
             }
 

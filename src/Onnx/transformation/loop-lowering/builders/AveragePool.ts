@@ -13,7 +13,8 @@ import {
     zeroTensor,
     resolveShapeToNumbers,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
+import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
+import { unsqueezeIdx, decodeMixedRadix } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";

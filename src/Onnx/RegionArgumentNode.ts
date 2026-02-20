@@ -1,7 +1,7 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import { DataType } from "./OnnxTypes.js";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import type { DataType } from "./OnnxTypes.js";
+import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 
 namespace RegionArgumentNode {

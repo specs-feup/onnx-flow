@@ -1,15 +1,14 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import { AttributeProto } from "./OnnxTypes.js";
+import type { AttributeMap, AttributeProto, AttributeValue } from "./OnnxTypes.js";
 
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
     export const VERSION = "4"; // Bumped version
 
     export type TensorKind = "input" | "output" | "intermediate" | "index" | "index_aux";
-    // Removed: "initializer", "constant"
 
     export class Class<
         D extends Data = Data,
@@ -35,6 +34,10 @@ namespace TensorNode {
             return this.data[TAG].type;
         }
 
+        setType(type: TensorKind): void {
+            this.data[TAG].type = type;
+        }
+
         get extraAttrs(): AttributeProto[] | undefined {
             return this.data[TAG].extraAttrs;
         }
@@ -47,21 +50,21 @@ namespace TensorNode {
             return this.outgoers.filterIs(OnnxEdge);
         }
 
-        get metadata(): Record<string, any> {
+        get metadata(): AttributeMap {
             return this.data[TAG].metadata;
         }
 
-        getMetadata<T = any>(key: string): T | undefined {
+        getMetadata(key: string): AttributeValue | undefined {
             return this.data[TAG].metadata[key];
         }
 
-        setMetadata(key: string, value: any): void {
+        setMetadata(key: string, value: AttributeValue): void {
             this.data[TAG].metadata[key] = value;
         }
 
         // Helper for legacy 'address' support (optional, if you want to keep the API logic)
         get address(): number | undefined {
-            return this.getMetadata<number>("address");
+            return this.getMetadata("address") as number | undefined;
         }
 
         setAddress(addr: number): void {
@@ -74,14 +77,14 @@ namespace TensorNode {
         private shape: (number | string)[];
         private type: TensorKind;
         private extraAttrs?: AttributeProto[];
-        private metadata: Record<string, any>;
+        private metadata: AttributeMap;
 
         constructor(
             literalType: number,
             shape: (number | string)[],
             type: TensorKind,
             extraAttrs?: AttributeProto[],
-            metadata: Record<string, any> = {},
+            metadata: AttributeMap = {},
         ) {
             this.literalType = literalType;
             this.shape = shape;
@@ -120,7 +123,7 @@ namespace TensorNode {
             shape: (number | string)[];
             type: TensorKind;
             extraAttrs?: AttributeProto[];
-            metadata: Record<string, any>;
+            metadata: AttributeMap;
         };
     }
 

@@ -1,10 +1,10 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import OnnxGraph from "../OnnxGraph.js";
 import TensorNode from "../TensorNode.js";
 import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
-import { PartitionSets } from "./Strategies.js";
+import type { PartitionSets } from "./Strategies.js";
 import ConstantNode from "../ConstantNode.js";
 
 /**
@@ -45,7 +45,7 @@ function cloneConstant(c: ConstantNode.Class, targetGraph: OnnxGraph.Class): Con
  * Updates the internal inputs list of an OperationNode.
  */
 function setOpInputs(op: OperationNode.Class, inputs: BaseNode.Class[]) {
-    (op.data as any)[OperationNode.TAG].inputs = inputs;
+    op.setInputs(inputs);
 }
 
 export function partitionGraph(
@@ -190,8 +190,14 @@ export function partitionGraph(
 
                     // Boundary Tensor
                     const headNode = headMap.get(input.id);
-                    if (headNode.is(ConstantNode)) {
-                        (headNode.data as any)[TensorNode.TAG].type = "output";
+                    if (headNode && headNode.is(TensorNode)) {
+                        headNode.as(TensorNode).setType("output");
+                    } else if (headNode && headNode.is(ConstantNode)) {
+                        // This should be unreachable due to the headInitializers check above,
+                        // but if it happens, we should catch the structural error.
+                        throw new Error(
+                            `[Partition] ConstantNode '${input.id}' bypassed the initializer cloning phase.`,
+                        );
                     }
 
                     if (!tailMap.has(input.id)) {

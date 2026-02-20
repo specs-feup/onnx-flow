@@ -1,9 +1,10 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { AttributeValue } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { addEdge, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "AveragePool") return false;
@@ -76,7 +77,7 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     const Wones = tensorOnesConst(g, `AvgPool_W_${op.id}`, dtype, [C, 1, kH, kW]);
 
     // B. Conv Attributes
-    const convAttrs: Record<string, any> = {
+    const convAttrs: Record<string, AttributeValue> = {
         group: C,
         strides: [sH, sW],
     };

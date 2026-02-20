@@ -1,4 +1,4 @@
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import dequantizeLinearHandler from "./handlers/DequantizeLinear.js";
 import averagePoolHandler from "./handlers/AveragePool.js";
 import clipHandler from "./handlers/Clip.js";
@@ -6,7 +6,7 @@ import concatHandler from "./handlers/Concat.js";
 import gemmHandler from "./handlers/Gemm.js";
 import padHandler from "./handlers/Pad.js";
 import sliceHandler from "./handlers/Slice.js";
-import OperationNode from "../../OperationNode.js";
+import type OperationNode from "../../OperationNode.js";
 import softmaxHandler from "./handlers/Softmax.js";
 import expandHandler from "./handlers/Expand.js";
 import quantizeLinearHandler from "./handlers/QuantizeLinear.js";

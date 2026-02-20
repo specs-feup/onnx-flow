@@ -1,8 +1,8 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import TensorSplitter from "../TensorSplitter.js";
+import type TensorSplitter from "../TensorSplitter.js";
 import { int64Vec } from "@specs-feup/onnx-flow/Onnx/Utils";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 

@@ -1,17 +1,11 @@
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
-import OperationNode from "../../../OperationNode.js";
+import type OperationNode from "../../../OperationNode.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { uniq, int64Vec, zeroTensor, bool, makeTensorConst, scalarInt64 } from "../../../Utils.js";
-import {
-    LoopCtx,
-    BuildResult,
-    LoopBuilder,
-    unsqueezeIdx,
-    broadcastShapes,
-    getMatDims,
-} from "../BuildLoop.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx, broadcastShapes, getMatDims } from "../BuildLoop.js";
 
 // Handlers needed here
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
@@ -21,7 +15,7 @@ import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class MatMulBuilder implements LoopBuilder {
-    canHandle(chain: OperationNode.Class[]) {
+    canHandle(chain: OperationNode.Class[]): boolean {
         return chain.some((op) => op.type === "MatMul");
     }
 

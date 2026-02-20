@@ -1,7 +1,7 @@
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
 import ConstantNode from "../../ConstantNode.js";
-import { TensorProto } from "../../OnnxTypes.js";
+import type { TensorProto } from "../../OnnxTypes.js";
 import { makeTensorProto, readTensorData } from "../../Utils.js";
 
 export type TensorSplit = {

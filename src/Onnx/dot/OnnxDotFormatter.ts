@@ -1,14 +1,9 @@
 import DefaultDotFormatter from "@specs-feup/flow/graph/dot/DefaultDotFormatter";
 import OnnxGraph from "../OnnxGraph.js";
-import Dot, {
-    DotEdge,
-    DotGraph,
-    DotNode,
-    DotStatement,
-    DotSubgraph,
-} from "@specs-feup/flow/graph/dot/dot";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
-import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
+import type { DotEdge, DotGraph, DotNode, DotStatement } from "@specs-feup/flow/graph/dot/dot";
+import Dot, { DotSubgraph } from "@specs-feup/flow/graph/dot/dot";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Node from "@specs-feup/flow/graph/Node";
 import TensorNode from "../TensorNode.js";
 import VariableNode from "../VariableNode.js";

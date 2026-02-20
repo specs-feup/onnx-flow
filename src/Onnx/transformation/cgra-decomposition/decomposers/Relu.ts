@@ -1,10 +1,10 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import { makeTensorProto } from "../../../Utils.js";
 import { DataType } from "../../../OnnxTypes.js";
-import TensorSplitter from "../TensorSplitter.js";
+import type TensorSplitter from "../TensorSplitter.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default function decomposeRelu(

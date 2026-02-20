@@ -1,7 +1,7 @@
 import { OpRegistry } from "./OpRegistry.js";
 import { StandardOps } from "./definitions/StandardOps.js";
 
-export function initializeSchemaRegistry() {
+export function initializeSchemaRegistry(): void {
     const registry = OpRegistry.getInstance();
     registry.registerAll(StandardOps);
     // Add other ops here

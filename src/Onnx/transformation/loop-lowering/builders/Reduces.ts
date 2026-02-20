@@ -1,12 +1,12 @@
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
-import { DataType, TensorProto } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import type { Shape, TensorProto } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import {
     toStaticShape,
-    Shape,
     uniq,
     makeTensorConst,
     int64Vec,
@@ -15,10 +15,8 @@ import {
     bool,
     readConstIntegerVectorFromTensorNode,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
 import {
-    LoopBuilder,
-    BuildResult,
-    LoopCtx,
     resolveFusedInput,
     ensureFlatInput,
     decodeMixedRadix,

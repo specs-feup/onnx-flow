@@ -1,11 +1,11 @@
-import OnnxGraph from "./Onnx/OnnxGraph.js";
+import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import VariableNode from "./Onnx/VariableNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
-import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "./Onnx/OnnxInnerEdge.js";
 import { readConstIntegerVectorFromTensorNode, readTensorData } from "./Onnx/Utils.js";
 

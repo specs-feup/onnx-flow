@@ -1,6 +1,6 @@
-import Graph from "@specs-feup/flow/graph/Graph";
+import type Graph from "@specs-feup/flow/graph/Graph";
 import OperationNode from "../../OperationNode.js";
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import optimizeSimpleLoopOperations from "./OptimizeSimpleLoopOperations.js";
 import optimizeMatMul from "./OptimizeMatMul.js";
 

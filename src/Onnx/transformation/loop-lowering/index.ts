@@ -1,9 +1,7 @@
-import Graph from "@specs-feup/flow/graph/Graph";
-import {
-    DecompositionOptions,
-    defaultDecompositionOptions,
-} from "@specs-feup/onnx-flow/DecompositionOptions";
-import OnnxGraph from "../../OnnxGraph.js";
+import type Graph from "@specs-feup/flow/graph/Graph";
+import type { DecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
+import { defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
+import type OnnxGraph from "../../OnnxGraph.js";
 import applyCanonicalization from "../canonicalization/index.js";
 import TransformChain from "./TransformChain.js";
 import transformForCgra from "../cgra-decomposition/index.js";

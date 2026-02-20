@@ -1,4 +1,4 @@
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
@@ -234,7 +234,7 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
     return true;
 }
 
-export default function transformForCgra(g: OnnxGraph.Class) {
+export default function transformForCgra(g: OnnxGraph.Class): void {
     let anyDivided = true;
 
     while (anyDivided) {

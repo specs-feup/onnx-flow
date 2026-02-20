@@ -1,10 +1,12 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type { Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { uniq, toStaticShape, Shape, getLargestRankShape } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopCtx, resolveFusedInput, squeezeIfLen1, broadcastShapes } from "../BuildLoop.js";
+import { uniq, toStaticShape, getLargestRankShape } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopCtx } from "../BuildLoop.js";
+import { resolveFusedInput, squeezeIfLen1, broadcastShapes } from "../BuildLoop.js";
 
 /* ============================== HANDLER ================================== */
 

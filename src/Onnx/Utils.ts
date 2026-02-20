@@ -1,19 +1,17 @@
 import fs from "fs";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import OnnxEdge from "./OnnxEdge.js";
-import OnnxGraph from "./OnnxGraph.js";
-import { TensorProto, DataType } from "./OnnxTypes.js";
+import type OnnxGraph from "./OnnxGraph.js";
+import type { Shape, TensorProto } from "./OnnxTypes.js";
+import { DataType } from "./OnnxTypes.js";
 import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
 
 // =====================================================================================
-// SECTION 1: TYPES & CONSTANTS
+// SECTION 1: CONSTANTS
 // =====================================================================================
-
-export type Dim = number | string;
-export type Shape = Dim[];
 
 export const typeSizeMap: Record<number, number> = {
     0: 0, // UNDEFINED
@@ -215,7 +213,7 @@ export function makeI64ShapeConst(
 }
 
 // Helper to create a scalar ConstantNode Builder
-export const constBuilder = (val: number) => {
+export const constBuilder = (val: number): ConstantNode.Builder => {
     return new ConstantNode.Builder(makeTensorProto(DataType.INT64, [], [val]));
 };
 
@@ -295,30 +293,33 @@ export function addEdge(
     dstTensor: TensorNode.Class,
     dtype: DataType,
     shape?: Array<number | string | undefined>,
-) {
+): void {
     g.addEdge(srcOp, dstTensor)
         .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
         .as(OnnxEdge);
 }
 
-export function toArrayLike<T = any>(nc: any): T[] {
-    return nc?.toArray?.() ?? nc ?? [];
+export function toArrayLike<T = unknown>(nc: unknown): T[] {
+    const obj = nc as { toArray?: () => T[] };
+    return obj?.toArray?.() ?? ((Array.isArray(nc) ? nc : []) as T[]);
 }
 
 /** Remove an initializer entry from the graph metadata (cleanup). */
-export function removeInitializerByName(g: OnnxGraph.Class, name?: string) {
+export function removeInitializerByName(g: OnnxGraph.Class, name?: string): void {
     if (!name) return;
-    const anyG: any = g as any;
-    const model = anyG?.rawModel ?? anyG?.model;
-    const graph = model?.graph ?? anyG?.graph;
+    const gRecord = g as unknown as Record<string, unknown>;
+    const model = (gRecord?.rawModel ?? gRecord?.model) as Record<string, unknown> | undefined;
+    const graph = (model?.graph ?? gRecord?.graph) as Record<string, unknown[]> | undefined;
     if (!graph) return;
     for (const f of ["initializer", "sparse_initializer", "input", "value_info"]) {
-        if (Array.isArray(graph[f])) graph[f] = graph[f].filter((x: any) => x?.name !== name);
+        if (Array.isArray(graph[f])) {
+            graph[f] = graph[f].filter((x: { name?: string }) => x?.name !== name);
+        }
     }
 }
 
 /** Removes a ConstantNode if it has no consumers. */
-export function maybeRemoveOrphanConstant(g: OnnxGraph.Class, node?: BaseNode.Class) {
+export function maybeRemoveOrphanConstant(g: OnnxGraph.Class, node?: BaseNode.Class): void {
     if (!node) return;
     // Strict check for ConstantNode (Phase 3)
     if (node.is(ConstantNode)) {
@@ -362,15 +363,16 @@ export function findConstantProducerAsTensor(
 // SECTION 6: DATA READERS (Phase 3 Updated)
 // =====================================================================================
 
-export function toU8(raw: any): Uint8Array | undefined {
+export function toU8(raw: unknown): Uint8Array | undefined {
     if (!raw) return undefined;
     if (raw instanceof Uint8Array) return raw;
     if (Array.isArray(raw)) return Uint8Array.from(raw);
-    if ((globalThis as any).Buffer?.isBuffer(raw)) {
-        const b: Buffer = raw as any;
+    const globalEnv = globalThis as unknown as { Buffer?: { isBuffer: (v: unknown) => boolean } };
+    if (globalEnv.Buffer?.isBuffer(raw)) {
+        const b = raw as Buffer;
         return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
     }
-    const inner = raw.data ?? undefined;
+    const inner = (raw as Record<string, unknown>)?.data ?? undefined;
     if (inner) return toU8(inner);
     return undefined;
 }
@@ -781,7 +783,7 @@ export function inferPoolDim(
     padHead: number,
     padTail: number,
     dil: number,
-) {
+): number {
     const effectiveK = dil * (k - 1) + 1;
     return Math.floor((inDim + padHead + padTail - effectiveK) / stride + 1);
 }
@@ -793,12 +795,16 @@ export function inferConvDim(
     padHead: number,
     padTail: number,
     dil: number,
-) {
+): number {
     return inferPoolDim(inDim, k, stride, padHead, padTail, dil);
 }
 
-export function getAttr(node: any, name: string, def?: any) {
-    const v = node.getAttributes?.[name] ?? node.attributes?.[name];
+export function getAttr(node: unknown, name: string, def?: unknown): unknown {
+    const n = node as {
+        getAttributes?: () => Record<string, unknown>;
+        attributes?: Record<string, unknown>;
+    };
+    const v = n.getAttributes?.()?.[name] ?? n.attributes?.[name];
     return v === undefined ? def : v;
 }
 
@@ -929,7 +935,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
 // SECTION 9: DEBUG UTILS
 // =====================================================================================
 
-export function dbg(...args: any[]): void {
+export function dbg(...args: unknown[]): void {
     console.log("[loop-debug]", ...args);
 }
 
@@ -944,7 +950,7 @@ export function dbgTensor(label: string, t: BaseNode.Class | null | undefined): 
     }
 }
 
-export function safeWriteJson(filePath: string, obj: any) {
+export function safeWriteJson(filePath: string, obj: unknown): void {
     const fd = fs.openSync(filePath, "w");
     const BUFFER_LIMIT = 1 << 20;
     let buffer = "";
@@ -960,9 +966,9 @@ export function safeWriteJson(filePath: string, obj: any) {
         if (buffer.length >= BUFFER_LIMIT) flush();
     };
 
-    const seen = new Set<any>();
+    const seen = new Set<unknown>();
 
-    const writeValue = (value: any) => {
+    const writeValue = (value: unknown) => {
         if (value === null || value === undefined) {
             write("null");
             return;
@@ -995,7 +1001,7 @@ export function safeWriteJson(filePath: string, obj: any) {
                 if (i > 0) write(",");
                 write(JSON.stringify(keys[i]));
                 write(":");
-                writeValue((value as any)[keys[i]]);
+                writeValue((value as Record<string, unknown>)[keys[i]]);
             }
             write("}");
             seen.delete(value);

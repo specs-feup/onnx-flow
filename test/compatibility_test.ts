@@ -8,7 +8,7 @@ import { performance } from "perf_hooks";
 import { fileURLToPath } from "url";
 import { onnx2json } from "../src/onnx2json.js";
 import { createGraph } from "../src/initGraph.js";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1368,7 +1368,7 @@ const CORE_OP_TESTS: Array<{
 ];
 
 // Run ONLY the focused subset above.
-export async function runCoreOpSubset() {
+export async function runCoreOpSubset(): Promise<void> {
     for (const t of CORE_OP_TESTS) {
         const cliArgs = typeof t.cliArgs === "function" ? t.cliArgs(t.originalPath) : t.cliArgs;
 
@@ -1387,7 +1387,7 @@ export async function runCoreOpSubset() {
 
 /* ============================== RUN ================================== */
 
-export async function runAllUnified() {
+export async function runAllUnified(): Promise<void> {
     for (const t of TESTS) {
         const cli = typeof t.cliArgs === "function" ? t.cliArgs(t.originalPath) : t.cliArgs;
         const feeds = buildFeeds(t.specs);

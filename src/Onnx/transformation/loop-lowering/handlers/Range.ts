@@ -1,9 +1,10 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import { uniq } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopCtx, resolveFusedInput } from "../BuildLoop.js";
+import type { LoopCtx } from "../BuildLoop.js";
+import { resolveFusedInput } from "../BuildLoop.js";
 
 /* ============================== HANDLER ================================== */
 

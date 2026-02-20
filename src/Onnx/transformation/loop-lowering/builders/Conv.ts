@@ -13,18 +13,11 @@ import {
     zeroTensor,
     resolveShapeToNumbers,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
-import {
-    LoopBuilder,
-    BuildResult,
-    unsqueezeIdx,
-    LoopCtx,
-    decodeMixedRadix,
-    createCapturedInput,
-} from "../BuildLoop.js";
+import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
+import { unsqueezeIdx, decodeMixedRadix, createCapturedInput } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
-
 
 /**
  * Conv loop-lowering builder.
@@ -164,11 +157,6 @@ export default class ConvBuilder implements LoopBuilder {
             // Already a plain JS array?
             if (Array.isArray(v)) {
                 return v.map(Number);
-            }
-
-            // ONNX-style attribute object: { ints: [...] }
-            if (Array.isArray(v.ints)) {
-                return v.ints.map((x) => Number(x));
             }
 
             return undefined;

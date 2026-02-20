@@ -1,5 +1,5 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
@@ -10,9 +10,9 @@ import {
     int64Vec,
     toStaticShape,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopCtx } from "../BuildLoop.js";
 import {
     unsqueezeIdx,
-    LoopCtx,
     resolveFusedInput,
     divmod,
     targetReshape,
@@ -21,8 +21,8 @@ import {
     squeezeIfLen1,
     decodeMixedRadix,
 } from "../BuildLoop.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
+import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /* ============================== Local Helpers ============================== */
 

@@ -1,12 +1,12 @@
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import { uniq, makeTensorConst } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopCtx } from "../BuildLoop.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
+import type { LoopCtx } from "../BuildLoop.js";
+import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /**
  * Per-element reducer: returns a scalar [] equal to the bin's value to write this iteration.

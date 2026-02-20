@@ -2,8 +2,8 @@
  * Graph-wide transformation – replace every tree of supported
  * ops with a single Loop if fusion is enabled, or one per op otherwise.
  *********************************************************************/
-import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../OnnxGraph.js";
+import type Graph from "@specs-feup/flow/graph/Graph";
+import type OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";

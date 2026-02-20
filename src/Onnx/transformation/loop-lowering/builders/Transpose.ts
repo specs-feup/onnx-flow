@@ -3,28 +3,22 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
+import type { Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-
 import {
     uniq,
     int64Vec,
     zeroTensor,
     bool,
     toStaticShape,
-    Shape,
     makeTensorConst,
     scalarInt64,
     asStaticDims,
     getAttr,
 } from "../../../Utils.js";
 
-import {
-    LoopCtx,
-    BuildResult,
-    LoopBuilder,
-    unsqueezeIdx,
-    resolveFusedInput,
-} from "../BuildLoop.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx, resolveFusedInput } from "../BuildLoop.js";
 import handleTranspose from "../handlers/Transpose.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
@@ -124,7 +118,10 @@ export default class TransposeBuilder implements LoopBuilder {
                 perm = Array.from({ length: rank }, (_, i) => rank - 1 - i);
             }
 
-            outShape = perm.map((p) => inShape[p] ?? 1);
+            // Safely cast perm to an array of numbers
+            const permArray = perm as number[];
+
+            outShape = permArray.map((p) => inShape[p] ?? 1);
         } else {
             // Very conservative fallback
             outShape = [];

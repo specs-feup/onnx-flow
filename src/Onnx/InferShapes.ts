@@ -1,5 +1,5 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
-import OnnxGraph from "./OnnxGraph.js";
+import type OnnxGraph from "./OnnxGraph.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
@@ -624,7 +624,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 }
 
                 const attrs = node.getAttributes() ?? node.attributes ?? {};
-                let axes: number[] | undefined = attrs.axes;
+                let axes: number[] | undefined = attrs.axes as number[] | undefined;
 
                 if (!Array.isArray(axes) || axes.length === 0) {
                     axes = Array.from({ length: rank }, (_, i) => i);
@@ -653,7 +653,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             case "ArgMin": {
                 const inShape = infos[0]?.shape ?? [];
                 const keepdims = !!getAttr(node, "keepdims", 1);
-                const axis = normalizeAxis(getAttr(node, "axis", 0), inShape.length);
+                const axis = normalizeAxis(getAttr(node, "axis", 0) as number, inShape.length);
                 if (keepdims) {
                     outShape = inShape.map((d, i) => (i === axis ? 1 : d));
                 } else {

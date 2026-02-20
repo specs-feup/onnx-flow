@@ -1,4 +1,4 @@
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import {
@@ -10,8 +10,8 @@ import {
     uniq,
     getAttr,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopCtx } from "../BuildLoop.js";
 import {
-    LoopCtx,
     resolveFusedInput,
     decodeMixedRadix,
     buildLinearIndex,
@@ -20,7 +20,7 @@ import {
     gatherFrom,
 } from "../BuildLoop.js";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ============================== HANDLER ================================== */
 
@@ -63,8 +63,11 @@ export default function handleTranspose(
         inversePerm[perm[outAxis]] = outAxis;
     }
 
+    // Safely cast perm to an array of numbers
+    const permArray = perm as number[];
+
     // Compute output shape (allow unknowns)
-    const outShape = perm.map((p) => inShapeNum[p]);
+    const outShape = permArray.map((p) => inShapeNum[p]);
     //ctx.outShape = outShape;
 
     // Mixed–radix decode in output space (unknown → 1 to keep arithmetic valid)

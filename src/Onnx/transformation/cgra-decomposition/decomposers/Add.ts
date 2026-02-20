@@ -1,9 +1,9 @@
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 import OnnxEdge from "../../../OnnxEdge.js";
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import TensorSplitter from "../TensorSplitter.js";
+import type TensorSplitter from "../TensorSplitter.js";
 import { shapesEqual } from "../utils.js";
 
 export default function decomposeAdd(

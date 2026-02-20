@@ -1,5 +1,5 @@
-import ConstantNode from "../../ConstantNode.js";
-import TensorNode from "../../TensorNode.js";
+import type ConstantNode from "../../ConstantNode.js";
+import type TensorNode from "../../TensorNode.js";
 
 /**
  * @brief Checks if two tensor nodes have the same shape.

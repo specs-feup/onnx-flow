@@ -3,6 +3,7 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
+import type { Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     uniq,
@@ -10,12 +11,12 @@ import {
     zeroTensor,
     bool,
     toStaticShape,
-    Shape,
     makeTensorConst,
     scalarInt64,
     asStaticDims,
 } from "../../../Utils.js";
-import { LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx, broadcastShapes } from "../BuildLoop.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx, broadcastShapes } from "../BuildLoop.js";
 
 // Handlers needed by the default builder only
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
@@ -24,7 +25,7 @@ import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class DefaultBuilder implements LoopBuilder {
-    canHandle(chain: OperationNode.Class[]) {
+    canHandle(chain: OperationNode.Class[]): boolean {
         // No Slice, no Range → handled here
         return !chain.some(
             (op) =>

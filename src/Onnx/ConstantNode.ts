@@ -1,7 +1,8 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import { DataType, TensorProto } from "./OnnxTypes.js";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import type { AttributeMap, AttributeValue, TensorProto } from "./OnnxTypes.js";
+import { DataType } from "./OnnxTypes.js";
+import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 
 namespace ConstantNode {
@@ -53,15 +54,15 @@ namespace ConstantNode {
             return this.outgoers.filterIs(OnnxEdge);
         }
 
-        get metadata(): Record<string, any> {
+        get metadata(): AttributeMap {
             return this.data[TAG].metadata;
         }
 
-        getMetadata<T = any>(key: string): T | undefined {
+        getMetadata(key: string): AttributeValue | undefined {
             return this.data[TAG].metadata[key];
         }
 
-        setMetadata(key: string, value: any): void {
+        setMetadata(key: string, value: AttributeValue): void {
             this.data[TAG].metadata[key] = value;
         }
     }
@@ -69,13 +70,9 @@ namespace ConstantNode {
     export class Builder implements Node.Builder<Data, ScratchData> {
         private value: TensorProto;
         private isInput: boolean;
-        private metadata: Record<string, any>;
+        private metadata: AttributeMap;
 
-        constructor(
-            value: TensorProto,
-            isInput: boolean = false,
-            metadata: Record<string, any> = {},
-        ) {
+        constructor(value: TensorProto, isInput: boolean = false, metadata: AttributeMap = {}) {
             this.value = value;
             this.isInput = isInput;
             this.metadata = metadata;
@@ -107,7 +104,7 @@ namespace ConstantNode {
             version: typeof VERSION;
             value: TensorProto;
             isInput: boolean;
-            metadata: Record<string, any>;
+            metadata: AttributeMap;
         };
     }
 

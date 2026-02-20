@@ -1,5 +1,5 @@
 import { AttributeType } from "../../OnnxTypes.js";
-import { OpSchema } from "../OpSchema.js";
+import type { OpSchema } from "../OpSchema.js";
 
 // --- Helper for common types ---
 const T_FLOAT = "tensor(float)";

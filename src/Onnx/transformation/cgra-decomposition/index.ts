@@ -1,4 +1,4 @@
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import decomposeAdd from "./decomposers/Add.js";
 import { decomposeMatMul } from "./decomposers/MatMul.js";
 import decomposeRelu from "./decomposers/Relu.js";

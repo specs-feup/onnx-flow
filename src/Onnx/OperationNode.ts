@@ -1,8 +1,9 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import OnnxGraph from "./OnnxGraph.js";
+import type OnnxGraph from "./OnnxGraph.js";
+import type { AttributeMap, AttributeValue } from "./OnnxTypes.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";
@@ -20,19 +21,19 @@ namespace OperationNode {
             this.data[TAG].type = newType;
         }
 
-        get attributes(): Record<string, any> {
+        get attributes(): AttributeMap {
             return this.data[TAG].attributes || {};
         }
 
-        set attributes(attrs: Record<string, any>) {
+        set attributes(attrs: AttributeMap) {
             this.data[TAG].attributes = attrs;
         }
 
-        setAttributes(attrs: Record<string, any>): void {
+        setAttributes(attrs: AttributeMap): void {
             this.attributes = attrs;
         }
 
-        getAttributes(): Record<string, any> {
+        getAttributes(): AttributeMap {
             return this.attributes;
         }
 
@@ -48,6 +49,10 @@ namespace OperationNode {
             return this.data[TAG].inputs;
         }
 
+        setInputs(inputs: BaseNode.Class[]): void {
+            this.data[TAG].inputs = inputs;
+        }
+
         // --- Region Management ---
 
         get regions(): OnnxGraph.Class[] {
@@ -58,32 +63,32 @@ namespace OperationNode {
             return this.regions[index];
         }
 
-        get metadata(): Record<string, any> {
+        get metadata(): AttributeMap {
             return this.data[TAG].metadata;
         }
 
-        getMetadata<T = any>(key: string): T | undefined {
+        getMetadata(key: string): AttributeValue | undefined {
             return this.data[TAG].metadata[key];
         }
 
-        setMetadata(key: string, value: any): void {
+        setMetadata(key: string, value: AttributeValue): void {
             this.data[TAG].metadata[key] = value;
         }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private type: string;
-        private attributes?: Record<string, any>;
+        private attributes?: AttributeMap;
         private inputs?: BaseNode.Class[];
         private regions?: OnnxGraph.Class[];
-        private metadata: Record<string, any>;
+        private metadata: AttributeMap;
 
         constructor(
             type: string,
             inputs?: BaseNode.Class[],
-            attributes?: Record<string, any>,
+            attributes?: AttributeMap,
             regions?: OnnxGraph.Class[],
-            metadata: Record<string, any> = {},
+            metadata: AttributeMap = {},
         ) {
             this.type = type;
             this.attributes = attributes;
@@ -120,9 +125,9 @@ namespace OperationNode {
             version: typeof VERSION;
             type: string;
             inputs?: BaseNode.Class[];
-            attributes?: Record<string, any>;
+            attributes?: AttributeMap;
             regions?: OnnxGraph.Class[];
-            metadata: Record<string, any>;
+            metadata: AttributeMap;
         };
     }
 

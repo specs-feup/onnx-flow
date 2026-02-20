@@ -1,11 +1,11 @@
 import BaseGraph from "@specs-feup/flow/graph/BaseGraph";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
+import type { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import TensorNode from "./TensorNode.js";
 import OperationNode from "./OperationNode.js";
 import OnnxEdge from "./OnnxEdge.js";
 import ConstantNode from "./ConstantNode.js";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 namespace OnnxGraph {
     export const TAG = "__specs-onnx__onnx_graph";

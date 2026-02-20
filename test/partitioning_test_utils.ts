@@ -7,7 +7,7 @@ import { convertFlowGraphToOnnxJson } from "../src/flow2json.js";
 import { json2onnx } from "../src/json2onnx.js";
 import { splitByAncestor } from "../src/Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../src/Onnx/partitioning/Partition.js";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 
 export interface InputSpec {
     name: string;

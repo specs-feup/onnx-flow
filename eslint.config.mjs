@@ -8,8 +8,16 @@ export default [
   // 1. Target all files
   {files: ['**/*.{js,mjs,cjs,ts}']},
 
-  // 2. Define environments (Node.js for your CLI tool)
-  {languageOptions: {globals: {...globals.node, ...globals.browser}}},
+  // 2. Define environments and Type-Aware Parser Options
+  {
+    languageOptions: {
+      globals: {...globals.node, ...globals.browser},
+      parserOptions: {
+        projectService: true, // Recommended for typescript-eslint v8+
+        tsconfigRootDir: import.meta.dirname, // Ensures it finds your tsconfig.json
+      },
+    }
+  },
 
   // 3. Base JS rules
   pluginJs.configs.recommended,
@@ -23,11 +31,25 @@ export default [
   // 6. Custom Overrides
   {
     rules: {
-      // Allow explicit "any" for now
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/ban-ts-comment': ['error', {
+          'ts-expect-error': 'allow-with-description',
+          'ts-ignore': true, // or 'allow-with-description'
+          'ts-nocheck': true,
+          'ts-check': false,
+      }],
 
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      // Allow explicit "any" for now
+      '@typescript-eslint/no-explicit-any': 'error',
+
+      '@typescript-eslint/explicit-module-boundary-types': 'error',
       'prettier/prettier': 'error',
+
+      // Flags unnecessary optional chaining (?.) and conditions that are always true/false
+      //'@typescript-eslint/no-unnecessary-condition': 'warn', 
+      
+      // Flags risky boolean checks (like checking an array instead of array.length)
+      //'@typescript-eslint/strict-boolean-expressions': 'warn',
 
       // Configure unused variables to ignore those starting with an underscore
       '@typescript-eslint/no-unused-vars': [

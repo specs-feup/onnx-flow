@@ -118,14 +118,26 @@ async function runTests() {
 
     // Create a list of inputs dynamically based on the model's input specifications
     const listOfInputs: Record<string, Tensor> = {};
-    onnxObject.graph.input.forEach((input) => {
-        const shape = input.type.tensorType.shape.dim.map((dim) => parseInt(dim.dimValue, 10));
-        const elemType = getArrayType(input.type.tensorType.elemType);
-        listOfInputs[input.name] = new Tensor(
-            elemType as keyof Tensor.DataTypeMap,
-            getRandomArray(shape, elemType),
-            shape,
+    onnxObject.graph?.input?.forEach((input) => {
+        // 1. Safely resolve tensorType (handling both camelCase and snake_case)
+        const tensorType = input.type?.tensorType ?? input.type?.tensor_type;
+
+        // 2. Map dimensions safely, using Number() to handle string|number unions
+        const shape = (tensorType?.shape?.dim ?? []).map(
+            (dim) => Number(dim.dimValue ?? dim.dim_value ?? 1), // Default to 1 if unknown
         );
+
+        // 3. Extract elemType strictly as a number
+        const rawElemType = Number(tensorType?.elemType ?? tensorType?.elem_type ?? 0);
+        const elemType = getArrayType(rawElemType);
+
+        if (input.name) {
+            listOfInputs[input.name] = new Tensor(
+                elemType as keyof Tensor.DataTypeMap,
+                getRandomArray(shape, elemType),
+                shape,
+            );
+        }
     });
     console.log("Generated random inputs:", listOfInputs, "\n\n");
 
@@ -153,7 +165,7 @@ async function runTests() {
     console.log("Generated Code (with optimizations):", generatedCode2, "\n\n");
 
     // Convert the randomly generated inputs to a format accepted by the generated code
-    const formattedInputs: Record<string, any> = {};
+    const formattedInputs: Record<string, unknown> = {};
     for (const [key, tensor] of Object.entries(listOfInputs)) {
         const elemType = onnxObject.graph.input.find((input) => input.name === key).type.tensorType
             .elemType;
@@ -189,7 +201,7 @@ async function runTests() {
     console.log("Generated Output (with transformations):", generatedOutput2);
 
     // Convert values to strings for comparison
-    const outputData = Array.from(outputTensor.data as any[]).map((value) => value.toString());
+    const outputData = Array.from(outputTensor.data as unknown[]).map((value) => value.toString());
     const generatedOutputValues1 = Object.values(generatedOutput1).map((value) => value.toString());
     const generatedOutputValues2 = Object.values(generatedOutput2).map((value) => value.toString());
 

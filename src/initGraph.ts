@@ -3,18 +3,27 @@ import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { AttributeType, TensorProto, DataType } from "./Onnx/OnnxTypes.js";
+import type {
+    RawOnnxAttribute,
+    RawOnnxDim,
+    RawOnnxModel,
+    RawOnnxNode,
+    RawOnnxTensorType,
+    RawOnnxValueInfo,
+    TensorProto,
+} from "./Onnx/OnnxTypes.js";
+import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 import inferShapes from "./Onnx/InferShapes.js";
 import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import { uniq } from "./Onnx/Utils.js";
 
 // Helper function to convert shape to number[]
-function parseShape(shape: any): (number | string)[] {
+function parseShape(shape: RawOnnxTensorType["shape"]): (number | string)[] {
     if (!shape?.dim) return [];
-    return shape.dim.map((dim: any) => {
+    return shape.dim.map((dim: RawOnnxDim) => {
         // Handle both camelCase and snake_case formats
         const dimParam = dim.dimParam ?? dim.dim_param;
         const dimValue = dim.dimValue ?? dim.dim_value;
@@ -31,7 +40,7 @@ function parseShape(shape: any): (number | string)[] {
     });
 }
 
-function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
+function addValueInfoNodes(data: RawOnnxModel, graph: OnnxGraph.Class): void {
     if (!data.graph.valueInfo) return;
 
     // Collect all outputs of Constant nodes so we don't create dummy intermediates for them
@@ -44,7 +53,7 @@ function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
         }
     }
 
-    data.graph.valueInfo.forEach((vi: any) => {
+    data.graph.valueInfo.forEach((vi: RawOnnxValueInfo) => {
         const name = vi.name;
 
         // Skip if we already created it as input/output/initializer/capture
@@ -53,8 +62,9 @@ function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
         // Skip valueInfo for Constant outputs — they'll be created as proper "constant" tensors in addNodes
         if (constantOutputs.has(name)) return;
 
-        const shape = parseShape(vi.type.tensorType ? vi.type.tensorType.shape : []);
-        const elemType = vi.type.tensorType ? vi.type.tensorType.elemType : 0;
+        const tensorType = vi.type?.tensorType ?? vi.type?.tensor_type;
+        const shape = parseShape(tensorType?.shape);
+        const elemType = Number(tensorType?.elemType ?? 0);
 
         graph
             .addNode(name)
@@ -64,12 +74,12 @@ function addValueInfoNodes(data: any, graph: OnnxGraph.Class) {
 }
 
 // Add initializers
-function addInitializers(data: any, graph: OnnxGraph.Class) {
+function addInitializers(data: RawOnnxModel, graph: OnnxGraph.Class) {
     if (!data.graph.initializer) {
         return;
     }
 
-    data.graph.initializer.forEach((tensor: any) => {
+    data.graph.initializer.forEach((tensor: TensorProto) => {
         if (!graph.hasNode(tensor.name)) {
             graph.addNode(tensor.name).init(new ConstantNode.Builder(tensor)).as(ConstantNode);
         }
@@ -77,11 +87,12 @@ function addInitializers(data: any, graph: OnnxGraph.Class) {
 }
 
 // Add input nodes to the graph
-function addInputNodes(data: any, graph: OnnxGraph.Class) {
-    data.graph.input.forEach((input: any) => {
+function addInputNodes(data: RawOnnxModel, graph: OnnxGraph.Class) {
+    data.graph?.input?.forEach((input: RawOnnxValueInfo) => {
         if (!graph.hasNode(input.name)) {
-            const shape = parseShape(input.type.tensorType ? input.type.tensorType.shape : []);
-            const eltype = input.type.tensorType ? input.type.tensorType.elemType : 0;
+            const tensorType = input.type?.tensorType ?? input.type?.tensor_type;
+            const shape = parseShape(tensorType?.shape);
+            const eltype = Number(tensorType?.elemType ?? 0);
             graph
                 .addNode(input.name)
                 .init(new TensorNode.Builder(eltype, shape, "input"))
@@ -91,13 +102,14 @@ function addInputNodes(data: any, graph: OnnxGraph.Class) {
 }
 
 // Add output nodes to the graph
-function addOutputNodes(data: any, graph: OnnxGraph.Class) {
-    data.graph.output.forEach((output: any) => {
+function addOutputNodes(data: RawOnnxModel, graph: OnnxGraph.Class) {
+    data.graph?.output?.forEach((output: RawOnnxValueInfo) => {
         // If output node already exists (e.g. created by addNodes as intermediate), update type to 'output'
         // But here we usually create placeholders.
         if (!graph.hasNode(output.name)) {
-            const shape = parseShape(output.type.tensorType ? output.type.tensorType.shape : []);
-            const eltype = output.type.tensorType ? output.type.tensorType.elemType : 0;
+            const tensorType = output.type?.tensorType ?? output.type?.tensor_type;
+            const shape = parseShape(tensorType?.shape);
+            const eltype = Number(tensorType?.elemType ?? 0);
             graph
                 .addNode(output.name)
                 .init(new TensorNode.Builder(eltype, shape, "output"))
@@ -111,16 +123,16 @@ function addOutputNodes(data: any, graph: OnnxGraph.Class) {
  * Returns the list of external variables 'captured' by this graph scope.
  */
 function addNodes(
-    data: any,
+    data: RawOnnxModel,
     graph: OnnxGraph.Class,
-    mapNodeAndOutput: any[],
-    mapNodeAndInputs: any[],
+    mapNodeAndOutput: { nodeId: string; output: string }[],
+    mapNodeAndInputs: { nodeId: string; inputs: string[] }[],
     parentGraph?: OnnxGraph.Class,
 ): string[] {
     const captures: string[] = [];
     const captureMap = new Map<string, RegionArgumentNode.Class>(); // Name -> Node
 
-    const nodesToAdd = new Set<number>(data.graph.node.map((_: any, i: number) => i));
+    const nodesToAdd = new Set<number>(data.graph!.node!.map((_: RawOnnxNode, i: number) => i));
 
     // Helper to resolve an input name to a node in the current scope or capture it
     function resolveInput(name: string): BaseNode.Class | undefined {
@@ -213,7 +225,7 @@ function addNodes(
                 let constantValue: TensorProto | undefined = undefined;
 
                 // Try to find 'value' attribute
-                const valAttr = node.attribute?.find((a: any) => a.name === "value");
+                const valAttr = node.attribute?.find((a: RawOnnxAttribute) => a.name === "value");
                 if (valAttr && valAttr.t) constantValue = valAttr.t;
 
                 if (!graph.hasNode(name) && constantValue) {
@@ -236,7 +248,7 @@ function addNodes(
             });
 
             // C. Parse Attributes & Regions (Phase 4)
-            const attributes: Record<string, any> = {};
+            const attributes: Record<string, unknown> = {};
             const regions: OnnxGraph.Class[] = [];
 
             // We need to maintain the order of regions as expected by OperationNode
@@ -311,8 +323,8 @@ function addNodes(
             // Re-map regions correctly based on attribute names if order matters
             if (node.opType === "If" || node.opType === "Loop" || node.opType === "Scan") {
                 const orderedRegions: OnnxGraph.Class[] = [];
-                const attrMap = new Map<string, any>();
-                node.attribute?.forEach((a: any) => attrMap.set(a.name, a));
+                const attrMap = new Map<string, RawOnnxAttribute>();
+                node.attribute?.forEach((a: RawOnnxAttribute) => attrMap.set(a.name, a));
 
                 if (node.opType === "If") {
                     // Parse 'then_branch'
@@ -338,7 +350,7 @@ function addNodes(
             graph.addNode(opId).init(opBuilder).as(OperationNode);
 
             // D. Create Outputs
-            node.output.forEach((output: any) => {
+            node.output?.forEach((output: string) => {
                 if (!output) return; // ignore empty outputs
 
                 if (!graph.hasNode(output)) {
@@ -370,7 +382,11 @@ function addNodes(
     return captures;
 }
 
-function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInputs: any[]) {
+function addEdges(
+    graph: OnnxGraph.Class,
+    mapNodeAndOutput: { nodeId: string; output: string }[],
+    mapNodeAndInputs: { nodeId: string; inputs: string[] }[],
+) {
     mapNodeAndInputs.forEach((node) => {
         const opNode = graph.getNodeById(node.nodeId);
         if (opNode && opNode.is(OperationNode)) {
@@ -425,7 +441,7 @@ function addEdges(graph: OnnxGraph.Class, mapNodeAndOutput: any[], mapNodeAndInp
 }
 
 function createGraphWithCaptures(
-    data: any,
+    data: RawOnnxModel,
     parentGraph?: OnnxGraph.Class,
 ): { graph: OnnxGraph.Class; captures: string[] } {
     const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -435,8 +451,8 @@ function createGraphWithCaptures(
     addOutputNodes(data, graph);
     addValueInfoNodes(data, graph);
 
-    const mapNodeAndOutput: any[] = [];
-    const mapNodeAndInputs: any[] = [];
+    const mapNodeAndOutput: { nodeId: string; output: string }[] = [];
+    const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];
 
     const captures = addNodes(data, graph, mapNodeAndOutput, mapNodeAndInputs, parentGraph);
 
@@ -446,7 +462,7 @@ function createGraphWithCaptures(
     return { graph, captures };
 }
 
-export function createGraph(data: any): OnnxGraph.Class {
+export function createGraph(data: RawOnnxModel): OnnxGraph.Class {
     applyAdapters(data);
     return createGraphWithCaptures(data, undefined).graph;
 }

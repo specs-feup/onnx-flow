@@ -1,4 +1,5 @@
-import { PartitionTestCase, runPartitionTest } from "./partitioning_test_utils.js";
+import type { PartitionTestCase } from "./partitioning_test_utils.js";
+import { runPartitionTest } from "./partitioning_test_utils.js";
 
 const tests: PartitionTestCase[] = [
     {

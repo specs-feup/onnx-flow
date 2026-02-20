@@ -1,18 +1,18 @@
 /**********************************************************************
  * Orchestrator: exposes helpers & context and delegates to builders
  *********************************************************************/
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
+import type { Shape } from "../../OnnxTypes.js";
 import { DataType } from "../../OnnxTypes.js";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import TransformChain from "./TransformChain.js";
 import {
     scalarInt64,
     uniq,
     int64Vec,
-    Shape,
     makeTensorConst,
     computeStrides,
     toStaticShape,
@@ -165,7 +165,19 @@ export function broadcastShapes(shapes: number[][]): number[] {
     return out;
 }
 
-export function getMatDims(aShape: (number | string)[], bShape: (number | string)[]) {
+export function getMatDims(
+    aShape: (number | string)[],
+    bShape: (number | string)[],
+): {
+    M: number;
+    K: number;
+    KN: number;
+    N: number;
+    A2: number[];
+    B2: number[];
+    aWasVec: boolean;
+    bWasVec: boolean;
+} {
     const a = asStaticDims(aShape);
     const b = asStaticDims(bShape);
 
@@ -485,7 +497,7 @@ export function squeezeIfLen1(
     t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
     axes: TensorNode.Class | ConstantNode.Class,
     tag: string,
-) {
+): TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class {
     if (t.shape.length === 1 && t.shape[0] === 1) {
         const sq = g
             .addNode(uniq(g, `sq_${tag}`))

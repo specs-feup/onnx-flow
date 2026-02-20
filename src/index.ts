@@ -5,7 +5,8 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import express, { Request, Response } from "express";
+import type { Request, Response } from "express";
+import express from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from "./initGraph.js";
 import OnnxGraphTransformer from "./Onnx/transformation/loop-lowering/index.js";
@@ -17,22 +18,24 @@ import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
 import { safeWriteJson } from "./Onnx/Utils.js";
-import { DecompositionOptions, defaultDecompositionOptions } from "./DecompositionOptions.js";
+import type { DecompositionOptions } from "./DecompositionOptions.js";
+import { defaultDecompositionOptions } from "./DecompositionOptions.js";
 import { splitByAncestor } from "./Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "./Onnx/partitioning/Partition.js";
-import OnnxGraph from "./Onnx/OnnxGraph.js";
+import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import validateGraph from "./Onnx/validation/ValidateGraph.js";
+import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
 
-export async function parseOnnxFile(inputFilePath: string) {
+export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
 }
 
-export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string) {
+export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string): Promise<void> {
     return await json2onnx(jsonFilePath, outputFilePath);
 }
 
 export function loadGraph(
-    onnxObject,
+    onnxObject: RawOnnxModel,
     enableLowLevel: boolean = true,
     enableOptimize: boolean = true,
     dotOutput: boolean = true,
@@ -42,7 +45,7 @@ export function loadGraph(
     loopLowering: boolean = defaultDecompositionOptions.loopLowering,
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
     validate: boolean = true,
-) {
+): string | OnnxGraph.Class {
     let graph = createGraph(onnxObject);
 
     // Initial Validation (Post-Adapter)

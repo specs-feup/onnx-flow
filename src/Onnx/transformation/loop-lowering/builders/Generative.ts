@@ -3,9 +3,11 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { DataType, TensorProto } from "../../../OnnxTypes.js";
+import type { TensorProto } from "../../../OnnxTypes.js";
+import { DataType } from "../../../OnnxTypes.js";
 import { uniq, int64Vec, bool, makeTensorConst } from "../../../Utils.js";
-import { LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx } from "../BuildLoop.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx } from "../BuildLoop.js";
 
 // Handlers needed here (Range + we allow trailing elementwise/transpose)
 import handleRange from "../handlers/Range.js";
@@ -15,7 +17,7 @@ import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class GenerativeBuilder implements LoopBuilder {
-    canHandle(chain: OperationNode.Class[]) {
+    canHandle(chain: OperationNode.Class[]): boolean {
         return chain.some((op) => op.type === "Range");
     }
 

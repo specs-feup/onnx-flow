@@ -1,4 +1,4 @@
-import { AttributeType } from "../OnnxTypes.js";
+import type { AttributeType, AttributeValue } from "../OnnxTypes.js";
 
 /**
  * Defines a single attribute for an operator (e.g., 'kernel_shape' for Conv).
@@ -7,7 +7,7 @@ export interface AttributeDefinition {
     name: string;
     type: AttributeType;
     required: boolean;
-    defaultValue?: any;
+    defaultValue?: AttributeValue;
     description?: string;
     structural?: boolean;
 }
@@ -39,7 +39,10 @@ export interface OpSchema {
 
     /**
      * Optional: Logic to infer output shapes based on inputs and attributes.
-     * You can move your logic from `InferShapes.ts` here eventually.
+     * Can move the logic from `InferShapes.ts` here eventually.
      */
-    inferShape?: (inputShapes: number[][], attributes: Record<string, any>) => number[][];
+    inferShape?: (
+        inputShapes: number[][],
+        attributes: Record<string, AttributeValue>,
+    ) => number[][];
 }

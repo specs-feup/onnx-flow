@@ -1,6 +1,6 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
-import { DataType } from "./OnnxTypes.js";
+import type { DataType } from "./OnnxTypes.js";
 
 namespace OnnxEdge {
     export const TAG = "__specs-onnx__onnx_edge";

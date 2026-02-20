@@ -1,4 +1,4 @@
-import OnnxGraph from "../OnnxGraph.js";
+import type OnnxGraph from "../OnnxGraph.js";
 import TensorNode from "../TensorNode.js";
 import OperationNode from "../OperationNode.js";
 import ConstantNode from "../ConstantNode.js";
