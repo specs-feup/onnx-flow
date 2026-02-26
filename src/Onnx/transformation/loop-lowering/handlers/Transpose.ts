@@ -20,7 +20,7 @@ import {
     gatherFrom,
 } from "../BuildLoop.js";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type { ConcreteValueNode, KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
 /* ============================== HANDLER ================================== */
 
@@ -48,7 +48,7 @@ export default function handleTranspose(
     const xIn = op.getInputs()![0];
     const X = resolveFusedInput(g, xIn, ctx, op, /*flatten*/ false, /*returnGather*/ false);
 
-    const inShapeNum = toStaticShape(X.shape as (number | string)[]);
+    const inShapeNum = toStaticShape(X.shape as KnownShape);
     const rank = inShapeNum.length;
 
     // Read perm safely, default to reverse if missing or wrong length
@@ -73,7 +73,7 @@ export default function handleTranspose(
     const oDigits = decodeMixedRadix(g, ctx.iter, decodeDims, `tp_${op.id}`);
 
     // Map back to input digits, honoring broadcast (input dim == 1 → use 0)
-    const iDigits: (ConstantNode.Class | TensorNode.Class)[] = [];
+    const iDigits: ConcreteValueNode[] = [];
     for (let k = 0; k < rank; k++) {
         const inDim = inShapeNum[k] > 0 ? inShapeNum[k] : 1;
         if (inDim === 1) {

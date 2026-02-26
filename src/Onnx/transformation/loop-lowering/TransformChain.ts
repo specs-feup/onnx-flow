@@ -9,6 +9,7 @@ import { buildLoopForChain } from "./BuildLoop.js";
 import TensorNode from "../../TensorNode.js";
 import { toStaticShape } from "../../Utils.js";
 import ConstantNode from "../../ConstantNode.js";
+import type { Shape } from "../../OnnxTypes.js";
 
 function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
     const rI = inDims.length;
@@ -34,7 +35,7 @@ function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
     return true;
 }
 
-function getSegmentOutShape(seg: OperationNode.Class[]): (number | string | undefined)[] | null {
+function getSegmentOutShape(seg: OperationNode.Class[]): Shape | null {
     if (!seg.length) return null;
 
     const root = seg[seg.length - 1]; // last op = segment root

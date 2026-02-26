@@ -17,7 +17,7 @@ import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
-import { safeWriteJson } from "./Onnx/Utils.js";
+import { BASE_TEN, safeWriteJson } from "./Onnx/Utils.js";
 import type { DecompositionOptions } from "./DecompositionOptions.js";
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
 import { splitByAncestor } from "./Onnx/partitioning/Strategies.js";
@@ -361,7 +361,7 @@ if (isPartitioning !== undefined) {
                 targetNodeId = argv.partition[0];
             } else if (argv.partition.length === 2) {
                 const opType = argv.partition[0];
-                const instance = parseInt(argv.partition[1], 10);
+                const instance = parseInt(argv.partition[1], BASE_TEN);
                 if (isNaN(instance)) {
                     throw new Error(`Invalid instance number: ${argv.partition[1]}`);
                 }

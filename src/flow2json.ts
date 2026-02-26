@@ -1,6 +1,7 @@
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import type {
+    ConcreteValueNode,
     RawOnnxAttribute,
     RawOnnxModel,
     RawOnnxNode,
@@ -40,7 +41,7 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
             const rawNode = graph.getNodeById(inputId);
 
             // Phase 3 Support: Input can be TensorNode OR ConstantNode
-            let inputNode: TensorNode.Class | ConstantNode.Class | undefined = undefined;
+            let inputNode: ConcreteValueNode | undefined = undefined;
             if (rawNode !== undefined && rawNode.is(TensorNode)) inputNode = rawNode.as(TensorNode);
             else if (rawNode !== undefined && rawNode.is(ConstantNode))
                 inputNode = rawNode.as(ConstantNode);

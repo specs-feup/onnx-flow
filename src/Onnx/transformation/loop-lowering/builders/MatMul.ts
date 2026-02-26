@@ -2,6 +2,7 @@ import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import type OperationNode from "../../../OperationNode.js";
+import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { uniq, int64Vec, zeroTensor, bool, makeTensorConst, scalarInt64 } from "../../../Utils.js";
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
@@ -72,7 +73,7 @@ export default class MatMulBuilder implements LoopBuilder {
         // ONNX / NumPy broadcast of batch dims
         const batchDimsStatic = broadcastShapes([aBatch, bBatch]);
 
-        const batchDims = batchDimsStatic as (number | string)[];
+        const batchDims = batchDimsStatic as KnownShape;
 
         // Batch product (treat non-positive/dynamic as 1 in the loop trip count)
         const batchProd = (batchDimsStatic.length ? batchDimsStatic : [1])
@@ -169,7 +170,7 @@ export default class MatMulBuilder implements LoopBuilder {
             Max: handleElementWiseOperation,
         };
 
-        let indicesOut: TensorNode.Class | ConstantNode.Class | null = null;
+        let indicesOut: ConcreteValueNode | null = null;
 
         for (const op of chain) {
             const h = handlers[op.type];

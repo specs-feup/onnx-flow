@@ -12,12 +12,13 @@ import {
     bool,
     zeroTensor,
     resolveShapeToNumbers,
+    isValueNode,
+    asValueNode,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
 import { unsqueezeIdx, decodeMixedRadix, createCapturedInput } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
+import type RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /**
  * Conv loop-lowering builder.
@@ -48,14 +49,8 @@ export default class ConvBuilder implements LoopBuilder {
         // ---- Basic tensor plumbing ------------------------------------------------
         const inputsArr = conv
             .getInputs()
-            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode))
-            .map((n) =>
-                n.is(TensorNode)
-                    ? n.as(TensorNode)
-                    : n.is(ConstantNode)
-                      ? n.as(ConstantNode)
-                      : n.as(RegionArgumentNode),
-            );
+            ?.filter((n) => isValueNode(n))
+            .map((n) => asValueNode(n));
         if (!inputsArr || inputsArr.length < 2) {
             throw new Error("ConvBuilder: Conv must have at least X and W as inputs");
         }
@@ -72,10 +67,10 @@ export default class ConvBuilder implements LoopBuilder {
                 ? outTensor.literalType
                 : fallbackElemTy;
 
-        console.log("XSHAPE raw:", X.shape);
+        //console.log("XSHAPE raw:", X.shape);
         const xShape = resolveShapeToNumbers(X);
         const wShape = resolveShapeToNumbers(W);
-        console.log("XSHAPE resolved:", xShape, "WSHAPE resolved:", wShape);
+        //console.log("XSHAPE resolved:", xShape, "WSHAPE resolved:", wShape);
 
         const is2D = xShape.length === 4 && wShape.length === 4;
         const is1D = xShape.length === 3 && wShape.length === 3;

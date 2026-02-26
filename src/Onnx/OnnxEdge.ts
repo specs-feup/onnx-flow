@@ -1,6 +1,6 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
-import type { DataType } from "./OnnxTypes.js";
+import type { DataType, Shape } from "./OnnxTypes.js";
 
 namespace OnnxEdge {
     export const TAG = "__specs-onnx__onnx_edge";
@@ -14,16 +14,16 @@ namespace OnnxEdge {
             return this.data[TAG].type;
         }
 
-        get shape(): (number | string | undefined)[] {
+        get shape(): Shape {
             return this.data[TAG].shape;
         }
     }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
         private type: DataType;
-        private shape: (number | string | undefined)[];
+        private shape: Shape;
 
-        constructor(type: DataType, shape: (number | string | undefined)[]) {
+        constructor(type: DataType, shape: Shape) {
             this.type = type;
             this.shape = shape;
         }
@@ -52,7 +52,7 @@ namespace OnnxEdge {
         [TAG]: {
             version: typeof VERSION;
             type: DataType;
-            shape: (number | string | undefined)[];
+            shape: Shape;
         };
     }
 

@@ -2,9 +2,14 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import type { DataType } from "../../../OnnxTypes.js";
-import { toArrayLike, uniq, addEdge, scalarOfType } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type { ConcreteValueNode, DataType } from "../../../OnnxTypes.js";
+import {
+    toArrayLike,
+    uniq,
+    addEdge,
+    scalarOfType,
+    tryAsConcreteValueNode,
+} from "../../../Utils.js";
 
 /* ------------------------------ Handler ------------------------------- */
 export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
@@ -16,21 +21,10 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
         throw new Error(`[GemmHandler] Node ${op.id} missing required inputs (A, B).`);
     }
 
-    const A = ins[0]?.is?.(TensorNode)
-        ? ins[0].as(TensorNode)
-        : ins[0]?.is?.(ConstantNode)
-          ? ins[0].as(ConstantNode)
-          : undefined;
-    const B = ins[1]?.is?.(TensorNode)
-        ? ins[1].as(TensorNode)
-        : ins[1]?.is?.(ConstantNode)
-          ? ins[1].as(ConstantNode)
-          : undefined;
-    const C = ins[2]?.is?.(TensorNode)
-        ? ins[2].as(TensorNode)
-        : ins[2]?.is?.(ConstantNode)
-          ? ins[2].as(ConstantNode)
-          : undefined;
+    const A = tryAsConcreteValueNode(ins[0]);
+    const B = tryAsConcreteValueNode(ins[1]);
+    const C = tryAsConcreteValueNode(ins[2]);
+
     if (!A || !B) {
         throw new Error(`[GemmHandler] Node ${op.id} has invalid A or B inputs.`);
     }
@@ -52,8 +46,8 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     const dtypeRight = (C?.literalType ?? dtypeLeft) as DataType;
 
     /* ---------- optional Transpose on A/B ---------- */
-    let A_in: TensorNode.Class | ConstantNode.Class = A;
-    let B_in: TensorNode.Class | ConstantNode.Class = B;
+    let A_in: ConcreteValueNode = A;
+    let B_in: ConcreteValueNode = B;
 
     if (transA) {
         const tA = g
@@ -112,7 +106,7 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     let producedToY = false;
 
     if (C && beta !== 0.0) {
-        let cTerm: TensorNode.Class | ConstantNode.Class = C;
+        let cTerm: ConcreteValueNode = C;
         if (beta !== 1.0) {
             const bC = scalarOfType(g, `Gemm_beta_${op.id}`, beta, dtypeRight);
             const mulB = g

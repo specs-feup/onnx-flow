@@ -1,10 +1,18 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type { ConcreteValueNode, KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { toArrayLike, uniq, addEdge, scalarOfType, constI64 } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import {
+    toArrayLike,
+    uniq,
+    addEdge,
+    scalarOfType,
+    constI64,
+    tryAsConcreteValueNode,
+} from "../../../Utils.js";
+import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ------------------------------ Handler ------------------------------- */
 /**
@@ -31,21 +39,10 @@ export default function dequantizeLinearHandler(
         );
     }
 
-    const X = ins[0]?.is?.(TensorNode)
-        ? ins[0].as(TensorNode)
-        : ins[0]?.is?.(ConstantNode)
-          ? ins[0].as(ConstantNode)
-          : undefined;
-    const S = ins[1]?.is?.(TensorNode)
-        ? ins[1].as(TensorNode)
-        : ins[1]?.is?.(ConstantNode)
-          ? ins[1].as(ConstantNode)
-          : undefined;
-    const Z = ins[2]?.is?.(TensorNode)
-        ? ins[2].as(TensorNode)
-        : ins[2]?.is?.(ConstantNode)
-          ? ins[2].as(ConstantNode)
-          : undefined;
+    const X = tryAsConcreteValueNode(ins[0]);
+    const S = tryAsConcreteValueNode(ins[1]);
+    const Z = tryAsConcreteValueNode(ins[2]);
+
     if (!X || !S) {
         throw new Error(`[DequantizeLinearHandler] Node ${op.id} has invalid inputs.`);
     }
@@ -98,7 +95,7 @@ export default function dequantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, castS, Sf, floatT, S.shape);
 
-    let Zf: TensorNode.Class | ConstantNode.Class;
+    let Zf: ConcreteValueNode;
     if (Z) {
         const castZ = g
             .addNode(uniq(g, `DQL_CastZ_${op.id}`))
@@ -151,7 +148,7 @@ export default function dequantizeLinearHandler(
         const axes = constI64(g, `DQL_axes_${op.id}`, axesVals);
 
         // Shape for S after Unsqueeze: [1, ..., |S|, ..., 1]
-        const sRankedShape: (number | string)[] = Array(rank).fill(1);
+        const sRankedShape: KnownShape = Array(rank).fill(1);
 
         // axis dim = length of S, or X's axis dim as a fallback
         const sLen =

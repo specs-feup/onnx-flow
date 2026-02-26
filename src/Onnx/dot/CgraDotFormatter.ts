@@ -9,7 +9,8 @@ import TensorNode from "../TensorNode.js";
 import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
-import { readConstIntegerVectorFromTensorNode, readTensorData, typeSizeMap } from "../Utils.js";
+import { readConstIntegerVectorFromTensorNode, readTensorData, TYPE_SIZE_MAP } from "../Utils.js";
+import type { KnownShape } from "../OnnxTypes.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -47,7 +48,7 @@ export default class CgraDotFormatter<
 
                 if (node.type === "input") {
                     attrs["size"] = size.toString();
-                    attrs["stride"] = typeSizeMap[node.literalType as number]!.toString();
+                    attrs["stride"] = TYPE_SIZE_MAP[node.literalType as number]!.toString();
                 } else if (node.type === "output") {
                     attrs["size"] = size.toString();
                 }
@@ -78,7 +79,7 @@ export default class CgraDotFormatter<
         return attrs;
     }
 
-    static shapeToLabel(shape: (number | string)[]): string {
+    static shapeToLabel(shape: KnownShape): string {
         const shapeString = `{${shape.join(",")}}`;
         return shapeString === "{}" ? "sc" : shapeString;
     }

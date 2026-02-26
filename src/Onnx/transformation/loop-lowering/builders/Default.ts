@@ -14,6 +14,7 @@ import {
     makeTensorConst,
     scalarInt64,
     asStaticDims,
+    asConcreteValueNode,
 } from "../../../Utils.js";
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
 import { unsqueezeIdx, broadcastShapes } from "../BuildLoop.js";
@@ -86,10 +87,7 @@ export default class DefaultBuilder implements LoopBuilder {
                         (
                             op.getInputs()?.filter((n) => n.is(TensorNode) || n.is(ConstantNode)) ??
                             []
-                        ).map((t) => [
-                            t.id,
-                            t.is(TensorNode) ? t.as(TensorNode) : t.as(ConstantNode),
-                        ]),
+                        ).map((t) => [t.id, asConcreteValueNode(t)]),
                     ),
                 ).values(),
             ]

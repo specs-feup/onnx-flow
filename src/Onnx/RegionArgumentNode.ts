@@ -1,6 +1,6 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import type { DataType } from "./OnnxTypes.js";
+import type { DataType, Shape } from "./OnnxTypes.js";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 
@@ -32,7 +32,7 @@ namespace RegionArgumentNode {
             return this.data[TAG].literalType;
         }
 
-        get shape(): (number | string | undefined)[] {
+        get shape(): Shape {
             return this.data[TAG].shape;
         }
 
@@ -40,7 +40,7 @@ namespace RegionArgumentNode {
             this.data[TAG].literalType = dtype;
         }
 
-        setShape(shape: (number | string | undefined)[]): void {
+        setShape(shape: Shape): void {
             this.data[TAG].shape = shape;
         }
 
@@ -53,14 +53,9 @@ namespace RegionArgumentNode {
         private index: number;
         private originalName: string;
         private literalType: DataType;
-        private shape: (number | string | undefined)[];
+        private shape: Shape;
 
-        constructor(
-            index: number,
-            originalName: string,
-            literalType: DataType,
-            shape: (number | string | undefined)[],
-        ) {
+        constructor(index: number, originalName: string, literalType: DataType, shape: Shape) {
             this.index = index;
             this.originalName = originalName;
             this.literalType = literalType;
@@ -95,7 +90,7 @@ namespace RegionArgumentNode {
             index: number;
             originalName: string;
             literalType: DataType;
-            shape: (number | string | undefined)[];
+            shape: Shape;
         };
     }
 

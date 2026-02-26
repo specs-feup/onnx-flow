@@ -1,9 +1,16 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { toArrayLike, uniq, addEdge, scalarOfType, constI64 } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import {
+    toArrayLike,
+    uniq,
+    addEdge,
+    scalarOfType,
+    constI64,
+    tryAsConcreteValueNode,
+} from "../../../Utils.js";
 
 /**
  * QuantizeLinear(x, scale, zero_point)
@@ -30,22 +37,10 @@ export default function quantizeLinearHandler(
         );
     }
 
-    const X = ins[0]?.is?.(TensorNode)
-        ? ins[0].as(TensorNode)
-        : ins[0]?.is?.(ConstantNode)
-          ? ins[0].as(ConstantNode)
-          : undefined;
-    const S = ins[1]?.is?.(TensorNode)
-        ? ins[1].as(TensorNode)
-        : ins[1]?.is?.(ConstantNode)
-          ? ins[1].as(ConstantNode)
-          : undefined;
+    const X = tryAsConcreteValueNode(ins[0]);
+    const S = tryAsConcreteValueNode(ins[1]);
     // Zero point is optional.
-    const Z = ins[2]?.is?.(TensorNode)
-        ? ins[2].as(TensorNode)
-        : ins[2]?.is?.(ConstantNode)
-          ? ins[2].as(ConstantNode)
-          : undefined;
+    const Z = tryAsConcreteValueNode(ins[2]);
 
     if (!X || !S) {
         throw new Error(`[QuantizeLinearHandler] Node ${op.id} has invalid inputs.`);
@@ -63,7 +58,7 @@ export default function quantizeLinearHandler(
     const axisAttr = Number(a["axis"] ?? 1);
 
     // 1. Prepare Inputs (Scale is float, Z needs cast to float)
-    let Zf: TensorNode.Class | ConstantNode.Class;
+    let Zf: ConcreteValueNode;
     if (Z) {
         const castZ = g
             .addNode(uniq(g, `QL_CastZ_${op.id}`))
@@ -94,8 +89,8 @@ export default function quantizeLinearHandler(
     // Heuristic: if S has rank 1 and X has rank > 1, assume per-axis if not 1-element
     const isPerAxis = sRank === 1 && rank > 1;
 
-    let Sx: TensorNode.Class | ConstantNode.Class = S;
-    let Zx: TensorNode.Class | ConstantNode.Class = Zf;
+    let Sx: ConcreteValueNode = S;
+    let Zx: ConcreteValueNode = Zf;
 
     if (isPerAxis) {
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;

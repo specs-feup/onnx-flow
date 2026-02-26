@@ -2,6 +2,7 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
+import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     readConstIntegerVectorFromTensorNode,
@@ -18,7 +19,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     // 1. Inputs (Standard Opset 10+: data, starts, ends, axes?, steps?)
     const ins = sl.getInputs() ?? [];
 
-    // Strict Input Check (Phase 5.2): Slice MUST have at least 3 inputs (data, starts, ends).
+    // Strict Input Check: Slice MUST have at least 3 inputs (data, starts, ends).
     if (ins.length < 3) {
         throw new Error(
             `[SliceHandler] Node ${sl.id} is missing required inputs. Expected 3 (data, starts, ends), got ${ins.length}. Adapter failure?`,
@@ -128,7 +129,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
         g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     } else {
         // Chain of Range + Gather
-        let curT: TensorNode.Class | ConstantNode.Class = Xin;
+        let curT: ConcreteValueNode = Xin;
 
         for (let i = 0; i < changingAxes.length; i++) {
             const ax = changingAxes[i];

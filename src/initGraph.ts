@@ -5,12 +5,15 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import type {
     AttributeMap,
+    KnownDim,
+    KnownShape,
     RawOnnxAttribute,
     RawOnnxDim,
     RawOnnxModel,
     RawOnnxNode,
     RawOnnxTensorType,
     RawOnnxValueInfo,
+    Shape,
     TensorProto,
 } from "./Onnx/OnnxTypes.js";
 import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
@@ -19,12 +22,12 @@ import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import { uniq } from "./Onnx/Utils.js";
+import { uniq, UNKOWN_SHAPE } from "./Onnx/Utils.js";
 
 // Helper function to convert shape to number[]
-function parseShape(shape: RawOnnxTensorType["shape"]): (number | string)[] {
+function parseShape(shape: RawOnnxTensorType["shape"]): KnownShape {
     if (!shape?.dim) return [];
-    return shape.dim.map((dim: RawOnnxDim): number | string => {
+    return shape.dim.map((dim: RawOnnxDim): KnownDim => {
         // Handle both camelCase and snake_case formats
         const dimParam = dim.dimParam ?? dim.dim_param;
         const dimValue = dim.dimValue ?? dim.dim_value;
@@ -36,7 +39,7 @@ function parseShape(shape: RawOnnxTensorType["shape"]): (number | string)[] {
         if (dimValue !== undefined) {
             return Number(dimValue); // explicitly cast to number
         } else {
-            return -1; // unknown dimension size
+            return UNKOWN_SHAPE[0]; // unknown shape
         }
     });
 }
@@ -156,7 +159,7 @@ function addNodes(
 
                 // Determine type/shape from parent for the proxy node
                 let type = DataType.UNDEFINED;
-                let shape: (number | string | undefined)[] = [];
+                let shape: Shape = [];
 
                 if (parentNode !== undefined) {
                     if (parentNode.is(TensorNode)) {
@@ -197,7 +200,7 @@ function addNodes(
         madeProgress = false;
         loopCount++;
 
-        // Safety break for cycles or unresolvable inputs
+        // Safety break for cycles or unresolvable inputs (*2+10 as a threshold)
         if (loopCount > nodesToAdd.size * 2 + 10) {
             console.warn(
                 "[initGraph] Potential cycle or missing input detected, processing remaining nodes anyway.",
@@ -222,8 +225,7 @@ function addNodes(
             }
 
             // --- Node Processing ---
-
-            // A. Handle Constant (Phase 3)
+            // A. Handle Constant
             if (
                 node.opType === "Constant" &&
                 node.output !== undefined &&
@@ -256,7 +258,7 @@ function addNodes(
                 if (resolved) inputs.push(resolved);
             });
 
-            // C. Parse Attributes & Regions (Phase 4)
+            // C. Parse Attributes & Regions
             const attributes: Record<string, unknown> = {};
             const regions: OnnxGraph.Class[] = [];
 
@@ -410,7 +412,7 @@ function addEdges(
 
             inputs.forEach((inputNode) => {
                 let type = DataType.UNDEFINED;
-                let shape: (number | string | undefined)[] = [];
+                let shape: Shape = [];
 
                 if (inputNode.is(TensorNode)) {
                     const t = inputNode.as(TensorNode);

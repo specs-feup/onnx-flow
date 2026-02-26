@@ -1,12 +1,11 @@
 import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type { ConcreteValueNode, ValueNode } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import { uniq, makeTensorConst } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopCtx } from "../BuildLoop.js";
-import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import type RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /**
  * Per-element reducer: returns a scalar [] equal to the bin's value to write this iteration.
@@ -31,8 +30,8 @@ export default function handleReduceElem(
     op: OperationNode.Class,
     g: OnnxGraph.Class,
     ctx: LoopCtx,
-    accScalar: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class, // []
-    xScalar: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class, // []
+    accScalar: ValueNode, // []
+    xScalar: ValueNode, // []
 ): TensorNode.Class {
     const elemTy =
         accScalar.literalType !== DataType.UNDEFINED
@@ -41,11 +40,7 @@ export default function handleReduceElem(
               ? xScalar.literalType
               : DataType.FLOAT;
 
-    const unary = (
-        type: string,
-        a: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-        name: string,
-    ): TensorNode.Class => {
+    const unary = (type: string, a: ValueNode, name: string): TensorNode.Class => {
         const n = g
             .addNode(uniq(g, `${name}_${op.id}`))
             .init(new OperationNode.Builder(type, [a], {}))
@@ -58,12 +53,7 @@ export default function handleReduceElem(
         return out;
     };
 
-    const bin = (
-        type: string,
-        a: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-        b: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-        name: string,
-    ): TensorNode.Class => {
+    const bin = (type: string, a: ValueNode, b: ValueNode, name: string): TensorNode.Class => {
         const n = g
             .addNode(uniq(g, `${name}_${op.id}`))
             .init(new OperationNode.Builder(type, [a, b], {}))
@@ -78,8 +68,8 @@ export default function handleReduceElem(
 
     const where = (
         cond: TensorNode.Class,
-        a: TensorNode.Class | ConstantNode.Class,
-        b: TensorNode.Class | ConstantNode.Class,
+        a: ConcreteValueNode,
+        b: ConcreteValueNode,
         name: string,
     ): TensorNode.Class => {
         const n = g

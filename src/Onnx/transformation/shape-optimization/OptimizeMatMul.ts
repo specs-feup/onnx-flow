@@ -5,7 +5,7 @@ import ConstantNode from "../../ConstantNode.js";
 import VariableNode from "../../VariableNode.js";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "../../OnnxInnerEdge.js";
-import { typeSizeMap, formatId, constBuilder } from "../../Utils.js";
+import { TYPE_SIZE_MAP, formatId, constBuilder } from "../../Utils.js";
 
 export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGraph.Class): void {
     let order = 0;
@@ -22,7 +22,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
     const shape1 = incomingEdges[1].shape;
     const type = incomingEdges[0].literalType;
 
-    const displacementInMemory: number = typeSizeMap[type];
+    const displacementInMemory: number = TYPE_SIZE_MAP[type];
 
     const nodeId = node.id;
 

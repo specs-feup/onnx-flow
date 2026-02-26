@@ -3,7 +3,7 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import type { Shape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape, Shape, ValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     uniq,
@@ -15,19 +15,17 @@ import {
     scalarInt64,
     asStaticDims,
     getAttr,
+    isValueNode,
+    asValueNode,
+    isConcreteValueNode,
+    asConcreteValueNode,
 } from "../../../Utils.js";
 
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
 import { unsqueezeIdx, resolveFusedInput } from "../BuildLoop.js";
 import handleTranspose from "../handlers/Transpose.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
-function toScalar(
-    g: OnnxGraph.Class,
-    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-    tag: string,
-): TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class {
+function toScalar(g: OnnxGraph.Class, t: ValueNode, tag: string): ValueNode {
     if (t.shape.length === 0) return t;
     const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
     const reshape = g
@@ -82,20 +80,10 @@ export default class TransposeBuilder implements LoopBuilder {
                     ? (finalOp.getOutgoers.first()?.literalType ?? DataType.FLOAT)
                     : outTensor.literalType;
         } else {
-            const xInNodeRaw = transposeOp
-                .getInputs()
-                ?.find((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode));
-            let xInNode:
-                | TensorNode.Class
-                | ConstantNode.Class
-                | RegionArgumentNode.Class
-                | undefined;
+            const xInNodeRaw = transposeOp.getInputs()?.find((n) => isValueNode(n));
+            let xInNode: ValueNode | undefined;
             if (xInNodeRaw) {
-                xInNode = xInNodeRaw.is(TensorNode)
-                    ? xInNodeRaw.as(TensorNode)
-                    : xInNodeRaw.is(ConstantNode)
-                      ? xInNodeRaw.as(ConstantNode)
-                      : xInNodeRaw.as(RegionArgumentNode);
+                xInNode = asValueNode(xInNodeRaw);
             }
             if (xInNode) {
                 elemTy = xInNode.literalType;
@@ -103,20 +91,14 @@ export default class TransposeBuilder implements LoopBuilder {
         }
 
         // ---- Compute transpose output shape from input+perm ---------------
-        const xInRaw = transposeOp
-            .getInputs()
-            ?.find((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode));
-        let xIn: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class | undefined;
+        const xInRaw = transposeOp.getInputs()?.find((n) => isValueNode(n));
+        let xIn: ValueNode | undefined;
         if (xInRaw) {
-            xIn = xInRaw.is(TensorNode)
-                ? xInRaw.as(TensorNode)
-                : xInRaw.is(ConstantNode)
-                  ? xInRaw.as(ConstantNode)
-                  : xInRaw.as(RegionArgumentNode);
+            xIn = asValueNode(xInRaw);
         }
 
         const inShape = xIn ? toStaticShape(xIn.shape as Shape) : [];
-        let outShape: (number | string)[] = [];
+        let outShape: KnownShape = [];
 
         if (inShape.length > 0) {
             const rank = inShape.length;
@@ -139,7 +121,7 @@ export default class TransposeBuilder implements LoopBuilder {
 
         // Ensure we always have an outer output tensor node for this chain
         if (!outTensor) {
-            const fallbackShape = outShape.length > 0 ? outShape : ([] as (number | string)[]);
+            const fallbackShape = outShape.length > 0 ? outShape : ([] as KnownShape);
             outTensor = outer
                 .addNode(uniq(outer, `out_${finalOp.id}`))
                 .init(new TensorNode.Builder(elemTy, fallbackShape, "intermediate"))
@@ -152,7 +134,7 @@ export default class TransposeBuilder implements LoopBuilder {
         }
 
         // ---- Trip count and carry length ----------------------------------
-        const safeOut = asStaticDims(outShape as (number | string)[]);
+        const safeOut = asStaticDims(outShape as KnownShape);
         const totalIters =
             safeOut.length <= 1 ? (safeOut[0] ?? 1) : safeOut.reduce((a, b) => a * b, 1);
         const carryLen = totalIters;
@@ -209,12 +191,12 @@ export default class TransposeBuilder implements LoopBuilder {
         // ---- 2) Optional Add after Transpose (CHAIN: [Transpose, Add]) ----
         if (hasAdd && addOp) {
             const addInputs = addOp.getInputs() ?? [];
-            let otherInput: TensorNode.Class | ConstantNode.Class | null = null;
+            let otherInput: ConcreteValueNode | null = null;
 
             // Find the Add input that is *not* produced by the Transpose op
             for (const inp of addInputs) {
-                if (!inp.is(TensorNode) && !inp.is(ConstantNode)) continue;
-                const t = inp.is(TensorNode) ? inp.as(TensorNode) : inp.as(ConstantNode);
+                if (!isConcreteValueNode(inp)) continue;
+                const t = asConcreteValueNode(inp);
 
                 if (t.getIncomers.length > 0) {
                     const prod = t.getIncomers[0].source;

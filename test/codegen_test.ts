@@ -6,7 +6,7 @@ import OnnxGraphTransformer from "../src/Onnx/transformation/loop-lowering/index
 import OnnxGraphOptimizer from "../src/Onnx/transformation/shape-optimization/index.js";
 import { generateCode } from "../src/codeGeneration.js";
 import { fileURLToPath } from "url";
-import { typeSizeMap } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { TYPE_SIZE_MAP } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 // Dynamically determine the project root directory
 const __filename = fileURLToPath(import.meta.url);
@@ -179,9 +179,9 @@ async function runTests() {
             throw new Error(`Could not resolve elemType for input '${key}'`);
         }
 
-        // 4. Safely coerce to number for your typeSizeMap lookup
+        // 4. Safely coerce to number for your TYPE_SIZE_MAP lookup
         const elemType = Number(rawElemType);
-        const displacement = typeSizeMap[elemType];
+        const displacement = TYPE_SIZE_MAP[elemType];
         formattedInputs[`tensor_${key}`] = {};
         // 1. Create a strictly typed temporary map for the offsets
         const tensorDataMap: Record<number, number> = {};

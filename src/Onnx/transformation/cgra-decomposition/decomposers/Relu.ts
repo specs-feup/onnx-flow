@@ -2,7 +2,8 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { makeTensorProto } from "../../../Utils.js";
+import { asConcreteValueNode, makeTensorProto } from "../../../Utils.js";
+import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import type TensorSplitter from "../TensorSplitter.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
@@ -13,7 +14,7 @@ export default function decomposeRelu(
     tensorSplitter: TensorSplitter,
 ): boolean {
     const rawInput = node.getInputs()![0];
-    const input = rawInput.is(TensorNode) ? rawInput.as(TensorNode) : rawInput.as(ConstantNode);
+    const input = asConcreteValueNode(rawInput);
     const literalType = input.literalType;
 
     if (input.shape.length > 2) {
@@ -38,10 +39,7 @@ export default function decomposeRelu(
         .as(ConstantNode);
 
     const output = node.outgoers.at(0)!.target.as(TensorNode);
-    const outputs: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
-        output,
-        false,
-    ).splits;
+    const outputs: ConcreteValueNode[] = tensorSplitter.getSplit(output, false).splits;
 
     for (let i = 0; i < inputs.length; i++) {
         // Create Greater node (serving as ">0" node)

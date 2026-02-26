@@ -1,7 +1,12 @@
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
-import type { Shape, TensorProto } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import type {
+    ConcreteValueNode,
+    Shape,
+    StaticShape,
+    TensorProto,
+} from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
@@ -14,6 +19,7 @@ import {
     scalarInt64,
     bool,
     readConstIntegerVectorFromTensorNode,
+    asValueNode,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
 import {
@@ -26,15 +32,13 @@ import {
 } from "../BuildLoop.js";
 import handleReduceElem from "../handlers/Reduces.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 function normalizeAxes(axes: number[] | undefined, rank: number): number[] {
     if (!axes || axes.length === 0) return Array.from({ length: rank }, (_, i) => i);
     return Array.from(new Set(axes.map((a) => (a < 0 ? a + rank : a)))).sort((a, b) => a - b);
 }
 
-function makeOutShape(inShape: number[], redAxes: number[], keepdims01: 0 | 1): number[] {
+function makeOutShape(inShape: StaticShape, redAxes: number[], keepdims01: 0 | 1): StaticShape {
     if (keepdims01 === 1) {
         const out = inShape.slice();
         redAxes.forEach((a) => {
@@ -140,11 +144,7 @@ export default class ReducesBuilder implements LoopBuilder {
         const op = chain[ridx]; // anchor reduce node
 
         const xInputRaw = op.getInputs()![0];
-        const xInput = xInputRaw.is(TensorNode)
-            ? xInputRaw.as(TensorNode)
-            : xInputRaw.is(ConstantNode)
-              ? xInputRaw.as(ConstantNode)
-              : xInputRaw.as(RegionArgumentNode);
+        const xInput = asValueNode(xInputRaw);
 
         inferShapes(outer);
 
@@ -220,7 +220,7 @@ export default class ReducesBuilder implements LoopBuilder {
         const axes0 = makeTensorConst(body, `axes_${op.id}`, int64Vec([0]));
 
         // Optional mean scale (per-iter contribution) → 1 / reduce_count
-        let meanScale: TensorNode.Class | ConstantNode.Class | undefined = undefined;
+        let meanScale: ConcreteValueNode | undefined = undefined;
         if (op.type === "ReduceMean") {
             const reduceCount =
                 redAxes.length === 0
@@ -282,7 +282,7 @@ export default class ReducesBuilder implements LoopBuilder {
         const xScalar = squeezeIfLen1(body, gXOut, axes0, `x_sq_${op.id}`); // []
 
         // ---- build output linear index for this input position ----
-        const oDigits: (ConstantNode.Class | TensorNode.Class)[] = [];
+        const oDigits: ConcreteValueNode[] = [];
         if (outStatic.length === 0) {
             const zeroIdx = makeTensorConst(body, `rd_out_zero_${op.id}`, scalarInt64(0));
             oDigits.push(zeroIdx);

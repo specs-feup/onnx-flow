@@ -2,7 +2,15 @@ import fs from "fs";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import OnnxEdge from "./OnnxEdge.js";
 import type OnnxGraph from "./OnnxGraph.js";
-import type { Shape, TensorProto } from "./OnnxTypes.js";
+import type {
+    ConcreteValueNode,
+    Dim,
+    KnownShape,
+    Shape,
+    StaticShape,
+    TensorProto,
+    ValueNode,
+} from "./OnnxTypes.js";
 import { DataType } from "./OnnxTypes.js";
 import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
@@ -13,7 +21,7 @@ import RegionArgumentNode from "./RegionArgumentNode.js";
 // SECTION 1: CONSTANTS
 // =====================================================================================
 
-export const typeSizeMap: Record<number, number> = {
+export const TYPE_SIZE_MAP: Record<number, number> = {
     0: 0, // UNDEFINED
     1: 4, // FLOAT
     2: 1, // UINT8
@@ -38,6 +46,11 @@ export const typeSizeMap: Record<number, number> = {
     21: 1, // UINT4
     22: 1, // INT4
 };
+
+export const SCALAR_SHAPE: number[] = [];
+export const UNKOWN_SHAPE = [-1];
+
+export const BASE_TEN = 10;
 
 // =====================================================================================
 // SECTION 2: TENSOR PROTO CREATION HELPERS
@@ -125,7 +138,7 @@ export function zeroTensor(elemType: DataType, shape: number[]): TensorProto {
 }
 
 // =====================================================================================
-// SECTION 3: CONSTANT NODE FACTORIES (Phase 3 Updated)
+// SECTION 3: CONSTANT NODE FACTORIES
 // =====================================================================================
 
 export function uniq(g: OnnxGraph.Class, base: string): string {
@@ -177,7 +190,7 @@ export function tensorOnesConst(
     g: OnnxGraph.Class,
     name: string,
     dtype: DataType,
-    shape: number[],
+    shape: StaticShape,
 ): ConstantNode.Class {
     const size = shape.reduce((a, b) => a * b, 1);
     const ones = new Array<number>(size).fill(1);
@@ -222,11 +235,7 @@ export const constBuilder = (val: number): ConstantNode.Builder => {
 // =====================================================================================
 
 /** Creates a Shape op + intermediate output tensor. */
-export function shapeOf(
-    g: OnnxGraph.Class,
-    x: TensorNode.Class | ConstantNode.Class,
-    name: string,
-): TensorNode.Class {
+export function shapeOf(g: OnnxGraph.Class, x: ConcreteValueNode, name: string): TensorNode.Class {
     const sop = g
         .addNode(uniq(g, `${name}_op`))
         .init(new OperationNode.Builder("Shape", [x], {}))
@@ -244,7 +253,7 @@ export function editShapeDim(
     g: OnnxGraph.Class,
     baseShape: TensorNode.Class,
     axis: number,
-    size1D: TensorNode.Class | ConstantNode.Class,
+    size1D: ConcreteValueNode,
     name: string,
 ): TensorNode.Class {
     const idx = makeI64ShapeConst(g, `${name}_idx`, [axis]);
@@ -292,7 +301,7 @@ export function addEdge(
     srcOp: OperationNode.Class,
     dstTensor: TensorNode.Class,
     dtype: DataType,
-    shape?: Array<number | string | undefined>,
+    shape?: Array<Dim>,
 ): void {
     g.addEdge(srcOp, dstTensor)
         .init(new OnnxEdge.Builder(dtype, shape ?? dstTensor.shape))
@@ -335,7 +344,7 @@ export function maybeRemoveOrphanConstant(g: OnnxGraph.Class, node?: BaseNode.Cl
 export function findTensorByOnnxName(
     g: OnnxGraph.Class,
     name?: string,
-): TensorNode.Class | ConstantNode.Class | undefined {
+): ConcreteValueNode | undefined {
     if (name === undefined) return undefined;
 
     // Check Constants
@@ -358,8 +367,58 @@ export function findConstantProducerAsTensor(
     return findTensorByOnnxName(g, onnxName)?.tryAs(ConstantNode);
 }
 
+export function isValueNode(node: BaseNode.Class): node is ValueNode {
+    return node.is(TensorNode) || node.is(ConstantNode) || node.is(RegionArgumentNode);
+}
+
+export function asValueNode(node: BaseNode.Class): ValueNode {
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+    if (node.is(RegionArgumentNode)) return node.as(RegionArgumentNode);
+
+    throw new Error(`Expected a ValueNode, but got a different node type for ID: ${node.id}`);
+}
+
+/**
+ * Safely attempts to cast a node to a ValueNode.
+ * Returns undefined if the node is missing or is not a Tensor/Constant.
+ */
+export function tryAsValueNode(node: BaseNode.Class | undefined): ValueNode | undefined {
+    if (!node) return undefined;
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+    if (node.is(RegionArgumentNode)) return node.as(RegionArgumentNode);
+    return undefined;
+}
+
+export function isConcreteValueNode(node: BaseNode.Class): node is ConcreteValueNode {
+    return node.is(TensorNode) || node.is(ConstantNode);
+}
+
+export function asConcreteValueNode(node: BaseNode.Class): ConcreteValueNode {
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+
+    throw new Error(
+        `Expected a ConcreteValueNode, but got a different node type for ID: ${node.id}`,
+    );
+}
+
+/**
+ * Safely attempts to cast a node to a ConcreteValueNode.
+ * Returns undefined if the node is missing or is not a Tensor/Constant.
+ */
+export function tryAsConcreteValueNode(
+    node: BaseNode.Class | undefined,
+): ConcreteValueNode | undefined {
+    if (!node) return undefined;
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+    return undefined;
+}
+
 // =====================================================================================
-// SECTION 6: DATA READERS (Phase 3 Updated)
+// SECTION 6: DATA READERS
 // =====================================================================================
 
 export function toU8(raw: unknown): Uint8Array | undefined {
@@ -376,16 +435,13 @@ export function toU8(raw: unknown): Uint8Array | undefined {
     return undefined;
 }
 
-export function totalSizeFromDims(
-    fallbackElems: number,
-    dims?: (number | string)[] | undefined,
-): number {
+export function totalSizeFromDims(fallbackElems: number, dims?: KnownShape | undefined): number {
     if (!Array.isArray(dims) || dims.length === 0) return fallbackElems;
     return dims.map((d) => Number(d)).reduce((a, b) => a * b, 1);
 }
 
-export function isInt64Type(dt: number | string | undefined): boolean {
-    return dt === 7 || dt === "INT64";
+export function isInt64Type(dt: DataType | string | undefined): boolean {
+    return dt === DataType.INT64 || dt === "INT64";
 }
 
 export function decodeIntegerVectorFromTensorProto(tv: TensorProto): number[] | undefined {
@@ -651,7 +707,7 @@ export function isNumeric(dtype: DataType): boolean {
     return !(dtype === DataType.STRING || dtype === DataType.BOOL);
 }
 
-export function toNum(x: number | string | undefined): number | undefined {
+export function toNum(x: Dim): number | undefined {
     if (typeof x === "number") return x;
     // FIX: Parse strings like "378" correctly
     if (typeof x === "string") {
@@ -661,14 +717,12 @@ export function toNum(x: number | string | undefined): number | undefined {
     return undefined;
 }
 
-export function toNumShape(
-    s?: Array<number | string | undefined>,
-): Array<number | undefined> | undefined {
+export function toNumShape(s?: Array<Dim>): Array<number | undefined> | undefined {
     if (!s) return undefined;
     return s.map(toNum);
 }
 
-export function asStaticDims(shape: (number | string | undefined)[]): number[] {
+export function asStaticDims(shape: Shape): number[] {
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined && n > 0 ? n : 1;
@@ -678,8 +732,29 @@ export function asStaticDims(shape: (number | string | undefined)[]): number[] {
 export function toStaticShape(shape: Shape): number[] {
     return shape.map((d) => {
         const n = toNum(d);
-        return n !== undefined ? n : -1;
+        return n !== undefined ? n : UNKOWN_SHAPE[0];
     });
+}
+
+/**
+ * @brief Checks if two tensor nodes have the same shape.
+ *
+ * @param tensor1 The first tensor node to compare.
+ * @param tensor2 The second tensor node to compare.
+ * @returns True if the shapes are equal, false otherwise.
+ */
+export function shapesEqual(tensor1: ConcreteValueNode, tensor2: ConcreteValueNode): boolean {
+    if (tensor1.shape.length !== tensor2.shape.length) {
+        return false;
+    }
+
+    for (let i = 0; i < tensor1.shape.length; i++) {
+        if (tensor1.shape[i] !== tensor2.shape[i]) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -690,10 +765,8 @@ export function toStaticShape(shape: Shape): number[] {
  * - Converts all dimensions to numbers.
  * - Non-finite or <= 0 values (like "batch" or -1) are coerced to 1 for safety in loop bounds.
  */
-export function resolveShapeToNumbers(
-    t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
-): number[] {
-    let rawShape: (number | string | undefined)[] = [];
+export function resolveShapeToNumbers(t: ValueNode): number[] {
+    let rawShape: Shape = [];
 
     // 1. Try internal shape
     if (t.shape.length > 0) {
@@ -753,7 +826,7 @@ export function normalizeAxis(axis: number, rank: number): number {
     return ((axis % rank) + rank) % rank;
 }
 
-export function broadcastTwoShapes(a: number[], b: number[]): number[] {
+export function broadcastTwoShapes(a: StaticShape, b: StaticShape): StaticShape {
     const ra = a.length,
         rb = b.length;
     const r = Math.max(ra, rb);
@@ -814,9 +887,7 @@ export function getSmallestRankShape(tensors: TensorNode.Class[]): Shape {
     return smallest;
 }
 
-export function getLargestRankShape(
-    tensors: (TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class)[],
-): Shape {
+export function getLargestRankShape(tensors: ValueNode[]): Shape {
     if (tensors.length === 0) return [];
     let largest = tensors[0].shape;
     for (let i = 1; i < tensors.length; i++) {

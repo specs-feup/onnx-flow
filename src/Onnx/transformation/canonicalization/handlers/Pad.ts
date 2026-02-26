@@ -1,6 +1,7 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { ConcreteValueNode, Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     decodeIntegerVectorFromTensorProto,
@@ -14,12 +15,12 @@ import {
     scalarI64,
     readScalarFromTensorNode,
     maybeRemoveOrphanConstant,
+    asConcreteValueNode,
+    tryAsConcreteValueNode,
 } from "../../../Utils.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
-function readPadsVectorFromTensorInput(
-    tn: TensorNode.Class | ConstantNode.Class,
-): number[] | undefined {
+function readPadsVectorFromTensorInput(tn: ConcreteValueNode): number[] | undefined {
     // If it's a ConstantNode, read it. If it's a TensorNode, it's dynamic (return undefined).
     if (tn.is(ConstantNode)) {
         return decodeIntegerVectorFromTensorProto(tn.as(ConstantNode).constantValue);
@@ -30,7 +31,7 @@ function readPadsVectorFromTensorInput(
 
 function ensurePadSlabConst(
     g: OnnxGraph.Class,
-    cur: TensorNode.Class | ConstantNode.Class,
+    cur: ConcreteValueNode,
     axis: number,
     size: number,
     dtype: DataType,
@@ -62,7 +63,7 @@ function ensurePadSlabConst(
 
 function ensureEdgeSlab(
     g: OnnxGraph.Class,
-    cur: TensorNode.Class | ConstantNode.Class,
+    cur: ConcreteValueNode,
     axis: number,
     size: number,
     tag: string,
@@ -86,8 +87,8 @@ function ensureEdgeSlab(
     const one1 = makeI64ShapeConst(g, `edge_one_${tag}`, [1]);
     const axes1 = makeI64ShapeConst(g, `edge_axes_${tag}`, [axis]);
 
-    let starts: TensorNode.Class | ConstantNode.Class;
-    let ends: TensorNode.Class | ConstantNode.Class;
+    let starts: ConcreteValueNode;
+    let ends: ConcreteValueNode;
     if (tag.endsWith("L")) {
         starts = zero1;
         ends = one1;
@@ -110,7 +111,7 @@ function ensureEdgeSlab(
         .addNode(uniq(g, `edge_slice_${tag}`))
         .init(new OperationNode.Builder("Slice", [cur, starts, ends, axes1], {}))
         .as(OperationNode);
-    const sliceShape: (number | string | undefined)[] = Array.isArray(cur.shape)
+    const sliceShape: Shape = Array.isArray(cur.shape)
         ? [...cur.shape]
         : new Array(rank).fill(undefined);
     if (rank > 0) {
@@ -131,7 +132,7 @@ function ensureEdgeSlab(
         .addNode(uniq(g, `edge_expand_${tag}`))
         .init(new OperationNode.Builder("Expand", [oneSlice, newShape], {}))
         .as(OperationNode);
-    const slabShape: (number | string | undefined)[] = Array.isArray(cur.shape)
+    const slabShape: Shape = Array.isArray(cur.shape)
         ? [...cur.shape]
         : new Array(rank).fill(undefined);
     if (rank > 0) {
@@ -148,7 +149,7 @@ function ensureEdgeSlab(
 
 function ensureReflectSlab(
     g: OnnxGraph.Class,
-    cur: TensorNode.Class | ConstantNode.Class,
+    cur: ConcreteValueNode,
     axis: number,
     size: number,
     tag: string,
@@ -217,7 +218,7 @@ function ensureReflectSlab(
     const stepNeg1 = scalarI64(g, `refl_step_${tag}`, -1);
 
     let startSc: TensorNode.Class;
-    let endSc: TensorNode.Class | ConstantNode.Class;
+    let endSc: ConcreteValueNode;
 
     if (tag.endsWith("L")) {
         // LEFT: indices = [sizeClamped, sizeClamped-1, ..., 1]
@@ -258,7 +259,7 @@ function ensureReflectSlab(
         .init(new OperationNode.Builder("Range", [startSc, endSc, stepNeg1], {}))
         .as(OperationNode);
 
-    const idxShape: (number | string | undefined)[] = [size];
+    const idxShape: Shape = [size];
     const idx = g
         .addNode(uniq(g, `refl_idx_${tag}`))
         .init(new TensorNode.Builder(DataType.INT64, idxShape, "intermediate"))
@@ -272,7 +273,7 @@ function ensureReflectSlab(
         .as(OperationNode);
 
     // slab has same rank as cur, but axis dim = original requested size
-    const reflSlabShape: (number | string | undefined)[] = Array.isArray(cur.shape)
+    const reflSlabShape: Shape = Array.isArray(cur.shape)
         ? [...cur.shape]
         : new Array(rank).fill(undefined);
     if (rank > 0) {
@@ -304,15 +305,11 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
         throw new Error(`[PadHandler] Node ${op.id} input[0] (data) is invalid or missing.`);
     }
 
-    const Xin = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
+    const Xin = asConcreteValueNode(Xn);
     const rank = Xin.shape.length;
 
     // --- Strictly read pads from Input[1] ---
-    const padsNode = ins[1]?.is?.(TensorNode)
-        ? ins[1].as(TensorNode)
-        : ins[1]?.is?.(ConstantNode)
-          ? ins[1].as(ConstantNode)
-          : undefined;
+    const padsNode = tryAsConcreteValueNode(ins[0]);
 
     if (!padsNode) {
         throw new Error(`[PadHandler] Node ${op.id} input[1] (pads) is missing. Adapter failure?`);
@@ -355,7 +352,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     // Prepare working tensor (may be cropped if negative pads)
     let cur = Xin;
     // Maintain current shape for intermediate updates
-    const currentShape: (number | string | undefined)[] = Array.isArray(Xin.shape)
+    const currentShape: Shape = Array.isArray(Xin.shape)
         ? [...Xin.shape]
         : new Array(rank).fill(undefined);
 
@@ -447,7 +444,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
             currentShape[ax] = undefined;
         }
 
-        const parts: (TensorNode.Class | ConstantNode.Class)[] = [];
+        const parts: ConcreteValueNode[] = [];
         if (left) parts.push(left);
         parts.push(cur);
         if (right) parts.push(right!);
@@ -483,14 +480,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
 
     // Cleanup constant inputs
     maybeRemoveOrphanConstant(g, padsNode);
-    maybeRemoveOrphanConstant(
-        g,
-        ins[2]?.is?.(TensorNode)
-            ? ins[2].as(TensorNode)
-            : ins[2]?.is?.(ConstantNode)
-              ? ins[2].as(ConstantNode)
-              : undefined,
-    );
+    maybeRemoveOrphanConstant(g, tryAsConcreteValueNode(ins[2]));
 
     return true;
 }

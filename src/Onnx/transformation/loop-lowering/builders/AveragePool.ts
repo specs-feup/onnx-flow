@@ -3,6 +3,7 @@ import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
+import type { ConcreteValueNode } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import {
     uniq,
@@ -12,12 +13,12 @@ import {
     bool,
     zeroTensor,
     resolveShapeToNumbers,
+    isValueNode,
+    asValueNode,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
 import { unsqueezeIdx, decodeMixedRadix } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
-import RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 class AveragePoolBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]): boolean {
@@ -62,14 +63,8 @@ class AveragePoolBuilder implements LoopBuilder {
 
         const inputsArr = avg
             .getInputs()
-            ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode))
-            .map((n) =>
-                n.is(TensorNode)
-                    ? n.as(TensorNode)
-                    : n.is(ConstantNode)
-                      ? n.as(ConstantNode)
-                      : n.as(RegionArgumentNode),
-            );
+            ?.filter((n) => isValueNode(n))
+            .map((n) => asValueNode(n));
         if (!inputsArr || inputsArr.length < 1) {
             throw new Error("AveragePoolBuilder: AveragePool must have at least X as input");
         }
@@ -321,8 +316,8 @@ class AveragePoolBuilder implements LoopBuilder {
         const sumInit = zeroFloat;
         const countInit = zeroInt;
 
-        let sumVal: TensorNode.Class | ConstantNode.Class = sumInit;
-        let countVal: TensorNode.Class | ConstantNode.Class = countInit;
+        let sumVal: ConcreteValueNode = sumInit;
+        let countVal: ConcreteValueNode = countInit;
 
         for (let kh = 0; kh < kH; kh++) {
             for (let kwi = 0; kwi < kW; kwi++) {
@@ -676,7 +671,7 @@ class AveragePoolBuilder implements LoopBuilder {
         }
 
         // Final avg = sumVal / divisor
-        let divisor: TensorNode.Class | ConstantNode.Class;
+        let divisor: ConcreteValueNode;
         if (countIncludePad) {
             // divide by kH*kW
             divisor = makeTensorConst(body, "divisor_kSize", scalarInt64(kernelSize));

@@ -1,12 +1,15 @@
+import type ConstantNode from "./ConstantNode.js";
 import type OnnxGraph from "./OnnxGraph.js";
+import type RegionArgumentNode from "./RegionArgumentNode.js";
+import type TensorNode from "./TensorNode.js";
 
 // =====================================================================================
 // RAW ONNX JSON INTERFACES (For parsing external JSON without 'any')
 // =====================================================================================
 
 export interface RawOnnxDim {
-    dimValue?: string | number;
-    dim_value?: string | number;
+    dimValue?: KnownDim;
+    dim_value?: KnownDim;
     dimParam?: string;
     dim_param?: string;
 }
@@ -141,7 +144,7 @@ export enum DataType {
 export type TensorProto = {
     name?: string;
     dataType?: DataType;
-    dims?: (number | string)[];
+    dims?: KnownShape;
     rawData?: { type: string; data: number[] | Buffer | bigint[] };
 
     // Field mapping for specific types:
@@ -195,5 +198,16 @@ export type AttributeValue =
     | OnnxGraph.Class[];
 export type AttributeMap = Record<string, AttributeValue>;
 
+// Level 1: The most generic form (can be unknown)
 export type Dim = number | string | undefined;
 export type Shape = Dim[];
+
+// Level 2: The shape is known, but might contain symbolic strings (e.g., "batch_size")
+export type KnownDim = number | string;
+export type KnownShape = KnownDim[];
+
+// Level 3: The shape is mathematically fully static (only integers)
+export type StaticShape = number[];
+
+export type ValueNode = TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class;
+export type ConcreteValueNode = TensorNode.Class | ConstantNode.Class;

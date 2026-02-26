@@ -1,9 +1,9 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { Dim } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, addEdge, toArrayLike } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import { uniq, addEdge, toArrayLike, asConcreteValueNode } from "../../../Utils.js";
 
 export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Expand") return false;
@@ -18,8 +18,8 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     const xIn = ins[0];
     const shapeIn = ins[1];
 
-    const X = xIn.is(TensorNode) ? xIn.as(TensorNode) : xIn.as(ConstantNode);
-    const shape = shapeIn.is(TensorNode) ? shapeIn.as(TensorNode) : shapeIn.as(ConstantNode);
+    const X = asConcreteValueNode(xIn);
+    const shape = asConcreteValueNode(shapeIn);
 
     const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
@@ -53,7 +53,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     // Pick a reasonable meta-shape for the zeros/add result.
     // This is for graph typing only; runtime shape still comes from ConstantOfShape(shape).
-    let outShape: Array<number | string | undefined>;
+    let outShape: Array<Dim>;
 
     if (Array.isArray(Y.shape) && Y.shape.length > 0) {
         outShape = [...Y.shape];

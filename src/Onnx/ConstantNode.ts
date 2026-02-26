@@ -1,6 +1,6 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import type { AttributeMap, AttributeValue, TensorProto } from "./OnnxTypes.js";
+import type { AttributeMap, AttributeValue, KnownShape, TensorProto } from "./OnnxTypes.js";
 import { DataType } from "./OnnxTypes.js";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
@@ -20,7 +20,7 @@ namespace ConstantNode {
             return this.data[TAG].value;
         }
 
-        get shape(): (number | string)[] {
+        get shape(): KnownShape {
             return this.data[TAG].value.dims ?? [];
         }
 
@@ -28,7 +28,7 @@ namespace ConstantNode {
             return this.data[TAG].value.dataType ?? DataType.UNDEFINED;
         }
 
-        setShape(shape: (number | string)[]): void {
+        setShape(shape: KnownShape): void {
             this.data[TAG].value.dims = shape;
         }
 

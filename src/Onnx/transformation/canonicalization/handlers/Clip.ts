@@ -2,9 +2,15 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import type { DataType } from "../../../OnnxTypes.js";
-import { toArrayLike, uniq, maybeRemoveOrphanConstant } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type { ConcreteValueNode, DataType } from "../../../OnnxTypes.js";
+import {
+    toArrayLike,
+    uniq,
+    maybeRemoveOrphanConstant,
+    isConcreteValueNode,
+    asConcreteValueNode,
+    tryAsConcreteValueNode,
+} from "../../../Utils.js";
 
 // --- Handler ---
 export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
@@ -16,10 +22,10 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     }
 
     const Xn = ins[0];
-    if (!Xn.is(TensorNode) && !Xn.is(ConstantNode)) {
+    if (!isConcreteValueNode(Xn)) {
         throw new Error(`[ClipHandler] Node ${op.id} input[0] invalid.`);
     }
-    const X = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
+    const X = asConcreteValueNode(Xn);
     const dtype = X.literalType as DataType;
 
     // Get output tensor Y
@@ -28,23 +34,11 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     const Y = outs[0];
 
     // --- Gather min/max ONLY from inputs (Inputs 1 and 2 are optional in ONNX) ---
-    let minT: TensorNode.Class | ConstantNode.Class | undefined;
-    let maxT: TensorNode.Class | ConstantNode.Class | undefined;
-
-    if (ins[1]?.is?.(TensorNode)) {
-        minT = ins[1].as(TensorNode);
-    } else if (ins[1]?.is?.(ConstantNode)) {
-        minT = ins[1].as(ConstantNode);
-    }
-
-    if (ins[2]?.is?.(TensorNode)) {
-        maxT = ins[2].as(TensorNode);
-    } else if (ins[2]?.is?.(ConstantNode)) {
-        maxT = ins[2].as(ConstantNode);
-    }
+    const minT: ConcreteValueNode | undefined = tryAsConcreteValueNode(ins[1]);
+    const maxT: ConcreteValueNode | undefined = tryAsConcreteValueNode(ins[2]);
 
     // Build: cur = X; if (min) cur = Max(cur, min); if (max) cur = Min(cur, max)
-    let cur: TensorNode.Class | ConstantNode.Class = X;
+    let cur: ConcreteValueNode = X;
 
     const maxOp = g
         .addNode(uniq(g, `clip_max_${op.id}`))
@@ -88,22 +82,8 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     g.getNodeById(op.id)?.remove();
 
     // Clean up unused min/max constants or initializers
-    maybeRemoveOrphanConstant(
-        g,
-        ins[1]?.is?.(TensorNode)
-            ? ins[1].as(TensorNode)
-            : ins[1]?.is?.(ConstantNode)
-              ? ins[1].as(ConstantNode)
-              : undefined,
-    );
-    maybeRemoveOrphanConstant(
-        g,
-        ins[2]?.is?.(TensorNode)
-            ? ins[2].as(TensorNode)
-            : ins[2]?.is?.(ConstantNode)
-              ? ins[2].as(ConstantNode)
-              : undefined,
-    );
+    maybeRemoveOrphanConstant(g, tryAsConcreteValueNode(ins[1]));
+    maybeRemoveOrphanConstant(g, tryAsConcreteValueNode(ins[2]));
 
     return true;
 }

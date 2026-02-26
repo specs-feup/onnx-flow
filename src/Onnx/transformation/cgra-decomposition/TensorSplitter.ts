@@ -1,12 +1,12 @@
 import type OnnxGraph from "../../OnnxGraph.js";
 import TensorNode from "../../TensorNode.js";
 import ConstantNode from "../../ConstantNode.js";
-import type { TensorProto } from "../../OnnxTypes.js";
+import type { ConcreteValueNode, StaticShape, TensorProto } from "../../OnnxTypes.js";
 import { makeTensorProto, readTensorData } from "../../Utils.js";
 
 export type TensorSplit = {
     // Phase 3: splits can contain either TensorNodes or ConstantNodes
-    splits: (TensorNode.Class | ConstantNode.Class)[];
+    splits: ConcreteValueNode[];
     columnWise: boolean;
 };
 
@@ -29,7 +29,7 @@ export default class TensorSplitter {
     private splitConstantData(
         node: ConstantNode.Class,
         splitIdx: number,
-        numSplits: number,
+        _numSplits: number,
         columnWise: boolean,
     ): TensorProto {
         const data = readTensorData(node) ?? [];
@@ -70,13 +70,13 @@ export default class TensorSplitter {
             return existingSplit;
         }
 
-        const shape = tensor.shape as number[];
+        const shape = tensor.shape as StaticShape;
         // Determine number of resulting nodes and their internal shapes
         const [numSplits, splitShape] = columnWise
             ? [shape[1] ?? 1, [shape[0]]]
             : [shape[0] ?? 1, [shape[1]]];
 
-        const splits: (TensorNode.Class | ConstantNode.Class)[] = [];
+        const splits: ConcreteValueNode[] = [];
 
         for (let i = 0; i < numSplits; i++) {
             const splitId = `${tensor.id}_split${i}`;

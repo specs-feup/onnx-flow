@@ -9,6 +9,7 @@ import type {
     RawOnnxModel,
     RawOnnxNode,
 } from "./Onnx/OnnxTypes.js";
+import { BASE_TEN } from "./Onnx/Utils.js";
 
 /**
  * Toggle strict behavior for Reshape shape constants:
@@ -18,6 +19,9 @@ import type {
 const STRICT_RESHAPE_NULLS = false as boolean;
 
 const OPSET = 19;
+const IR_VERSION = 9;
+
+const MODEL_VERSION = 1;
 
 /**
  * Recursively traverses an object and converts any { type: 'Buffer', data: [...] }
@@ -154,7 +158,7 @@ export function coerceNumericFields(obj: unknown): unknown {
         if (typeof x === "string") {
             const s = x.trim().toLowerCase();
             if (s === "" || s === "null" || s === "nan" || s === "undefined") return 0;
-            const n = parseInt(x, 10);
+            const n = parseInt(x, BASE_TEN);
             return Number.isFinite(n) ? n : 0;
         }
         if (typeof x === "number") {
@@ -162,7 +166,7 @@ export function coerceNumericFields(obj: unknown): unknown {
         }
         if (typeof x === "bigint") {
             const n = Number(x);
-            return Number.isFinite(n) ? n : parseInt(x.toString(), 10);
+            return Number.isFinite(n) ? n : parseInt(x.toString(), BASE_TEN);
         }
         return 0;
     };
@@ -260,11 +264,11 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
         const jsonData = JSON.parse(jsonText) as RawOnnxModel;
 
         const defaultFields = {
-            ir_version: 9,
+            ir_version: IR_VERSION,
             opset_import: [{ domain: "", version: OPSET }],
             producer_name: "onnx-flow",
             producer_version: "0.1.0",
-            model_version: 1,
+            model_version: MODEL_VERSION,
         };
 
         const completeJson = {

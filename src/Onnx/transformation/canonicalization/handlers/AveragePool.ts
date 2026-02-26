@@ -1,10 +1,9 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import type { AttributeValue } from "../../../OnnxTypes.js";
+import type { AttributeValue, ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { addEdge, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../../Utils.js";
-import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "AveragePool") return false;
@@ -102,7 +101,7 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     addEdge(g, convSum, sumOut, dtype, Y.shape);
 
     // D. Compute Divisor
-    let divisor: ConstantNode.Class | TensorNode.Class;
+    let divisor: ConcreteValueNode;
 
     if (countIncludePad === 1 || autoPad === "VALID") {
         // Simple case: Divide by kernel area

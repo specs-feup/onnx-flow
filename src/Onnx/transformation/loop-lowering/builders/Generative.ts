@@ -3,9 +3,9 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import type { TensorProto } from "../../../OnnxTypes.js";
+import type { KnownShape, TensorProto } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, int64Vec, bool, makeTensorConst } from "../../../Utils.js";
+import { uniq, int64Vec, bool, makeTensorConst, UNKOWN_SHAPE } from "../../../Utils.js";
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
 import { unsqueezeIdx } from "../BuildLoop.js";
 
@@ -44,7 +44,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         const elemTy = startNode.literalType;
 
         // out shape is unknown-length 1D (Range defines its length at runtime)
-        const outShape: (number | string)[] = [-1];
+        const outShape: KnownShape = [-1];
 
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const iter = body
@@ -58,7 +58,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         // unknown length carry → declare [-1], *no* initializer
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(new TensorNode.Builder(elemTy, [-1], "input"))
+            .init(new TensorNode.Builder(elemTy, UNKOWN_SHAPE, "input"))
             .as(TensorNode);
 
         const axes = makeTensorConst(body, "axes", int64Vec([0]));

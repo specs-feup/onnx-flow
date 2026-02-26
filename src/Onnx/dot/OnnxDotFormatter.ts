@@ -11,6 +11,7 @@ import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
 import { readTensorData } from "../Utils.js";
+import type { Shape } from "../OnnxTypes.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -59,7 +60,7 @@ export default class OnnxDotFormatter<
         return attrs;
     }
 
-    static shapeToLabel(shape: (number | string | undefined)[]): string {
+    static shapeToLabel(shape: Shape): string {
         const shapeString = `{${shape.join(",")}}`;
         return shapeString === "{}" ? "sc" : shapeString;
     }

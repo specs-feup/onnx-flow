@@ -2,7 +2,7 @@ import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import type { AttributeMap, AttributeProto, AttributeValue } from "./OnnxTypes.js";
+import type { AttributeMap, AttributeProto, AttributeValue, DataType, Shape } from "./OnnxTypes.js";
 
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
@@ -18,15 +18,15 @@ namespace TensorNode {
             return this.data[TAG].literalType;
         }
 
-        get shape(): (number | string | undefined)[] {
+        get shape(): Shape {
             return this.data[TAG].shape;
         }
 
-        setShape(shape: (number | string | undefined)[]): void {
+        setShape(shape: Shape): void {
             this.data[TAG].shape = shape;
         }
 
-        setLiteralType(dtype: number): void {
+        setLiteralType(dtype: DataType): void {
             this.data[TAG].literalType = dtype;
         }
 
@@ -73,15 +73,15 @@ namespace TensorNode {
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
-        private literalType: number;
-        private shape: (number | string | undefined)[];
+        private literalType: DataType;
+        private shape: Shape;
         private type: TensorKind;
         private extraAttrs?: AttributeProto[] | undefined;
         private metadata: AttributeMap;
 
         constructor(
-            literalType: number,
-            shape: (number | string | undefined)[],
+            literalType: DataType,
+            shape: Shape,
             type: TensorKind,
             extraAttrs?: AttributeProto[],
             metadata: AttributeMap = {},
@@ -119,8 +119,8 @@ namespace TensorNode {
     export interface Data extends BaseNode.Data {
         [TAG]: {
             version: typeof VERSION;
-            literalType: number;
-            shape: (number | string | undefined)[];
+            literalType: DataType;
+            shape: Shape;
             type: TensorKind;
             extraAttrs?: AttributeProto[];
             metadata: AttributeMap;
