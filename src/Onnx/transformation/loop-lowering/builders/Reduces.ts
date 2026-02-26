@@ -148,12 +148,12 @@ export default class ReducesBuilder implements LoopBuilder {
 
         inferShapes(outer);
 
-        let elemTy = xInput.literalType ?? DataType.FLOAT;
+        let elemTy = xInput.literalType;
         if (elemTy === DataType.UNDEFINED) elemTy = DataType.FLOAT;
 
         // Static input shape is mandatory for this lowering
         const inShape = toStaticShape(xInput.shape as Shape);
-        if (!inShape || inShape.some((d) => d === -1)) {
+        if (inShape.some((d) => d === -1)) {
             throw new Error(`[ReducesBuilder] dynamic input shapes not supported for ${op.id}`);
         }
         const rank = inShape.length;
@@ -165,7 +165,7 @@ export default class ReducesBuilder implements LoopBuilder {
             axesFromInput = readConstIntegerVectorFromTensorNode(axesNode);
         }
 
-        const atts = op.getAttributes?.() ?? op.attributes ?? {};
+        const atts = op.getAttributes();
         const axesAttr: number[] | undefined =
             axesFromInput ??
             (Array.isArray(atts["axes"])
@@ -174,7 +174,7 @@ export default class ReducesBuilder implements LoopBuilder {
                   ? [Number(atts["axes"])]
                   : undefined);
         const keepAttr = atts["keepdims"];
-        const keep01: 0 | 1 = keepAttr === undefined ? 1 : Number(keepAttr) === 1 ? 1 : 0;
+        const keep01: 0 | 1 = Number(keepAttr) === 1 ? 1 : 0;
 
         // If axes/keepdims both missing, infer from the input vs *expected* out shape later;
         // we’ll compute the out shape ourselves, so we don’t need the op’s outgoer at all.
@@ -188,7 +188,7 @@ export default class ReducesBuilder implements LoopBuilder {
         const outStatic = makeOutShape(inShape, effAxes, keep01);
 
         // We no longer read the reduce op's outgoer here (it can be absent in a chain)
-        let outTensor = op.getOutgoers?.targets?.filterIs?.(TensorNode)?.first?.(); // optional
+        let outTensor = op.getOutgoers.targets.filterIs(TensorNode).first(); // optional
 
         // Trip count & carry length
         const totalIters = inShape.reduce((a, b) => a * (b > 0 ? b : 1), 1);

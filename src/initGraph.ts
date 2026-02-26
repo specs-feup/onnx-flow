@@ -33,7 +33,7 @@ function parseShape(shape: RawOnnxTensorType["shape"]): (number | string)[] {
             return dimParam; // symbolic dimension, e.g., "batch"
         }
 
-        if (dimValue !== undefined && dimValue !== null) {
+        if (dimValue !== undefined) {
             return Number(dimValue); // explicitly cast to number
         } else {
             return -1; // unknown dimension size
@@ -81,7 +81,7 @@ function addInitializers(data: RawOnnxModel, graph: OnnxGraph.Class) {
     }
 
     data.graph.initializer.forEach((tensor: TensorProto) => {
-        if (!tensor.name || !graph.hasNode(tensor.name)) {
+        if (tensor.name === undefined || !graph.hasNode(tensor.name)) {
             graph.addNode(tensor.name).init(new ConstantNode.Builder(tensor)).as(ConstantNode);
         }
     });
@@ -158,18 +158,20 @@ function addNodes(
                 let type = DataType.UNDEFINED;
                 let shape: (number | string | undefined)[] = [];
 
-                if (parentNode?.is(TensorNode)) {
-                    const tn = parentNode.as(TensorNode);
-                    type = tn.literalType;
-                    shape = tn.shape;
-                } else if (parentNode?.is(ConstantNode)) {
-                    const cn = parentNode.as(ConstantNode);
-                    type = cn.literalType;
-                    shape = cn.shape;
-                } else if (parentNode?.is(RegionArgumentNode)) {
-                    const ra = parentNode.as(RegionArgumentNode);
-                    type = ra.literalType;
-                    shape = ra.shape;
+                if (parentNode !== undefined) {
+                    if (parentNode.is(TensorNode)) {
+                        const tn = parentNode.as(TensorNode);
+                        type = tn.literalType;
+                        shape = tn.shape;
+                    } else if (parentNode.is(ConstantNode)) {
+                        const cn = parentNode.as(ConstantNode);
+                        type = cn.literalType;
+                        shape = cn.shape;
+                    } else if (parentNode.is(RegionArgumentNode)) {
+                        const ra = parentNode.as(RegionArgumentNode);
+                        type = ra.literalType;
+                        shape = ra.shape;
+                    }
                 }
 
                 // Create proxy node in CURRENT graph
@@ -215,14 +217,19 @@ function addNodes(
                 return resolveInput(inputName) !== undefined;
             });
 
-            if (!allInputsResolved && loopCount <= nodesToAdd.size * 2) {
+            if (allInputsResolved === undefined && loopCount <= nodesToAdd.size * 2) {
                 continue; // Wait for inputs
             }
 
             // --- Node Processing ---
 
             // A. Handle Constant (Phase 3)
-            if (node.opType === "Constant" && node.output?.length && node.output?.length > 0) {
+            if (
+                node.opType === "Constant" &&
+                node.output !== undefined &&
+                node.output.length &&
+                node.output.length > 0
+            ) {
                 const name = node.output[0];
                 let constantValue: TensorProto | undefined = undefined;
 
@@ -337,7 +344,8 @@ function addNodes(
                     const eA = attrMap.get("else_branch");
                     if (eA?.g)
                         orderedRegions.push(createGraphWithCaptures({ graph: eA.g }, graph).graph);
-                } else if (node.opType === "Loop" || node.opType === "Scan") {
+                } else {
+                    //Loop or Scan case
                     const bA = attrMap.get("body");
                     if (bA?.g)
                         orderedRegions.push(createGraphWithCaptures({ graph: bA.g }, graph).graph);
@@ -401,8 +409,6 @@ function addEdges(
             const inputs = opNode.as(OperationNode).getInputs() ?? [];
 
             inputs.forEach((inputNode) => {
-                if (!inputNode) return;
-
                 let type = DataType.UNDEFINED;
                 let shape: (number | string | undefined)[] = [];
 

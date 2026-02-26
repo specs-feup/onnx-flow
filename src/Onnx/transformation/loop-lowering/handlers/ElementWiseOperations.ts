@@ -50,7 +50,14 @@ export default function handleElementWiseOperation(
     g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
 
     // Gate ONLY when we’re in a coalesced + fused chain
-    if (ctx.coalesce && ctx.gateByK && ctx.kIdx && ctx.kM1) {
+    if (
+        ctx.coalesce &&
+        ctx.gateByK !== undefined &&
+        ctx.kIdx !== undefined &&
+        ctx.kIdx !== null &&
+        ctx.kM1 !== undefined &&
+        ctx.kM1 !== null
+    ) {
         const eqNode = g
             .addNode(uniq(g, `eq_k_last_${op.id}`))
             .init(new OperationNode.Builder("Equal", [ctx.kIdx, ctx.kM1]))

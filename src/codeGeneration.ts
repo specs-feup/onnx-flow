@@ -24,9 +24,9 @@ function handleOperation(
     switch (source.type) {
         case "Addition":
         case "Add":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} + ${variables.get(inputs[1])})`,
@@ -36,9 +36,9 @@ function handleOperation(
             break;
         case "Subtraction":
         case "Sub":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} - ${variables.get(inputs[1])})`,
@@ -48,9 +48,9 @@ function handleOperation(
             break;
         case "Multiplication":
         case "Mul":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} * ${variables.get(inputs[1])})`,
@@ -60,9 +60,9 @@ function handleOperation(
             break;
         case "Division":
         case "Div":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} / ${variables.get(inputs[1])})`,
@@ -71,9 +71,9 @@ function handleOperation(
             }
             break;
         case "Load":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     const input0Node = graph.getNodeById(inputs[0]);
                     const input1Node = graph.getNodeById(inputs[1]);
 
@@ -106,17 +106,17 @@ function handleOperation(
             }
             break;
         case "Not":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(source.id, `!${variables.get(inputs[0])}`);
                 }
             }
             break;
         case "Equality":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} === ${variables.get(inputs[1])})`,
@@ -125,9 +125,9 @@ function handleOperation(
             }
             break;
         case "Store":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     if (target.is(VariableNode) && target.as(VariableNode).type === "output") {
                         variables.set(
                             source.id,
@@ -245,20 +245,16 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
         const indexNode = node.children
             .filterIs(VariableNode)
             .filter((node) => node.type === "index");
-        if (indexNode && indexNode.length === 1) {
+        if (indexNode.length === 1) {
             code += `   let ${indexNode[0].id} = 0\n`;
         } else return "";
 
         const indexAuxNodes = node.children
             .filterIs(VariableNode)
             .filter((node) => node.type === "index_aux");
-        if (indexAuxNodes) {
-            indexAuxNodes.forEach((node) => (code += `   let ${node.id} = 0\n`));
-        }
+        indexAuxNodes.forEach((node) => (code += `   let ${node.id} = 0\n`));
 
-        if (loopIterationsNode) {
-            code += `   while (${indexNode[0].id} < ${readConstIntegerVectorFromTensorNode(loopIterationsNode)![0]}) {\n`;
-        }
+        code += `   while (${indexNode[0].id} < ${readConstIntegerVectorFromTensorNode(loopIterationsNode)![0]}) {\n`;
 
         orderedEdges.forEach((edge) => {
             code += handleEdges(edge, graph, outputName);

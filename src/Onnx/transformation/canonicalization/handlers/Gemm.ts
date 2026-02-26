@@ -2,7 +2,7 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { DataType } from "../../../OnnxTypes.js";
+import type { DataType } from "../../../OnnxTypes.js";
 import { toArrayLike, uniq, addEdge, scalarOfType } from "../../../Utils.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
@@ -11,7 +11,7 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     if (op.type !== "Gemm") return false;
 
     // Inputs in topo order
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length < 2) {
         throw new Error(`[GemmHandler] Node ${op.id} missing required inputs (A, B).`);
     }
@@ -36,19 +36,19 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     }
 
     // Single output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // Attributes (defaults: alpha=1.0, beta=1.0, transA=0, transB=0)
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
+    const a = op.getAttributes();
     const alpha = Number(a["alpha"] ?? 1.0);
     const beta = Number(a["beta"] ?? 1.0);
     const transA = Number(a["transA"] ?? 0) === 1 ? 1 : 0;
     const transB = Number(a["transB"] ?? 0) === 1 ? 1 : 0;
 
     // DType selections
-    const dtypeLeft = (A.literalType ?? DataType.FLOAT) as DataType;
+    const dtypeLeft = A.literalType as DataType;
     const dtypeRight = (C?.literalType ?? dtypeLeft) as DataType;
 
     /* ---------- optional Transpose on A/B ---------- */
@@ -139,18 +139,9 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     if (!producedToY) {
         // No C-branch → wire 'left' directly to Y
         const srcOp = toArrayLike<OperationNode.Class>(
-            left.getIncomers?.sources?.filterIs?.(OperationNode),
+            left.getIncomers.sources.filterIs(OperationNode),
         )[0];
-        if (srcOp) {
-            g.addEdge(srcOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        } else {
-            // fallback: Identity
-            const id = g
-                .addNode(uniq(g, `Gemm_Id_${op.id}`))
-                .init(new OperationNode.Builder("Identity", [left], {}))
-                .as(OperationNode);
-            g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        }
+        g.addEdge(srcOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     }
 
     g.getNodeById(op.id)?.remove();

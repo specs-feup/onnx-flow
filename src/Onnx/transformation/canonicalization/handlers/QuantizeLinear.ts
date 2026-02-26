@@ -23,7 +23,7 @@ export default function quantizeLinearHandler(
 ): boolean {
     if (op.type !== "QuantizeLinear") return false;
 
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length < 2) {
         throw new Error(
             `[QuantizeLinearHandler] Node ${op.id} missing required inputs (x, y_scale).`,
@@ -51,15 +51,15 @@ export default function quantizeLinearHandler(
         throw new Error(`[QuantizeLinearHandler] Node ${op.id} has invalid inputs.`);
     }
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // Target type comes from Z (if present) or Y.
-    const targetType = Z ? Z.literalType : (Y.literalType ?? DataType.UINT8);
-    const floatT = X.literalType ?? DataType.FLOAT;
+    const targetType = Z ? Z.literalType : Y.literalType;
+    const floatT = X.literalType;
 
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
+    const a = op.getAttributes();
     const axisAttr = Number(a["axis"] ?? 1);
 
     // 1. Prepare Inputs (Scale is float, Z needs cast to float)
@@ -79,7 +79,7 @@ export default function quantizeLinearHandler(
     }
 
     // 2. Broadcast S and Z to X's shape (Scalar or Per-Axis)
-    const rank = X.shape?.length ?? 0;
+    const rank = X.shape.length;
     const shapeXop = g
         .addNode(uniq(g, `QL_ShapeX_${op.id}`))
         .init(new OperationNode.Builder("Shape", [X], {}))
@@ -90,7 +90,7 @@ export default function quantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, shapeXop, shapeX, DataType.INT64, [rank]);
 
-    const sRank = S.shape?.length ?? 0;
+    const sRank = S.shape.length;
     // Heuristic: if S has rank 1 and X has rank > 1, assume per-axis if not 1-element
     const isPerAxis = sRank === 1 && rank > 1;
 

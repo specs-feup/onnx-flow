@@ -538,7 +538,7 @@ export default function handleMatMul(
             .init(new OnnxEdge.Builder(acc.literalType, acc.shape))
             .as(OnnxEdge);
 
-        if (ctx.gateByK) {
+        if (ctx.gateByK !== undefined) {
             const one = scalarI64(g, `one_${op.id}`, 1);
             const Km1 = g
                 .addNode(uniq(g, `Km1_${op.id}`))

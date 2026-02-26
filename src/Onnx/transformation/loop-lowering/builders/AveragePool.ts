@@ -31,7 +31,7 @@ class AveragePoolBuilder implements LoopBuilder {
 
         if (op.type !== "AveragePool") return false;
 
-        const a = op.getAttributes?.() ?? op.attributes ?? {};
+        const a = op.getAttributes();
 
         const autoPad = (a["auto_pad"] ?? "NOTSET") as string;
         const ceilMode = Number(a["ceil_mode"] ?? 0);
@@ -88,7 +88,7 @@ class AveragePoolBuilder implements LoopBuilder {
         const N = xShape[0];
         const C = xShape[1];
 
-        const a = avg.getAttributes?.() ?? avg.attributes ?? {};
+        const a = avg.getAttributes();
 
         const countIncludePad = Number(a["count_include_pad"] ?? 0);
 

@@ -20,8 +20,6 @@ import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 function readPadsVectorFromTensorInput(
     tn: TensorNode.Class | ConstantNode.Class,
 ): number[] | undefined {
-    if (!tn) return undefined;
-
     // If it's a ConstantNode, read it. If it's a TensorNode, it's dynamic (return undefined).
     if (tn.is(ConstantNode)) {
         return decodeIntegerVectorFromTensorProto(tn.as(ConstantNode).constantValue);
@@ -293,7 +291,7 @@ function ensureReflectSlab(
 export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Pad") return false;
 
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     // Pad must have at least 'data' and 'pads' (after adapter)
     if (ins.length < 2) {
         throw new Error(
@@ -302,7 +300,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     }
 
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) {
+    if (!Xn.is(TensorNode) && !Xn.is(ConstantNode)) {
         throw new Error(`[PadHandler] Node ${op.id} input[0] (data) is invalid or missing.`);
     }
 
@@ -332,7 +330,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     }
 
     // mode
-    const attr = op.getAttributes?.() ?? op.attributes ?? {};
+    const attr = op.getAttributes();
     const modeRaw = String(attr["mode"] ?? "constant").toLowerCase();
     const mode: "constant" | "edge" | "reflect" =
         modeRaw === "edge" || modeRaw === "reflect" ? modeRaw : "constant";
@@ -340,13 +338,13 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     // pad value (only used in constant)
     let padValue = 0;
     const rawPadValue = ins[2];
-    if (rawPadValue?.is?.(TensorNode) || rawPadValue?.is?.(ConstantNode)) {
+    if (rawPadValue.is(TensorNode) || rawPadValue.is(ConstantNode)) {
         const s = readScalarFromTensorNode(rawPadValue);
         if (typeof s === "number" && Number.isFinite(s)) padValue = s;
     }
 
     // Output Y
-    const outsNC = op.getOutgoers?.targets?.filterIs?.(TensorNode);
+    const outsNC = op.getOutgoers.targets.filterIs(TensorNode);
     const outs = toArrayLike<TensorNode.Class>(outsNC);
     if (outs.length !== 1) return false;
     const Y = outs[0];

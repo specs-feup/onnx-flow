@@ -355,11 +355,12 @@ export default class CgraDotFormatter<
         const dotNodes: DotNode[] = [];
         const dotEdges: Map<string, DotEdge> = new Map<string, DotEdge>();
 
-        function addNodeStatements(...statements: DotStatement[]) {
-            const edges = (statements.filter((s) => s instanceof DotEdge) as DotEdge[]) || [];
-            const nodes = (statements.filter((s) => s instanceof DotNode) as DotNode[]) || [];
-            const others =
-                statements.filter((s) => !(s instanceof DotNode) && !(s instanceof DotEdge)) || [];
+        function addNodeStatements(...statements: (DotStatement | DotNode | DotEdge)[]) {
+            const edges = statements.filter((s) => s instanceof DotEdge) as DotEdge[];
+            const nodes = statements.filter((s) => s instanceof DotNode) as DotNode[];
+            const others = statements.filter(
+                (s) => !(s instanceof DotNode) && !(s instanceof DotEdge),
+            );
 
             dotNodes.push(...nodes);
             edges.forEach((edge) =>

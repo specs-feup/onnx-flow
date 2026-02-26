@@ -46,10 +46,10 @@ export default [
       'prettier/prettier': 'error',
 
       // Flags unnecessary optional chaining (?.) and conditions that are always true/false
-      '@typescript-eslint/no-unnecessary-condition': 'warn', 
+      '@typescript-eslint/no-unnecessary-condition': 'error', 
       
       // Flags risky boolean checks (like checking an array instead of array.length)
-      '@typescript-eslint/strict-boolean-expressions': 'warn',
+      '@typescript-eslint/strict-boolean-expressions': 'error',
 
       // Configure unused variables to ignore those starting with an underscore
       '@typescript-eslint/no-unused-vars': [

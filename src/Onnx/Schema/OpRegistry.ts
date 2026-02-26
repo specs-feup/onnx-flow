@@ -1,14 +1,14 @@
 import type { OpSchema } from "./OpSchema.js";
 
 export class OpRegistry {
-    private static instance: OpRegistry;
+    private static instance: OpRegistry | undefined;
     // Map<OpType, Map<Version, Schema>>
     private schemas: Map<string, Map<number, OpSchema>> = new Map();
 
     private constructor() {}
 
     public static getInstance(): OpRegistry {
-        if (!OpRegistry.instance) {
+        if (OpRegistry.instance === undefined) {
             OpRegistry.instance = new OpRegistry();
         }
         return OpRegistry.instance;

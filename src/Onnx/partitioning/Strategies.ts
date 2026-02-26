@@ -40,7 +40,7 @@ export function splitByAncestor(graph: OnnxGraph.Class, splitNodeId: string): Pa
     initialHeadNodes.forEach((nodeId) => {
         const node = graph.getNodeById(nodeId);
         // If it's an operation, pull its output tensors into Head
-        if (node?.is(OperationNode)) {
+        if (node !== undefined && node.is(OperationNode)) {
             node.outgoers.forEach((edge) => {
                 if (edge.target.is(TensorNode)) {
                     headSet.add(edge.target.id);

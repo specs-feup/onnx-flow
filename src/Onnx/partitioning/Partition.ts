@@ -160,7 +160,7 @@ export function partitionGraph(
                         // Clone shared initializer into Tail if missing
                         if (!tailMap.has(input.id)) {
                             const origNode = originalGraph.getNodeById(input.id);
-                            if (origNode?.is(ConstantNode)) {
+                            if (origNode !== undefined && origNode.is(ConstantNode)) {
                                 tailMap.set(
                                     input.id,
                                     cloneConstant(origNode.as(ConstantNode), tailGraph),
@@ -185,9 +185,9 @@ export function partitionGraph(
 
                     // Boundary Tensor
                     const headNode = headMap.get(input.id);
-                    if (headNode?.is(TensorNode)) {
+                    if (headNode !== undefined && headNode.is(TensorNode)) {
                         headNode.as(TensorNode).setType("output");
-                    } else if (headNode?.is(ConstantNode)) {
+                    } else if (headNode !== undefined && headNode.is(ConstantNode)) {
                         // This should be unreachable due to the headInitializers check above,
                         // but if it happens, we should catch the structural error.
                         throw new Error(

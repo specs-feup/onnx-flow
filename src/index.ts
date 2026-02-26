@@ -270,7 +270,7 @@ const validate = argv.validate;
 // to ensure the split point remains stable and recognizable.
 const isPartitioning = argv.partition && argv.partition.length > 0;
 
-if (isPartitioning) {
+if (isPartitioning !== undefined) {
     argv.noLowLevel = true;
     argv.noOptimize = true;
     argv.noCodegen = true;
@@ -372,15 +372,16 @@ if (isPartitioning) {
                 targetNodeId = resolvedNode.id;
             }
 
-            if (targetNodeId) {
+            if (targetNodeId !== undefined) {
                 if (verbosity > 0) console.log(`Partitioning graph at node: ${targetNodeId}`);
                 const sets = splitByAncestor(graph, targetNodeId);
                 partitions = partitionGraph(graph, sets);
 
                 const exportPartition = async (g: OnnxGraph.Class, suffix: string) => {
-                    const base = outputFilePath
-                        ? outputFilePath.split(".").slice(0, -1).join(".")
-                        : inputFilePath.split(".").slice(0, -1).join(".");
+                    const base =
+                        outputFilePath !== undefined
+                            ? outputFilePath.split(".").slice(0, -1).join(".")
+                            : inputFilePath.split(".").slice(0, -1).join(".");
                     const fileName = `${base}_${suffix}`;
 
                     // Always generate ONNX/JSON if reconversion is enabled
@@ -407,7 +408,7 @@ if (isPartitioning) {
             }
         }
 
-        if (outputFilePath) {
+        if (outputFilePath !== undefined) {
             if (outputFormat === "json") {
                 fs.writeFileSync(outputFilePath, JSON.stringify(graph.toCy().json(), null, 2));
             } else if (outputFormat === "dot") {
@@ -429,7 +430,7 @@ if (isPartitioning) {
         }
 
         // Convert the ONNX JSON format to ONNX binary format if not disabled
-        if (!argv.noReconversion && !isPartitioning) {
+        if (!argv.noReconversion && isPartitioning === undefined) {
             const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } =
                 getReconvertedPaths(inputFilePath);
             const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
@@ -440,14 +441,14 @@ if (isPartitioning) {
 
             await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
             console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-        } else if (verbosity > 0 && !isPartitioning) {
+        } else if (verbosity > 0 && isPartitioning === undefined) {
             console.log("Skipping ONNX reconversion.");
         }
 
         // Print the output graph to stdout
         if (verbosity > 0) {
             if (outputFormat === "json") {
-                if (isPartitioning && partitions) {
+                if (isPartitioning !== undefined && partitions) {
                     console.log(
                         "Output Head Graph in JSON Format:",
                         JSON.stringify(partitions.head.toCy().json(), null, 2),
@@ -463,7 +464,7 @@ if (isPartitioning) {
                     );
                 }
             } else if (outputFormat === "dot") {
-                if (isPartitioning && partitions) {
+                if (isPartitioning !== undefined && partitions) {
                     console.log(
                         "Output Head Graph in DOT Format:",
                         partitions.head.toString(dotFormatter),

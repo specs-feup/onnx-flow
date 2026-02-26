@@ -146,13 +146,13 @@ export default class ConvBuilder implements LoopBuilder {
         }
 
         // ---- Attribute sanity + current restrictions -----------------------------
-        const a = conv.getAttributes?.() ?? conv.attributes ?? {};
+        const a = conv.getAttributes();
 
         // Helper: normalise ONNX-style INT[] attributes to number[]
         const attrs = a;
         const getIntsAttr = (name: string): number[] | undefined => {
+            if (!(name in attrs)) return undefined;
             const v = attrs[name];
-            if (!v) return undefined;
 
             // Already a plain JS array?
             if (Array.isArray(v)) {

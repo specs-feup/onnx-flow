@@ -79,11 +79,7 @@ export default class DefaultBuilder implements LoopBuilder {
         const rawOutShape = Array.isArray(outTensor?.shape) ? outTensor.shape : [undefined];
         let staticOut = toStaticShape(rawOutShape as Shape);
 
-        if (
-            !staticOut ||
-            staticOut.length === 0 ||
-            staticOut.some((d) => d === -1 || d === undefined)
-        ) {
+        if (staticOut.length === 0 || staticOut.some((d) => d === -1)) {
             const inputShapes = [
                 ...new Map(
                     chain.flatMap((op) =>
@@ -109,7 +105,7 @@ export default class DefaultBuilder implements LoopBuilder {
 
         // Ensure we always have an outer output tensor node for this chain
         if (!outTensor) {
-            const fallbackShape = staticOut && staticOut.length ? staticOut : [];
+            const fallbackShape = staticOut.length ? staticOut : [];
             outTensor = outer
                 .addNode(uniq(outer, `out_${lastOp.id}`))
                 .init(new TensorNode.Builder(elemTy, fallbackShape, "intermediate"))
@@ -186,7 +182,6 @@ export default class DefaultBuilder implements LoopBuilder {
         const indicesOut = unsqOut;
         for (const op of chain) {
             const h = handlers[op.type];
-            if (!h) throw new Error(`DefaultBuilder: unsupported op ${op.type}`);
             const out = h(op, body, ctx);
             ctx.opMap.set(op, [op, out]);
         }

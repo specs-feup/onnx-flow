@@ -105,7 +105,6 @@ export default class GenerativeBuilder implements LoopBuilder {
 
         for (const op of chain) {
             const h = handlers[op.type];
-            if (!h) throw new Error(`GenerativeBuilder: unsupported op ${op.type}`);
             const out = h(op, body, ctx);
             ctx.opMap.set(op, [op, out]);
         }
@@ -276,9 +275,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         // Ensure we always have an outer output tensor node for this generative chain
         if (!outTensor) {
             const shapeForOut =
-                outShape && outShape.length && typeof outShape[0] === "number"
-                    ? [outShape[0] as number]
-                    : [];
+                outShape.length && typeof outShape[0] === "number" ? [outShape[0] as number] : [];
 
             outTensor = outer
                 .addNode(uniq(outer, `out_${lastOp.id}`))

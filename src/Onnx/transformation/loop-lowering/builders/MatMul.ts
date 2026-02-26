@@ -58,7 +58,7 @@ export default class MatMulBuilder implements LoopBuilder {
         let { M } = dims;
 
         const lhsShape = lhs.shape;
-        if (lhsShape && lhsShape.length >= 2) {
+        if (lhsShape.length >= 2) {
             const mCandidate = Number(lhsShape[lhsShape.length - 2]);
             if (Number.isFinite(mCandidate) && mCandidate > 0) {
                 M = mCandidate;
@@ -77,7 +77,7 @@ export default class MatMulBuilder implements LoopBuilder {
         // Batch product (treat non-positive/dynamic as 1 in the loop trip count)
         const batchProd = (batchDimsStatic.length ? batchDimsStatic : [1])
             .map((d) => {
-                const n = Number(d ?? 1);
+                const n = Number(d);
                 if (!Number.isFinite(n) || n <= 0) return 1;
                 return n;
             })
@@ -173,7 +173,6 @@ export default class MatMulBuilder implements LoopBuilder {
 
         for (const op of chain) {
             const h = handlers[op.type];
-            if (!h) throw new Error(`MatMulBuilder: unsupported op ${op.type}`);
             const out = h(op, body, ctx);
             ctx.opMap.set(op, [op, out]);
             if (op.type === "MatMul") {

@@ -15,7 +15,7 @@ import type {
  * - false (default): first null -> -1; additional nulls -> 0 (copy dim)
  * - true: throw when there are 2+ nulls
  */
-const STRICT_RESHAPE_NULLS = false;
+const STRICT_RESHAPE_NULLS = false as boolean;
 
 const OPSET = 19;
 
@@ -28,7 +28,7 @@ function fixBuffers(obj: unknown): unknown {
         return obj.map(fixBuffers);
     }
 
-    if (obj && typeof obj === "object") {
+    if (obj !== undefined && typeof obj === "object") {
         const record = obj as Record<string, unknown>;
         if (record["type"] === "Buffer" && Array.isArray(record["data"])) {
             return Buffer.from(record["data"]);
@@ -57,8 +57,6 @@ function fixBuffers(obj: unknown): unknown {
  * - This keeps within ONNX Reshape semantics: one -1 allowed, 0 means "copy from input".
  */
 function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
-    if (!graph) return;
-
     const nodes: RawOnnxNode[] = graph.node ?? [];
     // Map output name → producer node
     const byOutput: Record<string, RawOnnxNode> = {};
@@ -67,24 +65,22 @@ function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
     for (const n of nodes) {
         // --- Recurse into subgraphs first
         for (const a of n.attribute ?? []) {
-            if (a?.g) fixSingleNullReshapeShapesInGraph(a.g);
-            if (Array.isArray(a?.graphs))
+            if (a.g) fixSingleNullReshapeShapesInGraph(a.g);
+            if (Array.isArray(a.graphs))
                 for (const sg of a.graphs) fixSingleNullReshapeShapesInGraph(sg);
         }
 
         if (n.opType !== "Reshape") continue;
 
         const shapeInput = n.input?.[1];
-        if (!shapeInput) continue;
+        if (shapeInput === undefined || !(shapeInput in byOutput)) continue;
 
         const shapeProducer = byOutput[shapeInput];
-        if (!shapeProducer || shapeProducer.opType !== "Constant") continue;
+        if (shapeProducer.opType !== "Constant") continue;
 
         // Find Constant’s tensor attribute (commonly "value" or unnamed)
         const attrs = shapeProducer.attribute ?? [];
-        const tensorAttr = attrs.find(
-            (a: RawOnnxAttribute) => a?.t && a.t.dataType === /* INT64 */ 7,
-        );
+        const tensorAttr = attrs.find((a: RawOnnxAttribute) => a.t?.dataType === /* INT64 */ 7);
         const t = tensorAttr?.t;
         if (!t) continue;
 
@@ -105,7 +101,7 @@ function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
         }
 
         if (STRICT_RESHAPE_NULLS) {
-            const cname = shapeProducer.name || shapeInput;
+            const cname = shapeProducer.name !== undefined ? shapeProducer.name : shapeInput;
             throw new Error(
                 `Reshape shape Constant(${cname}) has ${nullIdxs.length} unknown dims. ` +
                     `ONNX allows only one -1. Build shape dynamically with Shape/Gather/Concat.`,
@@ -115,9 +111,9 @@ function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
             const out = data.slice();
             out[nullIdxs[0]] = -1;
             for (let k = 1; k < nullIdxs.length; k++) out[nullIdxs[k]] = 0;
-            const cname = shapeProducer.name || shapeInput;
+            const cname = shapeProducer.name !== undefined ? shapeProducer.name : shapeInput;
             console.warn(
-                `[json2onnx] Reshape(${n.name || ""}) shape Constant(${cname}) had ${nullIdxs.length} unknown dims; ` +
+                `[json2onnx] Reshape(${n.name !== undefined ? n.name : ""}) shape Constant(${cname}) had ${nullIdxs.length} unknown dims; ` +
                     `converted first -> -1, others -> 0 (copy dim).`,
             );
             t.int64Data = out as (number | bigint)[];
@@ -127,7 +123,7 @@ function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
 
 // OLD entry point now delegates to the recursive walker
 function fixSingleNullReshapeShapes(model: RawOnnxModel): void {
-    const graph = model?.graph;
+    const graph = model.graph;
     if (!graph) return;
     fixSingleNullReshapeShapesInGraph(graph);
 }
@@ -288,7 +284,7 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
         const normalizedJson = coerceNumericFields(fixedJson);
 
         const errMsg = ModelProto.verify(normalizedJson!);
-        if (errMsg) {
+        if (errMsg !== null) {
             throw new Error("Validation error: " + errMsg);
         }
 

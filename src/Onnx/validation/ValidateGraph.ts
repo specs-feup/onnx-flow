@@ -27,7 +27,7 @@ export default function validateGraph(
 
     for (const node of nodes) {
         // 1. Check Outgoing Edges
-        if (options.checkDanglingEdges) {
+        if (options.checkDanglingEdges !== undefined) {
             for (const edge of node.outgoers) {
                 if (!nodeSet.has(edge.target.id)) {
                     throw new Error(
@@ -38,7 +38,7 @@ export default function validateGraph(
         }
 
         // 2. Check Incoming Edges
-        if (options.checkDanglingEdges) {
+        if (options.checkDanglingEdges !== undefined) {
             for (const edge of node.incomers) {
                 if (!nodeSet.has(edge.source.id)) {
                     throw new Error(
@@ -58,7 +58,7 @@ export default function validateGraph(
         }
 
         // 4. Type Consistency (Basic)
-        if (options.checkTypeConsistency && node.is(TensorNode)) {
+        if (options.checkTypeConsistency !== undefined && node.is(TensorNode)) {
             const tn = node.as(TensorNode);
             if (tn.literalType === DataType.UNDEFINED && tn.type !== "index") {
                 console.warn(`[Validation Warning] Tensor '${tn.id}' has UNDEFINED data type.`);
@@ -66,7 +66,7 @@ export default function validateGraph(
         }
 
         // 5. Orphan Check
-        if (options.checkOrphans) {
+        if (options.checkOrphans !== undefined) {
             if (node.is(ConstantNode) && node.outgoers.length === 0) {
                 console.warn(`[Validation Warning] Constant '${node.id}' is unused (orphan).`);
             }
@@ -74,7 +74,7 @@ export default function validateGraph(
     }
 
     // 6. Scope Validation
-    if (options.checkScope) {
+    if (options.checkScope !== undefined) {
         validateScope(graph);
     }
 }

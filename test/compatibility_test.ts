@@ -39,9 +39,7 @@ function collectStatsRecursive(
         // 2. Recurse into regions
         // Instead of checking specific subgraphs (body, thenBranch), we iterate the regions array.
         for (const region of node.regions) {
-            if (region) {
-                collectStatsRecursive(region, stats);
-            }
+            collectStatsRecursive(region, stats);
         }
     }
 }
@@ -93,8 +91,8 @@ function printStatsComparison(
     const sorted = Array.from(opsSet).sort();
 
     for (const op of sorted) {
-        const from = original?.ops[op] || 0;
-        const to = decomposed?.ops[op] || 0;
+        const from = original !== null ? original.ops[op] : 0;
+        const to = decomposed !== null ? decomposed.ops[op] : 0;
 
         // If we have both, show comparison. If one failed, show what we have.
         if (original && decomposed) {
@@ -123,12 +121,12 @@ function printInputs(label: string, inputs: Record<string, ort.Tensor>) {
 
 function logErrorDetails(context: string, e: unknown) {
     // 1. Safely narrow 'e' to a generic record if it's an object
-    const errObj = e && typeof e === "object" ? (e as Record<string, unknown>) : null;
+    const errObj = e !== undefined && typeof e === "object" ? (e as Record<string, unknown>) : null;
 
     // 2. Use the narrowed object for safe property access
     if (errObj instanceof Error) {
-        console.error(`❌ Error in ${context}:`, errObj?.message ?? e);
-        if (errObj?.stack) console.error(errObj.stack);
+        console.error(`❌ Error in ${context}:`, errObj.message);
+        if (errObj.stack !== undefined) console.error(errObj.stack);
     }
 
     if (errObj) {
@@ -231,8 +229,8 @@ async function rerunWithOrtVerbose(
         const sess = await ort.InferenceSession.create(modelPath, so);
         const outNames = sess.outputNames;
         const outs = await sess.run(feeds, outNames);
-        const shapes = outNames.map((n) => outs[n]?.dims ?? []);
-        const dtypes = outNames.map((n) => outs[n]?.type ?? "unknown");
+        const shapes = outNames.map((n) => outs[n].dims);
+        const dtypes = outNames.map((n) => outs[n].type);
         console.log(
             "   ✓ ORT (web) run OK. Outputs:",
             outNames.map((k, i) => `${k}[${shapes[i]}] ${dtypes[i]}`),
@@ -459,7 +457,7 @@ async function testReconversion(opts: {
 
         // Reconverted (safe run)
         const recRun = await safeTimedRun(recSession, feeds);
-        if (recRun.error) {
+        if (recRun.error !== undefined) {
             logErrorDetails("reconverted run", recRun.error);
             reportOutcome("error", "Reconverted run failed");
 
@@ -535,7 +533,8 @@ export async function runEquivalenceForOriginalPath(
     options?: { labelHint?: string; skipCli?: boolean },
 ): Promise<SingleEquivResult> {
     const byPath = findTestConfigByOriginalPath(originalPath);
-    const byLabel = options?.labelHint ? findTestConfig(options.labelHint) : undefined;
+    const byLabel =
+        options?.labelHint !== undefined ? findTestConfig(options.labelHint) : undefined;
     const config = byPath || byLabel;
 
     if (!config) {
@@ -1421,7 +1420,6 @@ const mode = process.env["COMPAT_MODE"] ?? "all";
 const isMain =
     typeof process !== "undefined" &&
     Array.isArray(process.argv) &&
-    process.argv[1] &&
     (process.argv[1].includes("compatibility_test") ||
         process.argv[1].includes("onnx-flow-testcomp"));
 

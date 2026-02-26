@@ -22,7 +22,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
     if (op.type !== "Softmax") return false;
 
     // ---- Inputs / outputs
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length < 1) {
         throw new Error(`[SoftmaxHandler] Node ${op.id} missing required input (X).`);
     }
@@ -33,7 +33,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
 
     const XRaw = ins[0];
     const X = XRaw.is(TensorNode) ? XRaw.as(TensorNode) : XRaw.as(ConstantNode);
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
@@ -42,7 +42,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
     const rank = inShape.length;
 
     // axis attribute (default -1 per opset >= 13)
-    const attrs = op.getAttributes?.() ?? op.attributes ?? {};
+    const attrs = op.getAttributes();
     let axis = Number(attrs["axis"] ?? -1);
     if (rank > 0 && axis < 0) axis = (axis + rank) % rank;
 
@@ -115,7 +115,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
         .as(OperationNode);
     g.addEdge(div, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
 
-    g.getNodeById(op.id)?.remove?.();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

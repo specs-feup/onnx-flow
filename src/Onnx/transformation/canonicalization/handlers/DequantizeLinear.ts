@@ -24,7 +24,7 @@ export default function dequantizeLinearHandler(
 ): boolean {
     if (op.type !== "DequantizeLinear") return false;
 
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length < 2) {
         throw new Error(
             `[DequantizeLinearHandler] Node ${op.id} missing required inputs (x, x_scale).`,
@@ -51,12 +51,12 @@ export default function dequantizeLinearHandler(
     }
 
     // Single output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // Attributes (axis for per-channel). Default 0 per ONNX spec.
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
+    const a = op.getAttributes();
     const axisAttr = Number(a["axis"] ?? 0);
 
     // Choose computation float dtype: prefer Y's float type, else FLOAT
@@ -66,10 +66,10 @@ export default function dequantizeLinearHandler(
         DataType.BFLOAT16,
         DataType.DOUBLE,
     ]);
-    const yT = (Y.literalType ?? DataType.FLOAT) as DataType;
+    const yT = Y.literalType as DataType;
     const floatT: DataType = floatSet.has(yT) ? yT : DataType.FLOAT;
 
-    const xShape = X.shape ?? [];
+    const xShape = X.shape;
     const rank = xShape.length;
 
     Y.setLiteralType(floatT);
@@ -124,11 +124,11 @@ export default function dequantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, shapeXop, shapeX, DataType.INT64, [rank]);
 
-    const sRank = S.shape?.length ?? 0;
+    const sRank = S.shape.length;
 
     // Per-tensor: true scalar, or a rank-1 tensor of length 1
     const singleLen =
-        sRank === 1 && typeof S.shape?.[0] === "number" && (S.shape![0] as number) === 1;
+        sRank === 1 && typeof S.shape[0] === "number" && (S.shape![0] as number) === 1;
 
     const perTensor = sRank === 0 || singleLen;
     const perAxis = !perTensor && sRank === 1;
@@ -141,7 +141,7 @@ export default function dequantizeLinearHandler(
         if (axis < 0 || axis >= rank) return false;
 
         // Optional static length check if known
-        const xAxisDim = typeof xShape?.[axis] === "number" ? (xShape![axis] as number) : undefined;
+        const xAxisDim = typeof xShape[axis] === "number" ? (xShape![axis] as number) : undefined;
 
         // Build axes tensor: unsqueeze on every dim except 'axis'
         const axesVals: number[] = [];
@@ -157,13 +157,13 @@ export default function dequantizeLinearHandler(
         const sLen =
             Array.isArray(S.shape) && typeof S.shape[0] === "number"
                 ? S.shape[0]
-                : xShape && typeof xShape[axis] === "number"
+                : typeof xShape[axis] === "number"
                   ? xShape[axis]
                   : undefined;
 
         if (sLen !== undefined && xAxisDim !== undefined && sLen !== xAxisDim) return false;
 
-        if (sLen && rank > 0) {
+        if (sLen !== undefined && rank > 0) {
             sRankedShape[axis] = sLen;
         }
 

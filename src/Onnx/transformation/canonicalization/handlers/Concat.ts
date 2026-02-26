@@ -72,7 +72,7 @@ function makeUnsqueeze(
 export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Concat") return false;
 
-    const rawIns = op.getInputs?.() ?? [];
+    const rawIns = op.getInputs() ?? [];
     if (rawIns.length === 0) {
         throw new Error(`[ConcatHandler] Node ${op.id} has 0 inputs.`);
     }
@@ -80,7 +80,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     const inputs = rawIns
         .map((n) =>
-            n?.is?.(TensorNode)
+            n.is(TensorNode)
                 ? n.as(TensorNode)
                 : n.is(ConstantNode)
                   ? n.as(ConstantNode)
@@ -91,16 +91,15 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         throw new Error(`[ConcatHandler] Node ${op.id} has undefined/invalid inputs.`);
     }
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
+    const a = op.getAttributes();
     const axisAttr = Number(a["axis"] ?? 0);
 
-    const rank = inputs[0].shape?.length;
-    if (rank === undefined) return false;
-    if (!inputs.every((t) => (t.shape?.length ?? -1) === rank)) return false;
+    const rank = inputs[0].shape.length;
+    if (!inputs.every((t) => t.shape.length === rank)) return false;
 
     const dtype = inputs[0].literalType as DataType;
     if (!inputs.every((t) => t.literalType === dtype)) return false;

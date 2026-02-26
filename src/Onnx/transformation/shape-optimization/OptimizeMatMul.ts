@@ -22,11 +22,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
     const shape1 = incomingEdges[1].shape;
     const type = incomingEdges[0].literalType;
 
-    let displacementInMemory: number;
-
-    if (type !== undefined) {
-        displacementInMemory = typeSizeMap[type];
-    } else return;
+    const displacementInMemory: number = typeSizeMap[type];
 
     const nodeId = node.id;
 

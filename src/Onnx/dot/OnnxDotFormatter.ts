@@ -137,22 +137,20 @@ export default class OnnxDotFormatter<
         const statements: DotSubgraph[] = [];
 
         const body = node.regions[0];
-        if (body !== undefined) {
-            const subFormatter = new OnnxDotFormatter(idPrefix);
-            const bodyDot = subFormatter.toDot(body);
+        const subFormatter = new OnnxDotFormatter(idPrefix);
+        const bodyDot = subFormatter.toDot(body);
 
-            const bodySubdot = new DotSubgraph(`cluster_loop_${node.id}`, bodyDot.statementList)
-                .graphAttr("label", `Loop ${node.id}`)
-                .graphAttr("style", "dashed")
-                .graphAttr("color", "gray");
+        const bodySubdot = new DotSubgraph(`cluster_loop_${node.id}`, bodyDot.statementList)
+            .graphAttr("label", `Loop ${node.id}`)
+            .graphAttr("style", "dashed")
+            .graphAttr("color", "gray");
 
-            statements.push(bodySubdot);
+        statements.push(bodySubdot);
 
-            this.clusterInfos[node.id] = {
-                idPrefix,
-                subgraphLabel: bodySubdot.label ?? "",
-            };
-        }
+        this.clusterInfos[node.id] = {
+            idPrefix,
+            subgraphLabel: bodySubdot.label ?? "",
+        };
 
         return statements;
     }
@@ -165,54 +163,50 @@ export default class OnnxDotFormatter<
         statements.push(ifDot);
 
         const thenBranch = node.regions[0];
-        if (thenBranch !== undefined) {
-            const thenIdPrefix = `${idPrefix}then_`;
-            const thenFormatter = new OnnxDotFormatter(thenIdPrefix);
-            const thenDot = thenFormatter.toDot(thenBranch);
+        const thenIdPrefix = `${idPrefix}then_`;
+        const thenFormatter = new OnnxDotFormatter(thenIdPrefix);
+        const thenDot = thenFormatter.toDot(thenBranch);
 
-            const thenGraph = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
-                .graphAttr("label", `If-Then ${node.id}`)
-                .graphAttr("style", "dashed")
-                .graphAttr("color", "lime");
+        const thenGraph = new DotSubgraph(`cluster_if_then_${node.id}`, thenDot.statementList)
+            .graphAttr("label", `If-Then ${node.id}`)
+            .graphAttr("style", "dashed")
+            .graphAttr("color", "lime");
 
-            const firstThenNode = thenBranch.nodes[0];
-            const thenEdge = Dot.edge(
-                this.idPrefix + node.id,
-                thenFormatter.idPrefix + firstThenNode.id,
-            )
-                .attr("lhead", thenGraph.label!)
-                .attr("label", "then")
-                .attr("style", "dashed")
-                .attr("color", "lime");
+        const firstThenNode = thenBranch.nodes[0];
+        const thenEdge = Dot.edge(
+            this.idPrefix + node.id,
+            thenFormatter.idPrefix + firstThenNode.id,
+        )
+            .attr("lhead", thenGraph.label!)
+            .attr("label", "then")
+            .attr("style", "dashed")
+            .attr("color", "lime");
 
-            statements.push(thenGraph);
-            statements.push(thenEdge);
-        }
+        statements.push(thenGraph);
+        statements.push(thenEdge);
 
         const elseBranch = node.regions[1];
-        if (elseBranch !== undefined) {
-            const elseIdPrefix = `${idPrefix}else_`;
-            const elseFormatter = new OnnxDotFormatter(elseIdPrefix);
-            const elseDot = elseFormatter.toDot(elseBranch);
+        const elseIdPrefix = `${idPrefix}else_`;
+        const elseFormatter = new OnnxDotFormatter(elseIdPrefix);
+        const elseDot = elseFormatter.toDot(elseBranch);
 
-            const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
-                .graphAttr("label", `If-Else ${node.id}`)
-                .graphAttr("style", "dashed")
-                .graphAttr("color", "red");
+        const elseGraph = new DotSubgraph(`cluster_if_else_${node.id}`, elseDot.statementList)
+            .graphAttr("label", `If-Else ${node.id}`)
+            .graphAttr("style", "dashed")
+            .graphAttr("color", "red");
 
-            const firstElseNode = elseBranch.nodes[0];
-            const elseEdge = Dot.edge(
-                this.idPrefix + node.id,
-                elseFormatter.idPrefix + firstElseNode.id,
-            )
-                .attr("lhead", elseGraph.label!)
-                .attr("label", "else")
-                .attr("style", "dashed")
-                .attr("color", "red");
+        const firstElseNode = elseBranch.nodes[0];
+        const elseEdge = Dot.edge(
+            this.idPrefix + node.id,
+            elseFormatter.idPrefix + firstElseNode.id,
+        )
+            .attr("lhead", elseGraph.label!)
+            .attr("label", "else")
+            .attr("style", "dashed")
+            .attr("color", "red");
 
-            statements.push(elseGraph);
-            statements.push(elseEdge);
-        }
+        statements.push(elseGraph);
+        statements.push(elseEdge);
 
         return statements;
     }

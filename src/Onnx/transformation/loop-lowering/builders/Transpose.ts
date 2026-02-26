@@ -28,7 +28,7 @@ function toScalar(
     t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
     tag: string,
 ): TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class {
-    if (t.shape && t.shape.length === 0) return t;
+    if (t.shape.length === 0) return t;
     const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
     const reshape = g
         .addNode(uniq(g, `${tag}_reshape`))
@@ -118,7 +118,7 @@ export default class TransposeBuilder implements LoopBuilder {
         const inShape = xIn ? toStaticShape(xIn.shape as Shape) : [];
         let outShape: (number | string)[] = [];
 
-        if (inShape && inShape.length > 0) {
+        if (inShape.length > 0) {
             const rank = inShape.length;
 
             // Use the *same* perm-reading logic as the handler
@@ -139,8 +139,7 @@ export default class TransposeBuilder implements LoopBuilder {
 
         // Ensure we always have an outer output tensor node for this chain
         if (!outTensor) {
-            const fallbackShape =
-                outShape && outShape.length ? outShape : ([] as (number | string)[]);
+            const fallbackShape = outShape.length > 0 ? outShape : ([] as (number | string)[]);
             outTensor = outer
                 .addNode(uniq(outer, `out_${finalOp.id}`))
                 .init(new TensorNode.Builder(elemTy, fallbackShape, "intermediate"))
@@ -209,7 +208,7 @@ export default class TransposeBuilder implements LoopBuilder {
 
         // ---- 2) Optional Add after Transpose (CHAIN: [Transpose, Add]) ----
         if (hasAdd && addOp) {
-            const addInputs = addOp.getInputs?.() ?? [];
+            const addInputs = addOp.getInputs() ?? [];
             let otherInput: TensorNode.Class | ConstantNode.Class | null = null;
 
             // Find the Add input that is *not* produced by the Transpose op
@@ -219,7 +218,7 @@ export default class TransposeBuilder implements LoopBuilder {
 
                 if (t.getIncomers.length > 0) {
                     const prod = t.getIncomers[0].source;
-                    if (prod.is && prod.is(OperationNode) && prod.id === transposeOp.id) {
+                    if (prod.is(OperationNode) && prod.id === transposeOp.id) {
                         // This path comes from the Transpose op; skip it
                         continue;
                     }

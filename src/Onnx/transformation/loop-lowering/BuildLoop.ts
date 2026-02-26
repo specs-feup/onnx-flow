@@ -572,8 +572,8 @@ export function resolveFusedInput(
     input: BaseNode.Class,
     ctx: LoopCtx,
     op: OperationNode.Class,
-    flatten = true,
-    returnGather = true,
+    flatten: boolean = true,
+    returnGather: boolean = true,
 ): TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class {
     // 1. Handle Fused Operation (Inter-op communication)
     if (input.is(OperationNode)) {
@@ -609,10 +609,10 @@ export function resolveFusedInput(
     let tInner: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class | undefined;
 
     if (g.hasNode(tOuter.id)) {
-        const existing = g.getNodeById(tOuter.id);
-        if (existing?.is(TensorNode)) tInner = existing.as(TensorNode);
-        else if (existing?.is(ConstantNode)) tInner = existing.as(ConstantNode);
-        else if (existing?.is(RegionArgumentNode)) tInner = existing.as(RegionArgumentNode);
+        const existing = g.getNodeById(tOuter.id)!;
+        if (existing.is(TensorNode)) tInner = existing.as(TensorNode);
+        else if (existing.is(ConstantNode)) tInner = existing.as(ConstantNode);
+        else if (existing.is(RegionArgumentNode)) tInner = existing.as(RegionArgumentNode);
         else throw new Error(`ID collision in body: ${tOuter.id}`);
     } else {
         // Create Proxy in Body
@@ -673,9 +673,6 @@ export function resolveFusedInput(
         if (s.length === 2) {
             const flatT = ensureFlatInput(g, tInner);
             const idxU = ctx.flatU ?? idxToUse!;
-
-            if (!returnGather) return flatT;
-
             const idxScalar = squeezeIfLen1(g, idxU, ctx.axes, `idx2d_${tInner.id}_${op.id}`);
             return safeGather1D(g, flatT, idxScalar, ctx.axes, `gather2d_${tInner.id}_${op.id}`);
         }
@@ -761,7 +758,8 @@ export function createCapturedInput(
     // If a node with this ID already exists, return it (avoid duplicates)
     if (g.hasNode(outerNode.id)) {
         const existing = g.getNodeById(outerNode.id);
-        if (existing?.is(RegionArgumentNode)) return existing.as(RegionArgumentNode);
+        if (existing !== undefined && existing.is(RegionArgumentNode))
+            return existing.as(RegionArgumentNode);
         // If it exists but isn't a RegionArgumentNode (e.g. a Constant clone), that's a collision context logic needs to handle,
         // but for implicit captures we generally expect to create or find the proxy.
     }
@@ -845,15 +843,12 @@ export function buildLoopForChain(
     const rootOp = chain[chain.length - 1];
     const rootOutNodeRaw = rootOp.getOutgoers.targets
         .filter((n) => n.is(TensorNode) || n.is(ConstantNode))
-        .first();
-    const rootOutNode = rootOutNodeRaw?.is(TensorNode)
+        .first()!;
+    const rootOutNode = rootOutNodeRaw.is(TensorNode)
         ? rootOutNodeRaw.as(TensorNode)
-        : rootOutNodeRaw?.as(ConstantNode);
-    const originalOutShape: (number | string | undefined)[] = rootOutNode
-        ? [...rootOutNode.shape]
-        : [-1];
+        : rootOutNodeRaw.as(ConstantNode);
+    const originalOutShape: (number | string | undefined)[] = [...rootOutNode.shape];
     const rootIsGlobalOutput =
-        !!rootOutNode &&
         rootOutNode.is(TensorNode) &&
         graph.getOutputTensorNodes().contains(rootOutNode.as(TensorNode));
 
@@ -1046,13 +1041,8 @@ export function buildLoopForChain(
     const isGlobalOutput = rootIsGlobalOutput;
     let outId = uniq(graph, "out");
 
-    if (rootOutNode) {
-        outId = rootOutNode.id;
-        graph.getNodeById(outId)?.remove();
-    } else if (outTensor) {
-        outId = outTensor.id;
-        graph.getNodeById(outId)?.remove();
-    }
+    outId = rootOutNode.id;
+    graph.getNodeById(outId)?.remove();
 
     graph
         .addNode(outId)
@@ -1076,12 +1066,12 @@ export function buildLoopForChain(
             .as(OnnxEdge);
 
         // --- Sanitize exported output shape ---
-        const rawOutShape = (finalOutShape ?? []) as number[];
+        const rawOutShape = finalOutShape as number[];
 
         // Replace non-positive / unknown dims with -1, but keep the rank.
         let seenInfer = false;
         const exportShape = rawOutShape.map((d) => {
-            if (d != null && (d as number) > 0) return d as number;
+            if (d > 0) return d;
 
             // First unknown → -1 (ONNX "infer this dim")
             if (!seenInfer) {

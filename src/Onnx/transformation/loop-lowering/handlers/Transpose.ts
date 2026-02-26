@@ -25,7 +25,7 @@ import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 /* ============================== HANDLER ================================== */
 
 function toScalar(g: OnnxGraph.Class, t: TensorNode.Class, tag: string): TensorNode.Class {
-    if (t.shape && t.shape.length === 0) return t;
+    if (t.shape.length === 0) return t;
 
     const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
     const reshape = g
@@ -81,13 +81,7 @@ export default function handleTranspose(
             iDigits.push(z);
         } else {
             const outPos = inversePerm[k]; // where input axis k appears after transpose
-            // Guard against malformed perms just in case
-            if (outPos === undefined) {
-                const z = makeTensorConst(g, `tp_safezero_${op.id}_${k}`, scalarInt64(0));
-                iDigits.push(z);
-            } else {
-                iDigits.push(oDigits[outPos]);
-            }
+            iDigits.push(oDigits[outPos]);
         }
     }
 

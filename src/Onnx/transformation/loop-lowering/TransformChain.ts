@@ -39,7 +39,7 @@ function getSegmentOutShape(seg: OperationNode.Class[]): (number | string | unde
 
     const root = seg[seg.length - 1]; // last op = segment root
     const outT = root.getOutgoers.targets
-        ?.filter((n) => n.is(TensorNode))
+        .filter((n) => n.is(TensorNode))
         .first()
         ?.as(TensorNode);
 
@@ -76,7 +76,7 @@ function isBroadcastSafeSegment(seg: OperationNode.Class[]): boolean {
             // Index helpers never go through gatherWithBroadcast
             if (t.is(TensorNode) && (t.type === "index" || t.type === "index_aux")) continue;
 
-            const s = t.shape ?? [];
+            const s = t.shape;
             if (!s.length) continue; // scalar or unknown, fine
 
             // If any non-scalar input cannot broadcast to the final outShape,
@@ -242,12 +242,10 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
     if (!SUP.has(op.type)) return false;
     if (op.type === "Range" || op.type === "Conv" || op.type === "AveragePool") return true;
 
-    const incs = op.getIncomers ?? [];
+    const incs = op.getIncomers;
 
     const edgeHasShape = incs.some(
-        (edge) =>
-            edge.shape &&
-            (edge.shape.length > 1 || (edge.shape.length == 1 && Number(edge.shape[0]) > 1)),
+        (edge) => edge.shape.length > 1 || (edge.shape.length == 1 && Number(edge.shape[0]) > 1),
     );
     if (edgeHasShape) return true;
 
@@ -257,27 +255,23 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
             ?.filter((n) => n.is(TensorNode) || n.is(ConstantNode))
             .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode))) ?? [];
 
-    const inputHasShape = dataInputs.some((t) => t.shape && t.shape.length >= 1);
+    const inputHasShape = dataInputs.some((t) => t.shape.length >= 1);
     if (inputHasShape) return true;
 
     for (const t of dataInputs) {
         if (t.is(TensorNode) && t.type !== "intermediate") continue;
-        const interIncs = t.getIncomers ?? [];
+        const interIncs = t.getIncomers;
         for (const edge of interIncs) {
-            if (
-                edge.shape &&
-                (edge.shape.length > 1 || (edge.shape.length == 1 && Number(edge.shape[0]) > 1))
-            ) {
+            if (edge.shape.length > 1 || (edge.shape.length == 1 && Number(edge.shape[0]) > 1)) {
                 return true;
             }
             const prod = edge.source;
             if (prod.is(OperationNode)) {
-                const outEdges = prod.as(OperationNode).getOutgoers ?? [];
+                const outEdges = prod.as(OperationNode).getOutgoers;
                 for (const outEdge of outEdges) {
                     if (
-                        outEdge.shape &&
-                        (outEdge.shape.length > 1 ||
-                            (outEdge.shape.length == 1 && Number(outEdge.shape[0]) > 1))
+                        outEdge.shape.length > 1 ||
+                        (outEdge.shape.length == 1 && Number(outEdge.shape[0]) > 1)
                     ) {
                         return true;
                     }
@@ -401,8 +395,8 @@ export default class TransformChain implements Graph.Transformation<
             // Optional: coalescing / special-casing MatMul layout barriers
             if (this.coalesce) {
                 const matmuls = chainOps.filter((op) => op.type === "MatMul");
-                const mm = matmuls[0];
-                if (mm) {
+                if (matmuls.length > 0) {
+                    const mm = matmuls[0];
                     const mmIdx = chainOps.indexOf(mm);
                     const afterMM = chainOps.slice(mmIdx + 1);
                     const hasLayoutChangeAfter = afterMM.some((op) => op.type === "Transpose");
@@ -434,7 +428,7 @@ export default class TransformChain implements Graph.Transformation<
                     // Re-hydrate after prior mutations:
                     const seg = mmSeg0
                         .map((op) => g.getNodeById(op.id))
-                        .filter((n) => n && n.is(OperationNode))
+                        .filter((n) => n !== undefined && n.is(OperationNode))
                         .map((n) => n!.as(OperationNode));
 
                     if (seg.length === 0) continue;
@@ -456,13 +450,7 @@ export default class TransformChain implements Graph.Transformation<
                         continue;
                     }
 
-                    buildLoopForChain(
-                        seg,
-                        g,
-                        /* fuse = */ this.fuse && !isSingleReduce,
-                        this.recurse,
-                        this.coalesce,
-                    );
+                    buildLoopForChain(seg, g, !isSingleReduce, this.recurse, this.coalesce);
                 }
             }
         }

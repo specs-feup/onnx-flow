@@ -106,7 +106,7 @@ export function makeTensorProto(dtype: DataType, dims: number[], values: number[
 }
 
 export function zeroTensor(elemType: DataType, shape: number[]): TensorProto {
-    const safeShape = shape.length ? shape.map((d) => (d != null && d > 0 ? d : 1)) : [1];
+    const safeShape = shape.length ? shape.map((d) => (d > 0 ? d : 1)) : [1];
     const n = safeShape.reduce((a, b) => a * b, 1);
     const base: TensorProto = { dataType: elemType, dims: safeShape };
 
@@ -301,21 +301,19 @@ export function addEdge(
 
 export function toArrayLike<T = unknown>(nc: unknown): T[] {
     const obj = nc as { toArray?: () => T[] };
-    return obj?.toArray?.() ?? ((Array.isArray(nc) ? nc : []) as T[]);
+    return obj.toArray?.() ?? ((Array.isArray(nc) ? nc : []) as T[]);
 }
 
 /** Remove an initializer entry from the graph metadata (cleanup). */
 export function removeInitializerByName(g: OnnxGraph.Class, name?: string): void {
-    if (!name) return;
+    if (name === undefined) return;
     const gRecord = g as unknown as Record<string, unknown>;
-    const model = (gRecord?.["rawModel"] ?? gRecord?.["model"]) as
-        | Record<string, unknown>
-        | undefined;
-    const graph = (model?.["graph"] ?? gRecord?.["graph"]) as Record<string, unknown[]> | undefined;
+    const model = (gRecord["rawModel"] ?? gRecord["model"]) as Record<string, unknown> | undefined;
+    const graph = (model?.["graph"] ?? gRecord["graph"]) as Record<string, unknown[]> | undefined;
     for (const f of ["initializer", "sparse_initializer", "input", "value_info"]) {
         if (graph && Array.isArray(graph[f])) {
             // Accept 'unknown', then safely cast it to check the name
-            graph[f] = graph[f].filter((x: unknown) => (x as { name?: string })?.name !== name);
+            graph[f] = graph[f].filter((x: unknown) => (x as { name?: string }).name !== name);
         }
     }
 }
@@ -324,7 +322,7 @@ export function removeInitializerByName(g: OnnxGraph.Class, name?: string): void
 export function maybeRemoveOrphanConstant(g: OnnxGraph.Class, node?: BaseNode.Class): void {
     // Strict check for ConstantNode
     if (node && node.is(ConstantNode)) {
-        const consumers = toArrayLike(node.outgoers?.targets);
+        const consumers = toArrayLike(node.outgoers.targets);
         if (consumers.length === 0) {
             const onnxName = node.id;
             node.remove();
@@ -338,7 +336,7 @@ export function findTensorByOnnxName(
     g: OnnxGraph.Class,
     name?: string,
 ): TensorNode.Class | ConstantNode.Class | undefined {
-    if (!name) return undefined;
+    if (name === undefined) return undefined;
 
     // Check Constants
     const constants = g.nodes.filterIs(ConstantNode).toArray() as ConstantNode.Class[];
@@ -346,7 +344,7 @@ export function findTensorByOnnxName(
     if (tConst) return tConst;
 
     // Check Tensors
-    const tensors = (g.getTensorNodes?.().toArray?.() ?? []) as TensorNode.Class[];
+    const tensors = g.getTensorNodes().toArray() as TensorNode.Class[];
     const t = tensors.find((n) => n.id === name);
     return t;
 }
@@ -355,7 +353,7 @@ export function findConstantProducerAsTensor(
     g: OnnxGraph.Class,
     onnxName?: string,
 ): ConstantNode.Class | undefined {
-    if (!onnxName) return undefined;
+    if (onnxName === undefined) return undefined;
     // In Phase 3, constants are just ConstantNodes.
     return findTensorByOnnxName(g, onnxName)?.tryAs(ConstantNode);
 }
@@ -365,15 +363,15 @@ export function findConstantProducerAsTensor(
 // =====================================================================================
 
 export function toU8(raw: unknown): Uint8Array | undefined {
-    if (!raw) return undefined;
+    if (raw === undefined) return undefined;
     if (raw instanceof Uint8Array) return raw;
     if (Array.isArray(raw)) return Uint8Array.from(raw);
     const globalEnv = globalThis as unknown as { Buffer?: { isBuffer: (v: unknown) => boolean } };
-    if (globalEnv.Buffer?.isBuffer(raw)) {
+    if (globalEnv.Buffer !== undefined && globalEnv.Buffer.isBuffer(raw)) {
         const b = raw as Buffer;
         return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
     }
-    const inner = (raw as Record<string, unknown>)?.["data"] ?? undefined;
+    const inner = (raw as Record<string, unknown>)["data"] ?? undefined;
     if (inner) return toU8(inner);
     return undefined;
 }
@@ -391,8 +389,6 @@ export function isInt64Type(dt: number | string | undefined): boolean {
 }
 
 export function decodeIntegerVectorFromTensorProto(tv: TensorProto): number[] | undefined {
-    if (!tv) return undefined;
-
     if (Array.isArray(tv.int64Data) && tv.int64Data.length) return tv.int64Data.map(Number);
     if (Array.isArray(tv.int32Data) && tv.int32Data.length) return tv.int32Data.map(Number);
     if (Array.isArray(tv.uint64Data) && tv.uint64Data.length) return tv.uint64Data.map(Number);
@@ -700,16 +696,16 @@ export function resolveShapeToNumbers(
     let rawShape: (number | string | undefined)[] = [];
 
     // 1. Try internal shape
-    if (t.shape && t.shape.length > 0) {
+    if (t.shape.length > 0) {
         rawShape = t.shape;
     }
     // 2. Try edges if it's a TensorNode
     else if (t.is(TensorNode)) {
         const tn = t.as(TensorNode);
-        const incs = tn.getIncomers ?? [];
+        const incs = tn.getIncomers;
         // Try incoming edges
         for (const e of incs) {
-            if (e.shape && e.shape.length) {
+            if (e.shape.length) {
                 rawShape = e.shape;
                 tn.setShape(rawShape); // Cache it
                 break;
@@ -717,9 +713,9 @@ export function resolveShapeToNumbers(
         }
         // Fallback: try outgoing edges
         if (!rawShape.length) {
-            const outs = tn.getOutgoers ?? [];
+            const outs = tn.getOutgoers;
             for (const e of outs) {
-                if (e.shape && e.shape.length) {
+                if (e.shape.length) {
                     rawShape = e.shape;
                     tn.setShape(rawShape); // Cache it
                     break;
@@ -805,7 +801,7 @@ export function getAttr(node: unknown, name: string, def?: unknown): unknown {
         getAttributes?: () => Record<string, unknown>;
         attributes?: Record<string, unknown>;
     };
-    const v = n.getAttributes?.()?.[name] ?? n.attributes?.[name];
+    const v = n.getAttributes?.()[name] ?? n.attributes?.[name];
     return v === undefined ? def : v;
 }
 
@@ -843,8 +839,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
     // Map tensor id -> producing op
     const tensorProducers = new Map<string, OperationNode.Class>();
     for (const op of opNodes) {
-        const outTensors =
-            op.getOutgoers?.targets?.filter((n) => n.is(TensorNode)).toArray?.() ?? [];
+        const outTensors = op.getOutgoers.targets.filter((n) => n.is(TensorNode)).toArray();
         for (const t of outTensors as TensorNode.Class[]) {
             tensorProducers.set(t.id, op);
         }
@@ -855,11 +850,9 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
 
     for (const op of opNodes) {
         // Iterate over strict regions
-        const regions = op.regions ?? [];
+        const regions = op.regions;
 
         for (const sg of regions) {
-            if (!sg) continue;
-
             // Find explicit captures via RegionArgumentNode
             const nodes = sg.getNodes().toArray();
             for (const node of nodes) {
@@ -900,21 +893,16 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
             if (n.is(OperationNode)) {
                 const op = n.as(OperationNode);
                 // Follow intermediate tensor inputs recursively
-                for (const input of op.getInputs?.() ?? []) {
-                    if (
-                        input &&
-                        input.is(TensorNode) &&
-                        input.as(TensorNode).type === "intermediate"
-                    ) {
+                for (const input of op.getInputs() ?? []) {
+                    if (input.is(TensorNode) && input.as(TensorNode).type === "intermediate") {
                         checkPred(input);
                     }
                 }
             }
             // Check incomers (edges)
-            const incomers = n.incomers?.toArray?.() ?? [];
+            const incomers = n.incomers.toArray();
             for (const edge of incomers) {
-                const src = edge?.source;
-                if (!src) continue;
+                const src = edge.source;
                 if (src.is(OperationNode)) visit(src.as(OperationNode));
                 else if (src.is(TensorNode) && src.as(TensorNode).type === "intermediate")
                     checkPred(src);

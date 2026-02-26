@@ -8,7 +8,7 @@ import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Expand") return false;
 
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length !== 2) {
         throw new Error(
             `[ExpandHandler] Node ${op.id} invalid inputs. Expected 2 (data, shape), got ${ins.length}.`,
@@ -17,14 +17,11 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     const xIn = ins[0];
     const shapeIn = ins[1];
-    if (!xIn || !shapeIn) {
-        throw new Error(`[ExpandHandler] Node ${op.id} has undefined inputs.`);
-    }
 
     const X = xIn.is(TensorNode) ? xIn.as(TensorNode) : xIn.as(ConstantNode);
     const shape = shapeIn.is(TensorNode) ? shapeIn.as(TensorNode) : shapeIn.as(ConstantNode);
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
@@ -104,7 +101,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         .init(new OperationNode.Builder("Add", [X, zeros], {}))
         .as(OperationNode);
 
-    addEdge(g, addOp, Y, dt, outShape ?? Y.shape);
+    addEdge(g, addOp, Y, dt, outShape);
 
     g.getNodeById(op.id)?.remove();
 

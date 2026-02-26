@@ -10,7 +10,7 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     if (op.type !== "AveragePool") return false;
 
     // 1. Validate Inputs
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length !== 1) {
         throw new Error(
             `[AveragePoolHandler] Node ${op.id} must have exactly 1 input (X). Got ${ins.length}.`,
@@ -25,22 +25,22 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     }
 
     // 2. Validate Outputs
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // 3. Shape Analysis
-    const xShape = X.shape ?? [];
+    const xShape = X.shape;
     const rank = xShape.length;
     if (rank !== 4) return false; // Currently only supporting 2D NCHW (Rank 4)
 
     const C = xShape[1];
     if (typeof C !== "number") return false; // Need concrete channel count
 
-    const dtype = (X.literalType ?? DataType.FLOAT) as DataType;
+    const dtype = X.literalType as DataType;
 
     // 4. Parse Attributes (Strictly)
-    const attrs = op.getAttributes?.() ?? op.attributes ?? {};
+    const attrs = op.getAttributes();
 
     // Kernel Shape (Required)
     const kernelShape = attrs["kernel_shape"] as number[] | undefined;
@@ -48,15 +48,15 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     const [kH, kW] = kernelShape.map(Number);
 
     // Strides (Optional, default 1)
-    const strides = (attrs["strides"] as number[]) ?? [1, 1];
+    const strides = "strides" in attrs ? (attrs["strides"] as number[]) : [1, 1];
     const [sH, sW] = strides.map(Number);
 
     // Pads (Optional, default 0)
     // Note: AutoPad logic handling is simplified here for clarity
-    const pads = (attrs["pads"] as number[]) ?? [0, 0, 0, 0];
+    const pads = "pads" in attrs ? (attrs["pads"] as number[]) : [0, 0, 0, 0];
     const [pT, pL, pB, pR] = pads.length === 4 ? pads.map(Number) : [0, 0, 0, 0];
 
-    const autoPad = (attrs["auto_pad"] as string) ?? "NOTSET";
+    const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
     const countIncludePad = Number(attrs["count_include_pad"] ?? 0);
     const ceilMode = Number(attrs["ceil_mode"] ?? 0);
 

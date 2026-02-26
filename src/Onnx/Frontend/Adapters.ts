@@ -28,7 +28,7 @@ function moveAttributeToInput(
     type: "int" | "float" | "ints" = "ints",
 ) {
     const idx = node.attribute?.findIndex((a) => a.name === attrName);
-    if (idx && idx !== -1) {
+    if (idx !== undefined && idx !== -1) {
         const attr = node.attribute![idx];
         let init: TensorProto | undefined;
 
@@ -42,7 +42,7 @@ function moveAttributeToInput(
         } else if (type === "int") {
             const val = [Number(attr.i ?? 0)];
             init = createInt64Initializer(name, val);
-        } else if (type === "float") {
+        } else {
             const val = Number(attr.f ?? 0);
             init = createFloatInitializer(name, val);
         }
@@ -69,7 +69,7 @@ function moveAttributeToInput(
  * overwriting it with an empty TensorNode.
  */
 export function freezeOverridableInputs(data: RawOnnxModel): void {
-    if (!data?.graph?.input || !data?.graph?.initializer) return;
+    if (!data.graph?.input || !data.graph.initializer) return;
 
     const initializerNames = new Set(data.graph.initializer.map((init) => init.name));
 
@@ -180,7 +180,7 @@ function adaptResize(node: RawOnnxNode, graph: RawOnnxGraph) {
 
 // --- Main Entry Point ---
 export function applyAdapters(data: RawOnnxModel): void {
-    if (!data?.graph?.node) return;
+    if (!data.graph?.node) return;
     const graph = data.graph;
     if (!graph.node) return;
 

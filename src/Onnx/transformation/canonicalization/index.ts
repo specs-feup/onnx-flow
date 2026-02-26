@@ -14,7 +14,7 @@ import quantizeLinearHandler from "./handlers/QuantizeLinear.js";
 export type Handler = (graph: OnnxGraph.Class, op: OperationNode.Class) => boolean;
 
 // Registry by op type
-export type HandlersRegistry = Record<string, Handler>;
+export type HandlersRegistry = Record<string, Handler | undefined>;
 
 export interface CanonicalizationOptions {
     maxPasses?: number;
@@ -51,14 +51,14 @@ export default function applyCanonicalization(
     for (let pass = 0; pass < (opts.maxPasses ?? 1); pass++) {
         let changed = false;
 
-        // snapshot to avoid visiting newly inserted nodes in the same pass
+        // Snapshot to avoid visiting newly inserted nodes in the same pass
         const ops = graph.getOperationNodes();
 
         for (const op of ops) {
             const type = op.type;
-            const handler = opts.handlers![type];
-            if (!handler) continue;
-
+            if (opts.handlers === undefined) continue;
+            const handler: Handler | undefined = opts.handlers[type];
+            if (handler === undefined) continue;
             const didChange = handler(graph, op);
             if (didChange) changed = true;
         }

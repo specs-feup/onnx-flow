@@ -10,20 +10,20 @@ import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Clip") return false;
 
-    const ins = op.getInputs?.() ?? [];
+    const ins = op.getInputs() ?? [];
     if (ins.length < 1) {
         throw new Error(`[ClipHandler] Node ${op.id} missing required input (data).`);
     }
 
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) {
+    if (!Xn.is(TensorNode) && !Xn.is(ConstantNode)) {
         throw new Error(`[ClipHandler] Node ${op.id} input[0] invalid.`);
     }
     const X = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
     const dtype = X.literalType as DataType;
 
     // Get output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
@@ -80,7 +80,7 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     } else if (cur !== Y) {
         // Had only min or only max -> connect last op to Y
         const lastOp = toArrayLike<OperationNode.Class>(
-            cur.getIncomers?.sources?.filterIs?.(OperationNode),
+            cur.getIncomers.sources.filterIs(OperationNode),
         )[0];
         g.addEdge(lastOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     }

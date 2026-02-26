@@ -1,9 +1,9 @@
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type OnnxGraph from "./OnnxGraph.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
-import { AttributeType, DataType } from "./OnnxTypes.js";
+import { DataType } from "./OnnxTypes.js";
 import {
     broadcastShapes,
     decodeIntegerVectorFromTensorProto,
@@ -39,8 +39,8 @@ function resolveLiteralType(t: BaseNode.Class): DataType {
     if (t.is(TensorNode)) {
         const tn = t.as(TensorNode);
         if (tn.literalType !== DataType.UNDEFINED) return tn.literalType;
-        const interEdge = tn.getIncomers?.first() as OnnxEdge.Class | undefined;
-        if (interEdge?.literalType) return interEdge.literalType;
+        const interEdge = tn.getIncomers.first() as OnnxEdge.Class | undefined;
+        if (interEdge?.literalType !== undefined) return interEdge.literalType;
     }
     return DataType.UNDEFINED;
 }
@@ -74,16 +74,9 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
     const ops = topologicalSortOperationNodes(graph);
 
     for (const node of ops) {
-        const inputs = node.getInputs?.() ?? [];
+        const inputs = node.getInputs() ?? [];
 
         const infos = inputs.map((inp) => {
-            if (!inp) {
-                return {
-                    shape: [] as (number | string | undefined)[],
-                    dtype: DataType.UNDEFINED,
-                };
-            }
-
             let shape: (number | string | undefined)[] = [];
             let dtype = DataType.UNDEFINED;
 
@@ -100,8 +93,8 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const directEdge = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
 
                 shape = directEdge?.shape ??
-                    (tns?.shape as (number | string | undefined)[]) ?? [-1];
-                dtype = directEdge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED;
+                    (tns.shape as (number | string | undefined)[] | undefined) ?? [-1];
+                dtype = directEdge?.literalType ?? tns.literalType;
             }
 
             return {
@@ -115,62 +108,56 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
         if (node.type === "Loop") {
             const body = node.regions[0];
-            if (body) {
-                // 1. Propagate Captures (Outer -> Inner)
-                propagateToRegion(graph, body);
+            // 1. Propagate Captures (Outer -> Inner)
+            propagateToRegion(graph, body);
 
-                // 2. Propagate Loop Inputs -> Body Inputs
-                // Loop inputs: [trip, cond, v_init_1, v_init_2...]
-                // Body inputs: [iter, cond, v_in_1, v_in_2...]
-                const loopInputs = inputs; // skip trip/cond logic for shape?
-                // Usually v_init starts at index 2
-                const bodyInputs = body.getInputTensorNodes().toArray();
-                // Body inputs are strictly ordered: iter, cond, loop_vars...
+            // 2. Propagate Loop Inputs -> Body Inputs
+            // Loop inputs: [trip, cond, v_init_1, v_init_2...]
+            // Body inputs: [iter, cond, v_in_1, v_in_2...]
+            const loopInputs = inputs; // skip trip/cond logic for shape?
+            // Usually v_init starts at index 2
+            const bodyInputs = body.getInputTensorNodes().toArray();
+            // Body inputs are strictly ordered: iter, cond, loop_vars...
 
-                // Set shapes for loop variables in body based on v_initial
-                for (let i = 0; i < loopInputs.length - 2; i++) {
-                    const vInit = loopInputs[i + 2];
-                    const vBody = bodyInputs[i + 2]; // skip iter, cond
-                    if (vInit && vBody) {
-                        vBody.setShape(resolveTensorShape(vInit));
-                        vBody.setLiteralType(resolveLiteralType(vInit));
-                    }
-                }
+            // Set shapes for loop variables in body based on v_initial
+            for (let i = 0; i < loopInputs.length - 2; i++) {
+                const vInit = loopInputs[i + 2];
+                const vBody = bodyInputs[i + 2]; // skip iter, cond
+                vBody.setShape(resolveTensorShape(vInit));
+                vBody.setLiteralType(resolveLiteralType(vInit));
+            }
 
-                // 3. Recurse
-                inferShapes(body);
+            // 3. Recurse
+            inferShapes(body);
 
-                // 4. Propagate Body Outputs -> Loop Outputs
-                // Body outputs: [cond_out, v_out_1... v_out_N, scan_1... scan_M]
-                // Loop outputs: [v_final_1... v_final_N, scan_1... scan_M]
-                // (Scan outputs gain a dimension)
+            // 4. Propagate Body Outputs -> Loop Outputs
+            // Body outputs: [cond_out, v_out_1... v_out_N, scan_1... scan_M]
+            // Loop outputs: [v_final_1... v_final_N, scan_1... scan_M]
+            // (Scan outputs gain a dimension)
 
-                const bodyOutputs = body.getOutputTensorNodes().toArray();
-                const loopOutputs = node.getOutgoers.targets.filterIs(TensorNode).toArray();
+            const bodyOutputs = body.getOutputTensorNodes().toArray();
+            const loopOutputs = node.getOutgoers.targets.filterIs(TensorNode).toArray();
 
-                // Loop outputs map to body outputs starting at index 1 (skip cond_out)
-                for (let i = 0; i < loopOutputs.length; i++) {
-                    const bOut = bodyOutputs[i + 1]; // skip cond_out
-                    const lOut = loopOutputs[i];
+            // Loop outputs map to body outputs starting at index 1 (skip cond_out)
+            for (let i = 0; i < loopOutputs.length; i++) {
+                const bOut = bodyOutputs[i + 1]; // skip cond_out
+                const lOut = loopOutputs[i];
 
-                    if (bOut && lOut) {
-                        if (i < loopInputs.length - 2) {
-                            // Carried variable (shape preserved)
-                            lOut.setShape(bOut.shape);
-                            lOut.setLiteralType(bOut.literalType);
-                        } else {
-                            // Scan output (prepend dimension, usually trip count or symbolic)
-                            // Ideally we find 'trip_count' from input[0]
-                            const tripCnt = inputs[0]?.is(ConstantNode)
-                                ? decodeIntegerVectorFromTensorProto(
-                                      inputs[0].as(ConstantNode).constantValue,
-                                  )![0]
-                                : undefined;
-                            const dim0 = tripCnt !== undefined ? tripCnt : "N"; // 'N' or -1 for unknown
-                            lOut.setShape([dim0, ...bOut.shape]);
-                            lOut.setLiteralType(bOut.literalType);
-                        }
-                    }
+                if (i < loopInputs.length - 2) {
+                    // Carried variable (shape preserved)
+                    lOut.setShape(bOut.shape);
+                    lOut.setLiteralType(bOut.literalType);
+                } else {
+                    // Scan output (prepend dimension, usually trip count or symbolic)
+                    // Ideally we find 'trip_count' from input[0]
+                    const tripCnt = inputs[0]?.is(ConstantNode)
+                        ? decodeIntegerVectorFromTensorProto(
+                              inputs[0].as(ConstantNode).constantValue,
+                          )![0]
+                        : undefined;
+                    const dim0 = tripCnt !== undefined ? tripCnt : "N"; // 'N' or -1 for unknown
+                    lOut.setShape([dim0, ...bOut.shape]);
+                    lOut.setLiteralType(bOut.literalType);
                 }
             }
             continue; // Skip standard switch, we handled it
@@ -179,23 +166,19 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         if (node.type === "If") {
             // Propagate to both branches
             for (const region of node.regions) {
-                if (region) {
-                    propagateToRegion(graph, region);
-                    inferShapes(region);
-                }
+                propagateToRegion(graph, region);
+                inferShapes(region);
             }
 
             // Output shape is union/broadcast of branches (usually identical)
             // Just take from 'then' branch for simplicity
             const thenGraph = node.regions[0];
-            const thenOutputs = thenGraph?.getOutputTensorNodes().toArray() ?? [];
+            const thenOutputs = thenGraph.getOutputTensorNodes().toArray();
             const ifOutputs = node.getOutgoers.targets.filterIs(TensorNode).toArray();
 
             for (let i = 0; i < ifOutputs.length; i++) {
-                if (thenOutputs[i]) {
-                    ifOutputs[i].setShape(thenOutputs[i].shape);
-                    ifOutputs[i].setLiteralType(thenOutputs[i].literalType);
-                }
+                ifOutputs[i].setShape(thenOutputs[i].shape);
+                ifOutputs[i].setLiteralType(thenOutputs[i].literalType);
             }
             continue;
         }
@@ -218,7 +201,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             case "LessOrEqual":
             case "Equal":
             case "NotEqual": {
-                const shapes = infos.map((i) => toStaticShape(i.shape) ?? []);
+                const shapes = infos.map((i) => toStaticShape(i.shape));
                 outShape = broadcastShapes(...shapes);
                 if (
                     [
@@ -258,7 +241,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const sx = infos[1]?.shape ?? [];
                 const sy = infos[2]?.shape ?? [];
                 outShape = broadcastShapes(toStaticShape(sc), toStaticShape(sx), toStaticShape(sy));
-                outDtype = infos[1]?.dtype ?? infos[2]?.dtype ?? outDtype;
+                outDtype = infos[1]?.dtype ?? infos[2]?.dtype;
                 if (infos[0]?.dtype !== DataType.BOOL) {
                     console.warn("Where: condition input is not BOOL.");
                 }
@@ -312,7 +295,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const shapeInput = inputs[1]; // BaseNode
                 let target: number[] = [];
 
-                if (shapeInput?.is(ConstantNode)) {
+                if (shapeInput.is(ConstantNode)) {
                     target =
                         decodeIntegerVectorFromTensorProto(
                             shapeInput.as(ConstantNode).constantValue,
@@ -364,7 +347,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const axesNode = inputs[1];
 
                 let raw: number[] = [];
-                if (axesNode?.is(ConstantNode)) {
+                if (axesNode.is(ConstantNode)) {
                     raw =
                         decodeIntegerVectorFromTensorProto(
                             axesNode.as(ConstantNode).constantValue,
@@ -382,14 +365,14 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const axesNode = inputs[1];
 
                 let axes: number[] = [];
-                if (axesNode?.is(ConstantNode)) {
+                if (axesNode.is(ConstantNode)) {
                     axes =
                         decodeIntegerVectorFromTensorProto(
                             axesNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
 
-                if (!axes || axes.length === 0) {
+                if (axes.length === 0) {
                     outShape = inputShape.filter((d) => d !== 1);
                 } else {
                     const rank = inputShape.length;
@@ -415,14 +398,14 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             }
 
             case "Scan": {
-                const outs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
+                const outs = node.getOutgoers.targets;
 
                 const firstOutT = outs
                     .filter((t) => t.is(TensorNode))
                     .first()
                     ?.as(TensorNode);
 
-                if (firstOutT && firstOutT.literalType !== undefined) {
+                if (firstOutT !== undefined) {
                     outDtype = firstOutT.literalType;
                 }
                 outShape = [];
@@ -469,25 +452,25 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 let axes: number[] = [];
                 let steps: number[] = [];
 
-                if (startsNode?.is(ConstantNode)) {
+                if (startsNode.is(ConstantNode)) {
                     starts =
                         decodeIntegerVectorFromTensorProto(
                             startsNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
-                if (endsNode?.is(ConstantNode)) {
+                if (endsNode.is(ConstantNode)) {
                     ends =
                         decodeIntegerVectorFromTensorProto(
                             endsNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
-                if (axesNode?.is(ConstantNode)) {
+                if (axesNode.is(ConstantNode)) {
                     axes =
                         decodeIntegerVectorFromTensorProto(
                             axesNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
-                if (stepsNode?.is(ConstantNode)) {
+                if (stepsNode.is(ConstantNode)) {
                     steps =
                         decodeIntegerVectorFromTensorProto(
                             stepsNode.as(ConstantNode).constantValue,
@@ -536,7 +519,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const padsNode = inputs[1];
 
                 let pads: number[] = [];
-                if (padsNode?.is(ConstantNode)) {
+                if (padsNode.is(ConstantNode)) {
                     pads =
                         decodeIntegerVectorFromTensorProto(
                             padsNode.as(ConstantNode).constantValue,
@@ -564,7 +547,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             case "ReduceLogSum":
             case "ReduceSumSquare": {
                 const inShape = infos[0]?.shape ?? [];
-                const keepdims = !!getAttr(node, "keepdims", 1);
+                const keepdims = (getAttr(node, "keepdims", 1) as number) !== 0;
 
                 const axesAttr = getAttr(node, "axes", undefined) as number[] | number | undefined;
                 let axes: number[] | undefined = Array.isArray(axesAttr)
@@ -575,7 +558,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
                 if (!axes) {
                     const axesNode = inputs[1];
-                    if (axesNode?.is(ConstantNode)) {
+                    if (axesNode.is(ConstantNode)) {
                         const raw =
                             decodeIntegerVectorFromTensorProto(
                                 axesNode.as(ConstantNode).constantValue,
@@ -610,7 +593,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     break;
                 }
 
-                const attrs = node.getAttributes() ?? node.attributes ?? {};
+                const attrs = node.getAttributes();
                 let axes: number[] | undefined = attrs["axes"] as number[] | undefined;
 
                 if (!Array.isArray(axes) || axes.length === 0) {
@@ -639,7 +622,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             case "ArgMax":
             case "ArgMin": {
                 const inShape = infos[0]?.shape ?? [];
-                const keepdims = !!getAttr(node, "keepdims", 1);
+                const keepdims = (getAttr(node, "keepdims", 1) as number) !== 0;
                 const axis = normalizeAxis(getAttr(node, "axis", 0) as number, inShape.length);
                 if (keepdims) {
                     outShape = inShape.map((d, i) => (i === axis ? 1 : d));
@@ -660,7 +643,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     break;
                 }
 
-                const attrs = node.getAttributes() ?? node.attributes ?? {};
+                const attrs = node.getAttributes();
                 const hasStart = Object.prototype.hasOwnProperty.call(attrs, "start");
                 const hasEnd = Object.prototype.hasOwnProperty.call(attrs, "end");
 
@@ -697,7 +680,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const shapeTensor = inputs[0]; // BaseNode
                 let shape: (number | string | undefined)[] = [];
 
-                if (shapeTensor?.is(ConstantNode)) {
+                if (shapeTensor.is(ConstantNode)) {
                     const arr =
                         decodeIntegerVectorFromTensorProto(
                             shapeTensor.as(ConstantNode).constantValue,
@@ -707,27 +690,24 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     }
                 }
 
-                if (!shape.length && shapeTensor) {
-                    const producers =
-                        shapeTensor.incomers?.sources ?? graph.emptyCollection(BaseNode);
+                if (!shape.length) {
+                    const producers = shapeTensor.incomers.sources;
                     const shapeOp = producers
                         .filterIs(OperationNode)
                         .filter((op) => op.type === "Shape")
                         .first();
 
                     if (shapeOp) {
-                        const shapeInputs = shapeOp.getInputs?.() ?? [];
+                        const shapeInputs = shapeOp.getInputs() ?? [];
                         const xTensor = shapeInputs[0];
-                        if (xTensor) {
-                            const xShape = resolveTensorShape(xTensor);
-                            if (xShape.length) shape = xShape.slice();
-                        }
+                        const xShape = resolveTensorShape(xTensor);
+                        if (xShape.length) shape = xShape.slice();
                     }
                 }
 
                 // if we still don't know the shape, reuse the existing output shape
                 if (!shape.length) {
-                    const outs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
+                    const outs = node.getOutgoers.targets;
                     const outT = outs
                         .filter((t) => t.is(TensorNode))
                         .first()
@@ -749,7 +729,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const depthTensorNode = inputs[1];
                 let depth = 0;
 
-                if (depthTensorNode?.is(ConstantNode)) {
+                if (depthTensorNode.is(ConstantNode)) {
                     const depthArr =
                         decodeIntegerVectorFromTensorProto(
                             depthTensorNode.as(ConstantNode).constantValue,
@@ -764,10 +744,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 }
 
                 const valuesTensor = inputs[2];
-                if (valuesTensor?.is(ConstantNode)) {
-                    outDtype = valuesTensor.as(ConstantNode).literalType ?? DataType.FLOAT;
-                } else if (valuesTensor?.is(TensorNode)) {
-                    outDtype = valuesTensor.as(TensorNode).literalType ?? DataType.FLOAT;
+                if (valuesTensor.is(ConstantNode)) {
+                    outDtype = valuesTensor.as(ConstantNode).literalType;
+                } else if (valuesTensor.is(TensorNode)) {
+                    outDtype = valuesTensor.as(TensorNode).literalType;
                 } else {
                     outDtype = DataType.FLOAT;
                 }
@@ -804,7 +784,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const shapeInput = inputs[1]; // BaseNode
                 let targetShape: (string | number | undefined)[] = [];
 
-                if (shapeInput?.is(ConstantNode)) {
+                if (shapeInput.is(ConstantNode)) {
                     const arr =
                         decodeIntegerVectorFromTensorProto(
                             shapeInput.as(ConstantNode).constantValue,
@@ -814,25 +794,20 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     }
                 }
 
-                if (!targetShape || (!targetShape?.length && shapeInput)) {
-                    const producers =
-                        shapeInput.incomers?.sources ?? graph.emptyCollection(BaseNode);
-                    const shapeOp = producers
-                        .filterIs(OperationNode)
-                        .filter((op) => op.type === "Shape")
-                        .first();
+                const producers = shapeInput.incomers.sources;
+                const shapeOp = producers
+                    .filterIs(OperationNode)
+                    .filter((op) => op.type === "Shape")
+                    .first();
 
-                    if (shapeOp) {
-                        const shapeInputs = shapeOp.getInputs?.() ?? [];
-                        const xTensor = shapeInputs[0];
-                        if (xTensor) {
-                            const xShape = resolveTensorShape(xTensor);
-                            if (xShape.length) targetShape = xShape.slice();
-                        }
-                    }
+                if (shapeOp) {
+                    const shapeInputs = shapeOp.getInputs() ?? [];
+                    const xTensor = shapeInputs[0];
+                    const xShape = resolveTensorShape(xTensor);
+                    if (xShape.length) targetShape = xShape.slice();
                 }
 
-                if (targetShape && targetShape.length > 0) {
+                if (targetShape.length > 0) {
                     outShape = targetShape;
                 } else if (dataShape.length > 0) {
                     outShape = dataShape.slice();
@@ -848,10 +823,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const wShape = infos[1]?.shape ?? [];
 
                 if (xShape.length === 0 || wShape.length === 0) {
-                    const first = infos.find((i) => i.shape?.length);
+                    const first = infos.find((i) => i.shape.length);
                     if (first) {
                         outShape = first.shape.slice();
-                        outDtype = first.dtype ?? outDtype;
+                        outDtype = first.dtype;
                     }
                     break;
                 }
@@ -865,7 +840,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const [N, , H, W] = xShape.map(toNum) as number[];
                 const [M, , kH, kW] = wShape.map(toNum) as number[];
 
-                const attrs = node.getAttributes() ?? node.attributes ?? {};
+                const attrs = node.getAttributes();
 
                 let strides = attrs["strides"] as number[] | undefined;
                 if (!Array.isArray(strides) || strides.length !== 2) {
@@ -929,18 +904,19 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── MaxPool / AveragePool ───── */
             case "MaxPool":
             case "AveragePool": {
-                const x = toStaticShape(infos[0]?.shape) ?? [];
+                const x = toStaticShape(infos[0]?.shape);
                 const n = x[0],
                     c = x[1],
                     h = x[2],
                     wdim = x[3];
-                const kernel = (getAttr(node, "kernel_shape", [1, 1]) || []) as number[];
-                const strides = (getAttr(node, "strides", [1, 1]) || []) as number[];
-                const pads = (getAttr(node, "pads", [0, 0, 0, 0]) || []) as number[];
-                const dil = (getAttr(node, "dilations", [1, 1]) || []) as number[];
+                const kernel =
+                    (getAttr(node, "kernel_shape", [1, 1]) as number[] | undefined) ?? [];
+                const strides = (getAttr(node, "strides", [1, 1]) as number[] | undefined) ?? [];
+                const pads = (getAttr(node, "pads", [0, 0, 0, 0]) as number[] | undefined) ?? [];
+                const dil = (getAttr(node, "dilations", [1, 1]) as number[] | undefined) ?? [];
 
                 const Hout = inferPoolDim(
-                    h ?? 0,
+                    h,
                     kernel[0] ?? 1,
                     strides[0] ?? 1,
                     pads[0] ?? 0,
@@ -948,7 +924,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     dil[0] ?? 1,
                 );
                 const Wout = inferPoolDim(
-                    wdim ?? 0,
+                    wdim,
                     kernel[1] ?? 1,
                     strides[1] ?? 1,
                     pads[1] ?? 0,
@@ -1021,20 +997,13 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── Loop  ───── */
             case "Loop": {
                 const initState = infos[2];
-                if (initState && initState.shape) {
-                    outShape = initState.shape.slice();
-                    outDtype = initState.dtype ?? outDtype;
-                } else {
-                    const outputs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
-                    const firstOutT = outputs.first()?.tryAs?.(TensorNode);
-                    outShape = (firstOutT?.shape as (number | string | undefined)[]) ?? [];
-                    outDtype = firstOutT?.literalType ?? outDtype;
-                }
+                outShape = initState.shape.slice();
+                outDtype = initState.dtype;
                 break;
             }
 
             default: {
-                const first = infos.find((i) => i.shape !== undefined);
+                const first = infos.find((i) => typeof i.shape !== "undefined");
                 if (first) {
                     outShape = first.shape;
                     outDtype = first.dtype;
@@ -1046,7 +1015,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         const outputs = node.getOutgoers.targets;
         const outputTensors = outputs.filter((t) => t.is(TensorNode));
 
-        node.getOutgoers.forEach((e) => graph?.getEdgeById(e.id)?.remove());
+        node.getOutgoers.forEach((e) => graph.getEdgeById(e.id)?.remove());
 
         for (const output of outputs) {
             // If we inferred a specific shape above (standard ops), apply it.

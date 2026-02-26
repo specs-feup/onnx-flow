@@ -41,16 +41,17 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
 
             // Phase 3 Support: Input can be TensorNode OR ConstantNode
             let inputNode: TensorNode.Class | ConstantNode.Class | undefined = undefined;
-            if (rawNode?.is(TensorNode)) inputNode = rawNode.as(TensorNode);
-            else if (rawNode?.is(ConstantNode)) inputNode = rawNode.as(ConstantNode);
+            if (rawNode !== undefined && rawNode.is(TensorNode)) inputNode = rawNode.as(TensorNode);
+            else if (rawNode !== undefined && rawNode.is(ConstantNode))
+                inputNode = rawNode.as(ConstantNode);
 
             if (inputNode) {
-                const alreadyConnected = inputNode.getOutgoers?.some(
+                const alreadyConnected = inputNode.getOutgoers.some(
                     (e) => e.target.id === opNode?.id,
                 );
                 if (!alreadyConnected && opNode) {
-                    const type = inputNode.literalType ?? AttributeType.UNDEFINED;
-                    const shape = inputNode.shape ?? [];
+                    const type = inputNode.literalType;
+                    const shape = inputNode.shape;
                     graph
                         .addEdge(inputNode, opNode)
                         .init(new OnnxEdge.Builder(type, shape))
@@ -97,8 +98,8 @@ export function convertFlowGraphToOnnxJson(
                     sanitized[key] = value.map((v) => (typeof v === "string" ? Number(v) : v));
                 } else if (
                     key.endsWith("Data") &&
-                    tensor.rawData &&
-                    !(value as { length?: number }).length // only override if missing
+                    tensor.rawData !== undefined &&
+                    ((value as { length?: number }).length ?? 0) === 0 // only override if missing
                 ) {
                     // Try decoding rawData if value array is empty
                     const dtype = tensor.dataType ?? DataType.INT64;
@@ -145,7 +146,6 @@ export function convertFlowGraphToOnnxJson(
         const initializers: TensorProto[] = [];
         for (const node of graph.getConstantNodes()) {
             const original = node.constantValue;
-            if (!original) continue;
             const serialized = sanitizeTensor({ ...original, name: node.id });
             initializers.push(serialized);
         }
@@ -211,7 +211,7 @@ export function convertFlowGraphToOnnxJson(
     const opNodes = topologicalSortOperationNodes(graph);
 
     for (const opNode of opNodes) {
-        const opType = opNode.type ?? "UnknownOp";
+        const opType = opNode.type;
 
         // Handle Inputs: Resolve RegionArgumentNode back to original name
         const inputs =
@@ -227,17 +227,16 @@ export function convertFlowGraphToOnnxJson(
         const baseAttrs: RawOnnxAttribute[] = [];
 
         // Serialize attributes
-        for (const [name, value] of Object.entries(opNode.attributes || {})) {
+        for (const [name, value] of Object.entries(opNode.attributes)) {
             // Skip handled regions logic
-            if (value && typeof value === "object" && ("g" in value || "type" in value)) {
+            if (typeof value === "object" && ("g" in value || "type" in value)) {
                 const valObj = value as Record<string, unknown>;
 
                 baseAttrs.push({
                     name,
-                    // Explicitly provide 'type', falling back to GRAPH
-                    type: (valObj["type"] as number | string) ?? AttributeType.GRAPH,
+                    type: (valObj["type"] as number | string | undefined) ?? AttributeType.GRAPH,
                     ...valObj,
-                } as unknown as RawOnnxAttribute); // Safe cast to raw attribute
+                } as unknown as RawOnnxAttribute);
 
                 continue;
             }
@@ -254,7 +253,6 @@ export function convertFlowGraphToOnnxJson(
                 attr.type = AttributeType.STRING;
             } else if (
                 typeof value === "object" &&
-                value !== null &&
                 "type" in value &&
                 (value as Record<string, unknown>)["type"] === "TENSOR"
             ) {
@@ -272,48 +270,42 @@ export function convertFlowGraphToOnnxJson(
 
         if (opType === "Loop") {
             const bodyGraph = opNode.regions[0]; // Convention: Loop body is region 0
-            if (bodyGraph) {
-                const bodyJson = convertFlowGraphToOnnxJson(
-                    bodyGraph,
-                    `loop_body_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph!;
-                baseAttrs.push({
-                    name: "body",
-                    type: AttributeType.GRAPH,
-                    g: bodyJson,
-                });
-            }
+            const bodyJson = convertFlowGraphToOnnxJson(
+                bodyGraph,
+                `loop_body_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({
+                name: "body",
+                type: AttributeType.GRAPH,
+                g: bodyJson,
+            });
         } else if (opType === "If") {
             const thenGraph = opNode.regions[0];
             const elseGraph = opNode.regions[1];
 
-            if (thenGraph) {
-                const gJson = convertFlowGraphToOnnxJson(
-                    thenGraph,
-                    `then_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph!;
-                baseAttrs.push({ name: "then_branch", type: AttributeType.GRAPH, g: gJson });
-            }
-            if (elseGraph) {
-                const gJson = convertFlowGraphToOnnxJson(
-                    elseGraph,
-                    `else_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph!;
-                baseAttrs.push({ name: "else_branch", type: AttributeType.GRAPH, g: gJson });
-            }
+            //thenGraph
+            const thenJson = convertFlowGraphToOnnxJson(
+                thenGraph,
+                `then_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({ name: "then_branch", type: AttributeType.GRAPH, g: thenJson });
+            //elseGraph
+            const elseJson = convertFlowGraphToOnnxJson(
+                elseGraph,
+                `else_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({ name: "else_branch", type: AttributeType.GRAPH, g: elseJson });
         } else if (opType === "Scan") {
             const bodyGraph = opNode.regions[0];
-            if (bodyGraph) {
-                const gJson = convertFlowGraphToOnnxJson(
-                    bodyGraph,
-                    `scan_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph!;
-                baseAttrs.push({ name: "body", type: AttributeType.GRAPH, g: gJson });
-            }
+            const gJson = convertFlowGraphToOnnxJson(
+                bodyGraph,
+                `scan_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({ name: "body", type: AttributeType.GRAPH, g: gJson });
         }
 
         modelNodes.push({

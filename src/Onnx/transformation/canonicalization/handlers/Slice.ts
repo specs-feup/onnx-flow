@@ -16,7 +16,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     if (sl.type !== "Slice") return false;
 
     // 1. Inputs (Standard Opset 10+: data, starts, ends, axes?, steps?)
-    const ins = sl.getInputs?.() ?? [];
+    const ins = sl.getInputs() ?? [];
 
     // Strict Input Check (Phase 5.2): Slice MUST have at least 3 inputs (data, starts, ends).
     if (ins.length < 3) {
@@ -26,7 +26,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     }
 
     const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode) && !Xn?.is?.(ConstantNode)) {
+    if (!Xn.is(TensorNode) && !Xn.is(ConstantNode)) {
         throw new Error(`[SliceHandler] Node ${sl.id} input[0] (data) is invalid.`);
     }
 
@@ -37,15 +37,11 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     // 2. Read Parameters (Strictly from Inputs)
     const readVec = (idx: number) => {
         const t = ins[idx];
-        // If the node should exist (idx 1 or 2) but is undefined, it's a structural error
-        if (!t && (idx === 1 || idx === 2)) {
-            throw new Error(`[SliceHandler] Node ${sl.id} missing required input at index ${idx}.`);
-        }
 
-        if (t?.is?.(ConstantNode)) {
+        if (t.is(ConstantNode)) {
             return readConstIntegerVectorFromTensorNode(t.as(ConstantNode));
         }
-        return t?.is?.(TensorNode)
+        return t.is(TensorNode)
             ? readConstIntegerVectorFromTensorNode(t.as(TensorNode))
             : undefined;
     };
@@ -103,8 +99,8 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     }
 
     // 4. Output
-    const outs = sl.getOutgoers.targets ?? [];
-    if (outs.length !== 1 || !outs[0].is?.(TensorNode)) return false;
+    const outs = sl.getOutgoers.targets;
+    if (outs.length !== 1 || !outs[0].is(TensorNode)) return false;
     const Y = outs[0].as(TensorNode);
 
     // 5. Determine affected axes

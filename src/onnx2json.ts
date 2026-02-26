@@ -16,7 +16,7 @@ export function onnx2json(onnxFilePath: string): Promise<RawOnnxModel> {
 
     const protoPath = possiblePaths.find((p) => fs.existsSync(p));
 
-    if (!protoPath) {
+    if (protoPath === undefined) {
         return Promise.reject(
             `Error: Could not find 'onnx.proto'. Searched in: \n${possiblePaths.join("\n")}`,
         );
