@@ -183,7 +183,7 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     }
 
     // 7. Clean up
-    g.getNodeById(sl.id).remove();
+    g.getNodeById(sl.id)?.remove();
 
     // Cleanup orphaned constant inputs
     const getInput = (i: number) =>

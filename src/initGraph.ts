@@ -4,6 +4,7 @@ import OperationNode from "./Onnx/OperationNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import type {
+    AttributeMap,
     RawOnnxAttribute,
     RawOnnxDim,
     RawOnnxModel,
@@ -23,7 +24,7 @@ import { uniq } from "./Onnx/Utils.js";
 // Helper function to convert shape to number[]
 function parseShape(shape: RawOnnxTensorType["shape"]): (number | string)[] {
     if (!shape?.dim) return [];
-    return shape.dim.map((dim: RawOnnxDim) => {
+    return shape.dim.map((dim: RawOnnxDim): number | string => {
         // Handle both camelCase and snake_case formats
         const dimParam = dim.dimParam ?? dim.dim_param;
         const dimValue = dim.dimValue ?? dim.dim_value;
@@ -35,13 +36,13 @@ function parseShape(shape: RawOnnxTensorType["shape"]): (number | string)[] {
         if (dimValue !== undefined && dimValue !== null) {
             return Number(dimValue); // explicitly cast to number
         } else {
-            return undefined; // unknown dimension size
+            return -1; // unknown dimension size
         }
     });
 }
 
 function addValueInfoNodes(data: RawOnnxModel, graph: OnnxGraph.Class): void {
-    if (!data.graph.valueInfo) return;
+    if (!data.graph || !data.graph.valueInfo) return;
 
     // Collect all outputs of Constant nodes so we don't create dummy intermediates for them
     const constantOutputs = new Set<string>();
@@ -75,12 +76,12 @@ function addValueInfoNodes(data: RawOnnxModel, graph: OnnxGraph.Class): void {
 
 // Add initializers
 function addInitializers(data: RawOnnxModel, graph: OnnxGraph.Class) {
-    if (!data.graph.initializer) {
+    if (!data.graph || !data.graph.initializer) {
         return;
     }
 
     data.graph.initializer.forEach((tensor: TensorProto) => {
-        if (!graph.hasNode(tensor.name)) {
+        if (!tensor.name || !graph.hasNode(tensor.name)) {
             graph.addNode(tensor.name).init(new ConstantNode.Builder(tensor)).as(ConstantNode);
         }
     });
@@ -155,17 +156,17 @@ function addNodes(
 
                 // Determine type/shape from parent for the proxy node
                 let type = DataType.UNDEFINED;
-                let shape: (number | string)[] = [];
+                let shape: (number | string | undefined)[] = [];
 
-                if (parentNode.is(TensorNode)) {
+                if (parentNode?.is(TensorNode)) {
                     const tn = parentNode.as(TensorNode);
                     type = tn.literalType;
                     shape = tn.shape;
-                } else if (parentNode.is(ConstantNode)) {
+                } else if (parentNode?.is(ConstantNode)) {
                     const cn = parentNode.as(ConstantNode);
                     type = cn.literalType;
                     shape = cn.shape;
-                } else if (parentNode.is(RegionArgumentNode)) {
+                } else if (parentNode?.is(RegionArgumentNode)) {
                     const ra = parentNode.as(RegionArgumentNode);
                     type = ra.literalType;
                     shape = ra.shape;
@@ -205,10 +206,11 @@ function addNodes(
         const currentBatch = Array.from(nodesToAdd); // snapshot
 
         for (const nodeIndex of currentBatch) {
-            const node = data.graph.node[nodeIndex];
+            const node = data.graph?.node![nodeIndex];
+            if (!node) continue;
 
             // 1. Check if we can resolve all inputs (Local or Capture)
-            const allInputsResolved = node.input.every((inputName: string) => {
+            const allInputsResolved = node.input?.every((inputName: string) => {
                 if (inputName === "") return true; // Optional input
                 return resolveInput(inputName) !== undefined;
             });
@@ -220,7 +222,7 @@ function addNodes(
             // --- Node Processing ---
 
             // A. Handle Constant (Phase 3)
-            if (node.opType === "Constant" && node.output?.length > 0) {
+            if (node.opType === "Constant" && node.output?.length && node.output?.length > 0) {
                 const name = node.output[0];
                 let constantValue: TensorProto | undefined = undefined;
 
@@ -241,7 +243,7 @@ function addNodes(
 
             // B. Resolve Inputs (Actual wiring)
             const inputs: BaseNode.Class[] = [];
-            node.input.forEach((inputName: string) => {
+            node.input?.forEach((inputName: string) => {
                 if (inputName === "") return;
                 const resolved = resolveInput(inputName);
                 if (resolved) inputs.push(resolved);
@@ -305,11 +307,11 @@ function addNodes(
                                 break;
                             case AttributeType.FLOATS:
                             case "FLOATS":
-                                attributes[attr.name] = attr.floats.map(Number);
+                                attributes[attr.name] = attr.floats!.map(Number);
                                 break;
                             case AttributeType.INTS:
                             case "INTS":
-                                attributes[attr.name] = attr.ints.map(Number);
+                                attributes[attr.name] = attr.ints!.map(Number);
                                 break;
                             case AttributeType.TENSOR:
                             case "TENSOR":
@@ -329,15 +331,15 @@ function addNodes(
                 if (node.opType === "If") {
                     // Parse 'then_branch'
                     const tA = attrMap.get("then_branch");
-                    if (tA)
+                    if (tA?.g)
                         orderedRegions.push(createGraphWithCaptures({ graph: tA.g }, graph).graph);
                     // Parse 'else_branch'
                     const eA = attrMap.get("else_branch");
-                    if (eA)
+                    if (eA?.g)
                         orderedRegions.push(createGraphWithCaptures({ graph: eA.g }, graph).graph);
                 } else if (node.opType === "Loop" || node.opType === "Scan") {
                     const bA = attrMap.get("body");
-                    if (bA)
+                    if (bA?.g)
                         orderedRegions.push(createGraphWithCaptures({ graph: bA.g }, graph).graph);
                 }
                 // Replace the generic 'regions' from the loop with this ordered list
@@ -345,7 +347,12 @@ function addNodes(
             }
 
             // Build Operation Node
-            const opBuilder = new OperationNode.Builder(node.opType, inputs, attributes, regions);
+            const opBuilder = new OperationNode.Builder(
+                node.opType!,
+                inputs,
+                attributes as AttributeMap,
+                regions,
+            );
             const opId = nodeIndex.toString();
             graph.addNode(opId).init(opBuilder).as(OperationNode);
 
@@ -367,7 +374,7 @@ function addNodes(
                 // Note: We don't add to definedVars here anymore, graph.hasNode is the source of truth
             });
 
-            mapNodeAndInputs.push({ nodeId: opId, inputs: node.input });
+            mapNodeAndInputs.push({ nodeId: opId, inputs: node.input! });
 
             nodesToAdd.delete(nodeIndex);
             madeProgress = true;
@@ -397,7 +404,7 @@ function addEdges(
                 if (!inputNode) return;
 
                 let type = DataType.UNDEFINED;
-                let shape: (number | string)[] = [];
+                let shape: (number | string | undefined)[] = [];
 
                 if (inputNode.is(TensorNode)) {
                     const t = inputNode.as(TensorNode);

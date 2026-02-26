@@ -27,11 +27,9 @@ function moveAttributeToInput(
     inputIndex: number,
     type: "int" | "float" | "ints" = "ints",
 ) {
-    if (!node.attribute) return;
-
-    const idx = node.attribute.findIndex((a) => a.name === attrName);
-    if (idx !== -1) {
-        const attr = node.attribute[idx];
+    const idx = node.attribute?.findIndex((a) => a.name === attrName);
+    if (idx && idx !== -1) {
+        const attr = node.attribute![idx];
         let init: TensorProto | undefined;
 
         // Safely get opType (handling snake_case fallback)
@@ -39,7 +37,7 @@ function moveAttributeToInput(
         const name = `${node.name ?? opType}_${attrName}_${Math.random().toString(36).substr(2, 5)}`;
 
         if (type === "ints") {
-            const val = attr.ints || [];
+            const val = attr.ints ?? [0];
             init = createInt64Initializer(name, val);
         } else if (type === "int") {
             const val = [Number(attr.i ?? 0)];
@@ -49,18 +47,14 @@ function moveAttributeToInput(
             init = createFloatInitializer(name, val);
         }
 
-        if (init) {
-            graphProto.initializer = graphProto.initializer || [];
-            graphProto.initializer.push(init);
+        graphProto.initializer?.push(init!);
 
-            // Ensure inputs array is initialized and large enough
-            node.input = node.input || [];
-            while (node.input.length < inputIndex) node.input.push("");
-            node.input[inputIndex] = name;
-        }
+        // Ensure inputs array is initialized and large enough
+        while (node.input && node.input.length < inputIndex) node.input.push("");
+        if (node.input) node.input[inputIndex] = name;
 
         // Remove the attribute
-        node.attribute.splice(idx, 1);
+        node.attribute?.splice(idx, 1);
     }
 }
 
@@ -188,6 +182,7 @@ function adaptResize(node: RawOnnxNode, graph: RawOnnxGraph) {
 export function applyAdapters(data: RawOnnxModel): void {
     if (!data?.graph?.node) return;
     const graph = data.graph;
+    if (!graph.node) return;
 
     for (const node of graph.node) {
         // We call freezeOverridableInputs once per graph, not per node, to be safe.

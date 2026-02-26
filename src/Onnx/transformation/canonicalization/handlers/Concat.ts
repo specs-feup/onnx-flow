@@ -28,13 +28,7 @@ function makeSqueeze(
         .as(OperationNode);
     const out = g
         .addNode(uniq(g, `${name}_out`))
-        .init(
-            new TensorNode.Builder(
-                DataType.INT64,
-                axes.length === 1 ? [] : undefined,
-                "intermediate",
-            ),
-        )
+        .init(new TensorNode.Builder(DataType.INT64, axes.length === 1 ? [] : [-1], "intermediate"))
         .as(TensorNode);
     addEdge(g, op, out, DataType.INT64);
     return { out, op };
@@ -45,7 +39,7 @@ function makeUnsqueeze(
     x: TensorNode.Class | ConstantNode.Class,
     axes: number[],
     outDtype: DataType,
-    outShape: Array<number | string | undefined> | undefined,
+    outShape: Array<number | string | undefined>,
     name: string,
 ): { out: TensorNode.Class; op: OperationNode.Class } {
     const axesConst = constI64(g, `${name}_axes`, axes);
@@ -102,7 +96,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     const Y = outs[0];
 
     const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const axisAttr = Number(a.axis ?? 0);
+    const axisAttr = Number(a["axis"] ?? 0);
 
     const rank = inputs[0].shape?.length;
     if (rank === undefined) return false;
@@ -340,7 +334,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         .as(OperationNode);
     addEdge(g, finalId, Y, dtype, Y.shape);
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

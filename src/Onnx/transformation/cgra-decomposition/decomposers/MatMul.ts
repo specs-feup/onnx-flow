@@ -11,7 +11,7 @@ export function decomposeMatMul(
     g: OnnxGraph.Class,
     tensorSplitter: TensorSplitter,
 ): boolean {
-    const inputs = node.getInputs();
+    const inputs = node.getInputs()!;
     const input1 = inputs[0].is(TensorNode) ? inputs[0].as(TensorNode) : inputs[0].as(ConstantNode);
     const input2 = inputs[1].is(TensorNode) ? inputs[1].as(TensorNode) : inputs[1].as(ConstantNode);
     const literalType = input1.literalType;
@@ -42,7 +42,7 @@ export function decomposeMatMul(
     ).splits;
     const numCols = newInputs2.length;
 
-    const output = node.outgoers.at(0).target.as(TensorNode);
+    const output = node.outgoers.at(0)!.target.as(TensorNode);
 
     // Create constant zero (for unsqueezes)
     const zeroBuilder = new ConstantNode.Builder(int64Vec([0]));

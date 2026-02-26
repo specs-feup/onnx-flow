@@ -46,33 +46,29 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     // Build: cur = X; if (min) cur = Max(cur, min); if (max) cur = Min(cur, max)
     let cur: TensorNode.Class | ConstantNode.Class = X;
 
-    if (minT) {
-        const maxOp = g
-            .addNode(uniq(g, `clip_max_${op.id}`))
-            .init(new OperationNode.Builder("Max", [cur, minT], {}))
-            .as(OperationNode);
-        const maxOut = g
-            .addNode(uniq(g, `clip_max_out_${op.id}`))
-            .init(
-                new TensorNode.Builder(
-                    dtype,
-                    Array.isArray(X.shape) ? X.shape.slice() : [],
-                    "intermediate",
-                ),
-            )
-            .as(TensorNode);
-        g.addEdge(maxOp, maxOut).init(new OnnxEdge.Builder(dtype, maxOut.shape)).as(OnnxEdge);
-        cur = maxOut;
-    }
+    const maxOp = g
+        .addNode(uniq(g, `clip_max_${op.id}`))
+        .init(new OperationNode.Builder("Max", [cur, minT!], {}))
+        .as(OperationNode);
+    const maxOut = g
+        .addNode(uniq(g, `clip_max_out_${op.id}`))
+        .init(
+            new TensorNode.Builder(
+                dtype,
+                Array.isArray(X.shape) ? X.shape.slice() : [-1],
+                "intermediate",
+            ),
+        )
+        .as(TensorNode);
+    g.addEdge(maxOp, maxOut).init(new OnnxEdge.Builder(dtype, maxOut.shape)).as(OnnxEdge);
+    cur = maxOut;
 
-    if (maxT) {
-        const minOp = g
-            .addNode(uniq(g, `clip_min_${op.id}`))
-            .init(new OperationNode.Builder("Min", [cur, maxT], {}))
-            .as(OperationNode);
-        g.addEdge(minOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        cur = Y;
-    }
+    const minOp = g
+        .addNode(uniq(g, `clip_min_${op.id}`))
+        .init(new OperationNode.Builder("Min", [cur, maxT!], {}))
+        .as(OperationNode);
+    g.addEdge(minOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
+    cur = Y;
 
     // If neither min nor max existed (degenerate), just Identity to Y
     if (cur === X) {
@@ -86,11 +82,10 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
         const lastOp = toArrayLike<OperationNode.Class>(
             cur.getIncomers?.sources?.filterIs?.(OperationNode),
         )[0];
-        if (lastOp)
-            g.addEdge(lastOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
+        g.addEdge(lastOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     }
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     // Clean up unused min/max constants or initializers
     maybeRemoveOrphanConstant(

@@ -129,7 +129,7 @@ export default class TensorSplitter {
                 split.splits.every((s) => s.id !== oldTensorId) &&
                 this.graph.hasNode(oldTensorId)
             ) {
-                this.graph.getNodeById(oldTensorId).remove();
+                this.graph.getNodeById(oldTensorId)?.remove();
             }
         });
     }

@@ -56,7 +56,7 @@ export default function applyCanonicalization(
 
         for (const op of ops) {
             const type = op.type;
-            const handler = opts.handlers[type];
+            const handler = opts.handlers![type];
             if (!handler) continue;
 
             const didChange = handler(graph, op);

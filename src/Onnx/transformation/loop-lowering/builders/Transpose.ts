@@ -85,11 +85,18 @@ export default class TransposeBuilder implements LoopBuilder {
             const xInNodeRaw = transposeOp
                 .getInputs()
                 ?.find((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode));
-            const xInNode = xInNodeRaw.is(TensorNode)
-                ? xInNodeRaw.as(TensorNode)
-                : xInNodeRaw.is(ConstantNode)
-                  ? xInNodeRaw.as(ConstantNode)
-                  : xInNodeRaw.as(RegionArgumentNode);
+            let xInNode:
+                | TensorNode.Class
+                | ConstantNode.Class
+                | RegionArgumentNode.Class
+                | undefined;
+            if (xInNodeRaw) {
+                xInNode = xInNodeRaw.is(TensorNode)
+                    ? xInNodeRaw.as(TensorNode)
+                    : xInNodeRaw.is(ConstantNode)
+                      ? xInNodeRaw.as(ConstantNode)
+                      : xInNodeRaw.as(RegionArgumentNode);
+            }
             if (xInNode) {
                 elemTy = xInNode.literalType;
             }
@@ -99,11 +106,14 @@ export default class TransposeBuilder implements LoopBuilder {
         const xInRaw = transposeOp
             .getInputs()
             ?.find((n) => n.is(TensorNode) || n.is(ConstantNode) || n.is(RegionArgumentNode));
-        const xIn = xInRaw.is(TensorNode)
-            ? xInRaw.as(TensorNode)
-            : xInRaw.is(ConstantNode)
-              ? xInRaw.as(ConstantNode)
-              : xInRaw.as(RegionArgumentNode);
+        let xIn: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class | undefined;
+        if (xInRaw) {
+            xIn = xInRaw.is(TensorNode)
+                ? xInRaw.as(TensorNode)
+                : xInRaw.is(ConstantNode)
+                  ? xInRaw.as(ConstantNode)
+                  : xInRaw.as(RegionArgumentNode);
+        }
 
         const inShape = xIn ? toStaticShape(xIn.shape as Shape) : [];
         let outShape: (number | string)[] = [];
@@ -200,7 +210,7 @@ export default class TransposeBuilder implements LoopBuilder {
         // ---- 2) Optional Add after Transpose (CHAIN: [Transpose, Add]) ----
         if (hasAdd && addOp) {
             const addInputs = addOp.getInputs?.() ?? [];
-            let otherInput = null;
+            let otherInput: TensorNode.Class | ConstantNode.Class | null = null;
 
             // Find the Add input that is *not* produced by the Transpose op
             for (const inp of addInputs) {
@@ -215,7 +225,7 @@ export default class TransposeBuilder implements LoopBuilder {
                     }
                 }
 
-                otherInput = inp;
+                otherInput = t;
                 break;
             }
 

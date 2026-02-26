@@ -33,11 +33,11 @@ class AveragePoolBuilder implements LoopBuilder {
 
         const a = op.getAttributes?.() ?? op.attributes ?? {};
 
-        const autoPad = (a.auto_pad ?? "NOTSET") as string;
-        const ceilMode = Number(a.ceil_mode ?? 0);
-        const kernelShape = (a.kernel_shape ?? []) as number[];
-        const strides = (a.strides ?? []) as number[];
-        const pads = (a.pads ?? []) as number[];
+        const autoPad = (a["auto_pad"] ?? "NOTSET") as string;
+        const ceilMode = Number(a["ceil_mode"] ?? 0);
+        const kernelShape = (a["kernel_shape"] ?? []) as number[];
+        const strides = (a["strides"] ?? []) as number[];
+        const pads = (a["pads"] ?? []) as number[];
 
         // Only 2D spatial; if no proper kernel/stride, let other passes handle it.
         if (kernelShape.length !== 2 || strides.length !== 2) return false;
@@ -70,7 +70,7 @@ class AveragePoolBuilder implements LoopBuilder {
                       ? n.as(ConstantNode)
                       : n.as(RegionArgumentNode),
             );
-        if (inputsArr.length < 1) {
+        if (!inputsArr || inputsArr.length < 1) {
             throw new Error("AveragePoolBuilder: AveragePool must have at least X as input");
         }
 
@@ -90,11 +90,11 @@ class AveragePoolBuilder implements LoopBuilder {
 
         const a = avg.getAttributes?.() ?? avg.attributes ?? {};
 
-        const countIncludePad = Number(a.count_include_pad ?? 0);
+        const countIncludePad = Number(a["count_include_pad"] ?? 0);
 
-        const kernelShape = (a.kernel_shape ?? []) as number[];
-        const strides = (a.strides ?? []) as number[];
-        const pads = (a.pads ?? []) as number[];
+        const kernelShape = (a["kernel_shape"] ?? []) as number[];
+        const strides = (a["strides"] ?? []) as number[];
+        const pads = (a["pads"] ?? []) as number[];
 
         const isGlobal = avg.type === "GlobalAveragePool";
 
@@ -168,7 +168,7 @@ class AveragePoolBuilder implements LoopBuilder {
         // for weird geometric combos.
         const totalIters = N * C * H_out * W_out;
 
-        const elemTy = (Y.literalType ?? DataType.FLOAT) as DataType;
+        const elemTy = (Y?.literalType ?? DataType.FLOAT) as DataType;
         const carryLen = totalIters;
 
         // ---- Build loop body graph ----------------------------------------------
@@ -742,7 +742,7 @@ class AveragePoolBuilder implements LoopBuilder {
         inferShapes(body);
 
         const outShape = yShape;
-        const outTensor = Y;
+        const outTensor = Y!;
 
         return {
             body,

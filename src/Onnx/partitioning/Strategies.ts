@@ -8,19 +8,7 @@ export interface PartitionSets {
 }
 
 export function splitByAncestor(graph: OnnxGraph.Class, splitNodeId: string): PartitionSets {
-    let splitNode = graph.getNodeById(splitNodeId);
-
-    if (!splitNode) {
-        throw new Error(`Split node '${splitNodeId}' not found in graph.`);
-    }
-
-    // Smart Bubble-Up
-    while (splitNode.parent) {
-        console.warn(
-            `Node ${splitNode.id} is inside a subgraph. Bubbling up to parent ${splitNode.parent.id}.`,
-        );
-        splitNode = splitNode.parent;
-    }
+    const splitNode = graph.getNodeById(splitNodeId);
 
     const headSet = new Set<string>();
     const stack = [splitNode];
@@ -52,7 +40,7 @@ export function splitByAncestor(graph: OnnxGraph.Class, splitNodeId: string): Pa
     initialHeadNodes.forEach((nodeId) => {
         const node = graph.getNodeById(nodeId);
         // If it's an operation, pull its output tensors into Head
-        if (node.is(OperationNode)) {
+        if (node?.is(OperationNode)) {
             node.outgoers.forEach((edge) => {
                 if (edge.target.is(TensorNode)) {
                     headSet.add(edge.target.id);

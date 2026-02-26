@@ -106,7 +106,7 @@ export function makeTensorProto(dtype: DataType, dims: number[], values: number[
 }
 
 export function zeroTensor(elemType: DataType, shape: number[]): TensorProto {
-    const safeShape = shape && shape.length ? shape.map((d) => (d != null && d > 0 ? d : 1)) : [1];
+    const safeShape = shape.length ? shape.map((d) => (d != null && d > 0 ? d : 1)) : [1];
     const n = safeShape.reduce((a, b) => a * b, 1);
     const base: TensorProto = { dataType: elemType, dims: safeShape };
 
@@ -308,21 +308,22 @@ export function toArrayLike<T = unknown>(nc: unknown): T[] {
 export function removeInitializerByName(g: OnnxGraph.Class, name?: string): void {
     if (!name) return;
     const gRecord = g as unknown as Record<string, unknown>;
-    const model = (gRecord?.rawModel ?? gRecord?.model) as Record<string, unknown> | undefined;
-    const graph = (model?.graph ?? gRecord?.graph) as Record<string, unknown[]> | undefined;
-    if (!graph) return;
+    const model = (gRecord?.["rawModel"] ?? gRecord?.["model"]) as
+        | Record<string, unknown>
+        | undefined;
+    const graph = (model?.["graph"] ?? gRecord?.["graph"]) as Record<string, unknown[]> | undefined;
     for (const f of ["initializer", "sparse_initializer", "input", "value_info"]) {
-        if (Array.isArray(graph[f])) {
-            graph[f] = graph[f].filter((x: { name?: string }) => x?.name !== name);
+        if (graph && Array.isArray(graph[f])) {
+            // Accept 'unknown', then safely cast it to check the name
+            graph[f] = graph[f].filter((x: unknown) => (x as { name?: string })?.name !== name);
         }
     }
 }
 
 /** Removes a ConstantNode if it has no consumers. */
 export function maybeRemoveOrphanConstant(g: OnnxGraph.Class, node?: BaseNode.Class): void {
-    if (!node) return;
-    // Strict check for ConstantNode (Phase 3)
-    if (node.is(ConstantNode)) {
+    // Strict check for ConstantNode
+    if (node && node.is(ConstantNode)) {
         const consumers = toArrayLike(node.outgoers?.targets);
         if (consumers.length === 0) {
             const onnxName = node.id;
@@ -372,7 +373,7 @@ export function toU8(raw: unknown): Uint8Array | undefined {
         const b = raw as Buffer;
         return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
     }
-    const inner = (raw as Record<string, unknown>)?.data ?? undefined;
+    const inner = (raw as Record<string, unknown>)?.["data"] ?? undefined;
     if (inner) return toU8(inner);
     return undefined;
 }
@@ -420,10 +421,10 @@ export function readConstIntegerVectorFromTensorNode(node?: BaseNode.Class): num
     let tv: TensorProto;
     if (node.is(ConstantNode)) {
         tv = node.as(ConstantNode).constantValue;
+        return decodeIntegerVectorFromTensorProto(tv);
     }
 
-    if (!tv) return undefined;
-    return decodeIntegerVectorFromTensorProto(tv);
+    return undefined;
 }
 
 /** * Reads a scalar from a node.
@@ -671,7 +672,7 @@ export function toNumShape(
     return s.map(toNum);
 }
 
-export function asStaticDims(shape: (number | string)[]): number[] {
+export function asStaticDims(shape: (number | string | undefined)[]): number[] {
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined && n > 0 ? n : 1;
@@ -696,7 +697,7 @@ export function toStaticShape(shape: Shape): number[] {
 export function resolveShapeToNumbers(
     t: TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class,
 ): number[] {
-    let rawShape: (number | string)[] = [];
+    let rawShape: (number | string | undefined)[] = [];
 
     // 1. Try internal shape
     if (t.shape && t.shape.length > 0) {

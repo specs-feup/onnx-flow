@@ -56,7 +56,7 @@ export default class ConvBuilder implements LoopBuilder {
                       ? n.as(ConstantNode)
                       : n.as(RegionArgumentNode),
             );
-        if (inputsArr.length < 2) {
+        if (!inputsArr || inputsArr.length < 2) {
             throw new Error("ConvBuilder: Conv must have at least X and W as inputs");
         }
 
@@ -200,7 +200,7 @@ export default class ConvBuilder implements LoopBuilder {
         const kEffH = dilH * (kH - 1) + 1;
         const kEffW = dilW * (kW - 1) + 1;
 
-        const auto_pad = (a.auto_pad ?? "NOTSET") as string;
+        const auto_pad = (a["auto_pad"] ?? "NOTSET") as string;
 
         // Helper to compute SAME_* pads for one spatial dimension
         function computeSamePads(
@@ -266,7 +266,7 @@ export default class ConvBuilder implements LoopBuilder {
             pads = [0, 0, 0, 0];
         }
 
-        const group = Number(a.group ?? 1);
+        const group = Number(a["group"] ?? 1);
 
         // 1. Deduce C (Input Channels) if unknown
         // If X has C=-1, but we know Weights have Cw (C_in per group), calculate C.

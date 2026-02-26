@@ -52,9 +52,8 @@ namespace OnnxGraph {
         getEdge(sourceId: string, targetId: string): OnnxEdge.Class | undefined {
             const source = this.getNodeById(sourceId);
             const target = this.getNodeById(targetId);
-            if (!source || !target) return undefined;
 
-            return source.outgoers
+            return source?.outgoers
                 .filterIs(OnnxEdge)
                 .toArray()
                 .find((edge) => edge.target === target);

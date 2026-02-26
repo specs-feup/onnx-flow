@@ -32,7 +32,7 @@ namespace RegionArgumentNode {
             return this.data[TAG].literalType;
         }
 
-        get shape(): (number | string)[] {
+        get shape(): (number | string | undefined)[] {
             return this.data[TAG].shape;
         }
 
@@ -40,7 +40,7 @@ namespace RegionArgumentNode {
             this.data[TAG].literalType = dtype;
         }
 
-        setShape(shape: (number | string)[]): void {
+        setShape(shape: (number | string | undefined)[]): void {
             this.data[TAG].shape = shape;
         }
 
@@ -53,13 +53,13 @@ namespace RegionArgumentNode {
         private index: number;
         private originalName: string;
         private literalType: DataType;
-        private shape: (number | string)[];
+        private shape: (number | string | undefined)[];
 
         constructor(
             index: number,
             originalName: string,
             literalType: DataType,
-            shape: (number | string)[],
+            shape: (number | string | undefined)[],
         ) {
             this.index = index;
             this.originalName = originalName;
@@ -95,7 +95,7 @@ namespace RegionArgumentNode {
             index: number;
             originalName: string;
             literalType: DataType;
-            shape: (number | string)[];
+            shape: (number | string | undefined)[];
         };
     }
 

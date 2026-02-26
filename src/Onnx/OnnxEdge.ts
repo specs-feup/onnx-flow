@@ -14,16 +14,16 @@ namespace OnnxEdge {
             return this.data[TAG].type;
         }
 
-        get shape(): (number | string)[] {
+        get shape(): (number | string | undefined)[] {
             return this.data[TAG].shape;
         }
     }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
         private type: DataType;
-        private shape: (number | string)[];
+        private shape: (number | string | undefined)[];
 
-        constructor(type: DataType, shape: (number | string)[]) {
+        constructor(type: DataType, shape: (number | string | undefined)[]) {
             this.type = type;
             this.shape = shape;
         }
@@ -52,7 +52,7 @@ namespace OnnxEdge {
         [TAG]: {
             version: typeof VERSION;
             type: DataType;
-            shape: (number | string)[];
+            shape: (number | string | undefined)[];
         };
     }
 

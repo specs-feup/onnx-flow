@@ -34,26 +34,28 @@ export type LoopCtx = {
     coalesce: boolean;
 
     // Dims for MatMul-like ops (optional)
-    matmulDims?: {
-        M: number;
-        K: number;
-        N: number;
-        batchProd: number;
-        batchDims: (number | string)[];
-    };
+    matmulDims?:
+        | {
+              M: number;
+              K: number;
+              N: number;
+              batchProd: number;
+              batchDims: (number | string)[];
+          }
+        | undefined;
 
     // Optional indices for coalesced MatMul
-    iU?: TensorNode.Class | null;
-    jU?: TensorNode.Class | null;
-    kU?: TensorNode.Class | null;
-    flatU?: TensorNode.Class | null;
-    kIdx?: TensorNode.Class | null;
-    kM1?: TensorNode.Class | null;
-    gateByK?: boolean;
-    running?: TensorNode.Class | null;
+    iU?: TensorNode.Class | null | undefined;
+    jU?: TensorNode.Class | null | undefined;
+    kU?: TensorNode.Class | null | undefined;
+    flatU?: TensorNode.Class | null | undefined;
+    kIdx?: TensorNode.Class | null | undefined;
+    kM1?: TensorNode.Class | null | undefined;
+    gateByK?: boolean | undefined;
+    running?: TensorNode.Class | null | undefined;
 
     // Optional for Reduce
-    meanScale?: TensorNode.Class | ConstantNode.Class;
+    meanScale?: TensorNode.Class | ConstantNode.Class | undefined;
 };
 
 /* ------------------------------------------------------------------ */
@@ -166,8 +168,8 @@ export function broadcastShapes(shapes: number[][]): number[] {
 }
 
 export function getMatDims(
-    aShape: (number | string)[],
-    bShape: (number | string)[],
+    aShape: (number | string | undefined)[],
+    bShape: (number | string | undefined)[],
 ): {
     M: number;
     K: number;
@@ -608,9 +610,9 @@ export function resolveFusedInput(
 
     if (g.hasNode(tOuter.id)) {
         const existing = g.getNodeById(tOuter.id);
-        if (existing.is(TensorNode)) tInner = existing.as(TensorNode);
-        else if (existing.is(ConstantNode)) tInner = existing.as(ConstantNode);
-        else if (existing.is(RegionArgumentNode)) tInner = existing.as(RegionArgumentNode);
+        if (existing?.is(TensorNode)) tInner = existing.as(TensorNode);
+        else if (existing?.is(ConstantNode)) tInner = existing.as(ConstantNode);
+        else if (existing?.is(RegionArgumentNode)) tInner = existing.as(RegionArgumentNode);
         else throw new Error(`ID collision in body: ${tOuter.id}`);
     } else {
         // Create Proxy in Body
@@ -759,7 +761,7 @@ export function createCapturedInput(
     // If a node with this ID already exists, return it (avoid duplicates)
     if (g.hasNode(outerNode.id)) {
         const existing = g.getNodeById(outerNode.id);
-        if (existing.is(RegionArgumentNode)) return existing.as(RegionArgumentNode);
+        if (existing?.is(RegionArgumentNode)) return existing.as(RegionArgumentNode);
         // If it exists but isn't a RegionArgumentNode (e.g. a Constant clone), that's a collision context logic needs to handle,
         // but for implicit captures we generally expect to create or find the proxy.
     }
@@ -844,10 +846,12 @@ export function buildLoopForChain(
     const rootOutNodeRaw = rootOp.getOutgoers.targets
         .filter((n) => n.is(TensorNode) || n.is(ConstantNode))
         .first();
-    const rootOutNode = rootOutNodeRaw.is(TensorNode)
+    const rootOutNode = rootOutNodeRaw?.is(TensorNode)
         ? rootOutNodeRaw.as(TensorNode)
-        : rootOutNodeRaw.as(ConstantNode);
-    const originalOutShape: (number | string)[] = rootOutNode ? [...rootOutNode.shape] : [];
+        : rootOutNodeRaw?.as(ConstantNode);
+    const originalOutShape: (number | string | undefined)[] = rootOutNode
+        ? [...rootOutNode.shape]
+        : [-1];
     const rootIsGlobalOutput =
         !!rootOutNode &&
         rootOutNode.is(TensorNode) &&
@@ -880,9 +884,9 @@ export function buildLoopForChain(
         v_initial,
     } = buildResult;
 
-    let finalOutShape: (number | string)[] = builtOutShape;
+    let finalOutShape: (number | string | undefined)[] = builtOutShape;
 
-    const prod = (shape: (number | string)[]) =>
+    const prod = (shape: (number | string | undefined)[]) =>
         shape.length && shape.every((d) => typeof d === "number" && (d as number) > 0)
             ? (shape as number[]).reduce((a, b) => a * b, 1)
             : -1;
@@ -921,13 +925,13 @@ export function buildLoopForChain(
         .first();
     const idCond = body
         .addNode(uniq(body, "id_cond"))
-        .init(new OperationNode.Builder("Identity", [condIn]))
+        .init(new OperationNode.Builder("Identity", [condIn!]))
         .as(OperationNode);
     const condOut = body
         .addNode(uniq(body, "cond_out"))
         .init(new TensorNode.Builder(DataType.BOOL, [], "output"))
         .as(TensorNode);
-    body.addEdge(condIn, idCond).init(new OnnxEdge.Builder(condIn.literalType, condIn.shape));
+    body.addEdge(condIn!, idCond).init(new OnnxEdge.Builder(condIn!.literalType, condIn!.shape));
     body.addEdge(idCond, condOut).init(new OnnxEdge.Builder(condOut.literalType, condOut.shape));
 
     // --- ensuring updates dtype == carry dtype ---
@@ -1044,10 +1048,10 @@ export function buildLoopForChain(
 
     if (rootOutNode) {
         outId = rootOutNode.id;
-        graph.getNodeById(outId).remove();
+        graph.getNodeById(outId)?.remove();
     } else if (outTensor) {
         outId = outTensor.id;
-        graph.getNodeById(outId).remove();
+        graph.getNodeById(outId)?.remove();
     }
 
     graph

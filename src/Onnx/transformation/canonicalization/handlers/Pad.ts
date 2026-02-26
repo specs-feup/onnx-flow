@@ -333,7 +333,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
 
     // mode
     const attr = op.getAttributes?.() ?? op.attributes ?? {};
-    const modeRaw = String(attr.mode ?? "constant").toLowerCase();
+    const modeRaw = String(attr["mode"] ?? "constant").toLowerCase();
     const mode: "constant" | "edge" | "reflect" =
         modeRaw === "edge" || modeRaw === "reflect" ? modeRaw : "constant";
 
@@ -481,7 +481,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
         addEdge(g, id, Y, dtype, Y.shape);
     }
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     // Cleanup constant inputs
     maybeRemoveOrphanConstant(g, padsNode);

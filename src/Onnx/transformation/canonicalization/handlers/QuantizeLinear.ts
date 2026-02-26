@@ -60,7 +60,7 @@ export default function quantizeLinearHandler(
     const floatT = X.literalType ?? DataType.FLOAT;
 
     const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const axisAttr = Number(a.axis ?? 1);
+    const axisAttr = Number(a["axis"] ?? 1);
 
     // 1. Prepare Inputs (Scale is float, Z needs cast to float)
     let Zf: TensorNode.Class | ConstantNode.Class;
@@ -101,7 +101,7 @@ export default function quantizeLinearHandler(
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;
 
         // Unsqueeze on all dims EXCEPT 'axis'
-        const axesVals = [];
+        const axesVals: number[] = [];
         for (let i = 0; i < rank; i++) {
             if (i !== axis) axesVals.push(i);
         }
@@ -235,7 +235,7 @@ export default function quantizeLinearHandler(
 
     addEdge(g, finalCastOp, Y, targetType, Y.shape);
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

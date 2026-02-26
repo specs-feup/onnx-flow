@@ -148,7 +148,7 @@ function mergeOutputs(
 }
 
 function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
-    const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
+    const [input1, input2] = node.getInputs()!.map((inp) => inp.as(TensorNode));
     const literalType = input1.literalType;
     const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
@@ -167,7 +167,7 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
     const numCols = newInputs2.length;
 
     const newOutputs: TensorNode.Class[] = [];
-    const output = node.outgoers.at(0).target.as(TensorNode);
+    const output = node.outgoers.at(0)!.target.as(TensorNode);
     const outputBuilder = new TensorNode.Builder(output.literalType, [], output.type);
 
     for (let row = 0; row < numRows; row++) {

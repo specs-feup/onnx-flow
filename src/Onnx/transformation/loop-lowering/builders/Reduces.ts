@@ -168,12 +168,12 @@ export default class ReducesBuilder implements LoopBuilder {
         const atts = op.getAttributes?.() ?? op.attributes ?? {};
         const axesAttr: number[] | undefined =
             axesFromInput ??
-            (Array.isArray(atts.axes)
-                ? atts.axes.map(Number)
-                : typeof atts.axes === "number"
-                  ? [Number(atts.axes)]
+            (Array.isArray(atts["axes"])
+                ? atts["axes"].map(Number)
+                : typeof atts["axes"] === "number"
+                  ? [Number(atts["axes"])]
                   : undefined);
-        const keepAttr = atts.keepdims;
+        const keepAttr = atts["keepdims"];
         const keep01: 0 | 1 = keepAttr === undefined ? 1 : Number(keepAttr) === 1 ? 1 : 0;
 
         // If axes/keepdims both missing, infer from the input vs *expected* out shape later;

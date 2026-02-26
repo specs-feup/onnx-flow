@@ -42,10 +42,10 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
 
     // Attributes (defaults: alpha=1.0, beta=1.0, transA=0, transB=0)
     const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const alpha = Number(a.alpha ?? 1.0);
-    const beta = Number(a.beta ?? 1.0);
-    const transA = Number(a.transA ?? 0) === 1 ? 1 : 0;
-    const transB = Number(a.transB ?? 0) === 1 ? 1 : 0;
+    const alpha = Number(a["alpha"] ?? 1.0);
+    const beta = Number(a["beta"] ?? 1.0);
+    const transA = Number(a["transA"] ?? 0) === 1 ? 1 : 0;
+    const transB = Number(a["transB"] ?? 0) === 1 ? 1 : 0;
 
     // DType selections
     const dtypeLeft = (A.literalType ?? DataType.FLOAT) as DataType;
@@ -153,7 +153,7 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
         }
     }
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

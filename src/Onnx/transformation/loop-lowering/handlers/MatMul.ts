@@ -546,7 +546,7 @@ export default function handleMatMul(
                 .as(OperationNode);
             const Km1_out = g
                 .addNode(uniq(g, `Km1_out_${op.id}`))
-                .init(new TensorNode.Builder(DataType.INT64, [undefined], "intermediate"))
+                .init(new TensorNode.Builder(DataType.INT64, [-1], "intermediate"))
                 .as(TensorNode);
             g.addEdge(Km1, Km1_out)
                 .init(new OnnxEdge.Builder(Km1_out.literalType, Km1_out.shape))

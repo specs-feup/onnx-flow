@@ -59,15 +59,13 @@ export default function handleTranspose(
 
     // Precompute inverse perm (inversePerm[k] = output axis where input axis k lands)
     const inversePerm: number[] = new Array(rank);
+    const validPerm = perm as number[];
     for (let outAxis = 0; outAxis < rank; outAxis++) {
-        inversePerm[perm[outAxis]] = outAxis;
+        inversePerm[validPerm[outAxis]] = outAxis;
     }
 
-    // Safely cast perm to an array of numbers
-    const permArray = perm as number[];
-
     // Compute output shape (allow unknowns)
-    const outShape = permArray.map((p) => inShapeNum[p]);
+    const outShape = validPerm.map((p) => inShapeNum[p]);
     //ctx.outShape = outShape;
 
     // Mixed–radix decode in output space (unknown → 1 to keep arithmetic valid)

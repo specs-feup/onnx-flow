@@ -18,8 +18,10 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     }
 
     const X = ins[0]?.tryAs(TensorNode);
+
     if (!X) {
-        throw new Error(`[AveragePoolHandler] Node ${op.id} input is not a TensorNode.`);
+        throw new Error("Expected first input to be a valid TensorNode.");
+        // OR return early: return;
     }
 
     // 2. Validate Outputs
@@ -41,22 +43,22 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     const attrs = op.getAttributes?.() ?? op.attributes ?? {};
 
     // Kernel Shape (Required)
-    const kernelShape = attrs.kernel_shape as number[] | undefined;
+    const kernelShape = attrs["kernel_shape"] as number[] | undefined;
     if (!kernelShape || kernelShape.length !== 2) return false;
     const [kH, kW] = kernelShape.map(Number);
 
     // Strides (Optional, default 1)
-    const strides = (attrs.strides as number[]) ?? [1, 1];
+    const strides = (attrs["strides"] as number[]) ?? [1, 1];
     const [sH, sW] = strides.map(Number);
 
     // Pads (Optional, default 0)
     // Note: AutoPad logic handling is simplified here for clarity
-    const pads = (attrs.pads as number[]) ?? [0, 0, 0, 0];
+    const pads = (attrs["pads"] as number[]) ?? [0, 0, 0, 0];
     const [pT, pL, pB, pR] = pads.length === 4 ? pads.map(Number) : [0, 0, 0, 0];
 
-    const autoPad = (attrs.auto_pad as string) ?? "NOTSET";
-    const countIncludePad = Number(attrs.count_include_pad ?? 0);
-    const ceilMode = Number(attrs.ceil_mode ?? 0);
+    const autoPad = (attrs["auto_pad"] as string) ?? "NOTSET";
+    const countIncludePad = Number(attrs["count_include_pad"] ?? 0);
+    const ceilMode = Number(attrs["ceil_mode"] ?? 0);
 
     // 5. Optimization Heuristic: Tiled Global Pool
     // If this looks like a global pool split into tiles, leave it for the loop-lowering pass.
@@ -82,9 +84,9 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
         strides: [sH, sW],
     };
     if (autoPad !== "NOTSET") {
-        convAttrs.auto_pad = autoPad;
+        convAttrs["auto_pad"] = autoPad;
     } else {
-        convAttrs.pads = [pT, pL, pB, pR];
+        convAttrs["pads"] = [pT, pL, pB, pR];
     }
 
     // C. Compute Sum
@@ -153,7 +155,7 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     addEdge(g, divOp, Y, dtype, Y.shape);
 
     // Remove original node
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

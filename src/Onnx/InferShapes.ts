@@ -18,7 +18,7 @@ import OnnxEdge from "./OnnxEdge.js";
 import OperationNode from "./OperationNode.js";
 
 /** Helper: resolve a tensor's shape from its node or incoming edge */
-function resolveTensorShape(t: BaseNode.Class): (number | string)[] {
+function resolveTensorShape(t: BaseNode.Class): (number | string | undefined)[] {
     if (t.is(ConstantNode)) {
         return t.as(ConstantNode).shape;
     }
@@ -27,11 +27,7 @@ function resolveTensorShape(t: BaseNode.Class): (number | string)[] {
     }
     if (t.is(TensorNode)) {
         const tn = t.as(TensorNode);
-        if (tn.shape && tn.shape.length) return tn.shape as (number | string)[];
-        const interEdge = tn.getIncomers?.first() as OnnxEdge.Class | undefined;
-        if (interEdge?.shape && interEdge.shape.length) {
-            return interEdge.shape as (number | string)[];
-        }
+        return tn.shape;
     }
     return [];
 }
@@ -83,12 +79,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         const infos = inputs.map((inp) => {
             if (!inp) {
                 return {
-                    shape: [] as (number | string)[],
+                    shape: [] as (number | string | undefined)[],
                     dtype: DataType.UNDEFINED,
                 };
             }
 
-            let shape: (number | string)[] = [];
+            let shape: (number | string | undefined)[] = [];
             let dtype = DataType.UNDEFINED;
 
             if (inp.is(ConstantNode)) {
@@ -101,22 +97,11 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 dtype = ra.literalType;
             } else if (inp.is(TensorNode)) {
                 const tns = inp.as(TensorNode);
-                let interEdge;
-                if (tns.type === "intermediate") {
-                    interEdge = tns.getIncomers.sources.first();
-                }
                 const directEdge = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
 
-                shape =
-                    interEdge?.shape ??
-                    directEdge?.shape ??
-                    (tns?.shape as (number | string)[] | undefined) ??
-                    [];
-                dtype =
-                    interEdge?.literalType ??
-                    directEdge?.literalType ??
-                    tns?.literalType ??
-                    AttributeType.UNDEFINED;
+                shape = directEdge?.shape ??
+                    (tns?.shape as (number | string | undefined)[]) ?? [-1];
+                dtype = directEdge?.literalType ?? tns?.literalType ?? AttributeType.UNDEFINED;
             }
 
             return {
@@ -125,7 +110,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             };
         });
 
-        let outShape: (number | string)[] = [];
+        let outShape: (number | string | undefined)[] = [];
         let outDtype = infos[0]?.dtype ?? DataType.UNDEFINED;
 
         if (node.type === "Loop") {
@@ -179,7 +164,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                             const tripCnt = inputs[0]?.is(ConstantNode)
                                 ? decodeIntegerVectorFromTensorProto(
                                       inputs[0].as(ConstantNode).constantValue,
-                                  )[0]
+                                  )![0]
                                 : undefined;
                             const dim0 = tripCnt !== undefined ? tripCnt : "N"; // 'N' or -1 for unknown
                             lOut.setShape([dim0, ...bOut.shape]);
@@ -299,7 +284,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const a = infos[0]?.shape ?? [];
                 const b = infos[1]?.shape ?? [];
                 if (a.length === 2 && b.length === 2) {
-                    const mm: (number | string)[] = [a[0], b[1]];
+                    const mm: (number | string | undefined)[] = [a[0], b[1]];
                     const c = infos[2]?.shape ?? [];
                     outShape = c.length ? broadcastShapes(toStaticShape(mm), toStaticShape(c)) : mm;
                 } else {
@@ -530,10 +515,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     if (step === 0) continue;
 
                     const normPos = (pos: number) =>
-                        pos < 0 ? Math.max(0, toNum(len) + pos) : Math.min(toNum(len), pos);
+                        pos < 0
+                            ? Math.max(0, toNum(len) ?? 0 + pos)
+                            : Math.min(toNum(len) ?? Number.MAX_VALUE, pos);
 
                     s = normPos(s);
-                    e = normPos(toNum(e));
+                    e = normPos(toNum(e) ?? e);
 
                     const size = Math.max(0, Math.ceil((e - s) / step));
                     out[ax] = size;
@@ -624,7 +611,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 }
 
                 const attrs = node.getAttributes() ?? node.attributes ?? {};
-                let axes: number[] | undefined = attrs.axes as number[] | undefined;
+                let axes: number[] | undefined = attrs["axes"] as number[] | undefined;
 
                 if (!Array.isArray(axes) || axes.length === 0) {
                     axes = Array.from({ length: rank }, (_, i) => i);
@@ -632,7 +619,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     axes = axes.map((a: number) => (a < 0 ? ((a % rank) + rank) % rank : a));
                 }
 
-                const keepdims = Number(attrs.keepdims ?? 1);
+                const keepdims = Number(attrs["keepdims"] ?? 1);
 
                 if (keepdims) {
                     outShape = dataShape.slice();
@@ -677,8 +664,8 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 const hasStart = Object.prototype.hasOwnProperty.call(attrs, "start");
                 const hasEnd = Object.prototype.hasOwnProperty.call(attrs, "end");
 
-                let start = hasStart ? Number(attrs.start) : 0;
-                let end = hasEnd ? Number(attrs.end) : rank;
+                let start = hasStart ? Number(attrs["start"]) : 0;
+                let end = hasEnd ? Number(attrs["end"]) : rank;
 
                 const norm = (idx: number, r: number) => (r > 0 ? ((idx % r) + r) % r : 0);
 
@@ -696,7 +683,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
                 outShape = [length];
 
-                const toAttr = attrs.to;
+                const toAttr = attrs["to"];
                 if (typeof toAttr === "number") {
                     outDtype = toAttr as number;
                 } else {
@@ -708,7 +695,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── ConstantOfShape (with Shape(X) fallback) ───── */
             case "ConstantOfShape": {
                 const shapeTensor = inputs[0]; // BaseNode
-                let shape: (number | string)[] = [];
+                let shape: (number | string | undefined)[] = [];
 
                 if (shapeTensor?.is(ConstantNode)) {
                     const arr =
@@ -815,7 +802,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             case "Expand": {
                 const dataShape = infos[0]?.shape ?? [];
                 const shapeInput = inputs[1]; // BaseNode
-                let targetShape: (string | number)[] | undefined;
+                let targetShape: (string | number | undefined)[] = [];
 
                 if (shapeInput?.is(ConstantNode)) {
                     const arr =
@@ -827,7 +814,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     }
                 }
 
-                if (!targetShape?.length && shapeInput) {
+                if (!targetShape || (!targetShape?.length && shapeInput)) {
                     const producers =
                         shapeInput.incomers?.sources ?? graph.emptyCollection(BaseNode);
                     const shapeOp = producers
@@ -880,25 +867,25 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
                 const attrs = node.getAttributes() ?? node.attributes ?? {};
 
-                let strides = attrs.strides as number[] | undefined;
+                let strides = attrs["strides"] as number[] | undefined;
                 if (!Array.isArray(strides) || strides.length !== 2) {
                     strides = [1, 1];
                 }
                 const [sH, sW] = strides.map(Number);
 
-                let dilations = attrs.dilations as number[] | undefined;
+                let dilations = attrs["dilations"] as number[] | undefined;
                 if (!Array.isArray(dilations) || dilations.length !== 2) {
                     dilations = [1, 1];
                 }
                 const [dH, dW] = dilations.map(Number);
 
-                const pads = attrs.pads as number[] | undefined;
+                const pads = attrs["pads"] as number[] | undefined;
                 let padTop = 0,
                     padLeft = 0,
                     padBottom = 0,
                     padRight = 0;
 
-                const autoPad = (attrs.auto_pad ?? "NOTSET") as string;
+                const autoPad = (attrs["auto_pad"] ?? "NOTSET") as string;
 
                 if (Array.isArray(pads) && pads.length === 4) {
                     [padTop, padLeft, padBottom, padRight] = pads.map(Number);
@@ -1040,7 +1027,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 } else {
                     const outputs = node.getOutgoers?.targets ?? graph.emptyCollection(BaseNode);
                     const firstOutT = outputs.first()?.tryAs?.(TensorNode);
-                    outShape = (firstOutT?.shape as (number | string)[]) ?? [];
+                    outShape = (firstOutT?.shape as (number | string | undefined)[]) ?? [];
                     outDtype = firstOutT?.literalType ?? outDtype;
                 }
                 break;
@@ -1059,7 +1046,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
         const outputs = node.getOutgoers.targets;
         const outputTensors = outputs.filter((t) => t.is(TensorNode));
 
-        node.getOutgoers.forEach((e) => graph.getEdgeById(e.id).remove());
+        node.getOutgoers.forEach((e) => graph?.getEdgeById(e.id)?.remove());
 
         for (const output of outputs) {
             // If we inferred a specific shape above (standard ops), apply it.

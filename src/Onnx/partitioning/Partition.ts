@@ -122,17 +122,12 @@ export function partitionGraph(
             setOpInputs(clonedOp, newInputs);
 
             // 3.2 Head Outputs (Op -> Tensor)
-            originalOp.outgoers.forEach((edge) => {
+            originalOp.outgoers.forEach((edge: OnnxEdge.Class) => {
                 if (edge.target.is(TensorNode) && headIds.has(edge.target.id)) {
                     const clonedT = headMap.get(edge.target.id)!.as(TensorNode);
                     headGraph
                         .addEdge(clonedOp, clonedT)
-                        .init(
-                            new OnnxEdge.Builder(
-                                edge.data[OnnxEdge.TAG].literalType,
-                                edge.data[OnnxEdge.TAG].shape,
-                            ),
-                        )
+                        .init(new OnnxEdge.Builder(edge.literalType, edge.shape))
                         .as(OnnxEdge);
                 }
             });
@@ -165,7 +160,7 @@ export function partitionGraph(
                         // Clone shared initializer into Tail if missing
                         if (!tailMap.has(input.id)) {
                             const origNode = originalGraph.getNodeById(input.id);
-                            if (origNode.is(ConstantNode)) {
+                            if (origNode?.is(ConstantNode)) {
                                 tailMap.set(
                                     input.id,
                                     cloneConstant(origNode.as(ConstantNode), tailGraph),
@@ -173,7 +168,7 @@ export function partitionGraph(
                             } else {
                                 tailMap.set(
                                     input.id,
-                                    cloneTensor(origNode.as(TensorNode), tailGraph),
+                                    cloneTensor(origNode!.as(TensorNode), tailGraph),
                                 );
                             }
                         }
@@ -190,9 +185,9 @@ export function partitionGraph(
 
                     // Boundary Tensor
                     const headNode = headMap.get(input.id);
-                    if (headNode && headNode.is(TensorNode)) {
+                    if (headNode?.is(TensorNode)) {
                         headNode.as(TensorNode).setType("output");
-                    } else if (headNode && headNode.is(ConstantNode)) {
+                    } else if (headNode?.is(ConstantNode)) {
                         // This should be unreachable due to the headInitializers check above,
                         // but if it happens, we should catch the structural error.
                         throw new Error(
@@ -228,17 +223,12 @@ export function partitionGraph(
             setOpInputs(clonedOp, newInputs);
 
             // 3.4 Tail Outputs (Op -> Tensor)
-            originalOp.outgoers.forEach((edge) => {
+            originalOp.outgoers.forEach((edge: OnnxEdge.Class) => {
                 if (edge.target.is(TensorNode) && tailIds.has(edge.target.id)) {
                     const clonedT = tailMap.get(edge.target.id)!.as(TensorNode);
                     tailGraph
                         .addEdge(clonedOp, clonedT)
-                        .init(
-                            new OnnxEdge.Builder(
-                                edge.data[OnnxEdge.TAG].literalType,
-                                edge.data[OnnxEdge.TAG].shape,
-                            ),
-                        )
+                        .init(new OnnxEdge.Builder(edge.literalType, edge.shape))
                         .as(OnnxEdge);
                 }
             });

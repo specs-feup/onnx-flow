@@ -21,11 +21,11 @@ namespace ConstantNode {
         }
 
         get shape(): (number | string)[] {
-            return this.data[TAG].value.dims || [];
+            return this.data[TAG].value.dims ?? [];
         }
 
         get literalType(): DataType {
-            return (this.data[TAG].value.dataType as DataType) || DataType.UNDEFINED;
+            return this.data[TAG].value.dataType ?? DataType.UNDEFINED;
         }
 
         setShape(shape: (number | string)[]): void {

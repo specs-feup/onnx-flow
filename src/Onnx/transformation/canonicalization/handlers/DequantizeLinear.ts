@@ -57,7 +57,7 @@ export default function dequantizeLinearHandler(
 
     // Attributes (axis for per-channel). Default 0 per ONNX spec.
     const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const axisAttr = Number(a.axis ?? 0);
+    const axisAttr = Number(a["axis"] ?? 0);
 
     // Choose computation float dtype: prefer Y's float type, else FLOAT
     const floatSet = new Set([
@@ -144,14 +144,14 @@ export default function dequantizeLinearHandler(
         const xAxisDim = typeof xShape?.[axis] === "number" ? (xShape![axis] as number) : undefined;
 
         // Build axes tensor: unsqueeze on every dim except 'axis'
-        const axesVals = [];
+        const axesVals: number[] = [];
         for (let i = 0; i < rank; i++) {
             if (i !== axis) axesVals.push(i);
         }
         const axes = constI64(g, `DQL_axes_${op.id}`, axesVals);
 
         // Shape for S after Unsqueeze: [1, ..., |S|, ..., 1]
-        const sRankedShape: (number | string | undefined)[] = Array(rank).fill(1);
+        const sRankedShape: (number | string)[] = Array(rank).fill(1);
 
         // axis dim = length of S, or X's axis dim as a fallback
         const sLen =
@@ -163,7 +163,7 @@ export default function dequantizeLinearHandler(
 
         if (sLen !== undefined && xAxisDim !== undefined && sLen !== xAxisDim) return false;
 
-        if (rank > 0) {
+        if (sLen && rank > 0) {
             sRankedShape[axis] = sLen;
         }
 
@@ -252,7 +252,7 @@ export default function dequantizeLinearHandler(
 
     g.addEdge(mul, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

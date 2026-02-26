@@ -18,11 +18,11 @@ namespace TensorNode {
             return this.data[TAG].literalType;
         }
 
-        get shape(): (number | string)[] {
+        get shape(): (number | string | undefined)[] {
             return this.data[TAG].shape;
         }
 
-        setShape(shape: (number | string)[]): void {
+        setShape(shape: (number | string | undefined)[]): void {
             this.data[TAG].shape = shape;
         }
 
@@ -74,14 +74,14 @@ namespace TensorNode {
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private literalType: number;
-        private shape: (number | string)[];
+        private shape: (number | string | undefined)[];
         private type: TensorKind;
-        private extraAttrs?: AttributeProto[];
+        private extraAttrs?: AttributeProto[] | undefined;
         private metadata: AttributeMap;
 
         constructor(
             literalType: number,
-            shape: (number | string)[],
+            shape: (number | string | undefined)[],
             type: TensorKind,
             extraAttrs?: AttributeProto[],
             metadata: AttributeMap = {},
@@ -101,7 +101,7 @@ namespace TensorNode {
                     literalType: this.literalType,
                     shape: this.shape,
                     type: this.type,
-                    extraAttrs: this.extraAttrs,
+                    ...(this.extraAttrs !== undefined ? { extraAttrs: this.extraAttrs } : {}),
                     metadata: this.metadata,
                 },
             };
@@ -120,7 +120,7 @@ namespace TensorNode {
         [TAG]: {
             version: typeof VERSION;
             literalType: number;
-            shape: (number | string)[];
+            shape: (number | string | undefined)[];
             type: TensorKind;
             extraAttrs?: AttributeProto[];
             metadata: AttributeMap;

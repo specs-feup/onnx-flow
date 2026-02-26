@@ -35,9 +35,9 @@ export default class CgraDotFormatter<
     private idPrefix: string;
     private clusterInfos: Record<string, ClusterInfo> = {};
 
-    static defaultGetNodeAttrs(node: BaseNode.Class): Record<string, string> {
+    static override defaultGetNodeAttrs(node: BaseNode.Class): Record<string, string> {
         const attrs = super.defaultGetNodeAttrs(node);
-        delete attrs.shape; // Remove default shape attribute
+        delete attrs["shape"]; // Remove default shape attribute
 
         node.switch(
             Node.Case(TensorNode, (node) => {
@@ -46,27 +46,27 @@ export default class CgraDotFormatter<
                 const size = (node.shape as number[]).reduce((a, b) => a * b, 1);
 
                 if (node.type === "input") {
-                    attrs.size = size.toString();
-                    attrs.stride = typeSizeMap[node.literalType as number]!.toString();
+                    attrs["size"] = size.toString();
+                    attrs["stride"] = typeSizeMap[node.literalType as number]!.toString();
                 } else if (node.type === "output") {
-                    attrs.size = size.toString();
+                    attrs["size"] = size.toString();
                 }
             }),
             Node.Case(VariableNode, (node) => {
-                attrs.label = node.name;
+                attrs["label"] = node.name;
                 // attrs.address = '0';
                 // attrs.size = '1';
             }),
             Node.Case(ConstantNode, (node) => {
                 const val = readTensorData(node);
-                attrs.label = val ? val.slice(0, 5).toString() : "const";
+                attrs["label"] = val!.slice(0, 5).toString();
                 // attrs.size = node;
             }),
             Node.Case(OperationNode, (node) => {
-                attrs.label = node.type;
-                attrs.type = node.type.toLowerCase();
+                attrs["label"] = node.type;
+                attrs["type"] = node.type.toLowerCase();
 
-                attrs.feedback = "0";
+                attrs["feedback"] = "0";
                 // attrs.constant = '0';
                 // attrs.constant_fu_input = '0';
                 // attrs.initial_value = '0';
@@ -83,13 +83,13 @@ export default class CgraDotFormatter<
         return shapeString === "{}" ? "sc" : shapeString;
     }
 
-    static defaultGetEdgeAttrs(_edge: BaseEdge.Class): Record<string, string> {
+    static override defaultGetEdgeAttrs(_edge: BaseEdge.Class): Record<string, string> {
         const attrs = {};
 
         return attrs;
     }
 
-    static defaultGetGraphAttrs(): Record<string, string> {
+    static override defaultGetGraphAttrs(): Record<string, string> {
         const attrs = super.defaultGetGraphAttrs();
 
         return attrs;
@@ -200,7 +200,7 @@ export default class CgraDotFormatter<
      * @returns The resulting DOT statements.
      */
     intermediateTensorToDot(node: TensorNode.Class): DotStatement[] {
-        const statements = [];
+        const statements: DotEdge[] = [];
 
         const incomers = node.getIncomers;
         const outgoers = node.getOutgoers;
@@ -243,7 +243,7 @@ export default class CgraDotFormatter<
     }
 
     greaterToDot(node: OperationNode.Class): DotStatement[] {
-        if (node.getInputs().length !== 2) {
+        if (!node.getInputs() || node.getInputs()!.length !== 2) {
             throw new Error("Greater node must have two inputs.");
         }
 
@@ -251,10 +251,10 @@ export default class CgraDotFormatter<
             if (!tensor.is(ConstantNode)) return false;
 
             // TODO(Process-ing): STRELA only supports operations on integers, but add support to other types if needed
-            return readConstIntegerVectorFromTensorNode(tensor).every((val) => val === 0);
+            return readConstIntegerVectorFromTensorNode(tensor)!.every((val) => val === 0);
         };
 
-        const secondInput = node.getInputs()[1].as(TensorNode);
+        const secondInput = node.getInputs()![1].as(TensorNode);
         if (!isZeroConstVector(secondInput)) {
             throw new Error(
                 "All Greater nodes must compare against a zero constant vector on the left-hand side.",
@@ -325,7 +325,7 @@ export default class CgraDotFormatter<
             }
         }
 
-        return null;
+        return [];
     }
 
     /**
@@ -356,10 +356,10 @@ export default class CgraDotFormatter<
         const dotEdges: Map<string, DotEdge> = new Map<string, DotEdge>();
 
         function addNodeStatements(...statements: DotStatement[]) {
-            const edges = (statements?.filter((s) => s instanceof DotEdge) as DotEdge[]) || [];
-            const nodes = (statements?.filter((s) => s instanceof DotNode) as DotNode[]) || [];
+            const edges = (statements.filter((s) => s instanceof DotEdge) as DotEdge[]) || [];
+            const nodes = (statements.filter((s) => s instanceof DotNode) as DotNode[]) || [];
             const others =
-                statements?.filter((s) => !(s instanceof DotNode) && !(s instanceof DotEdge)) || [];
+                statements.filter((s) => !(s instanceof DotNode) && !(s instanceof DotEdge)) || [];
 
             dotNodes.push(...nodes);
             edges.forEach((edge) =>
@@ -389,7 +389,7 @@ export default class CgraDotFormatter<
         const nextTargets = new Map<string, string[]>();
 
         for (const node of dotNodes) {
-            if (node.attrList.type === "skip") {
+            if (node.attrList["type"] === "skip") {
                 nextTargets.set(node.id as string, []);
             }
         }
@@ -418,7 +418,7 @@ export default class CgraDotFormatter<
             }
         }
 
-        dot.statements(...dotNodes.filter((node) => node.attrList.type !== "skip"));
+        dot.statements(...dotNodes.filter((node) => node.attrList["type"] !== "skip"));
 
         for (const edge of dotEdges.values()) {
             if (

@@ -195,5 +195,5 @@ export type AttributeValue =
     | OnnxGraph.Class[];
 export type AttributeMap = Record<string, AttributeValue>;
 
-export type Dim = number | string;
+export type Dim = number | string | undefined;
 export type Shape = Dim[];

@@ -34,7 +34,7 @@ function isBroadcastableTo(inDims: number[], outDims: number[]): boolean {
     return true;
 }
 
-function getSegmentOutShape(seg: OperationNode.Class[]): (number | string)[] | null {
+function getSegmentOutShape(seg: OperationNode.Class[]): (number | string | undefined)[] | null {
     if (!seg.length) return null;
 
     const root = seg[seg.length - 1]; // last op = segment root
@@ -246,7 +246,8 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
 
     const edgeHasShape = incs.some(
         (edge) =>
-            edge.shape && (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1)),
+            edge.shape &&
+            (edge.shape.length > 1 || (edge.shape.length == 1 && Number(edge.shape[0]) > 1)),
     );
     if (edgeHasShape) return true;
 
@@ -265,18 +266,18 @@ function isSupportedNonScalarOp(op: OperationNode.Class): boolean {
         for (const edge of interIncs) {
             if (
                 edge.shape &&
-                (edge.shape.length > 1 || (edge.shape.length == 1 && edge.shape[0] > 1))
+                (edge.shape.length > 1 || (edge.shape.length == 1 && Number(edge.shape[0]) > 1))
             ) {
                 return true;
             }
             const prod = edge.source;
             if (prod.is(OperationNode)) {
-                const outEdges = prod.getOutgoers ?? [];
+                const outEdges = prod.as(OperationNode).getOutgoers ?? [];
                 for (const outEdge of outEdges) {
                     if (
                         outEdge.shape &&
                         (outEdge.shape.length > 1 ||
-                            (outEdge.shape.length == 1 && outEdge.shape[0] > 1))
+                            (outEdge.shape.length == 1 && Number(outEdge.shape[0]) > 1))
                     ) {
                         return true;
                     }

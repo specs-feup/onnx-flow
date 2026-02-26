@@ -28,7 +28,7 @@ export default function handleElementWiseOperation(
         .as(OperationNode);
 
     const allScalars = effInputs.every((t) => t.shape.length === 0);
-    let outShape: (number | string)[];
+    let outShape: (number | string | undefined)[];
     if (allScalars) {
         outShape = [];
     } else {

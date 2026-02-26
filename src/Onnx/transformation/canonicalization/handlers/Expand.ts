@@ -56,7 +56,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     // Pick a reasonable meta-shape for the zeros/add result.
     // This is for graph typing only; runtime shape still comes from ConstantOfShape(shape).
-    let outShape: Array<number | string> | undefined;
+    let outShape: Array<number | string | undefined>;
 
     if (Array.isArray(Y.shape) && Y.shape.length > 0) {
         outShape = [...Y.shape];
@@ -65,7 +65,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         outShape = new Array(X.shape.length).fill(undefined);
     } else {
         // Fallback: leave shape unknown; ONNX IR allows this.
-        outShape = undefined;
+        outShape = [-1];
     }
 
     // 1) zeros_f = ConstantOfShape(shape)  (defaults to FLOAT 0.0)

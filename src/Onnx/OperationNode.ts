@@ -22,7 +22,7 @@ namespace OperationNode {
         }
 
         get attributes(): AttributeMap {
-            return this.data[TAG].attributes || {};
+            return this.data[TAG].attributes ?? {};
         }
 
         set attributes(attrs: AttributeMap) {
@@ -78,9 +78,9 @@ namespace OperationNode {
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private type: string;
-        private attributes?: AttributeMap;
-        private inputs?: BaseNode.Class[];
-        private regions?: OnnxGraph.Class[];
+        private attributes?: AttributeMap | undefined;
+        private inputs?: BaseNode.Class[] | undefined;
+        private regions?: OnnxGraph.Class[] | undefined;
         private metadata: AttributeMap;
 
         constructor(
@@ -103,9 +103,9 @@ namespace OperationNode {
                 [TAG]: {
                     version: VERSION,
                     type: this.type,
-                    inputs: this.inputs || [],
-                    attributes: this.attributes || {},
-                    regions: this.regions || [],
+                    ...(this.inputs !== undefined ? { inputs: this.inputs } : {}),
+                    ...(this.attributes !== undefined ? { attributes: this.attributes } : {}),
+                    ...(this.regions !== undefined ? { regions: this.regions } : {}),
                     metadata: this.metadata,
                 },
             };

@@ -43,7 +43,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
 
     // axis attribute (default -1 per opset >= 13)
     const attrs = op.getAttributes?.() ?? op.attributes ?? {};
-    let axis = Number(attrs.axis ?? -1);
+    let axis = Number(attrs["axis"] ?? -1);
     if (rank > 0 && axis < 0) axis = (axis + rank) % rank;
 
     // Helper: shapes for intermediates

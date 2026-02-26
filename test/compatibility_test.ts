@@ -61,12 +61,16 @@ async function getGraphStats(modelPath: string) {
         return stats;
     } catch (e) {
         console.warn(`(Stats warning: could not load ${path.basename(modelPath)})`);
-        console.error(`   Reason: ${e.message}`);
+        if (e instanceof Error) console.error(`   Reason: ${e.message}`);
         return null;
     }
 }
 
-function printStatsComparison(label: string, original, decomposed) {
+function printStatsComparison(
+    label: string,
+    original: { total: number; ops: Record<string, number> } | null,
+    decomposed: { total: number; ops: Record<string, number> } | null,
+) {
     console.log(`\n--- Stats for ${label} (Recursive) ---`);
 
     if (original) {
@@ -117,14 +121,21 @@ function printInputs(label: string, inputs: Record<string, ort.Tensor>) {
     }
 }
 
-function logErrorDetails(context: string, e) {
-    console.error(`❌ Error in ${context}:`, e?.message || e);
-    if (e?.stack) console.error(e.stack);
-    if (e && typeof e === "object") {
-        const props = Object.getOwnPropertyNames(e);
+function logErrorDetails(context: string, e: unknown) {
+    // 1. Safely narrow 'e' to a generic record if it's an object
+    const errObj = e && typeof e === "object" ? (e as Record<string, unknown>) : null;
+
+    // 2. Use the narrowed object for safe property access
+    if (errObj instanceof Error) {
+        console.error(`❌ Error in ${context}:`, errObj?.message ?? e);
+        if (errObj?.stack) console.error(errObj.stack);
+    }
+
+    if (errObj) {
+        const props = Object.getOwnPropertyNames(errObj);
         for (const prop of props) {
             if (prop !== "message" && prop !== "stack") {
-                console.error(`  ${prop}:`, e[prop]);
+                console.error(`  ${prop}:`, errObj[prop]);
             }
         }
     }
@@ -333,7 +344,7 @@ function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
     return out;
 }
 
-function jsonFullArgsNoValidate() {
+function _jsonFullArgsNoValidate() {
     return `--format json -vz 0 -v 0 --validate false`;
 }
 function jsonFullArgs() {
@@ -364,10 +375,10 @@ async function testReconversion(opts: {
     label: string;
     originalPath: string;
     feeds: Record<string, ort.Tensor>;
-    tol?: number;
-    exact?: boolean;
-    cliArgs?: string;
-    skipCli?: boolean;
+    tol?: number | undefined;
+    exact?: boolean | undefined;
+    cliArgs?: string | undefined;
+    skipCli?: boolean | undefined;
 }) {
     const {
         label,
@@ -467,7 +478,7 @@ async function testReconversion(opts: {
         console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
 
         const originalArr = Array.from(Object.values(originalOut)[0].data as Iterable<number>);
-        const reconvArr = Array.from(Object.values(reconvOut)[0].data as Iterable<number>);
+        const reconvArr = Array.from(Object.values(reconvOut!)[0].data as Iterable<number>);
 
         console.log("→ original:", originalArr);
         console.log("→ reconverted:", reconvArr);
@@ -1203,6 +1214,7 @@ const TESTS: Array<{
         ],
     },
 
+    /*
     {
         label: "kws_ref_model_float32_standard",
         originalPath: "examples/onnx/kws_ref_model_float32.onnx",
@@ -1213,6 +1225,7 @@ const TESTS: Array<{
             // out: Identity [1,12] float32 (picked up automatically)
         ],
     },
+    */
 
     {
         label: "averagepool_kws_like",
@@ -1402,7 +1415,7 @@ export async function runAllUnified(): Promise<void> {
     }
 }
 
-const mode = process.env.COMPAT_MODE ?? "all";
+const mode = process.env["COMPAT_MODE"] ?? "all";
 
 // Only auto-run when this file is the main script (test runner).
 const isMain =

@@ -167,8 +167,11 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
 
         console.log(`   ✅ Success! Max diff: ${0} (or within ${tol})`);
     } catch (e) {
-        console.error(`   ❌ Failed: ${e.message}`);
-        if (e.stack) console.error(e.stack);
+        const isError = e instanceof Error;
+        const msg = isError ? e.message : String(e);
+
+        console.error(`   ❌ Failed: ${msg}`);
+        if (isError && e.stack) console.error(e.stack);
         throw e;
     } finally {
         if (fs.existsSync(headPath)) fs.unlinkSync(headPath);

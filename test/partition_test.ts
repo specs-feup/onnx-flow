@@ -561,9 +561,11 @@ async function runAll() {
             passed++;
         } catch (e) {
             failed++;
-            console.error(`   ❌ Failed: ${e.message}`);
+            const isError = e instanceof Error;
+            const msg = isError ? e.message : String(e);
+            console.error(`   ❌ Failed: ${msg}`);
             // Print stack trace for debugging
-            if (e.stack) {
+            if (isError && e.stack) {
                 console.error("   Stack Trace:");
                 console.error(
                     e.stack

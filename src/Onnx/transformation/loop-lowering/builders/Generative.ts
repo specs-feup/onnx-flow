@@ -44,7 +44,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         const elemTy = startNode.literalType;
 
         // out shape is unknown-length 1D (Range defines its length at runtime)
-        const outShape: (number | string)[] = [undefined];
+        const outShape: (number | string)[] = [-1];
 
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const iter = body
@@ -242,7 +242,7 @@ export default class GenerativeBuilder implements LoopBuilder {
 
         const zerosF = outer
             .addNode(uniq(outer, `range_initF_out_${chain[0].id}`))
-            .init(new TensorNode.Builder(DataType.FLOAT, [undefined], "intermediate"))
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1], "intermediate"))
             .as(TensorNode);
         outer
             .addEdge(cos, zerosF)
@@ -261,7 +261,7 @@ export default class GenerativeBuilder implements LoopBuilder {
 
             v_initial = outer
                 .addNode(uniq(outer, `range_init_out_${chain[0].id}`))
-                .init(new TensorNode.Builder(elemTy, [undefined], "intermediate"))
+                .init(new TensorNode.Builder(elemTy, [-1], "intermediate"))
                 .as(TensorNode);
 
             outer

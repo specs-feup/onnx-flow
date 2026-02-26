@@ -48,10 +48,8 @@ export const ElementWiseOps: OpSchema[] = [
     "Equal",
     "NotEqual",
 ].forEach((op) => {
-    const schema = ElementWiseOps.find((s) => s.opType === op);
-    if (schema) {
-        schema.outputs[0].typeConstraint = T_BOOL;
-    }
+    const schema = ElementWiseOps.find((s) => s.opType === op)!;
+    schema.outputs[0].typeConstraint = T_BOOL;
 });
 
 export const UnaryOps: OpSchema[] = [

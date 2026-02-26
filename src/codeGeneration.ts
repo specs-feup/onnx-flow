@@ -171,7 +171,7 @@ function handleEdges(edge: BaseEdge.Class, graph: OnnxGraph.Class, outputName: s
             code += `       ${target.id} = ${variables.get(source.id)}\n`;
         }
     } else if (source.is(ConstantNode)) {
-        variables.set(source.id, readTensorData(source).toString());
+        variables.set(source.id, readTensorData(source)?.toString() ?? "");
     } else if (source.is(VariableNode)) {
         if (source.as(VariableNode).type === "input") {
             variables.set(source.id, `tensor_${source.as(VariableNode).name.substring(1)}`);
@@ -224,10 +224,16 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
                 const displacementInMemory =
                     readConstIntegerVectorFromTensorNode(displacementInMemoryNode);
 
-                const totalElements = shape.reduce((acc, val) => acc * val, 1);
+                // Tell reduce to specifically return a number
+                const totalElements = shape.reduce<number>((acc, val) => {
+                    // If it's a number, use it. If it's a string, try to parse it.
+                    // Fall back to 1 if it's undefined or a symbolic string like "?"
+                    const dim = typeof val === "number" ? val : Number(val) || 1;
+                    return acc * dim;
+                }, 1);
                 code += `   let ${outputName} = {`;
                 for (let i = 0; i < totalElements; i++) {
-                    const index = i * displacementInMemory[0];
+                    const index = i * displacementInMemory![0];
                     code += `${index}: 0, `;
                 }
                 code = code.slice(0, -2) + "};\n";
@@ -251,7 +257,7 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
         }
 
         if (loopIterationsNode) {
-            code += `   while (${indexNode[0].id} < ${readConstIntegerVectorFromTensorNode(loopIterationsNode)[0]}) {\n`;
+            code += `   while (${indexNode[0].id} < ${readConstIntegerVectorFromTensorNode(loopIterationsNode)![0]}) {\n`;
         }
 
         orderedEdges.forEach((edge) => {

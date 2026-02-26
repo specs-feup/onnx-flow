@@ -29,7 +29,7 @@ export default function transformForCgra(g: OnnxGraph.Class): OnnxGraph.Class {
         const operationNodes = g.getOperationNodes();
 
         for (const node of operationNodes) {
-            const decomposer = decomposers[node.type];
+            const decomposer = decomposers[node.type as keyof typeof decomposers];
             if (decomposer !== undefined && decomposer(node, g, tensorSplitter)) {
                 anyDivided = true;
             }

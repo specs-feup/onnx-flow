@@ -30,8 +30,8 @@ function fixBuffers(obj: unknown): unknown {
 
     if (obj && typeof obj === "object") {
         const record = obj as Record<string, unknown>;
-        if (record.type === "Buffer" && Array.isArray(record.data)) {
-            return Buffer.from(record.data);
+        if (record["type"] === "Buffer" && Array.isArray(record["data"])) {
+            return Buffer.from(record["data"]);
         }
         for (const key of Object.keys(record)) {
             record[key] = fixBuffers(record[key]);
@@ -247,7 +247,7 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
 
     try {
         // Make protobufjs accept Longs for int64/uint64 fields
-        (protobuf.util as Record<string, unknown>).Long = Long;
+        (protobuf.util as Record<string, unknown>)["Long"] = Long;
         protobuf.configure();
 
         // Load the ONNX protobuf definition
@@ -283,16 +283,16 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
         const fixedJson = fixBuffers(completeJson);
 
         // Resilient Reshape shape fix runs BEFORE numeric coercion
-        fixSingleNullReshapeShapes(fixedJson);
+        fixSingleNullReshapeShapes(fixedJson!);
 
         const normalizedJson = coerceNumericFields(fixedJson);
 
-        const errMsg = ModelProto.verify(normalizedJson);
+        const errMsg = ModelProto.verify(normalizedJson!);
         if (errMsg) {
             throw new Error("Validation error: " + errMsg);
         }
 
-        const message = ModelProto.create(normalizedJson);
+        const message = ModelProto.create(normalizedJson!);
         const buffer = ModelProto.encode(message).finish();
 
         fs.writeFileSync(outputOnnxPath, buffer);

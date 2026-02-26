@@ -12,7 +12,7 @@ export default function decomposeRelu(
     g: OnnxGraph.Class,
     tensorSplitter: TensorSplitter,
 ): boolean {
-    const rawInput = node.getInputs()[0];
+    const rawInput = node.getInputs()![0];
     const input = rawInput.is(TensorNode) ? rawInput.as(TensorNode) : rawInput.as(ConstantNode);
     const literalType = input.literalType;
 
@@ -37,7 +37,7 @@ export default function decomposeRelu(
         .init(reluZeroBuilder)
         .as(ConstantNode);
 
-    const output = node.outgoers.at(0).target.as(TensorNode);
+    const output = node.outgoers.at(0)!.target.as(TensorNode);
     const outputs: (TensorNode.Class | ConstantNode.Class)[] = tensorSplitter.getSplit(
         output,
         false,
