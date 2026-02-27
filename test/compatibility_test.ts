@@ -91,8 +91,8 @@ function printStatsComparison(
     const sorted = Array.from(opsSet).sort();
 
     for (const op of sorted) {
-        const from = original !== null ? original.ops[op] : 0;
-        const to = decomposed !== null ? decomposed.ops[op] : 0;
+        const from = original?.ops[op] ?? 0;
+        const to = decomposed?.ops[op] ?? 0;
 
         // If we have both, show comparison. If one failed, show what we have.
         if (original && decomposed) {

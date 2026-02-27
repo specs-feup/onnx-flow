@@ -3,7 +3,17 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import type { AttributeValue, ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { addEdge, scalarOfType, tensorOnesConst, toArrayLike, uniq } from "../../../Utils.js";
+import {
+    addEdge,
+    asConcreteValueNode,
+    getIntAttr,
+    getIntsAttr,
+    getStringAttr,
+    scalarOfType,
+    tensorOnesConst,
+    tryAsConcreteValueNode,
+    uniq,
+} from "../../../Utils.js";
 
 export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "AveragePool") return false;
@@ -16,17 +26,11 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
         );
     }
 
-    const X = ins[0]?.tryAs(TensorNode);
-
-    if (!X) {
-        throw new Error("Expected first input to be a valid TensorNode.");
-        // OR return early: return;
-    }
-
-    // 2. Validate Outputs
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const X = tryAsConcreteValueNode(ins[0]);
+    if (X === undefined) throw new Error("Expected first input to be a valid TensorNode.");
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
 
     // 3. Shape Analysis
     const xShape = X.shape;
@@ -39,25 +43,23 @@ export default function averagePoolHandler(g: OnnxGraph.Class, op: OperationNode
     const dtype = X.literalType as DataType;
 
     // 4. Parse Attributes (Strictly)
-    const attrs = op.getAttributes();
-
     // Kernel Shape (Required)
-    const kernelShape = attrs["kernel_shape"] as number[] | undefined;
-    if (!kernelShape || kernelShape.length !== 2) return false;
+    const kernelShape = getIntsAttr(op, "kernel_shape", []);
+    if (kernelShape.length !== 2) return false;
     const [kH, kW] = kernelShape.map(Number);
 
     // Strides (Optional, default 1)
-    const strides = "strides" in attrs ? (attrs["strides"] as number[]) : [1, 1];
+    const strides = getIntsAttr(op, "strides", [1, 1]);
     const [sH, sW] = strides.map(Number);
 
     // Pads (Optional, default 0)
     // Note: AutoPad logic handling is simplified here for clarity
-    const pads = "pads" in attrs ? (attrs["pads"] as number[]) : [0, 0, 0, 0];
+    const pads = getIntsAttr(op, "pads", [0, 0, 0, 0]);
     const [pT, pL, pB, pR] = pads.length === 4 ? pads.map(Number) : [0, 0, 0, 0];
 
-    const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
-    const countIncludePad = Number(attrs["count_include_pad"] ?? 0);
-    const ceilMode = Number(attrs["ceil_mode"] ?? 0);
+    const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+    const countIncludePad = getIntAttr(op, "count_include_pad", 0);
+    const ceilMode = getIntAttr(op, "ceil_mode", 0);
 
     // 5. Optimization Heuristic: Tiled Global Pool
     // If this looks like a global pool split into tiles, leave it for the loop-lowering pass.

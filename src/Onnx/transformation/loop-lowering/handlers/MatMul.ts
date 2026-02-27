@@ -14,6 +14,9 @@ import {
     uniq,
     int64Vec,
     toStaticShape,
+    isKnownDim,
+    scalarI64,
+    as1D,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopCtx } from "../BuildLoop.js";
 import {
@@ -88,14 +91,6 @@ function sliceBatchThenReshape2D(
     return out2d;
 }
 
-function isKnownDim(d: number | undefined) {
-    return typeof d === "number" && Number.isFinite(d) && d > 0;
-}
-
-function scalarI64(g: OnnxGraph.Class, name: string, v: number) {
-    return makeTensorConst(g, name, scalarInt64(v));
-}
-
 function gatherDim(
     g: OnnxGraph.Class,
     tag: string,
@@ -134,11 +129,6 @@ function gatherDim(
         .as(TensorNode);
     g.addEdge(gather, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
     return out;
-}
-
-function as1D(g: OnnxGraph.Class, name: string, scalarI64T: ConcreteValueNode) {
-    const axes = makeTensorConst(g, `axes_${name}`, int64Vec([0]));
-    return unsqueezeIdx(g, scalarI64T, axes, `${name}_u`); // 1-D [1] from scalar
 }
 
 function shapeVec2(

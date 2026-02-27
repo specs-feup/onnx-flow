@@ -20,6 +20,7 @@ import {
     bool,
     readConstIntegerVectorFromTensorNode,
     asValueNode,
+    scalarFloat,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
 import {
@@ -68,10 +69,6 @@ function maxSentinel(elemTy: DataType): { kind: "float" | "i32" | "i64"; value: 
         default:
             return { kind: "float", value: 3.4028235e38 };
     }
-}
-
-function scalarFloat(v: number): TensorProto {
-    return { dataType: DataType.FLOAT, dims: [], floatData: [v] };
 }
 
 // Build a TensorProto filled with a scalar value (size = product(dims))

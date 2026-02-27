@@ -9,6 +9,8 @@ import {
     addEdge,
     scalarOfType,
     tryAsConcreteValueNode,
+    getFloatAttr,
+    getIntAttr,
 } from "../../../Utils.js";
 
 /* ------------------------------ Handler ------------------------------- */
@@ -30,16 +32,15 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     }
 
     // Single output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // Attributes (defaults: alpha=1.0, beta=1.0, transA=0, transB=0)
-    const a = op.getAttributes();
-    const alpha = Number(a["alpha"] ?? 1.0);
-    const beta = Number(a["beta"] ?? 1.0);
-    const transA = Number(a["transA"] ?? 0) === 1 ? 1 : 0;
-    const transB = Number(a["transB"] ?? 0) === 1 ? 1 : 0;
+    const alpha = getFloatAttr(op, "alpha", 1.0);
+    const beta = getFloatAttr(op, "beta", 1.0);
+    const transA = getIntAttr(op, "transA", 0) === 1 ? 1 : 0;
+    const transB = getIntAttr(op, "transB", 0) === 1 ? 1 : 0;
 
     // DType selections
     const dtypeLeft = A.literalType as DataType;

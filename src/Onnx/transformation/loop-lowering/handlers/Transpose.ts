@@ -1,14 +1,13 @@
 import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
-import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
-import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
+import type OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
+import type TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import {
     toStaticShape,
     makeTensorConst,
     scalarInt64,
     computeStrides,
-    int64Vec,
-    uniq,
     getAttr,
+    toScalar,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
 import type { LoopCtx } from "../BuildLoop.js";
 import {
@@ -19,26 +18,9 @@ import {
     ensureFlatInput,
     gatherFrom,
 } from "../BuildLoop.js";
-import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import type { ConcreteValueNode, KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
 /* ============================== HANDLER ================================== */
-
-function toScalar(g: OnnxGraph.Class, t: TensorNode.Class, tag: string): TensorNode.Class {
-    if (t.shape.length === 0) return t;
-
-    const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
-    const reshape = g
-        .addNode(uniq(g, `${tag}_reshape`))
-        .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
-        .as(OperationNode);
-    const out = g
-        .addNode(uniq(g, `${tag}_out`))
-        .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
-        .as(TensorNode);
-    g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-    return out;
-}
 
 export default function handleTranspose(
     op: OperationNode.Class,

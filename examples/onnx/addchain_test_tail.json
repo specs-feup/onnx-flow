@@ -5,12 +5,13 @@
         "data": {
           "id": "C",
           "__specs-onnx__tensor_node": {
-            "version": "2",
+            "version": "4",
             "literalType": 1,
             "shape": [
               4
             ],
-            "type": "input"
+            "type": "input",
+            "metadata": {}
           }
         },
         "position": {
@@ -30,12 +31,13 @@
         "data": {
           "id": "D",
           "__specs-onnx__tensor_node": {
-            "version": "2",
+            "version": "4",
             "literalType": 1,
             "shape": [
               4
             ],
-            "type": "input"
+            "type": "input",
+            "metadata": {}
           }
         },
         "position": {
@@ -55,12 +57,13 @@
         "data": {
           "id": "Y",
           "__specs-onnx__tensor_node": {
-            "version": "2",
+            "version": "4",
             "literalType": 1,
             "shape": [
               4
             ],
-            "type": "output"
+            "type": "output",
+            "metadata": {}
           }
         },
         "position": {
@@ -80,14 +83,15 @@
         "data": {
           "id": "1",
           "__specs-onnx__operation_node": {
-            "version": "2",
+            "version": "4",
             "type": "Add",
             "inputs": [
               {},
               {}
             ],
             "attributes": {},
-            "subgraphs": {}
+            "regions": [],
+            "metadata": {}
           }
         },
         "position": {
@@ -107,12 +111,13 @@
         "data": {
           "id": "CD",
           "__specs-onnx__tensor_node": {
-            "version": "2",
+            "version": "4",
             "literalType": 1,
             "shape": [
               4
             ],
-            "type": "intermediate"
+            "type": "intermediate",
+            "metadata": {}
           }
         },
         "position": {
@@ -132,14 +137,15 @@
         "data": {
           "id": "2",
           "__specs-onnx__operation_node": {
-            "version": "2",
+            "version": "4",
             "type": "Add",
             "inputs": [
               {},
               {}
             ],
             "attributes": {},
-            "subgraphs": {}
+            "regions": [],
+            "metadata": {}
           }
         },
         "position": {
@@ -159,12 +165,13 @@
         "data": {
           "id": "AB",
           "__specs-onnx__tensor_node": {
-            "version": "2",
+            "version": "4",
             "literalType": 1,
             "shape": [
               4
             ],
-            "type": "input"
+            "type": "input",
+            "metadata": {}
           }
         },
         "position": {
@@ -184,12 +191,12 @@
     "edges": [
       {
         "data": {
-          "id": "52d6c00e-7cc4-4bdb-b272-0865e0b31413",
+          "id": "271cad35-8c35-483e-af60-fab6cc96b62e",
           "source": "C",
           "target": "1",
           "__specs-onnx__onnx_edge": {
             "version": "1",
-            "literalType": 1,
+            "type": 1,
             "shape": [
               4
             ]
@@ -210,12 +217,12 @@
       },
       {
         "data": {
-          "id": "4167f5d6-6232-4542-b320-ce67e17a990b",
+          "id": "2dccc182-34e3-45de-af5c-4732790c2545",
           "source": "D",
           "target": "1",
           "__specs-onnx__onnx_edge": {
             "version": "1",
-            "literalType": 1,
+            "type": 1,
             "shape": [
               4
             ]
@@ -236,12 +243,11 @@
       },
       {
         "data": {
-          "id": "8ce110f2-71c1-48ea-a3bb-e35ec61f8c3b",
+          "id": "a661444f-a9a1-48b1-b54e-b0b53a599ed6",
           "source": "1",
           "target": "CD",
           "__specs-onnx__onnx_edge": {
             "version": "1",
-            "literalType": 1,
             "shape": [
               4
             ]
@@ -262,12 +268,12 @@
       },
       {
         "data": {
-          "id": "9e667513-ac38-4427-9b60-fd6e6e05700e",
+          "id": "2fd55433-140d-4dd7-83b9-63a202d60385",
           "source": "AB",
           "target": "2",
           "__specs-onnx__onnx_edge": {
             "version": "1",
-            "literalType": 1,
+            "type": 1,
             "shape": [
               4
             ]
@@ -288,12 +294,12 @@
       },
       {
         "data": {
-          "id": "61bc8451-b09f-49f3-ad65-7561e7a4084f",
+          "id": "388eaf71-bebe-4ad6-9093-a7612e952e05",
           "source": "CD",
           "target": "2",
           "__specs-onnx__onnx_edge": {
             "version": "1",
-            "literalType": 1,
+            "type": 1,
             "shape": [
               4
             ]
@@ -314,12 +320,11 @@
       },
       {
         "data": {
-          "id": "a946d39a-8a23-440b-bf23-82173123c57a",
+          "id": "7d8562c9-ea2e-4ee9-a15f-1c4ace26669e",
           "source": "2",
           "target": "Y",
           "__specs-onnx__onnx_edge": {
             "version": "1",
-            "literalType": 1,
             "shape": [
               4
             ]

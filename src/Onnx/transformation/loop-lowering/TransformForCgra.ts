@@ -4,16 +4,13 @@ import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import { int64Vec } from "../../Utils.js";
 import ConstantNode from "../../ConstantNode.js";
+import type { ValueNode } from "../../OnnxTypes.js";
 
-function splitInput(
-    input: TensorNode.Class,
-    g: OnnxGraph.Class,
-    rowWise: boolean,
-): TensorNode.Class[] {
-    const newInputs: TensorNode.Class[] = [];
+function splitInput(input: ValueNode, g: OnnxGraph.Class, rowWise: boolean): ValueNode[] {
+    const newInputs: ValueNode[] = [];
     const literalType = input.literalType;
 
-    if (input.type !== "input") {
+    if (input.is(TensorNode) && input.type !== "input") {
         const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
         const numDivs = rowWise ? (input.shape[0] as number) : (input.shape[1] as number);
@@ -66,7 +63,7 @@ function splitInput(
             g.addEdge(squeeze, newInput).init(edgeBuilder);
             newInputs.push(newInput);
         }
-    } else {
+    } else if (input.is(TensorNode)) {
         // For true input nodes, return copies
         const numDivs = rowWise ? (input.shape[0] as number) : (input.shape[1] as number);
         const newShape = rowWise ? [input.shape[1]] : [input.shape[0]];
@@ -148,7 +145,7 @@ function mergeOutputs(
 }
 
 function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
-    const [input1, input2] = node.getInputs()!.map((inp) => inp.as(TensorNode));
+    const [input1, input2] = node.getInputs()!;
     const literalType = input1.literalType;
     const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
@@ -159,11 +156,11 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
     }
 
     // Create new input1 nodes
-    const newInputs1: TensorNode.Class[] = splitInput(input1, g, true);
+    const newInputs1: ValueNode[] = splitInput(input1, g, true);
     const numRows = newInputs1.length;
 
     // Create new input2 nodes
-    const newInputs2: TensorNode.Class[] = splitInput(input2, g, false);
+    const newInputs2: ValueNode[] = splitInput(input2, g, false);
     const numCols = newInputs2.length;
 
     const newOutputs: TensorNode.Class[] = [];

@@ -16,6 +16,7 @@ import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
+import { unsqueezeIdx } from "./transformation/loop-lowering/BuildLoop.js";
 
 // =====================================================================================
 // SECTION 1: CONSTANTS
@@ -234,6 +235,16 @@ export const constBuilder = (val: number): ConstantNode.Builder => {
 // SECTION 4: COMPUTATIONAL HELPERS (Create Operations)
 // =====================================================================================
 
+/** Gets the OperationNode that produced this ValueNode, if any. */
+export function getProducer(node: ValueNode): OperationNode.Class | undefined {
+    return node.incomers.sources.first()?.tryAs(OperationNode);
+}
+
+/** Gets all OperationNodes that consume this ValueNode. */
+export function getConsumers(node: ValueNode): OperationNode.Class[] {
+    return node.outgoers.targets.filterIs(OperationNode).toArray();
+}
+
 /** Creates a Shape op + intermediate output tensor. */
 export function shapeOf(g: OnnxGraph.Class, x: ConcreteValueNode, name: string): TensorNode.Class {
     const sop = g
@@ -298,8 +309,8 @@ export function formatId(name: string, nodeId: string): string {
 
 export function addEdge(
     g: OnnxGraph.Class,
-    srcOp: OperationNode.Class,
-    dstTensor: TensorNode.Class,
+    srcOp: BaseNode.Class,
+    dstTensor: ValueNode,
     dtype: DataType,
     shape?: Array<Dim>,
 ): void {
@@ -709,7 +720,6 @@ export function isNumeric(dtype: DataType): boolean {
 
 export function toNum(x: Dim): number | undefined {
     if (typeof x === "number") return x;
-    // FIX: Parse strings like "378" correctly
     if (typeof x === "string") {
         const n = Number(x);
         return isNaN(n) ? undefined : n;
@@ -717,19 +727,38 @@ export function toNum(x: Dim): number | undefined {
     return undefined;
 }
 
+export function toScalar(g: OnnxGraph.Class, t: ValueNode, tag: string): TensorNode.Class {
+    if (t.shape.length === 0 && t.is(TensorNode)) return t;
+    const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
+    const reshape = g
+        .addNode(uniq(g, `${tag}_reshape`))
+        .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `${tag}_out`))
+        .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
+}
+
 export function toNumShape(s?: Array<Dim>): Array<number | undefined> | undefined {
     if (!s) return undefined;
     return s.map(toNum);
 }
 
-export function asStaticDims(shape: Shape): number[] {
+export function asStaticDims(shape: Shape): StaticShape {
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined && n > 0 ? n : 1;
     });
 }
 
-export function toStaticShape(shape: Shape): number[] {
+export function isKnownDim(d: number | undefined): boolean {
+    return typeof d === "number" && Number.isFinite(d) && d > 0;
+}
+
+export function toStaticShape(shape: Shape): StaticShape {
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined ? n : UNKOWN_SHAPE[0];
@@ -765,7 +794,7 @@ export function shapesEqual(tensor1: ConcreteValueNode, tensor2: ConcreteValueNo
  * - Converts all dimensions to numbers.
  * - Non-finite or <= 0 values (like "batch" or -1) are coerced to 1 for safety in loop bounds.
  */
-export function resolveShapeToNumbers(t: ValueNode): number[] {
+export function resolveShapeToNumbers(t: ValueNode): StaticShape {
     let rawShape: Shape = [];
 
     // 1. Try internal shape
@@ -805,11 +834,11 @@ export function resolveShapeToNumbers(t: ValueNode): number[] {
     });
 }
 
-export function prodSafe(dims: number[]): number {
+export function prodSafe(dims: StaticShape): number {
     return dims.reduce((a, b) => a * (b > 0 ? b : 1), 1);
 }
 
-export function computeStrides(dims: number[]): number[] {
+export function computeStrides(dims: StaticShape): StaticShape {
     const n = dims.length;
     const strides = new Array(n);
     let acc = 1;
@@ -878,6 +907,31 @@ export function getAttr(node: unknown, name: string, def?: unknown): unknown {
     return v === undefined ? def : v;
 }
 
+export function getIntAttr(node: OperationNode.Class, name: string, def: number): number {
+    const val = getAttr(node, name, def);
+    return typeof val === "number" ? val : def;
+}
+
+export function getFloatAttr(node: OperationNode.Class, name: string, def: number): number {
+    const val = getAttr(node, name, def);
+    return typeof val === "number" ? val : def; // ONNX floats parse as JS numbers
+}
+
+export function getStringAttr(node: OperationNode.Class, name: string, def: string): string {
+    const val = getAttr(node, name, def);
+    return typeof val === "string" ? val : def;
+}
+
+export function getIntsAttr(node: OperationNode.Class, name: string, def: number[]): number[] {
+    const val = getAttr(node, name, def);
+    return Array.isArray(val) ? (val as number[]) : def;
+}
+
+export function getFloatsAttr(node: OperationNode.Class, name: string, def: number[]): number[] {
+    const val = getAttr(node, name, def);
+    return Array.isArray(val) ? (val as number[]) : def;
+}
+
 export function getSmallestRankShape(tensors: TensorNode.Class[]): Shape {
     if (tensors.length === 0) return [];
     let smallest = tensors[0].shape;
@@ -894,6 +948,15 @@ export function getLargestRankShape(tensors: ValueNode[]): Shape {
         if (tensors[i].shape.length > largest.length) largest = tensors[i].shape;
     }
     return largest;
+}
+
+export function as1D(
+    g: OnnxGraph.Class,
+    name: string,
+    scalarI64T: ConcreteValueNode,
+): TensorNode.Class {
+    const axes = makeTensorConst(g, `axes_${name}`, int64Vec([0]));
+    return unsqueezeIdx(g, scalarI64T, axes, `${name}_u`); // 1-D [1] from scalar
 }
 
 // =====================================================================================

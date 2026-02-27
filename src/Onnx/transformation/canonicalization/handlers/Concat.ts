@@ -6,12 +6,13 @@ import { DataType } from "../../../OnnxTypes.js";
 import {
     uniq,
     addEdge,
-    toArrayLike,
     constI64,
     isNumeric,
     scalarI64,
     scalarZeroOfType,
     tryAsConcreteValueNode,
+    getIntAttr,
+    asConcreteValueNode,
 } from "../../../Utils.js";
 
 /* --------------------- Squeeze/Unsqueeze Aux (minding opset) -------------------- */
@@ -86,12 +87,11 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         throw new Error(`[ConcatHandler] Node ${op.id} has undefined/invalid inputs.`);
     }
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
 
-    const a = op.getAttributes();
-    const axisAttr = Number(a["axis"] ?? 0);
+    const axisAttr = getIntAttr(op, "axis", 0);
 
     const rank = inputs[0].shape.length;
     if (!inputs.every((t) => t.shape.length === rank)) return false;

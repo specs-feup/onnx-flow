@@ -2,7 +2,7 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import type { ConcreteValueNode, DataType } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, DataType, ValueNode } from "../../../OnnxTypes.js";
 import {
     toArrayLike,
     uniq,
@@ -29,7 +29,7 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     const dtype = X.literalType as DataType;
 
     // Get output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
@@ -38,7 +38,7 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     const maxT: ConcreteValueNode | undefined = tryAsConcreteValueNode(ins[2]);
 
     // Build: cur = X; if (min) cur = Max(cur, min); if (max) cur = Min(cur, max)
-    let cur: ConcreteValueNode = X;
+    let cur: ValueNode = X;
 
     const maxOp = g
         .addNode(uniq(g, `clip_max_${op.id}`))
@@ -74,7 +74,7 @@ export default function clipHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     } else if (cur !== Y) {
         // Had only min or only max -> connect last op to Y
         const lastOp = toArrayLike<OperationNode.Class>(
-            cur.getIncomers.sources.filterIs(OperationNode),
+            cur.incomers.sources.filterIs(OperationNode),
         )[0];
         g.addEdge(lastOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     }

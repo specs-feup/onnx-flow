@@ -19,26 +19,12 @@ import {
     asValueNode,
     isConcreteValueNode,
     asConcreteValueNode,
+    toScalar,
 } from "../../../Utils.js";
 
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
 import { unsqueezeIdx, resolveFusedInput } from "../BuildLoop.js";
 import handleTranspose from "../handlers/Transpose.js";
-
-function toScalar(g: OnnxGraph.Class, t: ValueNode, tag: string): ValueNode {
-    if (t.shape.length === 0) return t;
-    const shapeConst = makeTensorConst(g, uniq(g, `${tag}_shape`), int64Vec([]));
-    const reshape = g
-        .addNode(uniq(g, `${tag}_reshape`))
-        .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
-        .as(OperationNode);
-    const out = g
-        .addNode(uniq(g, `${tag}_out`))
-        .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
-        .as(TensorNode);
-    g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-    return out;
-}
 
 /**
  * Dedicated builder for Transpose chains:

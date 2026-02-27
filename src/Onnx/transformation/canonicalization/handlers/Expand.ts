@@ -3,7 +3,7 @@ import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import type { Dim } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, addEdge, toArrayLike, asConcreteValueNode } from "../../../Utils.js";
+import { uniq, addEdge, asConcreteValueNode } from "../../../Utils.js";
 
 export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Expand") return false;
@@ -21,9 +21,10 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     const X = asConcreteValueNode(xIn);
     const shape = asConcreteValueNode(shapeIn);
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = outs[0].tryAs(TensorNode);
+    if (Y === undefined) return false;
 
     // Expand preserves X's dtype.
     const dt = (X.literalType as DataType | undefined) ?? (Y.literalType as DataType | undefined);

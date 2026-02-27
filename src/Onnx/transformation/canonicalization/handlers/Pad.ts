@@ -5,7 +5,6 @@ import type { ConcreteValueNode, Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     decodeIntegerVectorFromTensorProto,
-    toArrayLike,
     shapeOf,
     makeI64ShapeConst,
     editShapeDim,
@@ -17,6 +16,7 @@ import {
     maybeRemoveOrphanConstant,
     asConcreteValueNode,
     tryAsConcreteValueNode,
+    getStringAttr,
 } from "../../../Utils.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
@@ -300,12 +300,11 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
         );
     }
 
-    const Xn = ins[0];
-    if (!Xn.is(TensorNode) && !Xn.is(ConstantNode)) {
+    const Xin = tryAsConcreteValueNode(ins[0]);
+    if (Xin === undefined) {
         throw new Error(`[PadHandler] Node ${op.id} input[0] (data) is invalid or missing.`);
     }
 
-    const Xin = asConcreteValueNode(Xn);
     const rank = Xin.shape.length;
 
     // --- Strictly read pads from Input[1] ---
@@ -327,8 +326,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     }
 
     // mode
-    const attr = op.getAttributes();
-    const modeRaw = String(attr["mode"] ?? "constant").toLowerCase();
+    const modeRaw = getStringAttr(op, "mode", "constant").toLowerCase();
     const mode: "constant" | "edge" | "reflect" =
         modeRaw === "edge" || modeRaw === "reflect" ? modeRaw : "constant";
 
@@ -341,10 +339,9 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
     }
 
     // Output Y
-    const outsNC = op.getOutgoers.targets.filterIs(TensorNode);
-    const outs = toArrayLike<TensorNode.Class>(outsNC);
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
     const dtype = Xin.literalType as DataType;
 
     // ... [Rest of the function logic remains the same] ...

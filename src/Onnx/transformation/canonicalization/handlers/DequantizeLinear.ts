@@ -5,12 +5,12 @@ import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import {
-    toArrayLike,
     uniq,
     addEdge,
     scalarOfType,
     constI64,
     tryAsConcreteValueNode,
+    getIntAttr,
 } from "../../../Utils.js";
 import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
@@ -48,13 +48,13 @@ export default function dequantizeLinearHandler(
     }
 
     // Single output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = outs[0].tryAs(TensorNode);
+    if (Y === undefined) return false;
 
     // Attributes (axis for per-channel). Default 0 per ONNX spec.
-    const a = op.getAttributes();
-    const axisAttr = Number(a["axis"] ?? 0);
+    const axisAttr = getIntAttr(op, "axis", 0);
 
     // Choose computation float dtype: prefer Y's float type, else FLOAT
     const floatSet = new Set([
@@ -66,7 +66,7 @@ export default function dequantizeLinearHandler(
     const yT = Y.literalType as DataType;
     const floatT: DataType = floatSet.has(yT) ? yT : DataType.FLOAT;
 
-    const xShape = X.shape;
+    const xShape = X.shape as KnownShape;
     const rank = xShape.length;
 
     Y.setLiteralType(floatT);

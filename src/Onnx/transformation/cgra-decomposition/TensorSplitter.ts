@@ -33,11 +33,11 @@ export default class TensorSplitter {
         columnWise: boolean,
     ): TensorProto {
         const data = readTensorData(node) ?? [];
-        const shape = node.shape as number[];
+        const shape = node.shape as StaticShape;
         const [rows, cols] = shape.length === 2 ? shape : [1, shape[0]];
 
         let subData: number[] = [];
-        let newShape: number[] = [];
+        let newShape: StaticShape = [];
 
         if (columnWise) {
             // Split [R, C] into C tensors of [R]

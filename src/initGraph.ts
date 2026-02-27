@@ -15,14 +15,14 @@ import type {
     RawOnnxValueInfo,
     Shape,
     TensorProto,
+    ValueNode,
 } from "./Onnx/OnnxTypes.js";
 import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 import inferShapes from "./Onnx/InferShapes.js";
 import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
-import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import { uniq, UNKOWN_SHAPE } from "./Onnx/Utils.js";
+import { tryAsValueNode, uniq, UNKOWN_SHAPE } from "./Onnx/Utils.js";
 
 // Helper function to convert shape to number[]
 function parseShape(shape: RawOnnxTensorType["shape"]): KnownShape {
@@ -139,12 +139,12 @@ function addNodes(
     const nodesToAdd = new Set<number>(data.graph!.node!.map((_: RawOnnxNode, i: number) => i));
 
     // Helper to resolve an input name to a node in the current scope or capture it
-    function resolveInput(name: string): BaseNode.Class | undefined {
+    function resolveInput(name: string): ValueNode | undefined {
         // 1. Local scope (Tensor, Constant, or existing Capture)
-        if (graph.hasNode(name)) return graph.getNodeById(name);
+        if (graph.hasNode(name)) return tryAsValueNode(graph.getNodeById(name));
 
         // 2. Already captured in this pass but not yet fully registered? (Redundant with 1, but safe)
-        if (captureMap.has(name)) return captureMap.get(name);
+        if (captureMap.has(name)) return tryAsValueNode(captureMap.get(name));
 
         // 3. Check parent scope (Implicit Capture)
         if (parentGraph) {
@@ -251,7 +251,7 @@ function addNodes(
             }
 
             // B. Resolve Inputs (Actual wiring)
-            const inputs: BaseNode.Class[] = [];
+            const inputs: ValueNode[] = [];
             node.input?.forEach((inputName: string) => {
                 if (inputName === "") return;
                 const resolved = resolveInput(inputName);

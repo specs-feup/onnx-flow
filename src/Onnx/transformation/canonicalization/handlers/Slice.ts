@@ -9,6 +9,8 @@ import {
     uniq,
     maybeRemoveOrphanConstant,
     scalarI64,
+    tryAsConcreteValueNode,
+    asConcreteValueNode,
 } from "../../../Utils.js";
 import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
@@ -26,12 +28,9 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
         );
     }
 
-    const Xn = ins[0];
-    if (!Xn.is(TensorNode) && !Xn.is(ConstantNode)) {
+    const Xin = tryAsConcreteValueNode(ins[0]);
+    if (Xin === undefined)
         throw new Error(`[SliceHandler] Node ${sl.id} input[0] (data) is invalid.`);
-    }
-
-    const Xin = Xn.is(TensorNode) ? Xn.as(TensorNode) : Xn.as(ConstantNode);
     const inShape = Xin.shape.map((d) => (typeof d === "number" ? d : 1));
     const rank = inShape.length;
 
@@ -100,9 +99,9 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
     }
 
     // 4. Output
-    const outs = sl.getOutgoers.targets;
-    if (outs.length !== 1 || !outs[0].is(TensorNode)) return false;
-    const Y = outs[0].as(TensorNode);
+    const outs = sl.getOutputs();
+    if (outs.length !== 1) return false;
+    const Y = asConcreteValueNode(outs[0]);
 
     // 5. Determine affected axes
     const changingAxes: number[] = [];

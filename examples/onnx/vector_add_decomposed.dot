@@ -30,8 +30,8 @@ digraph {
     loop0_6 [label=Identity shape=box color=blue];
     loop0_iter_idx -> loop0_1 [label=sc];
     loop0_axes -> loop0_1 [label="{1}"];
-    loop0_5 -> loop0_carry_out [label="{4}"];
     loop0_capture_A -> loop0_2 [label="{4}"];
+    loop0_5 -> loop0_carry_out [label="{4}"];
     loop0_capture_B -> loop0_3 [label="{4}"];
     loop0_carry -> loop0_5 [label="{4}"];
     loop0_cond_in -> loop0_6 [label=sc];

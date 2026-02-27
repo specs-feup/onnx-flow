@@ -3,7 +3,8 @@ import Node from "@specs-feup/flow/graph/Node";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 import type OnnxGraph from "./OnnxGraph.js";
-import type { AttributeMap, AttributeValue } from "./OnnxTypes.js";
+import type { AttributeMap, AttributeValue, ValueNode } from "./OnnxTypes.js";
+import { isValueNode } from "./Utils.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";
@@ -45,11 +46,15 @@ namespace OperationNode {
             return this.outgoers.filterIs(OnnxEdge);
         }
 
-        getInputs(): BaseNode.Class[] | undefined {
+        getInputs(): ValueNode[] | undefined {
             return this.data[TAG].inputs;
         }
 
-        setInputs(inputs: BaseNode.Class[]): void {
+        getOutputs(): ValueNode[] {
+            return this.outgoers.targets.toArray().filter(isValueNode);
+        }
+
+        setInputs(inputs: ValueNode[]): void {
             this.data[TAG].inputs = inputs;
         }
 
@@ -79,13 +84,13 @@ namespace OperationNode {
     export class Builder implements Node.Builder<Data, ScratchData> {
         private type: string;
         private attributes?: AttributeMap | undefined;
-        private inputs?: BaseNode.Class[] | undefined;
+        private inputs?: ValueNode[] | undefined;
         private regions?: OnnxGraph.Class[] | undefined;
         private metadata: AttributeMap;
 
         constructor(
             type: string,
-            inputs?: BaseNode.Class[],
+            inputs?: ValueNode[],
             attributes?: AttributeMap,
             regions?: OnnxGraph.Class[],
             metadata: AttributeMap = {},
@@ -124,7 +129,7 @@ namespace OperationNode {
         [TAG]: {
             version: typeof VERSION;
             type: string;
-            inputs?: BaseNode.Class[];
+            inputs?: ValueNode[];
             attributes?: AttributeMap;
             regions?: OnnxGraph.Class[];
             metadata: AttributeMap;

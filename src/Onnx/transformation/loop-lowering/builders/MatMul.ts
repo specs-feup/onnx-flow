@@ -4,7 +4,15 @@ import TensorNode from "../../../TensorNode.js";
 import type OperationNode from "../../../OperationNode.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, int64Vec, zeroTensor, bool, makeTensorConst, scalarInt64 } from "../../../Utils.js";
+import {
+    uniq,
+    int64Vec,
+    zeroTensor,
+    bool,
+    makeTensorConst,
+    scalarInt64,
+    asConcreteValueNode,
+} from "../../../Utils.js";
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
 import { unsqueezeIdx, broadcastShapes, getMatDims } from "../BuildLoop.js";
 
@@ -13,7 +21,6 @@ import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleMatMul from "../handlers/MatMul.js";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class MatMulBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]): boolean {
@@ -50,9 +57,9 @@ export default class MatMulBuilder implements LoopBuilder {
 
         const mm = chain[matmulIndex];
         const lhsRaw = mm.getInputs()![0];
-        const lhs = lhsRaw.is(TensorNode) ? lhsRaw.as(TensorNode) : lhsRaw.as(ConstantNode);
+        const lhs = asConcreteValueNode(lhsRaw);
         const rhsRaw = mm.getInputs()![1];
-        const rhs = rhsRaw.is(TensorNode) ? rhsRaw.as(TensorNode) : rhsRaw.as(ConstantNode);
+        const rhs = asConcreteValueNode(rhsRaw);
 
         // Use shared helper to normalise vector/matrix shapes
         const { K, N, A2, B2, ...dims } = getMatDims(lhs.shape, rhs.shape);

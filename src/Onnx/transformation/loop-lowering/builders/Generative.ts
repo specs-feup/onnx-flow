@@ -5,7 +5,14 @@ import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
 import type { KnownShape, TensorProto } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, int64Vec, bool, makeTensorConst, UNKOWN_SHAPE } from "../../../Utils.js";
+import {
+    uniq,
+    int64Vec,
+    bool,
+    makeTensorConst,
+    UNKOWN_SHAPE,
+    asConcreteValueNode,
+} from "../../../Utils.js";
 import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
 import { unsqueezeIdx } from "../BuildLoop.js";
 
@@ -14,7 +21,6 @@ import handleRange from "../handlers/Range.js";
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleTranspose from "../handlers/Transpose.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class GenerativeBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]): boolean {
@@ -38,9 +44,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         // Use the Range's start input to define the element type
         const rangeInputs = rangeOp.getInputs()!;
         const startNodeRaw = rangeInputs[0];
-        const startNode = startNodeRaw.is(TensorNode)
-            ? startNodeRaw.as(TensorNode)
-            : startNodeRaw.as(ConstantNode);
+        const startNode = asConcreteValueNode(startNodeRaw);
         const elemTy = startNode.literalType;
 
         // out shape is unknown-length 1D (Range defines its length at runtime)
@@ -118,9 +122,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         inferShapes(body);
 
         // Compute trip_count, cond, v_initial for Range at OUTER graph level
-        const [startT, limitT, deltaT] = rangeOp
-            .getInputs()!
-            .map((n) => (n.is(TensorNode) ? n.as(TensorNode) : n.as(ConstantNode)));
+        const [startT, limitT, deltaT] = rangeOp.getInputs()!.map((n) => asConcreteValueNode(n));
 
         const subN = outer
             .addNode(uniq(outer, `range_sub_${chain[0].id}`))

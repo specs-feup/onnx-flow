@@ -4,12 +4,12 @@ import TensorNode from "../../../TensorNode.js";
 import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
-    toArrayLike,
     uniq,
     addEdge,
     scalarOfType,
     constI64,
     tryAsConcreteValueNode,
+    getIntAttr,
 } from "../../../Utils.js";
 
 /**
@@ -46,7 +46,7 @@ export default function quantizeLinearHandler(
         throw new Error(`[QuantizeLinearHandler] Node ${op.id} has invalid inputs.`);
     }
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
@@ -54,8 +54,7 @@ export default function quantizeLinearHandler(
     const targetType = Z ? Z.literalType : Y.literalType;
     const floatT = X.literalType;
 
-    const a = op.getAttributes();
-    const axisAttr = Number(a["axis"] ?? 1);
+    const axisAttr = getIntAttr(op, "axis", 1);
 
     // 1. Prepare Inputs (Scale is float, Z needs cast to float)
     let Zf: ConcreteValueNode;

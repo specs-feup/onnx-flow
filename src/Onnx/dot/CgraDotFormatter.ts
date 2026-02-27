@@ -255,7 +255,7 @@ export default class CgraDotFormatter<
             return readConstIntegerVectorFromTensorNode(tensor)!.every((val) => val === 0);
         };
 
-        const secondInput = node.getInputs()![1].as(TensorNode);
+        const secondInput = node.getInputs()![1];
         if (!isZeroConstVector(secondInput)) {
             throw new Error(
                 "All Greater nodes must compare against a zero constant vector on the left-hand side.",

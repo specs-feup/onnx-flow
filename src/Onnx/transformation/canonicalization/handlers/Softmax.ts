@@ -2,8 +2,14 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { uniq, addEdge, toArrayLike, makeI64ShapeConst } from "../../../Utils.js";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import {
+    uniq,
+    addEdge,
+    makeI64ShapeConst,
+    tryAsConcreteValueNode,
+    asConcreteValueNode,
+    getIntAttr,
+} from "../../../Utils.js";
 
 /**
  * Softmax(X, axis)  ≡  exp(X - reduce_max(X, axis)) / reduce_sum(exp(...), axis)
@@ -27,23 +33,18 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
         throw new Error(`[SoftmaxHandler] Node ${op.id} missing required input (X).`);
     }
 
-    if (!ins[0]?.is?.(TensorNode) && !ins[0]?.is?.(ConstantNode)) {
-        throw new Error(`[SoftmaxHandler] Node ${op.id} input[0] is invalid.`);
-    }
-
-    const XRaw = ins[0];
-    const X = XRaw.is(TensorNode) ? XRaw.as(TensorNode) : XRaw.as(ConstantNode);
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers.targets.filterIs(TensorNode));
+    const X = tryAsConcreteValueNode(ins[0]);
+    if (!X) throw new Error(`[SoftmaxHandler] Node ${op.id} input[0] is invalid.`);
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
 
     // ---- Rank and axis
     const inShape = Array.isArray(X.shape) ? [...X.shape] : [];
     const rank = inShape.length;
 
-    // axis attribute (default -1 per opset >= 13)
-    const attrs = op.getAttributes();
-    let axis = Number(attrs["axis"] ?? -1);
+    // axis attribute
+    let axis = getIntAttr(op, "axis", -1);
     if (rank > 0 && axis < 0) axis = (axis + rank) % rank;
 
     // Helper: shapes for intermediates

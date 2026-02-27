@@ -6,6 +6,8 @@ import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
 import type { PartitionSets } from "./Strategies.js";
 import ConstantNode from "../ConstantNode.js";
+import type { ValueNode } from "../OnnxTypes.js";
+import { asValueNode } from "../Utils.js";
 
 /**
  * Clones a TensorNode into the target graph.
@@ -44,7 +46,7 @@ function cloneConstant(c: ConstantNode.Class, targetGraph: OnnxGraph.Class): Con
 /**
  * Updates the internal inputs list of an OperationNode.
  */
-function setOpInputs(op: OperationNode.Class, inputs: BaseNode.Class[]) {
+function setOpInputs(op: OperationNode.Class, inputs: ValueNode[]) {
     op.setInputs(inputs);
 }
 
@@ -98,7 +100,7 @@ export function partitionGraph(
         // --- Case A: Op is in HEAD ---
         if (headIds.has(originalOp.id)) {
             const clonedOp = headMap.get(originalOp.id)!.as(OperationNode);
-            const newInputs: BaseNode.Class[] = [];
+            const newInputs: ValueNode[] = [];
 
             // 3.1 Head Inputs (Tensor -> Op)
             for (const input of originalInputs) {
@@ -109,7 +111,7 @@ export function partitionGraph(
                 }
 
                 const clonedInput = headMap.get(input.id)!;
-                newInputs.push(clonedInput);
+                newInputs.push(asValueNode(clonedInput));
 
                 if (clonedInput.is(TensorNode)) {
                     const t = clonedInput.as(TensorNode);
@@ -136,14 +138,14 @@ export function partitionGraph(
         // --- Case B: Op is in TAIL ---
         else if (tailIds.has(originalOp.id)) {
             const clonedOp = tailMap.get(originalOp.id)!.as(OperationNode);
-            const newInputs: BaseNode.Class[] = [];
+            const newInputs: ValueNode[] = [];
 
             // 3.3 Tail Inputs (Tensor -> Op)
             for (const input of originalInputs) {
                 // Option 1: Input exists in Tail (Internal flow)
                 if (tailMap.has(input.id)) {
                     const clonedInput = tailMap.get(input.id)!;
-                    newInputs.push(clonedInput);
+                    newInputs.push(asValueNode(clonedInput));
                     if (clonedInput.is(TensorNode)) {
                         const t = clonedInput.as(TensorNode);
                         tailGraph
@@ -173,7 +175,7 @@ export function partitionGraph(
                             }
                         }
                         const clonedInput = tailMap.get(input.id)!;
-                        newInputs.push(clonedInput);
+                        newInputs.push(asValueNode(clonedInput));
 
                         const t = clonedInput.as(TensorNode);
                         tailGraph
@@ -196,7 +198,7 @@ export function partitionGraph(
                     }
 
                     if (!tailMap.has(input.id)) {
-                        const origTensor = input.as(TensorNode);
+                        const origTensor = input;
                         const ghost = tailGraph
                             .addNode(input.id)
                             .init(
@@ -211,7 +213,7 @@ export function partitionGraph(
                     }
 
                     const ghostInput = tailMap.get(input.id)!;
-                    newInputs.push(ghostInput);
+                    newInputs.push(asValueNode(ghostInput));
 
                     const t = ghostInput.as(TensorNode);
                     tailGraph

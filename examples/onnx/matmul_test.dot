@@ -57,6 +57,8 @@ digraph {
     loopLoop_0_prev_0 [label=GatherElements shape=box color=blue];
     loopLoop_0_sq_prev_sq_0 [label=Squeeze shape=box color=blue];
     loopLoop_0_acc_0 [label=Add shape=box color=blue];
+    loopLoop_0_one_0 [label=1 shape=box color=maroon];
+    loopLoop_0_Km1_0 [label=Sub shape=box color=blue];
     loopLoop_0_updateUnsq [label=Unsqueeze shape=box color=blue];
     loopLoop_0_updateUnsq -> loopLoop_0_scatter [label="{1}"];
     loopLoop_0_id_cond [label=Identity shape=box color=blue];
