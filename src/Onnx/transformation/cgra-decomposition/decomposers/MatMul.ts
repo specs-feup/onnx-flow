@@ -1,17 +1,20 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import TensorSplitter from "../TensorSplitter.js";
-import { int64Vec } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import type TensorSplitter from "../TensorSplitter.js";
+import { asConcreteValueNode, int64Vec } from "@specs-feup/onnx-flow/Onnx/Utils";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import type { ConcreteValueNode } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
 export function decomposeMatMul(
     node: OperationNode.Class,
     g: OnnxGraph.Class,
     tensorSplitter: TensorSplitter,
 ): boolean {
-    const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
+    const inputs = node.getInputs()!;
+    const input1 = asConcreteValueNode(inputs[0]);
+    const input2 = asConcreteValueNode(inputs[1]);
     const literalType = input1.literalType;
 
     if (input1.shape.length > 2 || input2.shape.length > 2) {
@@ -27,21 +30,21 @@ export function decomposeMatMul(
     }
 
     // Create new input1 nodes
-    const newInputs1: TensorNode.Class[] = tensorSplitter.getSplit(input1, false).splits;
+    const newInputs1: ConcreteValueNode[] = tensorSplitter.getSplit(input1, false).splits;
     const numRows = newInputs1.length;
 
     // Create new input2 nodes
-    const newInputs2: TensorNode.Class[] = tensorSplitter.getSplit(input2, true).splits;
+    const newInputs2: ConcreteValueNode[] = tensorSplitter.getSplit(input2, true).splits;
     const numCols = newInputs2.length;
 
-    const output = node.outgoers.at(0).target.as(TensorNode);
+    const output = node.outgoers.at(0)!.target.as(TensorNode);
 
     // Create constant zero (for unsqueezes)
-    const zeroBuilder = new TensorNode.Builder(DataType.INT64, [1], "constant", int64Vec([0]));
-    const zeroNode = g.addNode(`${node.id}_zero`, node.parent).init(zeroBuilder).as(TensorNode);
+    const zeroBuilder = new ConstantNode.Builder(int64Vec([0]));
+    const zeroNode = g.addNode(`${node.id}_zero`, node.parent).init(zeroBuilder).as(ConstantNode);
 
     // Organize outputs
-    const newOutputs: TensorNode.Class[] = tensorSplitter.getSplit(output, false).splits;
+    const newOutputs: ConcreteValueNode[] = tensorSplitter.getSplit(output, false).splits;
 
     for (let row = 0; row < numRows; row++) {
         const unsqueezes: OperationNode.Class[] = [];

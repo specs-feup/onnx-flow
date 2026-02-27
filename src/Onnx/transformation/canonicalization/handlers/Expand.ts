@@ -1,25 +1,30 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { Dim } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, addEdge, toArrayLike } from "../../../Utils.js";
+import { uniq, addEdge, asConcreteValueNode } from "../../../Utils.js";
 
 export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Expand") return false;
 
-    const ins = op.getInputs?.() ?? [];
-    if (ins.length !== 2) return false;
+    const ins = op.getInputs() ?? [];
+    if (ins.length !== 2) {
+        throw new Error(
+            `[ExpandHandler] Node ${op.id} invalid inputs. Expected 2 (data, shape), got ${ins.length}.`,
+        );
+    }
 
     const xIn = ins[0];
     const shapeIn = ins[1];
-    if (!xIn?.is?.(TensorNode) || !shapeIn?.is?.(TensorNode)) return false;
 
-    const X = xIn.as(TensorNode);
-    const shape = shapeIn.as(TensorNode);
+    const X = asConcreteValueNode(xIn);
+    const shape = asConcreteValueNode(shapeIn);
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = outs[0].tryAs(TensorNode);
+    if (Y === undefined) return false;
 
     // Expand preserves X's dtype.
     const dt = (X.literalType as DataType | undefined) ?? (Y.literalType as DataType | undefined);
@@ -49,7 +54,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     // Pick a reasonable meta-shape for the zeros/add result.
     // This is for graph typing only; runtime shape still comes from ConstantOfShape(shape).
-    let outShape: Array<number | string> | undefined;
+    let outShape: Array<Dim>;
 
     if (Array.isArray(Y.shape) && Y.shape.length > 0) {
         outShape = [...Y.shape];
@@ -58,7 +63,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         outShape = new Array(X.shape.length).fill(undefined);
     } else {
         // Fallback: leave shape unknown; ONNX IR allows this.
-        outShape = undefined;
+        outShape = [-1];
     }
 
     // 1) zeros_f = ConstantOfShape(shape)  (defaults to FLOAT 0.0)
@@ -69,7 +74,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
     const zerosF = g
         .addNode(uniq(g, `${op.id}_expand_fill_out`))
-        .init(new TensorNode.Builder(DataType.FLOAT, outShape as any, "intermediate"))
+        .init(new TensorNode.Builder(DataType.FLOAT, outShape, "intermediate"))
         .as(TensorNode);
 
     addEdge(g, cosOp, zerosF, DataType.FLOAT, outShape);
@@ -84,7 +89,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
         const zerosCast = g
             .addNode(uniq(g, `${op.id}_expand_cast_out`))
-            .init(new TensorNode.Builder(dt, outShape as any, "intermediate"))
+            .init(new TensorNode.Builder(dt, outShape, "intermediate"))
             .as(TensorNode);
 
         addEdge(g, castOp, zerosCast, dt, outShape);
@@ -97,7 +102,7 @@ export default function expandHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         .init(new OperationNode.Builder("Add", [X, zeros], {}))
         .as(OperationNode);
 
-    addEdge(g, addOp, Y, dt, outShape ?? Y.shape);
+    addEdge(g, addOp, Y, dt, outShape);
 
     g.getNodeById(op.id)?.remove();
 

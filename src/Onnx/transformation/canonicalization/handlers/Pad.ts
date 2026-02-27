@@ -1,11 +1,10 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { ConcreteValueNode, Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
-    AnyTensorProto,
     decodeIntegerVectorFromTensorProto,
-    toArrayLike,
     shapeOf,
     makeI64ShapeConst,
     editShapeDim,
@@ -15,52 +14,24 @@ import {
     scalarI64,
     readScalarFromTensorNode,
     maybeRemoveOrphanConstant,
+    asConcreteValueNode,
+    tryAsConcreteValueNode,
+    getStringAttr,
 } from "../../../Utils.js";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
-function readPadsVectorFromTensorInput(
-    g: OnnxGraph.Class,
-    tn?: TensorNode.Class,
-): number[] | undefined {
-    if (!tn) return undefined;
-    const tv1: AnyTensorProto | undefined =
-        (tn as any).constantValue ??
-        (tn as any).originalInitializer ??
-        (tn as any).initializer ??
-        (tn as any).value ??
-        (tn as any).data;
-    let vec = decodeIntegerVectorFromTensorProto(tv1);
-    if (vec && vec.length) return vec;
-
-    const srcOpsNC = tn.getIncomers?.sources?.filterIs?.(OperationNode);
-    const srcOps = toArrayLike<OperationNode.Class>(srcOpsNC);
-    const constOp = srcOps.find((op) => op.type === "Constant");
-    if (constOp) {
-        const valueAttr: AnyTensorProto | undefined =
-            constOp.attributes["value"] ?? constOp.getAttributes?.() ?? {}["value"];
-        vec = decodeIntegerVectorFromTensorProto(valueAttr);
-        if (vec && vec.length) return vec;
+function readPadsVectorFromTensorInput(tn: ConcreteValueNode): number[] | undefined {
+    // If it's a ConstantNode, read it. If it's a TensorNode, it's dynamic (return undefined).
+    if (tn.is(ConstantNode)) {
+        return decodeIntegerVectorFromTensorProto(tn.as(ConstantNode).constantValue);
     }
 
-    const name = tn.id;
-    const anyG = g as any;
-    const initLists: any[][] = [
-        anyG?.rawModel?.graph?.initializer,
-        anyG?.model?.graph?.initializer,
-        anyG?.graph?.initializer,
-    ].filter(Boolean);
-    for (const list of initLists) {
-        const found = Array.isArray(list) ? list.find((t) => t?.name === name) : undefined;
-        if (found) {
-            vec = decodeIntegerVectorFromTensorProto(found);
-            if (vec && vec.length) return vec;
-        }
-    }
     return undefined;
 }
 
 function ensurePadSlabConst(
     g: OnnxGraph.Class,
-    cur: TensorNode.Class,
+    cur: ConcreteValueNode,
     axis: number,
     size: number,
     dtype: DataType,
@@ -92,7 +63,7 @@ function ensurePadSlabConst(
 
 function ensureEdgeSlab(
     g: OnnxGraph.Class,
-    cur: TensorNode.Class,
+    cur: ConcreteValueNode,
     axis: number,
     size: number,
     tag: string,
@@ -116,8 +87,8 @@ function ensureEdgeSlab(
     const one1 = makeI64ShapeConst(g, `edge_one_${tag}`, [1]);
     const axes1 = makeI64ShapeConst(g, `edge_axes_${tag}`, [axis]);
 
-    let starts: TensorNode.Class;
-    let ends: TensorNode.Class;
+    let starts: ConcreteValueNode;
+    let ends: ConcreteValueNode;
     if (tag.endsWith("L")) {
         starts = zero1;
         ends = one1;
@@ -140,7 +111,7 @@ function ensureEdgeSlab(
         .addNode(uniq(g, `edge_slice_${tag}`))
         .init(new OperationNode.Builder("Slice", [cur, starts, ends, axes1], {}))
         .as(OperationNode);
-    const sliceShape: (number | string | undefined)[] = Array.isArray(cur.shape)
+    const sliceShape: Shape = Array.isArray(cur.shape)
         ? [...cur.shape]
         : new Array(rank).fill(undefined);
     if (rank > 0) {
@@ -161,7 +132,7 @@ function ensureEdgeSlab(
         .addNode(uniq(g, `edge_expand_${tag}`))
         .init(new OperationNode.Builder("Expand", [oneSlice, newShape], {}))
         .as(OperationNode);
-    const slabShape: (number | string | undefined)[] = Array.isArray(cur.shape)
+    const slabShape: Shape = Array.isArray(cur.shape)
         ? [...cur.shape]
         : new Array(rank).fill(undefined);
     if (rank > 0) {
@@ -178,7 +149,7 @@ function ensureEdgeSlab(
 
 function ensureReflectSlab(
     g: OnnxGraph.Class,
-    cur: TensorNode.Class,
+    cur: ConcreteValueNode,
     axis: number,
     size: number,
     tag: string,
@@ -247,7 +218,7 @@ function ensureReflectSlab(
     const stepNeg1 = scalarI64(g, `refl_step_${tag}`, -1);
 
     let startSc: TensorNode.Class;
-    let endSc: TensorNode.Class;
+    let endSc: ConcreteValueNode;
 
     if (tag.endsWith("L")) {
         // LEFT: indices = [sizeClamped, sizeClamped-1, ..., 1]
@@ -288,7 +259,7 @@ function ensureReflectSlab(
         .init(new OperationNode.Builder("Range", [startSc, endSc, stepNeg1], {}))
         .as(OperationNode);
 
-    const idxShape: (number | string | undefined)[] = [size];
+    const idxShape: Shape = [size];
     const idx = g
         .addNode(uniq(g, `refl_idx_${tag}`))
         .init(new TensorNode.Builder(DataType.INT64, idxShape, "intermediate"))
@@ -302,7 +273,7 @@ function ensureReflectSlab(
         .as(OperationNode);
 
     // slab has same rank as cur, but axis dim = original requested size
-    const reflSlabShape: (number | string | undefined)[] = Array.isArray(cur.shape)
+    const reflSlabShape: Shape = Array.isArray(cur.shape)
         ? [...cur.shape]
         : new Array(rank).fill(undefined);
     if (rank > 0) {
@@ -321,53 +292,72 @@ function ensureReflectSlab(
 export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Pad") return false;
 
-    const ins = op.getInputs?.() ?? [];
-    const Xn = ins[0];
-    if (!Xn?.is?.(TensorNode)) return false;
+    const ins = op.getInputs() ?? [];
+    // Pad must have at least 'data' and 'pads' (after adapter)
+    if (ins.length < 2) {
+        throw new Error(
+            `[PadHandler] Node ${op.id} missing required inputs. Pad must have at least 2 inputs (data, pads). Adapter failure?`,
+        );
+    }
 
-    const Xin = Xn.as(TensorNode);
+    const Xin = tryAsConcreteValueNode(ins[0]);
+    if (Xin === undefined) {
+        throw new Error(`[PadHandler] Node ${op.id} input[0] (data) is invalid or missing.`);
+    }
+
     const rank = Xin.shape.length;
 
-    // read pads (constant only)
-    let pads: number[] | undefined = undefined;
-    const padsNode = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    if (padsNode) pads = readPadsVectorFromTensorInput(g, padsNode);
-    if (!pads) {
-        const a = op.getAttributes?.() ?? op.attributes ?? {};
-        if (Array.isArray(a.pads)) pads = a.pads.map((x) => Number(x));
+    // --- Strictly read pads from Input[1] ---
+    const padsNode = tryAsConcreteValueNode(ins[0]);
+
+    if (!padsNode) {
+        throw new Error(`[PadHandler] Node ${op.id} input[1] (pads) is missing. Adapter failure?`);
     }
-    if (!pads || pads.length !== 2 * rank) return false;
+
+    const pads = readPadsVectorFromTensorInput(padsNode);
+
+    // If pads are dynamic (not constant), we cannot canonicalize to Split/Concat slices.
+    if (!pads) return false;
+
+    if (pads.length !== 2 * rank) {
+        throw new Error(
+            `[PadHandler] Node ${op.id} pads length (${pads.length}) does not match 2 * rank (${2 * rank}).`,
+        );
+    }
 
     // mode
-    const attr = op.getAttributes?.() ?? op.attributes ?? {};
-    const modeRaw = String(attr.mode ?? "constant").toLowerCase();
+    const modeRaw = getStringAttr(op, "mode", "constant").toLowerCase();
     const mode: "constant" | "edge" | "reflect" =
         modeRaw === "edge" || modeRaw === "reflect" ? modeRaw : "constant";
 
     // pad value (only used in constant)
     let padValue = 0;
-    if (ins[2]?.is?.(TensorNode)) {
-        const s = readScalarFromTensorNode(ins[2].as(TensorNode));
+    const rawPadValue = ins[2];
+    if (rawPadValue.is(TensorNode) || rawPadValue.is(ConstantNode)) {
+        const s = readScalarFromTensorNode(rawPadValue);
         if (typeof s === "number" && Number.isFinite(s)) padValue = s;
     }
 
     // Output Y
-    const outsNC = op.getOutgoers?.targets?.filterIs?.(TensorNode);
-    const outs = toArrayLike<TensorNode.Class>(outsNC);
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
     const dtype = Xin.literalType as DataType;
+
+    // ... [Rest of the function logic remains the same] ...
 
     // Prepare working tensor (may be cropped if negative pads)
     let cur = Xin;
     // Maintain current shape for intermediate updates
-    const currentShape: (number | string | undefined)[] = Array.isArray(Xin.shape)
+    const currentShape: Shape = Array.isArray(Xin.shape)
         ? [...Xin.shape]
         : new Array(rank).fill(undefined);
 
     // Negative pads => crop via Slice, then zero-out those pads in the array
     const beg = pads.slice(0, rank);
     const end = pads.slice(rank);
+
+    // ... [Copy logic loop for negative pads] ...
     for (let ax = 0; ax < rank; ax++) {
         const negB = Math.max(0, -beg[ax]);
         const negE = Math.max(0, -end[ax]);
@@ -451,7 +441,7 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
             currentShape[ax] = undefined;
         }
 
-        const parts: TensorNode.Class[] = [];
+        const parts: ConcreteValueNode[] = [];
         if (left) parts.push(left);
         parts.push(cur);
         if (right) parts.push(right!);
@@ -475,7 +465,6 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
         }
     }
 
-    // If nothing changed, route X -> Y via Identity
     if (cur === Xin) {
         const id = g
             .addNode(uniq(g, `pad_identity_${op.id}`))
@@ -484,13 +473,11 @@ export default function padHandler(g: OnnxGraph.Class, op: OperationNode.Class):
         addEdge(g, id, Y, dtype, Y.shape);
     }
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     // Cleanup constant inputs
-    const padsTN = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    const valTN = ins[2]?.is?.(TensorNode) ? ins[2].as(TensorNode) : undefined;
-    maybeRemoveOrphanConstant(g, padsTN);
-    maybeRemoveOrphanConstant(g, valTN);
+    maybeRemoveOrphanConstant(g, padsNode);
+    maybeRemoveOrphanConstant(g, tryAsConcreteValueNode(ins[2]));
 
     return true;
 }

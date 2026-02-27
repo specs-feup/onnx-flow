@@ -1,9 +1,18 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type { ConcreteValueNode, KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { toArrayLike, uniq, addEdge, scalarOfType, constI64 } from "../../../Utils.js";
+import {
+    uniq,
+    addEdge,
+    scalarOfType,
+    constI64,
+    tryAsConcreteValueNode,
+    getIntAttr,
+} from "../../../Utils.js";
+import type ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 /* ------------------------------ Handler ------------------------------- */
 /**
@@ -23,22 +32,29 @@ export default function dequantizeLinearHandler(
 ): boolean {
     if (op.type !== "DequantizeLinear") return false;
 
-    const ins = op.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    const ins = op.getInputs() ?? [];
+    if (ins.length < 2) {
+        throw new Error(
+            `[DequantizeLinearHandler] Node ${op.id} missing required inputs (x, x_scale).`,
+        );
+    }
 
-    const X = ins[0]?.is?.(TensorNode) ? ins[0].as(TensorNode) : undefined;
-    const S = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    const Z = ins[2]?.is?.(TensorNode) ? ins[2].as(TensorNode) : undefined;
-    if (!X || !S) return false;
+    const X = tryAsConcreteValueNode(ins[0]);
+    const S = tryAsConcreteValueNode(ins[1]);
+    const Z = tryAsConcreteValueNode(ins[2]);
+
+    if (!X || !S) {
+        throw new Error(`[DequantizeLinearHandler] Node ${op.id} has invalid inputs.`);
+    }
 
     // Single output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = outs[0].tryAs(TensorNode);
+    if (Y === undefined) return false;
 
     // Attributes (axis for per-channel). Default 0 per ONNX spec.
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const axisAttr = Number(a.axis ?? 0);
+    const axisAttr = getIntAttr(op, "axis", 0);
 
     // Choose computation float dtype: prefer Y's float type, else FLOAT
     const floatSet = new Set([
@@ -47,10 +63,10 @@ export default function dequantizeLinearHandler(
         DataType.BFLOAT16,
         DataType.DOUBLE,
     ]);
-    const yT = (Y.literalType ?? DataType.FLOAT) as DataType;
+    const yT = Y.literalType as DataType;
     const floatT: DataType = floatSet.has(yT) ? yT : DataType.FLOAT;
 
-    const xShape = X.shape ?? [];
+    const xShape = X.shape as KnownShape;
     const rank = xShape.length;
 
     Y.setLiteralType(floatT);
@@ -79,7 +95,7 @@ export default function dequantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, castS, Sf, floatT, S.shape);
 
-    let Zf: TensorNode.Class;
+    let Zf: ConcreteValueNode;
     if (Z) {
         const castZ = g
             .addNode(uniq(g, `DQL_CastZ_${op.id}`))
@@ -105,46 +121,46 @@ export default function dequantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, shapeXop, shapeX, DataType.INT64, [rank]);
 
-    const sRank = S.shape?.length ?? 0;
+    const sRank = S.shape.length;
 
     // Per-tensor: true scalar, or a rank-1 tensor of length 1
     const singleLen =
-        sRank === 1 && typeof S.shape?.[0] === "number" && (S.shape![0] as number) === 1;
+        sRank === 1 && typeof S.shape[0] === "number" && (S.shape![0] as number) === 1;
 
     const perTensor = sRank === 0 || singleLen;
     const perAxis = !perTensor && sRank === 1;
 
     let Sx: TensorNode.Class = Sf;
-    let Zx: TensorNode.Class = Zf;
+    let Zx: TensorNode.Class | ConstantNode.Class = Zf;
 
     if (perAxis) {
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;
         if (axis < 0 || axis >= rank) return false;
 
         // Optional static length check if known
-        const xAxisDim = typeof xShape?.[axis] === "number" ? (xShape![axis] as number) : undefined;
+        const xAxisDim = typeof xShape[axis] === "number" ? (xShape![axis] as number) : undefined;
 
         // Build axes tensor: unsqueeze on every dim except 'axis'
-        const axesVals = [];
+        const axesVals: number[] = [];
         for (let i = 0; i < rank; i++) {
             if (i !== axis) axesVals.push(i);
         }
         const axes = constI64(g, `DQL_axes_${op.id}`, axesVals);
 
         // Shape for S after Unsqueeze: [1, ..., |S|, ..., 1]
-        const sRankedShape: (number | string | undefined)[] = Array(rank).fill(1);
+        const sRankedShape: KnownShape = Array(rank).fill(1);
 
         // axis dim = length of S, or X's axis dim as a fallback
         const sLen =
             Array.isArray(S.shape) && typeof S.shape[0] === "number"
                 ? S.shape[0]
-                : xShape && typeof xShape[axis] === "number"
+                : typeof xShape[axis] === "number"
                   ? xShape[axis]
                   : undefined;
 
         if (sLen !== undefined && xAxisDim !== undefined && sLen !== xAxisDim) return false;
 
-        if (rank > 0) {
+        if (sLen !== undefined && rank > 0) {
             sRankedShape[axis] = sLen;
         }
 
@@ -233,7 +249,7 @@ export default function dequantizeLinearHandler(
 
     g.addEdge(mul, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

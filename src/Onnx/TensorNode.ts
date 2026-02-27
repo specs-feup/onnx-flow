@@ -1,21 +1,14 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import { AttributeProto, TensorProto } from "./OnnxTypes.js";
+import type { AttributeMap, AttributeProto, AttributeValue, DataType, Shape } from "./OnnxTypes.js";
 
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
-    export const VERSION = "2";
+    export const VERSION = "4"; // Bumped version
 
-    export type TensorKind =
-        | "input"
-        | "output"
-        | "initializer"
-        | "intermediate"
-        | "constant"
-        | "index"
-        | "index_aux";
+    export type TensorKind = "input" | "output" | "intermediate" | "index" | "index_aux";
 
     export class Class<
         D extends Data = Data,
@@ -25,15 +18,15 @@ namespace TensorNode {
             return this.data[TAG].literalType;
         }
 
-        get shape(): (number | string)[] {
+        get shape(): Shape {
             return this.data[TAG].shape;
         }
 
-        setShape(shape: (number | string)[]): void {
+        setShape(shape: Shape): void {
             this.data[TAG].shape = shape;
         }
 
-        setLiteralType(dtype: number): void {
+        setLiteralType(dtype: DataType): void {
             this.data[TAG].literalType = dtype;
         }
 
@@ -41,24 +34,12 @@ namespace TensorNode {
             return this.data[TAG].type;
         }
 
-        get address(): number {
-            return this.data[TAG].address;
-        }
-
-        get constantValue(): TensorProto | undefined {
-            return this.data[TAG].constantValue;
-        }
-
-        get originalInitializer(): TensorProto | undefined {
-            return this.data[TAG].originalInitializer;
+        setType(type: TensorKind): void {
+            this.data[TAG].type = type;
         }
 
         get extraAttrs(): AttributeProto[] | undefined {
             return this.data[TAG].extraAttrs;
-        }
-
-        isConstant(): boolean {
-            return this.data[TAG].type === "constant" && !!this.data[TAG].constantValue;
         }
 
         get getIncomers(): EdgeCollection<OnnxEdge.Class> {
@@ -68,32 +49,48 @@ namespace TensorNode {
         get getOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
         }
+
+        get metadata(): AttributeMap {
+            return this.data[TAG].metadata;
+        }
+
+        getMetadata(key: string): AttributeValue | undefined {
+            return this.data[TAG].metadata[key];
+        }
+
+        setMetadata(key: string, value: AttributeValue): void {
+            this.data[TAG].metadata[key] = value;
+        }
+
+        // Helper for legacy 'address' support (optional, if you want to keep the API logic)
+        get address(): number | undefined {
+            return this.getMetadata("address") as number | undefined;
+        }
+
+        setAddress(addr: number): void {
+            this.setMetadata("address", addr);
+        }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
-        private literalType: number;
-        private shape: (number | string)[];
+        private literalType: DataType;
+        private shape: Shape;
         private type: TensorKind;
-        private address: number;
-        private constantValue?: TensorProto;
-        private originalInitializer?: TensorProto;
-        private extraAttrs?: AttributeProto[];
+        private extraAttrs?: AttributeProto[] | undefined;
+        private metadata: AttributeMap;
 
         constructor(
-            literalType: number,
-            shape: (number | string)[],
+            literalType: DataType,
+            shape: Shape,
             type: TensorKind,
-            constantValue?: TensorProto,
-            originalInitializer?: TensorProto,
             extraAttrs?: AttributeProto[],
+            metadata: AttributeMap = {},
         ) {
             this.literalType = literalType;
             this.shape = shape;
             this.type = type;
-            this.address = 0; // TODO(Process-ing): Allow reading addresses
-            this.constantValue = constantValue;
-            this.originalInitializer = originalInitializer;
             this.extraAttrs = extraAttrs;
+            this.metadata = metadata;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -104,10 +101,8 @@ namespace TensorNode {
                     literalType: this.literalType,
                     shape: this.shape,
                     type: this.type,
-                    address: this.address,
-                    constantValue: this.constantValue,
-                    originalInitializer: this.originalInitializer,
-                    extraAttrs: this.extraAttrs,
+                    ...(this.extraAttrs !== undefined ? { extraAttrs: this.extraAttrs } : {}),
+                    metadata: this.metadata,
                 },
             };
         }
@@ -124,13 +119,11 @@ namespace TensorNode {
     export interface Data extends BaseNode.Data {
         [TAG]: {
             version: typeof VERSION;
-            literalType: number;
-            shape: (number | string)[];
+            literalType: DataType;
+            shape: Shape;
             type: TensorKind;
-            address: number;
-            constantValue?: TensorProto;
-            originalInitializer?: TensorProto;
             extraAttrs?: AttributeProto[];
+            metadata: AttributeMap;
         };
     }
 

@@ -3,6 +3,7 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
+import type { Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     uniq,
@@ -10,23 +11,29 @@ import {
     zeroTensor,
     bool,
     toStaticShape,
-    Shape,
     makeTensorConst,
     scalarInt64,
     asStaticDims,
+    asConcreteValueNode,
 } from "../../../Utils.js";
-import { LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx, broadcastShapes } from "../BuildLoop.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx, broadcastShapes } from "../BuildLoop.js";
 
 // Handlers needed by the default builder only
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
 import handleTranspose from "../handlers/Transpose.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
+import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
 
 export default class DefaultBuilder implements LoopBuilder {
-    canHandle(chain: OperationNode.Class[]) {
+    canHandle(chain: OperationNode.Class[]): boolean {
         // No Slice, no Range → handled here
         return !chain.some(
-            (op) => op.type === "Slice" || op.type === "Range" || op.type === "MatMul",
+            (op) =>
+                op.type === "Scan" ||
+                op.type === "Slice" ||
+                op.type === "Range" ||
+                op.type === "MatMul",
         );
     }
 
@@ -37,15 +44,6 @@ export default class DefaultBuilder implements LoopBuilder {
     ): BuildResult {
         const lastOp = chain.at(-1)!;
         let outTensor = lastOp.getOutgoers.targets.filterIs(TensorNode).first();
-
-        // Collect all tensor inputs for this chain (we'll use them for type inference)
-        const inputs = new Map<string, TensorNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((t) => inputs.set(t.id, t.as(TensorNode))),
-        );
 
         // Prefer a floating-point element type when available (important for DQL)
         const floatSet = new Set<DataType>([
@@ -73,16 +71,6 @@ export default class DefaultBuilder implements LoopBuilder {
             }
         }
 
-        // 3) If still non-float, infer from *inputs* of the whole chain
-        if (!floatSet.has(elemTy)) {
-            for (const t of inputs.values()) {
-                if (floatSet.has(t.literalType)) {
-                    elemTy = t.literalType;
-                    break;
-                }
-            }
-        }
-
         // 4) Last fallback: default to FLOAT if still undefined
         if (elemTy === DataType.UNDEFINED) {
             elemTy = DataType.FLOAT;
@@ -92,18 +80,14 @@ export default class DefaultBuilder implements LoopBuilder {
         const rawOutShape = Array.isArray(outTensor?.shape) ? outTensor.shape : [undefined];
         let staticOut = toStaticShape(rawOutShape as Shape);
 
-        if (
-            !staticOut ||
-            staticOut.length === 0 ||
-            staticOut.some((d) => d === -1 || d === undefined)
-        ) {
+        if (staticOut.length === 0 || staticOut.some((d) => d === -1)) {
             const inputShapes = [
                 ...new Map(
                     chain.flatMap((op) =>
-                        (op.getInputs()?.filter((n) => n.is(TensorNode)) ?? []).map((t) => [
-                            t.id,
-                            t.as(TensorNode),
-                        ]),
+                        (
+                            op.getInputs()?.filter((n) => n.is(TensorNode) || n.is(ConstantNode)) ??
+                            []
+                        ).map((t) => [t.id, asConcreteValueNode(t)]),
                     ),
                 ).values(),
             ]
@@ -119,7 +103,7 @@ export default class DefaultBuilder implements LoopBuilder {
 
         // Ensure we always have an outer output tensor node for this chain
         if (!outTensor) {
-            const fallbackShape = staticOut && staticOut.length ? staticOut : [];
+            const fallbackShape = staticOut.length ? staticOut : [];
             outTensor = outer
                 .addNode(uniq(outer, `out_${lastOp.id}`))
                 .init(new TensorNode.Builder(elemTy, fallbackShape, "intermediate"))
@@ -149,11 +133,9 @@ export default class DefaultBuilder implements LoopBuilder {
             .as(TensorNode);
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(
-                new TensorNode.Builder(elemTy, [carryLen], "input", zeroTensor(elemTy, [carryLen])),
-            )
+            .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
-        const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
+        const axes = makeTensorConst(body, "axes", int64Vec([0]));
 
         const unsq = body
             .addNode(uniq(body, "unsq"))
@@ -198,7 +180,6 @@ export default class DefaultBuilder implements LoopBuilder {
         const indicesOut = unsqOut;
         for (const op of chain) {
             const h = handlers[op.type];
-            if (!h) throw new Error(`DefaultBuilder: unsupported op ${op.type}`);
             const out = h(op, body, ctx);
             ctx.opMap.set(op, [op, out]);
         }
@@ -212,27 +193,9 @@ export default class DefaultBuilder implements LoopBuilder {
         inferShapes(body);
 
         // Loop inputs for outer graph
-        const trip = makeTensorConst(
-            outer,
-            `trip_count_${chain[0].id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(totalIters),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `cond_${chain[0].id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
-        const v_initial = makeTensorConst(
-            outer,
-            "init_carry",
-            elemTy,
-            "initializer",
-            zeroTensor(elemTy, [carryLen]),
-        );
+        const trip = makeTensorConst(outer, `trip_count_${chain[0].id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `cond_${chain[0].id}`, bool(true));
+        const v_initial = makeTensorConst(outer, "init_carry", zeroTensor(elemTy, [carryLen]));
 
         return {
             body,
@@ -241,7 +204,6 @@ export default class DefaultBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape: staticOut,
-            inputs,
             outTensor,
             trip,
             cond,

@@ -1,15 +1,18 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { ConcreteValueNode, Dim, Shape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     uniq,
     addEdge,
-    toArrayLike,
     constI64,
     isNumeric,
     scalarI64,
     scalarZeroOfType,
+    tryAsConcreteValueNode,
+    getIntAttr,
+    asConcreteValueNode,
 } from "../../../Utils.js";
 
 /* --------------------- Squeeze/Unsqueeze Aux (minding opset) -------------------- */
@@ -27,13 +30,7 @@ function makeSqueeze(
         .as(OperationNode);
     const out = g
         .addNode(uniq(g, `${name}_out`))
-        .init(
-            new TensorNode.Builder(
-                DataType.INT64,
-                axes.length === 1 ? [] : undefined,
-                "intermediate",
-            ),
-        )
+        .init(new TensorNode.Builder(DataType.INT64, axes.length === 1 ? [] : [-1], "intermediate"))
         .as(TensorNode);
     addEdge(g, op, out, DataType.INT64);
     return { out, op };
@@ -41,10 +38,10 @@ function makeSqueeze(
 
 function makeUnsqueeze(
     g: OnnxGraph.Class,
-    x: TensorNode.Class,
+    x: ConcreteValueNode,
     axes: number[],
     outDtype: DataType,
-    outShape: Array<number | string | undefined> | undefined,
+    outShape: Array<Dim>,
     name: string,
 ): { out: TensorNode.Class; op: OperationNode.Class } {
     const axesConst = constI64(g, `${name}_axes`, axes);
@@ -77,24 +74,27 @@ function makeUnsqueeze(
 export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Concat") return false;
 
-    const rawIns = op.getInputs?.() ?? [];
+    const rawIns = op.getInputs() ?? [];
+    if (rawIns.length === 0) {
+        throw new Error(`[ConcatHandler] Node ${op.id} has 0 inputs.`);
+    }
     if (rawIns.length < 2) return false;
 
     const inputs = rawIns
-        .map((n) => (n?.is?.(TensorNode) ? n.as(TensorNode) : undefined))
-        .filter(Boolean) as TensorNode.Class[];
-    if (inputs.length < 2) return false;
+        .map((n) => tryAsConcreteValueNode(n))
+        .filter(Boolean) as ConcreteValueNode[];
+    if (inputs.length !== rawIns.length) {
+        throw new Error(`[ConcatHandler] Node ${op.id} has undefined/invalid inputs.`);
+    }
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
 
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const axisAttr = Number(a.axis ?? 0);
+    const axisAttr = getIntAttr(op, "axis", 0);
 
-    const rank = inputs[0].shape?.length;
-    if (rank === undefined) return false;
-    if (!inputs.every((t) => (t.shape?.length ?? -1) === rank)) return false;
+    const rank = inputs[0].shape.length;
+    if (!inputs.every((t) => t.shape.length === rank)) return false;
 
     const dtype = inputs[0].literalType as DataType;
     if (!inputs.every((t) => t.literalType === dtype)) return false;
@@ -159,7 +159,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     }
 
     // Sum axis sizes via Add chain (INT64 scalar)
-    let sumAxis: TensorNode.Class = scalarI64(g, `Concat_sum_init_${op.id}`, 0);
+    let sumAxis: ConcreteValueNode = scalarI64(g, `Concat_sum_init_${op.id}`, 0);
     for (let i = 0; i < sizeScalars.length; i++) {
         const add = g
             .addNode(uniq(g, `Concat_sum_add_${i}_${op.id}`))
@@ -214,7 +214,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
     addEdge(g, expandOp, curY, dtype, Y.shape);
 
     /* -------------- For each Xi: build indices and ScatterElements -------------- */
-    let offsetSc: TensorNode.Class = scalarI64(g, `Concat_off_init_${op.id}`, 0); // INT64 scalar
+    let offsetSc: ConcreteValueNode = scalarI64(g, `Concat_off_init_${op.id}`, 0); // INT64 scalar
     const oneSc = scalarI64(g, `Concat_one_${op.id}`, 1);
 
     for (let i = 0; i < inputs.length; i++) {
@@ -240,9 +240,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
 
         // shape [size] along the concat axis
         const axisDim = Array.isArray(Xi.shape) ? Xi.shape[axis] : undefined;
-        const rangeShape: (number | string | undefined)[] = [
-            typeof axisDim === "number" ? axisDim : undefined,
-        ];
+        const rangeShape: Shape = [typeof axisDim === "number" ? axisDim : undefined];
 
         const range1D = g
             .addNode(uniq(g, `Concat_range1D_${i}_${op.id}`))
@@ -257,7 +255,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         if (axesToUnsq.length === 0) {
             idxRanked = range1D;
         } else {
-            const idxShape: (number | string | undefined)[] = Array.isArray(Xi.shape)
+            const idxShape: Shape = Array.isArray(Xi.shape)
                 ? [...Xi.shape]
                 : new Array(rank).fill(undefined);
 
@@ -320,7 +318,7 @@ export default function concatHandler(g: OnnxGraph.Class, op: OperationNode.Clas
         .as(OperationNode);
     addEdge(g, finalId, Y, dtype, Y.shape);
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

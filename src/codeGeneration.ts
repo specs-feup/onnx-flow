@@ -1,12 +1,13 @@
-import OnnxGraph from "./Onnx/OnnxGraph.js";
+import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import TensorNode from "./Onnx/TensorNode.js";
 import OperationNode from "./Onnx/OperationNode.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import VariableNode from "./Onnx/VariableNode.js";
 import OnnxEdge from "./Onnx/OnnxEdge.js";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
-import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "./Onnx/OnnxInnerEdge.js";
+import { readConstIntegerVectorFromTensorNode, readTensorData } from "./Onnx/Utils.js";
 
 const variables = new Map<string, string>();
 const operations = new Map<string, string[]>();
@@ -23,9 +24,9 @@ function handleOperation(
     switch (source.type) {
         case "Addition":
         case "Add":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} + ${variables.get(inputs[1])})`,
@@ -35,9 +36,9 @@ function handleOperation(
             break;
         case "Subtraction":
         case "Sub":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} - ${variables.get(inputs[1])})`,
@@ -47,9 +48,9 @@ function handleOperation(
             break;
         case "Multiplication":
         case "Mul":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} * ${variables.get(inputs[1])})`,
@@ -59,9 +60,9 @@ function handleOperation(
             break;
         case "Division":
         case "Div":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} / ${variables.get(inputs[1])})`,
@@ -70,9 +71,9 @@ function handleOperation(
             }
             break;
         case "Load":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     const input0Node = graph.getNodeById(inputs[0]);
                     const input1Node = graph.getNodeById(inputs[1]);
 
@@ -105,17 +106,17 @@ function handleOperation(
             }
             break;
         case "Not":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(source.id, `!${variables.get(inputs[0])}`);
                 }
             }
             break;
         case "Equality":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     variables.set(
                         source.id,
                         `(${variables.get(inputs[0])} === ${variables.get(inputs[1])})`,
@@ -124,9 +125,9 @@ function handleOperation(
             }
             break;
         case "Store":
-            if (!variables.get(source.id)) {
+            if (!variables.has(source.id)) {
                 const inputs = operations.get(source.id);
-                if (inputs) {
+                if (inputs !== undefined) {
                     if (target.is(VariableNode) && target.as(VariableNode).type === "output") {
                         variables.set(
                             source.id,
@@ -170,7 +171,7 @@ function handleEdges(edge: BaseEdge.Class, graph: OnnxGraph.Class, outputName: s
             code += `       ${target.id} = ${variables.get(source.id)}\n`;
         }
     } else if (source.is(ConstantNode)) {
-        variables.set(source.id, source.as(ConstantNode).value.toString());
+        variables.set(source.id, readTensorData(source)?.toString() ?? "");
     } else if (source.is(VariableNode)) {
         if (source.as(VariableNode).type === "input") {
             variables.set(source.id, `tensor_${source.as(VariableNode).name.substring(1)}`);
@@ -220,12 +221,19 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
 
         if (displacementInMemoryNode && shape) {
             if (displacementInMemoryNode.is(ConstantNode)) {
-                const displacementInMemory = displacementInMemoryNode.as(ConstantNode).value;
+                const displacementInMemory =
+                    readConstIntegerVectorFromTensorNode(displacementInMemoryNode);
 
-                const totalElements = shape.reduce((acc, val) => acc * val, 1);
+                // Tell reduce to specifically return a number
+                const totalElements = shape.reduce<number>((acc, val) => {
+                    // If it's a number, use it. If it's a string, try to parse it.
+                    // Fall back to 1 if it's undefined or a symbolic string like "?"
+                    const dim = typeof val === "number" ? val : Number(val) || 1;
+                    return acc * dim;
+                }, 1);
                 code += `   let ${outputName} = {`;
                 for (let i = 0; i < totalElements; i++) {
-                    const index = i * displacementInMemory;
+                    const index = i * displacementInMemory![0];
                     code += `${index}: 0, `;
                 }
                 code = code.slice(0, -2) + "};\n";
@@ -237,20 +245,16 @@ function handleOuterOperationNode(node: OperationNode.Class, graph: OnnxGraph.Cl
         const indexNode = node.children
             .filterIs(VariableNode)
             .filter((node) => node.type === "index");
-        if (indexNode && indexNode.length === 1) {
+        if (indexNode.length === 1) {
             code += `   let ${indexNode[0].id} = 0\n`;
         } else return "";
 
         const indexAuxNodes = node.children
             .filterIs(VariableNode)
             .filter((node) => node.type === "index_aux");
-        if (indexAuxNodes) {
-            indexAuxNodes.forEach((node) => (code += `   let ${node.id} = 0\n`));
-        }
+        indexAuxNodes.forEach((node) => (code += `   let ${node.id} = 0\n`));
 
-        if (loopIterationsNode) {
-            code += `   while (${indexNode[0].id} < ${loopIterationsNode?.value}) {\n`;
-        }
+        code += `   while (${indexNode[0].id} < ${readConstIntegerVectorFromTensorNode(loopIterationsNode)![0]}) {\n`;
 
         orderedEdges.forEach((edge) => {
             code += handleEdges(edge, graph, outputName);

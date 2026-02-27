@@ -3,6 +3,7 @@ import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
+import type { ConcreteValueNode } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import {
     uniq,
@@ -11,55 +12,13 @@ import {
     scalarInt64,
     bool,
     zeroTensor,
+    resolveShapeToNumbers,
+    isValueNode,
+    asValueNode,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
+import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
+import { unsqueezeIdx, decodeMixedRadix } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-
-function resolveShape(t: TensorNode.Class): number[] {
-    // If the tensor already has a shape, just use it.
-    if (t.shape && t.shape.length) {
-        return t.shape as number[];
-    }
-
-    // Try incoming edges first
-    const incs = t.getIncomers ?? [];
-    for (const e of incs) {
-        if (e.shape && e.shape.length) {
-            const s = e.shape.slice();
-            // Cache it on the tensor so later passes see it as well
-            t.setShape(s);
-            return s;
-        }
-    }
-
-    // Fallback: try outgoing edges (sometimes only consumers got a shape)
-    const outs = t.getOutgoers ?? [];
-    for (const e of outs) {
-        if (e.shape && e.shape.length) {
-            const s = e.shape.slice();
-
-            t.setShape(s);
-            return s;
-        }
-    }
-
-    // Still unknown
-    return [];
-}
-
-/*
-function getAttr<T>(op: OperationNode.Class, name: string, def: T): T | number[] | undefined {
-    if (!op.attributes) return def;
-    const attr = op.attributes.find((a) => a.name === name);
-    if (!attr) return def;
-
-    if (attr.type === "INTS") return attr.ints ?? def;
-    if (attr.type === "INT") return attr.i ?? def;
-    if (attr.type === "FLOAT") return attr.f ?? def;
-
-    return def;
-}
-*/
 
 class AveragePoolBuilder implements LoopBuilder {
     canHandle(chain: OperationNode.Class[]): boolean {
@@ -73,13 +32,13 @@ class AveragePoolBuilder implements LoopBuilder {
 
         if (op.type !== "AveragePool") return false;
 
-        const a = op.getAttributes?.() ?? op.attributes ?? {};
+        const a = op.getAttributes();
 
-        const autoPad = (a.auto_pad ?? "NOTSET") as string;
-        const ceilMode = Number(a.ceil_mode ?? 0);
-        const kernelShape = (a.kernel_shape ?? []) as number[];
-        const strides = (a.strides ?? []) as number[];
-        const pads = (a.pads ?? []) as number[];
+        const autoPad = (a["auto_pad"] ?? "NOTSET") as string;
+        const ceilMode = Number(a["ceil_mode"] ?? 0);
+        const kernelShape = (a["kernel_shape"] ?? []) as number[];
+        const strides = (a["strides"] ?? []) as number[];
+        const pads = (a["pads"] ?? []) as number[];
 
         // Only 2D spatial; if no proper kernel/stride, let other passes handle it.
         if (kernelShape.length !== 2 || strides.length !== 2) return false;
@@ -102,12 +61,11 @@ class AveragePoolBuilder implements LoopBuilder {
     ): BuildResult {
         const avg = chain[0];
 
-        const inputsArr =
-            avg
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .map((n) => n.as(TensorNode)) ?? [];
-        if (inputsArr.length < 1) {
+        const inputsArr = avg
+            .getInputs()
+            ?.filter((n) => isValueNode(n))
+            .map((n) => asValueNode(n));
+        if (!inputsArr || inputsArr.length < 1) {
             throw new Error("AveragePoolBuilder: AveragePool must have at least X as input");
         }
 
@@ -115,7 +73,7 @@ class AveragePoolBuilder implements LoopBuilder {
         const output = avg.getOutgoers.targets.filterIs(TensorNode).first();
         const Y = output;
 
-        const xShape = resolveShape(X);
+        const xShape = resolveShapeToNumbers(X);
         if (xShape.length < 3) {
             throw new Error(
                 `AveragePoolBuilder: expected at least 3D input (N,C,H,...) but got ${xShape}`,
@@ -125,13 +83,13 @@ class AveragePoolBuilder implements LoopBuilder {
         const N = xShape[0];
         const C = xShape[1];
 
-        const a = avg.getAttributes?.() ?? avg.attributes ?? {};
+        const a = avg.getAttributes();
 
-        const countIncludePad = Number(a.count_include_pad ?? 0);
+        const countIncludePad = Number(a["count_include_pad"] ?? 0);
 
-        const kernelShape = (a.kernel_shape ?? []) as number[];
-        const strides = (a.strides ?? []) as number[];
-        const pads = (a.pads ?? []) as number[];
+        const kernelShape = (a["kernel_shape"] ?? []) as number[];
+        const strides = (a["strides"] ?? []) as number[];
+        const pads = (a["pads"] ?? []) as number[];
 
         const isGlobal = avg.type === "GlobalAveragePool";
 
@@ -205,12 +163,8 @@ class AveragePoolBuilder implements LoopBuilder {
         // for weird geometric combos.
         const totalIters = N * C * H_out * W_out;
 
-        const elemTy = (Y.literalType ?? DataType.FLOAT) as DataType;
+        const elemTy = (Y?.literalType ?? DataType.FLOAT) as DataType;
         const carryLen = totalIters;
-
-        // ---- Loop context / inputs ----------------------------------------------
-        const inputs = new Map<string, TensorNode.Class>();
-        inputs.set(X.id, X);
 
         // ---- Build loop body graph ----------------------------------------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -241,7 +195,7 @@ class AveragePoolBuilder implements LoopBuilder {
 
         // axes=[0] constant & unsqueezed iter index for ScatterElements indices
         const axes0 = int64Vec([0]);
-        const axesTensor = makeTensorConst(body, "axes0", DataType.INT64, "constant", axes0);
+        const axesTensor = makeTensorConst(body, "axes0", axes0);
 
         const iterUnsq = unsqueezeIdx(body, iter, axesTensor, "avgpIdx");
 
@@ -257,34 +211,10 @@ class AveragePoolBuilder implements LoopBuilder {
         // hStart = ho * strideH - padTop
         // wStart = wo * strideW - padLeft
 
-        const strideHConst = makeTensorConst(
-            body,
-            "strideH",
-            DataType.INT64,
-            "constant",
-            scalarInt64(strideH),
-        );
-        const strideWConst = makeTensorConst(
-            body,
-            "strideW",
-            DataType.INT64,
-            "constant",
-            scalarInt64(strideW),
-        );
-        const padTopConst = makeTensorConst(
-            body,
-            "padTop",
-            DataType.INT64,
-            "constant",
-            scalarInt64(padTop),
-        );
-        const padLeftConst = makeTensorConst(
-            body,
-            "padLeft",
-            DataType.INT64,
-            "constant",
-            scalarInt64(padLeft),
-        );
+        const strideHConst = makeTensorConst(body, "strideH", scalarInt64(strideH));
+        const strideWConst = makeTensorConst(body, "strideW", scalarInt64(strideW));
+        const padTopConst = makeTensorConst(body, "padTop", scalarInt64(padTop));
+        const padLeftConst = makeTensorConst(body, "padLeft", scalarInt64(padLeft));
 
         const hoMulStride = body
             .addNode(uniq(body, "ho_mul_stride"))
@@ -366,77 +296,33 @@ class AveragePoolBuilder implements LoopBuilder {
 
         // We flatten the inner kernel indices into a single range [0..kH*kW-1]
         const kernelSize = kH * kW;
-        const _kernelIndexConst = makeTensorConst(
-            body,
-            "kernelIndex",
-            DataType.INT64,
-            "constant",
-            scalarInt64(kernelSize),
-        );
+        const _kernelIndexConst = makeTensorConst(body, "kernelIndex", scalarInt64(kernelSize));
 
         const zeroFloat = makeTensorConst(
             body,
             "zeroFloat",
-            elemTy,
-            "constant",
             zeroTensor(elemTy, []), // shape [] scalar, element type = elemTy
         );
 
-        const zeroInt = makeTensorConst(
-            body,
-            "zeroInt",
-            DataType.INT64,
-            "constant",
-            scalarInt64(0),
-        );
+        const zeroInt = makeTensorConst(body, "zeroInt", scalarInt64(0));
 
-        const HConst = makeTensorConst(body, "H_const", DataType.INT64, "constant", scalarInt64(H));
-        const WConst = makeTensorConst(
-            body,
-            "W_const",
-            DataType.INT64,
-            "constant",
-            scalarInt64(W_in),
-        );
+        const HConst = makeTensorConst(body, "H_const", scalarInt64(H));
+        const WConst = makeTensorConst(body, "W_const", scalarInt64(W_in));
 
-        const Hminus1Const = makeTensorConst(
-            body,
-            "H_minus1",
-            DataType.INT64,
-            "constant",
-            scalarInt64(H - 1),
-        );
-        const Wminus1Const = makeTensorConst(
-            body,
-            "W_minus1",
-            DataType.INT64,
-            "constant",
-            scalarInt64(W_in - 1),
-        );
+        const Hminus1Const = makeTensorConst(body, "H_minus1", scalarInt64(H - 1));
+        const Wminus1Const = makeTensorConst(body, "W_minus1", scalarInt64(W_in - 1));
 
         // sumVal and countVal start at 0
         const sumInit = zeroFloat;
         const countInit = zeroInt;
 
-        let sumVal = sumInit;
-        let countVal = countInit;
+        let sumVal: ConcreteValueNode = sumInit;
+        let countVal: ConcreteValueNode = countInit;
 
         for (let kh = 0; kh < kH; kh++) {
             for (let kwi = 0; kwi < kW; kwi++) {
-                const khConst = makeTensorConst(
-                    body,
-                    `kh_${kh}`,
-                    DataType.INT64,
-                    "constant",
-                    scalarInt64(kh),
-                );
-                const kwConst = makeTensorConst(
-                    body,
-                    `kw_${kwi}`,
-                    DataType.INT64,
-                    "constant",
-                    scalarInt64(kwi),
-                );
+                const khConst = makeTensorConst(body, `kh_${kh}`, scalarInt64(kh));
+                const kwConst = makeTensorConst(body, `kw_${kwi}`, scalarInt64(kwi));
 
                 // h = hStart + kh
                 const hOp = body
@@ -785,16 +671,10 @@ class AveragePoolBuilder implements LoopBuilder {
         }
 
         // Final avg = sumVal / divisor
-        let divisor: TensorNode.Class;
+        let divisor: ConcreteValueNode;
         if (countIncludePad) {
             // divide by kH*kW
-            divisor = makeTensorConst(
-                body,
-                "divisor_kSize",
-                DataType.INT64,
-                "constant",
-                scalarInt64(kernelSize),
-            );
+            divisor = makeTensorConst(body, "divisor_kSize", scalarInt64(kernelSize));
         } else {
             // use computed countVal
             divisor = countVal;
@@ -846,32 +726,18 @@ class AveragePoolBuilder implements LoopBuilder {
 
         // ---- Outer: trip_count, cond, v_initial ------------------------------
         inferShapes(outer);
-        const trip = makeTensorConst(
-            outer,
-            `avg_trip_${avg.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(totalIters)),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `avg_cond_${avg.id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
+        const trip = makeTensorConst(outer, `avg_trip_${avg.id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `avg_cond_${avg.id}`, bool(true));
         const v_initial = makeTensorConst(
             outer,
             `avg_carry_init_${avg.id}`,
-            elemTy,
-            "constant",
             zeroTensor(elemTy, [carryLen]),
         );
 
         inferShapes(body);
 
         const outShape = yShape;
-        const outTensor = Y;
+        const outTensor = Y!;
 
         return {
             body,
@@ -880,7 +746,6 @@ class AveragePoolBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

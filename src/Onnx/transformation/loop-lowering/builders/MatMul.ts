@@ -1,17 +1,20 @@
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
-import OperationNode from "../../../OperationNode.js";
+import type OperationNode from "../../../OperationNode.js";
+import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { uniq, int64Vec, zeroTensor, bool, makeTensorConst, scalarInt64 } from "../../../Utils.js";
 import {
-    LoopCtx,
-    BuildResult,
-    LoopBuilder,
-    unsqueezeIdx,
-    broadcastShapes,
-    getMatDims,
-} from "../BuildLoop.js";
+    uniq,
+    int64Vec,
+    zeroTensor,
+    bool,
+    makeTensorConst,
+    scalarInt64,
+    asConcreteValueNode,
+} from "../../../Utils.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx, broadcastShapes, getMatDims } from "../BuildLoop.js";
 
 // Handlers needed here
 import handleElementWiseOperation from "../handlers/ElementWiseOperations.js";
@@ -20,7 +23,7 @@ import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 
 export default class MatMulBuilder implements LoopBuilder {
-    canHandle(chain: OperationNode.Class[]) {
+    canHandle(chain: OperationNode.Class[]): boolean {
         return chain.some((op) => op.type === "MatMul");
     }
 
@@ -53,15 +56,17 @@ export default class MatMulBuilder implements LoopBuilder {
         inferShapes(outer);
 
         const mm = chain[matmulIndex];
-        const lhs = mm.getInputs()![0].as(TensorNode);
-        const rhs = mm.getInputs()![1].as(TensorNode);
+        const lhsRaw = mm.getInputs()![0];
+        const lhs = asConcreteValueNode(lhsRaw);
+        const rhsRaw = mm.getInputs()![1];
+        const rhs = asConcreteValueNode(rhsRaw);
 
         // Use shared helper to normalise vector/matrix shapes
         const { K, N, A2, B2, ...dims } = getMatDims(lhs.shape, rhs.shape);
         let { M } = dims;
 
         const lhsShape = lhs.shape;
-        if (lhsShape && lhsShape.length >= 2) {
+        if (lhsShape.length >= 2) {
             const mCandidate = Number(lhsShape[lhsShape.length - 2]);
             if (Number.isFinite(mCandidate) && mCandidate > 0) {
                 M = mCandidate;
@@ -75,12 +80,12 @@ export default class MatMulBuilder implements LoopBuilder {
         // ONNX / NumPy broadcast of batch dims
         const batchDimsStatic = broadcastShapes([aBatch, bBatch]);
 
-        const batchDims = batchDimsStatic as (number | string)[];
+        const batchDims = batchDimsStatic as KnownShape;
 
         // Batch product (treat non-positive/dynamic as 1 in the loop trip count)
         const batchProd = (batchDimsStatic.length ? batchDimsStatic : [1])
             .map((d) => {
-                const n = Number(d ?? 1);
+                const n = Number(d);
                 if (!Number.isFinite(n) || n <= 0) return 1;
                 return n;
             })
@@ -106,14 +111,6 @@ export default class MatMulBuilder implements LoopBuilder {
 
         const matmulDims = { M, K, N, batchProd, batchDims };
 
-        const inputs = new Map<string, TensorNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((t) => inputs.set(t.id, t.as(TensorNode))),
-        );
-
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const iter = body
             .addNode(uniq(body, "iter"))
@@ -126,12 +123,10 @@ export default class MatMulBuilder implements LoopBuilder {
         // carry buffer flat [M*N]
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(
-                new TensorNode.Builder(elemTy, [carryLen], "input", zeroTensor(elemTy, [carryLen])),
-            )
+            .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
 
-        const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
+        const axes = makeTensorConst(body, "axes", int64Vec([0]));
         // Flat index (i,j,k) decoding + cached unsqueezed indices provided by handler
         const ctx: LoopCtx = {
             opMap: new Map(),
@@ -182,11 +177,10 @@ export default class MatMulBuilder implements LoopBuilder {
             Max: handleElementWiseOperation,
         };
 
-        let indicesOut: TensorNode.Class | null = null;
+        let indicesOut: ConcreteValueNode | null = null;
 
         for (const op of chain) {
             const h = handlers[op.type];
-            if (!h) throw new Error(`MatMulBuilder: unsupported op ${op.type}`);
             const out = h(op, body, ctx);
             ctx.opMap.set(op, [op, out]);
             if (op.type === "MatMul") {
@@ -203,27 +197,9 @@ export default class MatMulBuilder implements LoopBuilder {
         inferShapes(body);
 
         // Loop inputs
-        const trip = makeTensorConst(
-            outer,
-            `trip_count_${chain[0].id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(totalIters),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `cond_${chain[0].id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
-        const v_initial = makeTensorConst(
-            outer,
-            "init_carry",
-            elemTy,
-            "initializer",
-            zeroTensor(elemTy, [carryLen]),
-        );
+        const trip = makeTensorConst(outer, `trip_count_${chain[0].id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `cond_${chain[0].id}`, bool(true));
+        const v_initial = makeTensorConst(outer, "init_carry", zeroTensor(elemTy, [carryLen]));
 
         return {
             body,
@@ -232,7 +208,6 @@ export default class MatMulBuilder implements LoopBuilder {
             indicesOut: indicesOut!,
             elemTy,
             outShape: finalOutShape,
-            inputs,
             outTensor,
             trip,
             cond,

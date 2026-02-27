@@ -1,24 +1,29 @@
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
 import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
-import { DataType, TensorProto } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import type {
+    ConcreteValueNode,
+    Shape,
+    StaticShape,
+    TensorProto,
+} from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 import {
     toStaticShape,
-    Shape,
     uniq,
-    zeroTensor,
     makeTensorConst,
     int64Vec,
     computeStrides,
     scalarInt64,
     bool,
+    readConstIntegerVectorFromTensorNode,
+    asValueNode,
+    scalarFloat,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
 import {
-    LoopBuilder,
-    BuildResult,
-    LoopCtx,
     resolveFusedInput,
     ensureFlatInput,
     decodeMixedRadix,
@@ -34,7 +39,7 @@ function normalizeAxes(axes: number[] | undefined, rank: number): number[] {
     return Array.from(new Set(axes.map((a) => (a < 0 ? a + rank : a)))).sort((a, b) => a - b);
 }
 
-function makeOutShape(inShape: number[], redAxes: number[], keepdims01: 0 | 1): number[] {
+function makeOutShape(inShape: StaticShape, redAxes: number[], keepdims01: 0 | 1): StaticShape {
     if (keepdims01 === 1) {
         const out = inShape.slice();
         redAxes.forEach((a) => {
@@ -64,10 +69,6 @@ function maxSentinel(elemTy: DataType): { kind: "float" | "i32" | "i64"; value: 
         default:
             return { kind: "float", value: 3.4028235e38 };
     }
-}
-
-function scalarFloat(v: number): TensorProto {
-    return { dataType: DataType.FLOAT, dims: [], floatData: [v] };
 }
 
 // Build a TensorProto filled with a scalar value (size = product(dims))
@@ -139,42 +140,38 @@ export default class ReducesBuilder implements LoopBuilder {
         if (ridx < 0) throw new Error("[Reduces] no Reduce op in chain");
         const op = chain[ridx]; // anchor reduce node
 
-        const xInput = op.getInputs()![0].as(TensorNode);
-        const allInputs = op
-            .getInputs()!
-            .filter((n) => n.is(TensorNode))
-            .map((n) => n.as(TensorNode));
+        const xInputRaw = op.getInputs()![0];
+        const xInput = asValueNode(xInputRaw);
 
         inferShapes(outer);
 
-        let elemTy = xInput.literalType ?? DataType.FLOAT;
+        let elemTy = xInput.literalType;
         if (elemTy === DataType.UNDEFINED) elemTy = DataType.FLOAT;
 
         // Static input shape is mandatory for this lowering
         const inShape = toStaticShape(xInput.shape as Shape);
-        if (!inShape || inShape.some((d) => d === -1)) {
+        if (inShape.some((d) => d === -1)) {
             throw new Error(`[ReducesBuilder] dynamic input shapes not supported for ${op.id}`);
         }
         const rank = inShape.length;
 
-        // Parse axes from input (opset >= 13) or attribute (older), with default=all axes
         let axesFromInput: number[] | undefined;
-        if (allInputs.length > 1) {
-            const ax = allInputs[1];
-            const rawI64 = ax?.constantValue?.int64Data as bigint[] | undefined;
-            if (rawI64 && (ax.shape?.length ?? 0) <= 1)
-                axesFromInput = rawI64.map((v) => Number(v));
+        const inputsRaw = op.getInputs();
+        if (inputsRaw && inputsRaw.length > 1) {
+            const axesNode = inputsRaw[1];
+            axesFromInput = readConstIntegerVectorFromTensorNode(axesNode);
         }
-        const atts = op.getAttributes?.() ?? (op as any).attributes ?? {};
+
+        const atts = op.getAttributes();
         const axesAttr: number[] | undefined =
             axesFromInput ??
-            (Array.isArray(atts.axes)
-                ? atts.axes.map(Number)
-                : typeof atts.axes === "number"
-                  ? [Number(atts.axes)]
+            (Array.isArray(atts["axes"])
+                ? atts["axes"].map(Number)
+                : typeof atts["axes"] === "number"
+                  ? [Number(atts["axes"])]
                   : undefined);
-        const keepAttr = atts.keepdims;
-        const keep01: 0 | 1 = keepAttr === undefined ? 1 : Number(keepAttr) === 1 ? 1 : 0;
+        const keepAttr = atts["keepdims"];
+        const keep01: 0 | 1 = Number(keepAttr) === 1 ? 1 : 0;
 
         // If axes/keepdims both missing, infer from the input vs *expected* out shape later;
         // we’ll compute the out shape ourselves, so we don’t need the op’s outgoer at all.
@@ -188,7 +185,7 @@ export default class ReducesBuilder implements LoopBuilder {
         const outStatic = makeOutShape(inShape, effAxes, keep01);
 
         // We no longer read the reduce op's outgoer here (it can be absent in a chain)
-        let outTensor = op.getOutgoers?.targets?.filterIs?.(TensorNode)?.first?.(); // optional
+        let outTensor = op.getOutgoers.targets.filterIs(TensorNode).first(); // optional
 
         // Trip count & carry length
         const totalIters = inShape.reduce((a, b) => a * (b > 0 ? b : 1), 1);
@@ -196,21 +193,6 @@ export default class ReducesBuilder implements LoopBuilder {
             1,
             outStatic.length ? outStatic.reduce((a, b) => a * (b > 0 ? b : 1), 1) : 1,
         );
-
-        // Outer inputs (skip axes constants)
-        const inputs = new Map<string, TensorNode.Class>();
-        chain.forEach((o) => {
-            o.getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((tn) => {
-                    const t = tn.as(TensorNode);
-                    const maybeAxes =
-                        (t.literalType === DataType.INT64 || t.constantValue?.int64Data) &&
-                        (t.shape?.length ?? 0) <= 1;
-                    if (maybeAxes) return;
-                    inputs.set(t.id, t);
-                });
-        });
 
         // ------------- Body graph -------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -228,22 +210,14 @@ export default class ReducesBuilder implements LoopBuilder {
         // Carry buffer (flat out)
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(
-                new TensorNode.Builder(elemTy, [carryLen], "input", zeroTensor(elemTy, [carryLen])),
-            )
+            .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
 
         // Axes const [0] (for Unsqueeze/GatherElements)
-        const axes0 = makeTensorConst(
-            body,
-            `axes_${op.id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([0]),
-        );
+        const axes0 = makeTensorConst(body, `axes_${op.id}`, int64Vec([0]));
 
         // Optional mean scale (per-iter contribution) → 1 / reduce_count
-        let meanScale: TensorNode.Class | undefined = undefined;
+        let meanScale: ConcreteValueNode | undefined = undefined;
         if (op.type === "ReduceMean") {
             const reduceCount =
                 redAxes.length === 0
@@ -252,8 +226,6 @@ export default class ReducesBuilder implements LoopBuilder {
             meanScale = makeTensorConst(
                 body,
                 `rd_mean_scale_${op.id}`,
-                DataType.FLOAT,
-                "constant",
                 scalarFloat(1.0 / Math.max(1, reduceCount)),
             );
         }
@@ -307,28 +279,16 @@ export default class ReducesBuilder implements LoopBuilder {
         const xScalar = squeezeIfLen1(body, gXOut, axes0, `x_sq_${op.id}`); // []
 
         // ---- build output linear index for this input position ----
-        const oDigits: TensorNode.Class[] = [];
+        const oDigits: ConcreteValueNode[] = [];
         if (outStatic.length === 0) {
-            const zeroIdx = makeTensorConst(
-                body,
-                `rd_out_zero_${op.id}`,
-                DataType.INT64,
-                "constant",
-                scalarInt64(0),
-            );
+            const zeroIdx = makeTensorConst(body, `rd_out_zero_${op.id}`, scalarInt64(0));
             oDigits.push(zeroIdx);
         } else {
             for (let ax = 0; ax < rank; ax++) {
                 if (keptAxes.includes(ax)) {
                     oDigits.push(inDigits[ax]);
                 } else if (keep01 === 1) {
-                    const z = makeTensorConst(
-                        body,
-                        `rd_zero_${op.id}_${ax}`,
-                        DataType.INT64,
-                        "constant",
-                        scalarInt64(0),
-                    );
+                    const z = makeTensorConst(body, `rd_zero_${op.id}_${ax}`, scalarInt64(0));
                     oDigits.push(z);
                 }
             }
@@ -337,13 +297,7 @@ export default class ReducesBuilder implements LoopBuilder {
         const outStrides = computeStrides(outDimsForStrides);
         const outLin = outStatic.length
             ? buildLinearIndex(body, oDigits, outStrides, `rd_outlin_${op.id}`)
-            : makeTensorConst(
-                  body,
-                  `rd_outlin_scalar_${op.id}`,
-                  DataType.INT64,
-                  "constant",
-                  scalarInt64(0),
-              );
+            : makeTensorConst(body, `rd_outlin_scalar_${op.id}`, scalarInt64(0));
         const outLinU = unsqueezeIdx(body, outLin, axes0, `rd_outlinU_${op.id}`); // [1]
 
         // acc scalar: GatherElements(carry, outLinU) → [1] → squeeze → []
@@ -374,14 +328,8 @@ export default class ReducesBuilder implements LoopBuilder {
         inferShapes(outer);
 
         // ------------- Outer Loop & v_initial -------------
-        const trip = makeTensorConst(
-            outer,
-            `trip_count_${op.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(totalIters),
-        );
-        const cond = makeTensorConst(outer, `cond_${op.id}`, DataType.BOOL, "constant", bool(true));
+        const trip = makeTensorConst(outer, `trip_count_${op.id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `cond_${op.id}`, bool(true));
 
         // v_initial: identity per op
         let initTensor: TensorProto;
@@ -422,13 +370,7 @@ export default class ReducesBuilder implements LoopBuilder {
                 initTensor = filledTensor(elemTy, [carryLen], 0);
         }
 
-        const v_initial = makeTensorConst(
-            outer,
-            `rd_init_out_${op.id}`,
-            elemTy,
-            "constant",
-            initTensor,
-        );
+        const v_initial = makeTensorConst(outer, `rd_init_out_${op.id}`, initTensor);
 
         // run shape inference to align with other builders
         inferShapes(outer);
@@ -456,7 +398,6 @@ export default class ReducesBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape: finalShape,
-            inputs,
             outTensor,
             trip,
             cond,

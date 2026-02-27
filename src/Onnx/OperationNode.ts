@@ -1,19 +1,19 @@
 import BaseNode from "@specs-feup/flow/graph/BaseNode";
 import Node from "@specs-feup/flow/graph/Node";
-import { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
+import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import OnnxGraph from "./OnnxGraph.js";
+import type OnnxGraph from "./OnnxGraph.js";
+import type { AttributeMap, AttributeValue, ValueNode } from "./OnnxTypes.js";
+import { isValueNode } from "./Utils.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";
-    export const VERSION = "2";
+    export const VERSION = "4"; // Bumped version for regions
 
     export class Class<
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseNode.Class<D, S> {
-        getOutputs: any[];
-
         get type(): string {
             return this.data[TAG].type;
         }
@@ -22,19 +22,19 @@ namespace OperationNode {
             this.data[TAG].type = newType;
         }
 
-        get attributes(): Record<string, any> {
-            return this.data[TAG].attributes || {};
+        get attributes(): AttributeMap {
+            return this.data[TAG].attributes ?? {};
         }
 
-        set attributes(attrs: Record<string, any>) {
+        set attributes(attrs: AttributeMap) {
             this.data[TAG].attributes = attrs;
         }
 
-        setAttributes(attrs: Record<string, any>): void {
+        setAttributes(attrs: AttributeMap): void {
             this.attributes = attrs;
         }
 
-        getAttributes(): Record<string, any> {
+        getAttributes(): AttributeMap {
             return this.attributes;
         }
 
@@ -46,53 +46,60 @@ namespace OperationNode {
             return this.outgoers.filterIs(OnnxEdge);
         }
 
-        getInputs(): BaseNode.Class[] | undefined {
+        getInputs(): ValueNode[] | undefined {
             return this.data[TAG].inputs;
         }
 
-        getBodySubgraph(): OnnxGraph.Class | undefined {
-            return this.data[TAG].bodyGraph ?? this.data[TAG].subgraphs?.body;
+        getOutputs(): ValueNode[] {
+            return this.outgoers.targets.toArray().filter(isValueNode);
         }
 
-        getSubgraph(name: string): OnnxGraph.Class | undefined {
-            return this.data[TAG].subgraphs?.[name];
+        setInputs(inputs: ValueNode[]): void {
+            this.data[TAG].inputs = inputs;
         }
 
-        getThenBranch(): OnnxGraph.Class | undefined {
-            return this.getSubgraph("thenBranch");
+        // --- Region Management ---
+
+        get regions(): OnnxGraph.Class[] {
+            return this.data[TAG].regions ?? [];
         }
 
-        getElseBranch(): OnnxGraph.Class | undefined {
-            return this.getSubgraph("elseBranch");
+        getRegion(index: number): OnnxGraph.Class | undefined {
+            return this.regions[index];
         }
 
-        getSubgraphs(): Record<string, OnnxGraph.Class> {
-            return this.data[TAG].subgraphs ?? {};
+        get metadata(): AttributeMap {
+            return this.data[TAG].metadata;
+        }
+
+        getMetadata(key: string): AttributeValue | undefined {
+            return this.data[TAG].metadata[key];
+        }
+
+        setMetadata(key: string, value: AttributeValue): void {
+            this.data[TAG].metadata[key] = value;
         }
     }
 
     export class Builder implements Node.Builder<Data, ScratchData> {
         private type: string;
-        private attributes?: Record<string, any>;
-        private inputs?: BaseNode.Class[];
-        private bodyGraph?: OnnxGraph.Class;
-        private subgraphs?: Record<string, OnnxGraph.Class>;
+        private attributes?: AttributeMap | undefined;
+        private inputs?: ValueNode[] | undefined;
+        private regions?: OnnxGraph.Class[] | undefined;
+        private metadata: AttributeMap;
 
         constructor(
             type: string,
-            inputs?: BaseNode.Class[],
-            attributes?: Record<string, any>,
-            bodyGraphOrSubgraphs?: OnnxGraph.Class | Record<string, OnnxGraph.Class>,
+            inputs?: ValueNode[],
+            attributes?: AttributeMap,
+            regions?: OnnxGraph.Class[],
+            metadata: AttributeMap = {},
         ) {
             this.type = type;
             this.attributes = attributes;
             this.inputs = inputs;
-
-            if (bodyGraphOrSubgraphs instanceof OnnxGraph.Class) {
-                this.bodyGraph = bodyGraphOrSubgraphs;
-            } else if (bodyGraphOrSubgraphs && typeof bodyGraphOrSubgraphs === "object") {
-                this.subgraphs = bodyGraphOrSubgraphs;
-            }
+            this.regions = regions;
+            this.metadata = metadata;
         }
 
         buildData(data: BaseNode.Data): Data {
@@ -101,10 +108,10 @@ namespace OperationNode {
                 [TAG]: {
                     version: VERSION,
                     type: this.type,
-                    inputs: this.inputs || [],
-                    attributes: this.attributes || {},
-                    bodyGraph: this.bodyGraph,
-                    subgraphs: this.subgraphs,
+                    ...(this.inputs !== undefined ? { inputs: this.inputs } : {}),
+                    ...(this.attributes !== undefined ? { attributes: this.attributes } : {}),
+                    ...(this.regions !== undefined ? { regions: this.regions } : {}),
+                    metadata: this.metadata,
                 },
             };
         }
@@ -122,10 +129,10 @@ namespace OperationNode {
         [TAG]: {
             version: typeof VERSION;
             type: string;
-            inputs?: BaseNode.Class[];
-            attributes?: Record<string, any>;
-            bodyGraph?: OnnxGraph.Class;
-            subgraphs?: Record<string, OnnxGraph.Class>;
+            inputs?: ValueNode[];
+            attributes?: AttributeMap;
+            regions?: OnnxGraph.Class[];
+            metadata: AttributeMap;
         };
     }
 

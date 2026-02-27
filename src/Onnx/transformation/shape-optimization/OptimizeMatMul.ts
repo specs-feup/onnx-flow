@@ -1,11 +1,11 @@
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import ConstantNode from "../../ConstantNode.js";
 import VariableNode from "../../VariableNode.js";
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import OnnxInnerEdge from "../../OnnxInnerEdge.js";
-import { typeSizeMap, formatId } from "../../Utils.js";
+import { TYPE_SIZE_MAP, formatId, constBuilder } from "../../Utils.js";
 
 export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGraph.Class): void {
     let order = 0;
@@ -22,11 +22,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
     const shape1 = incomingEdges[1].shape;
     const type = incomingEdges[0].literalType;
 
-    let displacementInMemory: number;
-
-    if (type !== undefined) {
-        displacementInMemory = typeSizeMap[type];
-    } else return;
+    const displacementInMemory: number = TYPE_SIZE_MAP[type];
 
     const nodeId = node.id;
 
@@ -73,7 +69,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
             .as(OperationNode);
         const zero = graph
             .addNode(formatId("zero_offset", nodeId), node)
-            .init(new ConstantNode.Builder(0))
+            .init(constBuilder(0))
             .as(ConstantNode);
         const storeNode = graph
             .addNode(formatId("Store", nodeId), node)
@@ -132,7 +128,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
 
     const addToIndexNode = graph
         .addNode(formatId("addToIndexNode", nodeId), node)
-        .init(new ConstantNode.Builder(1))
+        .init(constBuilder(1))
         .as(ConstantNode);
     const indexNode = graph
         .addNode(formatId("Index", nodeId), node)
@@ -151,15 +147,15 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
                 .as(VariableNode);
             columns1Node = graph
                 .addNode(formatId("#columns1", nodeId), node)
-                .init(new ConstantNode.Builder(shape1[1]))
+                .init(constBuilder(Number(shape1[1])))
                 .as(ConstantNode);
             rows1Node = graph
                 .addNode(formatId("#rows1", nodeId), node)
-                .init(new ConstantNode.Builder(shape1[0]))
+                .init(constBuilder(Number(shape1[0])))
                 .as(ConstantNode);
             displacementInMemoryNode = graph
                 .addNode(formatId("displacementInMemory", nodeId), node)
-                .init(new ConstantNode.Builder(displacementInMemory))
+                .init(constBuilder(displacementInMemory))
                 .as(ConstantNode);
             multiplication1Node = graph
                 .addNode(formatId("Multiplication1", nodeId), node)
@@ -240,11 +236,11 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
                 .as(VariableNode);
             rows1Node = graph
                 .addNode(formatId("#rows1", nodeId), node)
-                .init(new ConstantNode.Builder(shape1[0]))
+                .init(constBuilder(Number(shape1[0])))
                 .as(ConstantNode);
             displacementInMemoryNode = graph
                 .addNode(formatId("displacementInMemory", nodeId), node)
-                .init(new ConstantNode.Builder(displacementInMemory))
+                .init(constBuilder(displacementInMemory))
                 .as(ConstantNode);
             multiplication0Node = graph
                 .addNode(formatId("Multiplication0", nodeId), node)
@@ -316,10 +312,9 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
             break;
 
         case "101":
-            //kNode = graph.addNode(formatId("k", nodeId), node).init(new VariableNode.Builder(6, 'k', 'index_aux')).as(VariableNode);
             displacementInMemoryNode = graph
                 .addNode(formatId("displacementInMemory", nodeId), node)
-                .init(new ConstantNode.Builder(displacementInMemory))
+                .init(constBuilder(displacementInMemory))
                 .as(ConstantNode);
             index0Node = graph
                 .addNode(formatId("Index0", nodeId), node)
@@ -331,7 +326,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
                 .as(OperationNode);
             indexResNode = graph
                 .addNode(formatId("IndexResNode", nodeId), node)
-                .init(new ConstantNode.Builder(0))
+                .init(constBuilder(0))
                 .as(ConstantNode);
 
             graph
@@ -365,11 +360,11 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
                 .as(VariableNode);
             columns1Node = graph
                 .addNode(formatId("#columns1", nodeId), node)
-                .init(new ConstantNode.Builder(shape1[1]))
+                .init(constBuilder(Number(shape1[1])))
                 .as(ConstantNode);
             displacementInMemoryNode = graph
                 .addNode(formatId("displacementInMemory", nodeId), node)
-                .init(new ConstantNode.Builder(displacementInMemory))
+                .init(constBuilder(displacementInMemory))
                 .as(ConstantNode);
             index0Node = graph
                 .addNode(formatId("Index0", nodeId), node)
@@ -442,7 +437,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
         case "110":
             displacementInMemoryNode = graph
                 .addNode(formatId("displacementInMemory", nodeId), node)
-                .init(new ConstantNode.Builder(displacementInMemory))
+                .init(constBuilder(displacementInMemory))
                 .as(ConstantNode);
             index1Node = graph
                 .addNode(formatId("Index1", nodeId), node)
@@ -450,7 +445,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
                 .as(OperationNode);
             index0Node = graph
                 .addNode(formatId("Index0", nodeId), node)
-                .init(new ConstantNode.Builder(0))
+                .init(constBuilder(0))
                 .as(ConstantNode);
 
             indexResNode = index1Node;
@@ -468,7 +463,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
         case "011":
             displacementInMemoryNode = graph
                 .addNode(formatId("displacementInMemory", nodeId), node)
-                .init(new ConstantNode.Builder(displacementInMemory))
+                .init(constBuilder(displacementInMemory))
                 .as(ConstantNode);
             index0Node = graph
                 .addNode(formatId("Index0", nodeId), node)
@@ -476,7 +471,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
                 .as(OperationNode);
             index1Node = graph
                 .addNode(formatId("Index1", nodeId), node)
-                .init(new ConstantNode.Builder(0))
+                .init(constBuilder(0))
                 .as(ConstantNode);
 
             indexResNode = index0Node;
@@ -494,6 +489,7 @@ export default function optimizeMatMul(node: OperationNode.Class, graph: OnnxGra
     }
 
     if (index0Node && index1Node && indexResNode) {
+        // ... (Rest of the function remains the same as it mostly deals with wiring logic)
         const input0Node = graph
             .addNode(formatId(incomingEdges[0].source.id, nodeId), node)
             .init(new VariableNode.Builder(type, `&${incomingEdges[0].source.id}`, "input"))

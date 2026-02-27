@@ -1,42 +1,54 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { DataType } from "../../../OnnxTypes.js";
-import { toArrayLike, uniq, addEdge, scalarOfType } from "../../../Utils.js";
+import type { ConcreteValueNode, DataType } from "../../../OnnxTypes.js";
+import {
+    toArrayLike,
+    uniq,
+    addEdge,
+    scalarOfType,
+    tryAsConcreteValueNode,
+    getFloatAttr,
+    getIntAttr,
+} from "../../../Utils.js";
 
 /* ------------------------------ Handler ------------------------------- */
 export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class): boolean {
     if (op.type !== "Gemm") return false;
 
     // Inputs in topo order
-    const ins = op.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    const ins = op.getInputs() ?? [];
+    if (ins.length < 2) {
+        throw new Error(`[GemmHandler] Node ${op.id} missing required inputs (A, B).`);
+    }
 
-    const A = ins[0]?.is?.(TensorNode) ? ins[0].as(TensorNode) : undefined;
-    const B = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
-    const C = ins[2]?.is?.(TensorNode) ? ins[2].as(TensorNode) : undefined;
-    if (!A || !B) return false;
+    const A = tryAsConcreteValueNode(ins[0]);
+    const B = tryAsConcreteValueNode(ins[1]);
+    const C = tryAsConcreteValueNode(ins[2]);
+
+    if (!A || !B) {
+        throw new Error(`[GemmHandler] Node ${op.id} has invalid A or B inputs.`);
+    }
 
     // Single output tensor Y
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // Attributes (defaults: alpha=1.0, beta=1.0, transA=0, transB=0)
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const alpha = Number(a.alpha ?? 1.0);
-    const beta = Number(a.beta ?? 1.0);
-    const transA = Number(a.transA ?? 0) === 1 ? 1 : 0;
-    const transB = Number(a.transB ?? 0) === 1 ? 1 : 0;
+    const alpha = getFloatAttr(op, "alpha", 1.0);
+    const beta = getFloatAttr(op, "beta", 1.0);
+    const transA = getIntAttr(op, "transA", 0) === 1 ? 1 : 0;
+    const transB = getIntAttr(op, "transB", 0) === 1 ? 1 : 0;
 
     // DType selections
-    const dtypeLeft = (A.literalType ?? DataType.FLOAT) as DataType;
+    const dtypeLeft = A.literalType as DataType;
     const dtypeRight = (C?.literalType ?? dtypeLeft) as DataType;
 
     /* ---------- optional Transpose on A/B ---------- */
-    let A_in: TensorNode.Class = A;
-    let B_in: TensorNode.Class = B;
+    let A_in: ConcreteValueNode = A;
+    let B_in: ConcreteValueNode = B;
 
     if (transA) {
         const tA = g
@@ -95,7 +107,7 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     let producedToY = false;
 
     if (C && beta !== 0.0) {
-        let cTerm: TensorNode.Class = C;
+        let cTerm: ConcreteValueNode = C;
         if (beta !== 1.0) {
             const bC = scalarOfType(g, `Gemm_beta_${op.id}`, beta, dtypeRight);
             const mulB = g
@@ -122,21 +134,12 @@ export default function gemmHandler(g: OnnxGraph.Class, op: OperationNode.Class)
     if (!producedToY) {
         // No C-branch → wire 'left' directly to Y
         const srcOp = toArrayLike<OperationNode.Class>(
-            left.getIncomers?.sources?.filterIs?.(OperationNode),
+            left.getIncomers.sources.filterIs(OperationNode),
         )[0];
-        if (srcOp) {
-            g.addEdge(srcOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        } else {
-            // fallback: Identity
-            const id = g
-                .addNode(uniq(g, `Gemm_Id_${op.id}`))
-                .init(new OperationNode.Builder("Identity", [left], {}))
-                .as(OperationNode);
-            g.addEdge(id, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
-        }
+        g.addEdge(srcOp, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
     }
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

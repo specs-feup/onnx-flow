@@ -1,4 +1,5 @@
-import { PartitionTestCase, runPartitionTest } from "./partitioning_test_utils.js";
+import type { PartitionTestCase } from "./partitioning_test_utils.js";
+import { runPartitionTest } from "./partitioning_test_utils.js";
 
 const tests: PartitionTestCase[] = [
     {
@@ -558,11 +559,13 @@ async function runAll() {
         try {
             await runPartitionTest(t);
             passed++;
-        } catch (e) {
+        } catch (e: unknown) {
             failed++;
-            console.error(`   ❌ Failed: ${e.message}`);
+            const isError = e instanceof Error;
+            const msg = isError ? e.message : String(e);
+            console.error(`   ❌ Failed: ${msg}`);
             // Print stack trace for debugging
-            if (e.stack) {
+            if (isError && e.stack !== undefined) {
                 console.error("   Stack Trace:");
                 console.error(
                     e.stack

@@ -1,5 +1,6 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
+import type { DataType, Shape } from "./OnnxTypes.js";
 
 namespace OnnxEdge {
     export const TAG = "__specs-onnx__onnx_edge";
@@ -9,29 +10,21 @@ namespace OnnxEdge {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseEdge.Class<D, S> {
-        get literalType(): number | undefined {
-            return this.data[TAG].literalType;
+        get literalType(): DataType {
+            return this.data[TAG].type;
         }
 
-        set literalType(value: number | undefined) {
-            this.data[TAG].literalType = value;
-        }
-
-        get shape(): (number | string)[] {
+        get shape(): Shape {
             return this.data[TAG].shape;
-        }
-
-        set shape(value: number[]) {
-            this.data[TAG].shape = value;
         }
     }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
-        private literalType?: number;
-        private shape: (number | string)[];
+        private type: DataType;
+        private shape: Shape;
 
-        constructor(literalType?: number, shape: (number | string)[] = []) {
-            this.literalType = literalType;
+        constructor(type: DataType, shape: Shape) {
+            this.type = type;
             this.shape = shape;
         }
 
@@ -40,7 +33,7 @@ namespace OnnxEdge {
                 ...data,
                 [TAG]: {
                     version: VERSION,
-                    literalType: this.literalType,
+                    type: this.type,
                     shape: this.shape,
                 },
             };
@@ -58,11 +51,12 @@ namespace OnnxEdge {
     export interface Data extends BaseEdge.Data {
         [TAG]: {
             version: typeof VERSION;
-            literalType?: number;
-            shape: (number | string)[];
+            type: DataType;
+            shape: Shape;
         };
     }
 
     export interface ScratchData extends BaseEdge.ScratchData {}
 }
+
 export default OnnxEdge;

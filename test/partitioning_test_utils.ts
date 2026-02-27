@@ -7,6 +7,7 @@ import { convertFlowGraphToOnnxJson } from "../src/flow2json.js";
 import { json2onnx } from "../src/json2onnx.js";
 import { splitByAncestor } from "../src/Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../src/Onnx/partitioning/Partition.js";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
 
 export interface InputSpec {
     name: string;
@@ -24,7 +25,7 @@ export interface PartitionTestCase {
 
 function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     const size = spec.shape.reduce((a, b) => a * b, 1);
-    let data: any;
+    let data;
 
     if (spec.dtype === "float32") {
         data = new Float32Array(size).map(() => Math.random());
@@ -41,7 +42,7 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     return new ort.Tensor(spec.dtype, data, spec.shape);
 }
 
-async function saveGraphToTempOnnx(graph: any, prefix: string): Promise<string> {
+async function saveGraphToTempOnnx(graph: OnnxGraph.Class, prefix: string): Promise<string> {
     const json = convertFlowGraphToOnnxJson(graph);
     const tmpJson = path.resolve(`temp_${prefix}.json`);
     const tmpOnnx = path.resolve(`temp_${prefix}.onnx`);
@@ -72,7 +73,7 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
 
     // 4. Select Split Node
     let splitId = testCase.splitNodeId;
-    if (!splitId) {
+    if (splitId === undefined) {
         const ops = irGraph.getOperationNodes().toArray();
         const eligibleOps = ops.filter((op) => op.type !== "Constant");
         if (eligibleOps.length === 0) throw new Error(`No eligible operation nodes found.`);
@@ -105,7 +106,7 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
 
             const headFeeds: Record<string, ort.Tensor> = {};
             sessionHead.inputNames.forEach((name) => {
-                if (feeds[name]) headFeeds[name] = feeds[name];
+                if (name in feeds) headFeeds[name] = feeds[name];
                 else throw new Error(`Head model input '${name}' missing from specs.`);
             });
 
@@ -123,8 +124,8 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
 
             const tailFeeds: Record<string, ort.Tensor> = {};
             sessionTail.inputNames.forEach((name) => {
-                if (resultsHead[name]) tailFeeds[name] = resultsHead[name];
-                else if (feeds[name]) tailFeeds[name] = feeds[name];
+                if (name in resultsHead) tailFeeds[name] = resultsHead[name];
+                else if (name in feeds) tailFeeds[name] = feeds[name];
                 else throw new Error(`Tail model input '${name}' missing.`);
             });
 
@@ -139,10 +140,6 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
         for (const outName of sessionOrig.outputNames) {
             const valOrig = resultsOrig[outName];
             const valTail = resultsTail[outName];
-
-            if (!valTail) {
-                throw new Error(`Output '${outName}' missing from final results (Tail/Head).`);
-            }
 
             const d1 = valOrig.data as Float32Array;
             const d2 = valTail.data as Float32Array;
@@ -165,9 +162,12 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
         }
 
         console.log(`   ✅ Success! Max diff: ${0} (or within ${tol})`);
-    } catch (e: any) {
-        console.error(`   ❌ Failed: ${e.message}`);
-        if (e.stack) console.error(e.stack);
+    } catch (e: unknown) {
+        const isError = e instanceof Error;
+        const msg = isError ? e.message : String(e);
+
+        console.error(`   ❌ Failed: ${msg}`);
+        if (isError && e.stack !== undefined) console.error(e.stack);
         throw e;
     } finally {
         if (fs.existsSync(headPath)) fs.unlinkSync(headPath);

@@ -1,8 +1,18 @@
 import OnnxEdge from "./Onnx/OnnxEdge.js";
-import OnnxGraph from "./Onnx/OnnxGraph.js";
-import { AttributeProto, AttributeType, DataType } from "./Onnx/OnnxTypes.js";
+import type OnnxGraph from "./Onnx/OnnxGraph.js";
+import type {
+    ConcreteValueNode,
+    RawOnnxAttribute,
+    RawOnnxModel,
+    RawOnnxNode,
+    RawOnnxValueInfo,
+    TensorProto,
+} from "./Onnx/OnnxTypes.js";
+import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 import TensorNode from "./Onnx/TensorNode.js";
+import ConstantNode from "./Onnx/ConstantNode.js";
 import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
+import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 
 const IR_VERSION = 9;
 const OPSET_IMPORT = 19;
@@ -12,32 +22,37 @@ export function prepareGraphForExport(graph: OnnxGraph.Class): void {
     const mapNodeAndOutput: { nodeId: string; output: string }[] = [];
 
     for (const opNode of graph.getOperationNodes()) {
-        const inputs = opNode.getInputs().map((n) => n.id);
-        mapNodeAndInputs.push({ nodeId: opNode.id, inputs });
+        const inputs = opNode.getInputs()?.map((n) => n.id);
+        if (inputs) {
+            mapNodeAndInputs.push({ nodeId: opNode.id, inputs });
+        }
 
         opNode.getOutgoers.targets.forEach((target) => {
-            if (target.is(TensorNode)) {
+            if (target.is(TensorNode) || target.is(ConstantNode)) {
                 mapNodeAndOutput.push({ nodeId: opNode.id, output: target.id });
             }
         });
     }
 
-    //Optional Debug
-    //mapNodeAndInputs.forEach(({ nodeId, inputs }) => { console.log("MINP:", nodeId, inputs) });
-    //mapNodeAndOutput.forEach(({ nodeId, output }) => { console.log("MOUT:", nodeId, output) });
-
     // Add missing edges
     mapNodeAndInputs.forEach(({ nodeId, inputs }) => {
         const opNode = graph.getNodeById(nodeId);
         for (const inputId of inputs) {
-            const inputNode = graph.getNodeById(inputId)?.tryAs(TensorNode);
+            const rawNode = graph.getNodeById(inputId);
+
+            // Phase 3 Support: Input can be TensorNode OR ConstantNode
+            let inputNode: ConcreteValueNode | undefined = undefined;
+            if (rawNode !== undefined && rawNode.is(TensorNode)) inputNode = rawNode.as(TensorNode);
+            else if (rawNode !== undefined && rawNode.is(ConstantNode))
+                inputNode = rawNode.as(ConstantNode);
+
             if (inputNode) {
-                const alreadyConnected = inputNode.getOutgoers?.some(
-                    (e) => e.target.id === opNode.id,
+                const alreadyConnected = inputNode.getOutgoers.some(
+                    (e) => e.target.id === opNode?.id,
                 );
-                if (!alreadyConnected) {
-                    const type = inputNode.literalType ?? AttributeType.UNDEFINED;
-                    const shape = inputNode.shape ?? [];
+                if (!alreadyConnected && opNode) {
+                    const type = inputNode.literalType;
+                    const shape = inputNode.shape;
                     graph
                         .addEdge(inputNode, opNode)
                         .init(new OnnxEdge.Builder(type, shape))
@@ -52,13 +67,16 @@ export function convertFlowGraphToOnnxJson(
     graph: OnnxGraph.Class,
     name?: string,
     bodyCount: number = 0,
-): any {
-    const modelInputs: any[] = [];
-    const modelOutputs: any[] = [];
-    const modelInitializers = convertInitializers(graph);
-    const modelNodes: any[] = [];
+): RawOnnxModel {
+    const modelInputs: RawOnnxValueInfo[] = [];
+    const modelOutputs: RawOnnxValueInfo[] = [];
 
-    function sanitizeTensor(tensor: any): any {
+    // 1. Convert Initializers (Constants)
+    const modelInitializers = convertInitializers(graph);
+
+    const modelNodes: RawOnnxNode[] = [];
+
+    function sanitizeTensor(tensor: Partial<TensorProto>): TensorProto {
         // TensorProto keys except name and rawData (handled differently)
         const allowedKeys = [
             "dataType",
@@ -72,36 +90,41 @@ export function convertFlowGraphToOnnxJson(
             "externalData",
         ];
 
-        const sanitized: any = { name: tensor.name };
+        const sanitized: Record<string, unknown> = { name: tensor.name };
 
         for (const key of allowedKeys) {
-            const value = tensor[key];
+            const value = (tensor as Record<string, unknown>)[key];
             if (value !== undefined && value !== null) {
                 if (Array.isArray(value)) {
                     sanitized[key] = value.map((v) => (typeof v === "string" ? Number(v) : v));
                 } else if (
                     key.endsWith("Data") &&
-                    tensor.rawData &&
-                    !value.length // only override if missing
+                    tensor.rawData !== undefined &&
+                    ((value as { length?: number }).length ?? 0) === 0 // only override if missing
                 ) {
                     // Try decoding rawData if value array is empty
                     const dtype = tensor.dataType ?? DataType.INT64;
-                    const buffer = Buffer.from(tensor.rawData.data);
+                    const buffer = Buffer.isBuffer(tensor.rawData.data)
+                        ? tensor.rawData.data
+                        : Buffer.from(tensor.rawData.data as number[]);
                     if (dtype === DataType.INT64) {
-                        sanitized.int64Data = [];
+                        const arr: bigint[] = [];
                         for (let i = 0; i < buffer.length; i += 8) {
-                            sanitized.int64Data.push(buffer.readBigInt64LE(i));
+                            arr.push(buffer.readBigInt64LE(i));
                         }
+                        sanitized["int64Data"] = arr;
                     } else if (dtype === DataType.INT32) {
-                        sanitized.int32Data = [];
+                        const arr: number[] = [];
                         for (let i = 0; i < buffer.length; i += 4) {
-                            sanitized.int32Data.push(buffer.readInt32LE(i));
+                            arr.push(buffer.readInt32LE(i));
                         }
+                        sanitized["int32Data"] = arr;
                     } else if (dtype === DataType.FLOAT) {
-                        sanitized.floatData = [];
+                        const arr: number[] = [];
                         for (let i = 0; i < buffer.length; i += 4) {
-                            sanitized.floatData.push(buffer.readFloatLE(i));
+                            arr.push(buffer.readFloatLE(i));
                         }
+                        sanitized["floatData"] = arr;
                     }
                 } else {
                     sanitized[key] = value;
@@ -111,35 +134,26 @@ export function convertFlowGraphToOnnxJson(
 
         // Special handling for rawData
         if (tensor.rawData && Buffer.isBuffer(tensor.rawData) && tensor.rawData.length > 0) {
-            sanitized.rawData = {
+            sanitized["rawData"] = {
                 type: "Buffer",
                 data: Array.from(tensor.rawData),
             };
         }
 
-        return sanitized;
+        return sanitized as TensorProto;
     }
 
-    function convertInitializers(graph: OnnxGraph.Class): any[] {
-        const initializers: any[] = [];
-
-        for (const node of graph.getTensorNodes()) {
-            if (node.type !== "initializer") continue;
-            const original = node.originalInitializer;
-
-            if (!original) {
-                console.warn(`[Convert] Missing original initializer data for '${node.id}'`);
-                continue;
-            }
-
+    function convertInitializers(graph: OnnxGraph.Class): TensorProto[] {
+        const initializers: TensorProto[] = [];
+        for (const node of graph.getConstantNodes()) {
+            const original = node.constantValue;
             const serialized = sanitizeTensor({ ...original, name: node.id });
-
             initializers.push(serialized);
         }
-
         return initializers;
     }
 
+    // 2. Export Inputs
     for (const node of graph.getInputTensorNodes()) {
         modelInputs.push({
             name: node.id,
@@ -148,11 +162,8 @@ export function convertFlowGraphToOnnxJson(
                     elemType: node.literalType,
                     shape: {
                         dim: node.shape.map((d) => {
-                            if (typeof d === "string") {
-                                return { dimParam: d };
-                            } else {
-                                return d == null ? {} : { dimValue: d };
-                            }
+                            if (typeof d === "string") return { dimParam: d };
+                            return d == null ? {} : { dimValue: d };
                         }),
                     },
                 },
@@ -160,6 +171,26 @@ export function convertFlowGraphToOnnxJson(
         });
     }
 
+    // 2b. Constant inputs
+    for (const node of graph.getConstantNodes()) {
+        if (node.isInput) {
+            modelInputs.push({
+                name: node.id,
+                type: {
+                    tensorType: {
+                        elemType: node.literalType,
+                        shape: {
+                            dim: node.shape.map((d) =>
+                                typeof d === "string" ? { dimParam: d } : { dimValue: d },
+                            ),
+                        },
+                    },
+                },
+            });
+        }
+    }
+
+    // 3. Export Outputs
     for (const node of graph.getOutputTensorNodes()) {
         modelOutputs.push({
             name: node.id,
@@ -168,11 +199,8 @@ export function convertFlowGraphToOnnxJson(
                     elemType: node.literalType,
                     shape: {
                         dim: node.shape.map((d) => {
-                            if (typeof d === "string") {
-                                return { dimParam: d };
-                            } else {
-                                return d == null ? {} : { dimValue: d };
-                            }
+                            if (typeof d === "string") return { dimParam: d };
+                            return d == null ? {} : { dimValue: d };
                         }),
                     },
                 },
@@ -180,68 +208,43 @@ export function convertFlowGraphToOnnxJson(
         });
     }
 
-    for (const tensorNode of graph.getTensorNodes()) {
-        if (tensorNode.isConstant()) {
-            const original = tensorNode.constantValue!;
-            const serialized = sanitizeTensor({ ...original, name: tensorNode.id });
-
-            const attrs: AttributeProto[] = [
-                {
-                    name: "value",
-                    type: AttributeType.TENSOR,
-                    t: serialized,
-                },
-            ];
-
-            // Include any other preserved attributes
-            for (const attr of tensorNode.extraAttrs ?? []) {
-                attrs.push(attr);
-            }
-
-            modelNodes.push({
-                opType: "Constant",
-                input: [],
-                output: [tensorNode.id],
-                attribute: attrs,
-            });
-        }
-    }
-
-    // Prepare graph (e.g. rebuild edges)
-    prepareGraphForExport(graph);
-
-    // Use sorted op nodes
+    // 4. Nodes
     const opNodes = topologicalSortOperationNodes(graph);
-    //const opNodes = graph.getOperationNodes();
 
     for (const opNode of opNodes) {
-        const opType = opNode.type ?? "UnknownOp";
-        const inputs = opNode.getInputs().map((n) => n.id);
+        const opType = opNode.type;
+
+        // Handle Inputs: Resolve RegionArgumentNode back to original name
+        const inputs =
+            opNode.getInputs()?.map((n) => {
+                if (n.is(RegionArgumentNode)) {
+                    return n.as(RegionArgumentNode).originalName; // Restore implicit link
+                }
+                return n.id;
+            }) ?? [];
+
         const outputs = opNode.getOutgoers.targets.toArray().map((n) => n.id);
 
-        const baseAttrs: AttributeProto[] = [];
+        const baseAttrs: RawOnnxAttribute[] = [];
 
-        for (const [name, value] of Object.entries(opNode.attributes || {})) {
-            // 1) Pass-through: already looks like an AttributeProto
-            if (
-                value &&
-                typeof value === "object" &&
-                ("type" in (value as any) ||
-                    "t" in (value as any) ||
-                    "i" in (value as any) ||
-                    "s" in (value as any) ||
-                    "ints" in (value as any) ||
-                    "floats" in (value as any))
-            ) {
-                baseAttrs.push({ name, ...(value as any) });
+        // Serialize attributes
+        for (const [name, value] of Object.entries(opNode.attributes)) {
+            // Skip handled regions logic
+            if (typeof value === "object" && ("g" in value || "type" in value)) {
+                const valObj = value as Record<string, unknown>;
+
+                baseAttrs.push({
+                    name,
+                    type: (valObj["type"] as number | string | undefined) ?? AttributeType.GRAPH,
+                    ...valObj,
+                } as unknown as RawOnnxAttribute);
+
                 continue;
             }
 
-            const attr: any = { name };
-
-            // 2) Normal scalar / list attributes
+            const attr: RawOnnxAttribute = { name };
             if (Array.isArray(value)) {
-                attr.ints = value;
+                attr.ints = value as (number | string)[];
                 attr.type = AttributeType.INTS;
             } else if (typeof value === "number") {
                 attr.i = value;
@@ -249,192 +252,69 @@ export function convertFlowGraphToOnnxJson(
             } else if (typeof value === "string") {
                 attr.s = value;
                 attr.type = AttributeType.STRING;
-            }
-            // 3) Legacy internal tensor wrapper: { type: "TENSOR", ...tensorFields }
-            else if (value && typeof value === "object" && (value as any).type === "TENSOR") {
-                const tensorLike = {
-                    ...(value as any),
-                    name: (value as any).name ?? name,
-                };
-                attr.t = sanitizeTensor(tensorLike);
-                attr.type = AttributeType.TENSOR;
-            }
-            // 4) Raw TensorProto-like object: { dataType, dims, ... }
-            else if (
-                value &&
+            } else if (
                 typeof value === "object" &&
-                ("dataType" in (value as any) || "dims" in (value as any))
+                "type" in value &&
+                (value as Record<string, unknown>)["type"] === "TENSOR"
             ) {
-                const tensorLike = {
-                    ...(value as any),
-                    name: (value as any).name ?? name,
-                };
-                attr.t = sanitizeTensor(tensorLike);
+                // Prove to TypeScript it's an object with a 'type' property,
+                // and explicitly cast it for the sanitize function
+                attr.t = sanitizeTensor(value as Partial<TensorProto>);
                 attr.type = AttributeType.TENSOR;
             }
 
-            // Only push attributes that have a valid type;
-            // skip anything we couldn't classify instead of emitting broken attrs.
-            if (attr.type !== undefined) {
-                baseAttrs.push(attr as AttributeProto);
-            }
+            if (attr.type !== undefined) baseAttrs.push(attr);
         }
+
+        // Handle Regions (Subgraphs)
+        // We use the 'regions' array on the OpNode and map back to standard ONNX attr names.
 
         if (opType === "Loop") {
-            const bodyGraph = opNode.getBodySubgraph?.();
-            const bodyGraphJson = bodyGraph
-                ? convertFlowGraphToOnnxJson(bodyGraph, `loop_body_${bodyCount}`, bodyCount + 1)
-                      .graph
-                : null;
-
-            const filteredAttrs = baseAttrs.filter((attr) => attr.name !== "body");
-
-            if (bodyGraphJson) {
-                // Collect existing inputs / initializers / produced names in the body
-                const bodyInputs = new Set((bodyGraphJson.input ?? []).map((i: any) => i.name));
-                const bodyInits = new Set(
-                    (bodyGraphJson.initializer ?? []).map((i: any) => i.name),
-                );
-                const produced = new Set<string>();
-
-                for (const n of bodyGraphJson.node ?? []) {
-                    for (const out of n.output ?? []) {
-                        if (out) produced.add(out);
-                    }
-                }
-
-                // Find "free" names used as inputs but not defined in the body graph
-                const freeNames = new Set<string>();
-                for (const n of bodyGraphJson.node ?? []) {
-                    for (const inp of n.input ?? []) {
-                        if (!inp) continue;
-                        if (!bodyInputs.has(inp) && !bodyInits.has(inp) && !produced.has(inp)) {
-                            freeNames.add(inp);
-                        }
-                    }
-                }
-
-                // Turn free names into valueInfo entries so onnx.checker knows they exist.
-                const freeValueInfos = [...freeNames].map((name) => ({
-                    name,
-                    // Type is mostly for tooling/checker; empty shape & float elem_type is fine here.
-                    type: {
-                        tensor_type: {
-                            elem_type: DataType.FLOAT,
-                            shape: { dim: [] },
-                        },
-                    },
-                }));
-
-                // Existing valueInfo from outputs
-                const outputValueInfos = (bodyGraphJson.output ?? []).map((out: any) => ({
-                    name: out.name,
-                    type: out.type,
-                }));
-
-                const valueInfo = [...outputValueInfos, ...freeValueInfos];
-
-                filteredAttrs.push({
-                    name: "body",
-                    type: AttributeType.GRAPH,
-                    g: {
-                        ...bodyGraphJson,
-                        valueInfo,
-                    },
-                });
-            }
-
-            modelNodes.push({
-                opType,
-                input: inputs,
-                output: outputs,
-                attribute: filteredAttrs,
+            const bodyGraph = opNode.regions[0]; // Convention: Loop body is region 0
+            const bodyJson = convertFlowGraphToOnnxJson(
+                bodyGraph,
+                `loop_body_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({
+                name: "body",
+                type: AttributeType.GRAPH,
+                g: bodyJson,
             });
         } else if (opType === "If") {
-            const subgraphs = opNode.getSubgraphs();
-            const filteredAttrs = baseAttrs.filter(
-                (attr) => attr.name !== "then_branch" && attr.name !== "else_branch",
-            );
-            const thenGraph = subgraphs["thenBranch"];
-            const elseGraph = subgraphs["elseBranch"];
+            const thenGraph = opNode.regions[0];
+            const elseGraph = opNode.regions[1];
 
-            if (thenGraph) {
-                const thenJson = convertFlowGraphToOnnxJson(
-                    thenGraph,
-                    `then_branch_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph;
-                const thenInfo = (thenJson.output ?? []).map((out: any) => ({
-                    name: out.name,
-                    type: out.type,
-                }));
-                filteredAttrs.push({
-                    name: "then_branch",
-                    type: AttributeType.GRAPH,
-                    g: { ...thenJson, valueInfo: thenInfo },
-                });
-            }
-
-            if (elseGraph) {
-                const elseJson = convertFlowGraphToOnnxJson(
-                    elseGraph,
-                    `else_branch_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph;
-                const elseInfo = (elseJson.output ?? []).map((out: any) => ({
-                    name: out.name,
-                    type: out.type,
-                }));
-                filteredAttrs.push({
-                    name: "else_branch",
-                    type: AttributeType.GRAPH,
-                    g: { ...elseJson, valueInfo: elseInfo },
-                });
-            }
-
-            modelNodes.push({
-                opType,
-                input: inputs,
-                output: outputs,
-                attribute: filteredAttrs,
-            });
+            //thenGraph
+            const thenJson = convertFlowGraphToOnnxJson(
+                thenGraph,
+                `then_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({ name: "then_branch", type: AttributeType.GRAPH, g: thenJson });
+            //elseGraph
+            const elseJson = convertFlowGraphToOnnxJson(
+                elseGraph,
+                `else_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({ name: "else_branch", type: AttributeType.GRAPH, g: elseJson });
         } else if (opType === "Scan") {
-            const subgraphs = opNode.getSubgraphs();
-            const filteredAttrs = baseAttrs.filter((attr) => attr.name !== "body");
-
-            const scanBody = subgraphs["body"];
-            if (scanBody) {
-                const scanJson = convertFlowGraphToOnnxJson(
-                    scanBody,
-                    `scan_body_${bodyCount}`,
-                    bodyCount + 1,
-                ).graph;
-                const scanInfo = (scanJson.output ?? []).map((out: any) => ({
-                    name: out.name,
-                    type: out.type,
-                }));
-                filteredAttrs.push({
-                    name: "body",
-                    type: AttributeType.GRAPH,
-                    g: { ...scanJson, valueInfo: scanInfo },
-                });
-            }
-
-            modelNodes.push({
-                opType,
-                input: inputs,
-                output: outputs,
-                attribute: filteredAttrs,
-            });
-        } else {
-            // Generic operator
-            modelNodes.push({
-                opType,
-                input: inputs,
-                output: outputs,
-                attribute: baseAttrs,
-            });
+            const bodyGraph = opNode.regions[0];
+            const gJson = convertFlowGraphToOnnxJson(
+                bodyGraph,
+                `scan_${bodyCount}`,
+                bodyCount + 1,
+            ).graph!;
+            baseAttrs.push({ name: "body", type: AttributeType.GRAPH, g: gJson });
         }
+
+        modelNodes.push({
+            opType,
+            input: inputs,
+            output: outputs,
+            attribute: baseAttrs,
+        });
     }
 
     return {

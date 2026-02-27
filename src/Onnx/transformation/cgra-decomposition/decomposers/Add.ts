@@ -1,16 +1,19 @@
 import OnnxEdge from "../../../OnnxEdge.js";
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
-import TensorSplitter from "../TensorSplitter.js";
-import { shapesEqual } from "../utils.js";
+import type TensorSplitter from "../TensorSplitter.js";
+import { asConcreteValueNode, shapesEqual } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { ConcreteValueNode } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
 export default function decomposeAdd(
     node: OperationNode.Class,
     g: OnnxGraph.Class,
     tensorSplitter: TensorSplitter,
 ): boolean {
-    const [input1, input2] = node.getInputs().map((inp) => inp.as(TensorNode));
+    const inputs = node.getInputs()!;
+    const input1 = asConcreteValueNode(inputs[0]);
+    const input2 = asConcreteValueNode(inputs[1]);
 
     if (!shapesEqual(input1, input2)) {
         throw new Error("Add decomposition is only supported for inputs with the same shape.");
@@ -21,10 +24,10 @@ export default function decomposeAdd(
         return false;
     }
 
-    const newInputs1: TensorNode.Class[] = tensorSplitter.getSplit(input1, false).splits;
-    const newInputs2: TensorNode.Class[] = tensorSplitter.getSplit(input2, false).splits;
+    const newInputs1: ConcreteValueNode[] = tensorSplitter.getSplit(input1, false).splits;
+    const newInputs2: ConcreteValueNode[] = tensorSplitter.getSplit(input2, false).splits;
 
-    const output = node.outgoers.at(0).target.as(TensorNode);
+    const output = node.outgoers.at(0)!.target.as(TensorNode);
     const outputs = tensorSplitter.getSplit(output, false).splits;
 
     for (let i = 0; i < newInputs1.length; i++) {

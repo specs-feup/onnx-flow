@@ -3,68 +3,28 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
+import type { ConcreteValueNode, KnownShape, Shape, ValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-
 import {
     uniq,
     int64Vec,
     zeroTensor,
     bool,
     toStaticShape,
-    Shape,
     makeTensorConst,
     scalarInt64,
     asStaticDims,
+    getAttr,
+    isValueNode,
+    asValueNode,
+    isConcreteValueNode,
+    asConcreteValueNode,
+    toScalar,
 } from "../../../Utils.js";
 
-import {
-    LoopCtx,
-    BuildResult,
-    LoopBuilder,
-    unsqueezeIdx,
-    resolveFusedInput,
-} from "../BuildLoop.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx, resolveFusedInput } from "../BuildLoop.js";
 import handleTranspose from "../handlers/Transpose.js";
-
-/**
- * Local getAttr helper – identical to the one used in the Transpose handler.
- */
-function getAttr<T = any>(op: OperationNode.Class, key: string, dflt?: T): T | undefined {
-    const anyOp: any = op as any;
-    if (typeof anyOp.getAttributes === "function") {
-        const obj = anyOp.getAttributes();
-        if (obj && key in obj) return obj[key];
-    }
-    if (typeof anyOp.getAttribute === "function") {
-        const v = anyOp.getAttribute(key);
-        if (v !== undefined) return v;
-    }
-    if (anyOp.attributes && key in anyOp.attributes) {
-        return anyOp.attributes[key];
-    }
-    return dflt;
-}
-
-function toScalar(g: OnnxGraph.Class, t: TensorNode.Class, tag: string): TensorNode.Class {
-    if (t.shape && t.shape.length === 0) return t;
-    const shapeConst = makeTensorConst(
-        g,
-        uniq(g, `${tag}_shape`),
-        DataType.INT64,
-        "constant",
-        int64Vec([]),
-    );
-    const reshape = g
-        .addNode(uniq(g, `${tag}_reshape`))
-        .init(new OperationNode.Builder("Reshape", [t, shapeConst]))
-        .as(OperationNode);
-    const out = g
-        .addNode(uniq(g, `${tag}_out`))
-        .init(new TensorNode.Builder(t.literalType, [], "intermediate"))
-        .as(TensorNode);
-    g.addEdge(reshape, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
-    return out;
-}
 
 /**
  * Dedicated builder for Transpose chains:
@@ -106,35 +66,40 @@ export default class TransposeBuilder implements LoopBuilder {
                     ? (finalOp.getOutgoers.first()?.literalType ?? DataType.FLOAT)
                     : outTensor.literalType;
         } else {
-            const xInNode = transposeOp
-                .getInputs()
-                ?.find((n) => n.is(TensorNode))
-                ?.as(TensorNode);
+            const xInNodeRaw = transposeOp.getInputs()?.find((n) => isValueNode(n));
+            let xInNode: ValueNode | undefined;
+            if (xInNodeRaw) {
+                xInNode = asValueNode(xInNodeRaw);
+            }
             if (xInNode) {
                 elemTy = xInNode.literalType;
             }
         }
 
         // ---- Compute transpose output shape from input+perm ---------------
-        const xIn = transposeOp
-            .getInputs()
-            ?.find((n) => n.is(TensorNode))
-            ?.as(TensorNode);
+        const xInRaw = transposeOp.getInputs()?.find((n) => isValueNode(n));
+        let xIn: ValueNode | undefined;
+        if (xInRaw) {
+            xIn = asValueNode(xInRaw);
+        }
 
         const inShape = xIn ? toStaticShape(xIn.shape as Shape) : [];
-        let outShape: (number | string)[] = [];
+        let outShape: KnownShape = [];
 
-        if (inShape && inShape.length > 0) {
+        if (inShape.length > 0) {
             const rank = inShape.length;
 
             // Use the *same* perm-reading logic as the handler
-            let perm = getAttr<number[]>(transposeOp, "perm");
+            let perm = getAttr(transposeOp, "perm");
             if (!Array.isArray(perm) || perm.length !== rank) {
                 // ONNX default for Transpose: reverse axes
                 perm = Array.from({ length: rank }, (_, i) => rank - 1 - i);
             }
 
-            outShape = perm.map((p) => inShape[p] ?? 1);
+            // Safely cast perm to an array of numbers
+            const permArray = perm as number[];
+
+            outShape = permArray.map((p) => inShape[p] ?? 1);
         } else {
             // Very conservative fallback
             outShape = [];
@@ -142,8 +107,7 @@ export default class TransposeBuilder implements LoopBuilder {
 
         // Ensure we always have an outer output tensor node for this chain
         if (!outTensor) {
-            const fallbackShape =
-                outShape && outShape.length ? outShape : ([] as (number | string)[]);
+            const fallbackShape = outShape.length > 0 ? outShape : ([] as KnownShape);
             outTensor = outer
                 .addNode(uniq(outer, `out_${finalOp.id}`))
                 .init(new TensorNode.Builder(elemTy, fallbackShape, "intermediate"))
@@ -156,19 +120,10 @@ export default class TransposeBuilder implements LoopBuilder {
         }
 
         // ---- Trip count and carry length ----------------------------------
-        const safeOut = asStaticDims(outShape as (number | string)[]);
+        const safeOut = asStaticDims(outShape as KnownShape);
         const totalIters =
             safeOut.length <= 1 ? (safeOut[0] ?? 1) : safeOut.reduce((a, b) => a * b, 1);
         const carryLen = totalIters;
-
-        // Captured tensor inputs for Loop wiring later
-        const inputs = new Map<string, TensorNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((t) => inputs.set(t.id, t.as(TensorNode))),
-        );
 
         // ---- Body graph skeleton ------------------------------------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -185,12 +140,10 @@ export default class TransposeBuilder implements LoopBuilder {
 
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(
-                new TensorNode.Builder(elemTy, [carryLen], "input", zeroTensor(elemTy, [carryLen])),
-            )
+            .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
 
-        const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
+        const axes = makeTensorConst(body, "axes", int64Vec([0]));
 
         const unsq = body
             .addNode(uniq(body, "unsq"))
@@ -223,23 +176,23 @@ export default class TransposeBuilder implements LoopBuilder {
 
         // ---- 2) Optional Add after Transpose (CHAIN: [Transpose, Add]) ----
         if (hasAdd && addOp) {
-            const addInputs = addOp.getInputs?.() ?? [];
-            let otherInput: any = null;
+            const addInputs = addOp.getInputs() ?? [];
+            let otherInput: ConcreteValueNode | null = null;
 
             // Find the Add input that is *not* produced by the Transpose op
             for (const inp of addInputs) {
-                if (!inp.is || !inp.is(TensorNode)) continue;
-                const t = inp.as(TensorNode);
+                if (!isConcreteValueNode(inp)) continue;
+                const t = asConcreteValueNode(inp);
 
                 if (t.getIncomers.length > 0) {
                     const prod = t.getIncomers[0].source;
-                    if (prod.is && prod.is(OperationNode) && prod.id === transposeOp.id) {
+                    if (prod.is(OperationNode) && prod.id === transposeOp.id) {
                         // This path comes from the Transpose op; skip it
                         continue;
                     }
                 }
 
-                otherInput = inp;
+                otherInput = t;
                 break;
             }
 
@@ -282,27 +235,9 @@ export default class TransposeBuilder implements LoopBuilder {
         lastOut = unsqueezeIdx(body, lastOut, ctx.axes, hasAdd ? "updateUnsq_add" : "updateUnsq");
 
         // ---- Loop inputs for outer graph ----------------------------------
-        const trip = makeTensorConst(
-            outer,
-            `trip_count_${chain[0].id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(totalIters),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `cond_${chain[0].id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
-        const v_initial = makeTensorConst(
-            outer,
-            "init_carry",
-            elemTy,
-            "initializer",
-            zeroTensor(elemTy, [carryLen]),
-        );
+        const trip = makeTensorConst(outer, `trip_count_${chain[0].id}`, scalarInt64(totalIters));
+        const cond = makeTensorConst(outer, `cond_${chain[0].id}`, bool(true));
+        const v_initial = makeTensorConst(outer, "init_carry", zeroTensor(elemTy, [carryLen]));
 
         return {
             body,
@@ -311,7 +246,6 @@ export default class TransposeBuilder implements LoopBuilder {
             indicesOut: unsqOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

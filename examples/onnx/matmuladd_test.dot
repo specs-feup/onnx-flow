@@ -5,20 +5,34 @@ digraph {
   B [label=B shape=ellipse color=lime];
   reshape_0 [label=Reshape shape=box color=blue];
   Loop_0 -> reshape_0 [label="{9}"];
-  init_carry [label=init_carry shape=box];
+  init_carry [label="0,0,0,0,0" shape=box color=maroon];
+  reshape_shape_0 [label="3,3" shape=box color=maroon];
+  trip_count_0 [label=27 shape=box color=maroon];
+  cond_0 [label=1 shape=box color=maroon];
   subgraph cluster_loop_Loop_0 {
     graph [compound=true rankdir=LR];
     loopLoop_0_iter [label=iter shape=ellipse color=lime];
     loopLoop_0_cond_in [label=cond_in shape=ellipse color=lime];
     loopLoop_0_carry [label=carry shape=ellipse color=lime];
+    loopLoop_0_axes [label=0 shape=box color=maroon];
+    loopLoop_0_X [label=X shape=box];
+    loopLoop_0_A [label=A shape=box];
+    loopLoop_0_M_0 [label=3 shape=box color=maroon];
+    loopLoop_0_K_0 [label=3 shape=box color=maroon];
+    loopLoop_0_N_0 [label=3 shape=box color=maroon];
     loopLoop_0_KN_0 [label=Mul shape=box color=blue];
     loopLoop_0_MN_0 [label=Mul shape=box color=blue];
     loopLoop_0_MKN_0 [label=Mul shape=box color=blue];
+    loopLoop_0_Mneg1_0 [label=-1 shape=box color=maroon];
+    loopLoop_0_axes_shape2_A_0_d0 [label=0 shape=box color=maroon];
     loopLoop_0_shape2_A_0_d0_u [label=Unsqueeze shape=box color=blue];
+    loopLoop_0_axes_shape2_A_0_d1 [label=0 shape=box color=maroon];
     loopLoop_0_shape2_A_0_d1_u [label=Unsqueeze shape=box color=blue];
     loopLoop_0_concat_shape2_A_0 [label=Concat shape=box color=blue];
     loopLoop_0_reshape_reshape2D_A_0 [label=Reshape shape=box color=blue];
+    loopLoop_0_axes_shape2_B_0_d0 [label=0 shape=box color=maroon];
     loopLoop_0_shape2_B_0_d0_u [label=Unsqueeze shape=box color=blue];
+    loopLoop_0_axes_shape2_B_0_d1 [label=0 shape=box color=maroon];
     loopLoop_0_shape2_B_0_d1_u [label=Unsqueeze shape=box color=blue];
     loopLoop_0_concat_shape2_B_0 [label=Concat shape=box color=blue];
     loopLoop_0_reshape_reshape2D_B_0 [label=Reshape shape=box color=blue];
@@ -34,10 +48,12 @@ digraph {
     loopLoop_0_flatU_0 [label=Unsqueeze shape=box color=blue];
     loopLoop_0_flatU_0 -> loopLoop_0_scatter [label="{1}"];
     loopLoop_0_a_row_0 [label=Gather shape=box color=blue];
+    loopLoop_0_fixshape_a_vec_0 [label=3 shape=box color=maroon];
     loopLoop_0_reshape_a_vec_0 [label=Reshape shape=box color=blue];
     loopLoop_0_a_pick_0 [label=Gather shape=box color=blue];
     loopLoop_0_sq_a_sq_0 [label=Squeeze shape=box color=blue];
     loopLoop_0_b_col_0 [label=Gather shape=box color=blue];
+    loopLoop_0_fixshape_b_vec_0 [label=3 shape=box color=maroon];
     loopLoop_0_reshape_b_vec_0 [label=Reshape shape=box color=blue];
     loopLoop_0_b_pick_0 [label=Gather shape=box color=blue];
     loopLoop_0_sq_b_sq_0 [label=Squeeze shape=box color=blue];
@@ -45,10 +61,14 @@ digraph {
     loopLoop_0_prev_0 [label=GatherElements shape=box color=blue];
     loopLoop_0_sq_prev_sq_0 [label=Squeeze shape=box color=blue];
     loopLoop_0_acc_0 [label=Add shape=box color=blue];
+    loopLoop_0_one_0 [label=1 shape=box color=maroon];
     loopLoop_0_Km1_0 [label=Sub shape=box color=blue];
+    loopLoop_0_B [label=B shape=box];
+    loopLoop_0_flat_shape_B [label=-1 shape=box color=maroon];
     loopLoop_0_flat_rs_B [label=Reshape shape=box color=blue];
     loopLoop_0_sq_idx2d_B_1 [label=Squeeze shape=box color=blue];
     loopLoop_0_sg_shape_gather2d_B_1 [label=Shape shape=box color=blue];
+    loopLoop_0_sg_len_idx_gather2d_B_1 [label=0 shape=box color=maroon];
     loopLoop_0_sg_len_gather2d_B_1 [label=Gather shape=box color=blue];
     loopLoop_0_Mod_sg_mod_gather2d_B_1 [label=Mod shape=box color=blue];
     loopLoop_0_sg_idx_unsq_gather2d_B_1 [label=Unsqueeze shape=box color=blue];
@@ -64,17 +84,20 @@ digraph {
     loopLoop_0_scatter [label=ScatterElements shape=box color=blue];
     loopLoop_0_carry_out [label=carry_out shape=ellipse color=red];
     loopLoop_0_id_cond -> loopLoop_0_cond_out [label=sc];
+    loopLoop_0_B -> loopLoop_0_flat_rs_B [label="{3,3}"];
+    loopLoop_0_flat_shape_B -> loopLoop_0_flat_rs_B [label="{1}"];
     loopLoop_0_cond_in -> loopLoop_0_id_cond [label=sc];
     loopLoop_0_carry -> loopLoop_0_scatter [label="{9}"];
     loopLoop_0_scatter -> loopLoop_0_carry_out [label="{9}"];
-    X -> loopLoop_0_reshape_reshape2D_A_0 [style=dashed color=gray label="{3,3}"];
-    A -> loopLoop_0_reshape_reshape2D_B_0 [style=dashed color=gray label="{3,3}"];
-    B -> loopLoop_0_flat_rs_B [style=dashed color=gray label="{3,3}"];
     graph [label="Loop Loop_0"];
     graph [style=dashed];
     graph [color=gray];
   }
 
   Y [label=Y shape=ellipse color=red];
+  cond_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
+  reshape_shape_0 -> reshape_0 [label="{2}"];
   reshape_0 -> Y [label="{3,3}"];
+  init_carry -> loopLoop_0_Loop_0 [label="{9}" lhead=cluster_loop_Loop_0];
+  trip_count_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
 }

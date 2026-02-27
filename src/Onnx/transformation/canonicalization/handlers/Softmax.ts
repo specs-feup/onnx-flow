@@ -1,8 +1,15 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { uniq, addEdge, toArrayLike, makeI64ShapeConst } from "../../../Utils.js";
+import {
+    uniq,
+    addEdge,
+    makeI64ShapeConst,
+    tryAsConcreteValueNode,
+    asConcreteValueNode,
+    getIntAttr,
+} from "../../../Utils.js";
 
 /**
  * Softmax(X, axis)  ≡  exp(X - reduce_max(X, axis)) / reduce_sum(exp(...), axis)
@@ -21,21 +28,23 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
     if (op.type !== "Softmax") return false;
 
     // ---- Inputs / outputs
-    const ins = op.getInputs?.() ?? [];
-    if (ins.length < 1 || !ins[0]?.is?.(TensorNode)) return false;
+    const ins = op.getInputs() ?? [];
+    if (ins.length < 1) {
+        throw new Error(`[SoftmaxHandler] Node ${op.id} missing required input (X).`);
+    }
 
-    const X = ins[0].as(TensorNode);
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const X = tryAsConcreteValueNode(ins[0]);
+    if (!X) throw new Error(`[SoftmaxHandler] Node ${op.id} input[0] is invalid.`);
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
-    const Y = outs[0];
+    const Y = asConcreteValueNode(outs[0]);
 
     // ---- Rank and axis
     const inShape = Array.isArray(X.shape) ? [...X.shape] : [];
     const rank = inShape.length;
 
-    // axis attribute (default -1 per opset >= 13)
-    const attrs = op.getAttributes?.() ?? op.attributes ?? {};
-    let axis = Number(attrs.axis ?? -1);
+    // axis attribute
+    let axis = getIntAttr(op, "axis", -1);
     if (rank > 0 && axis < 0) axis = (axis + rank) % rank;
 
     // Helper: shapes for intermediates
@@ -107,7 +116,7 @@ export default function softmaxHandler(g: OnnxGraph.Class, op: OperationNode.Cla
         .as(OperationNode);
     g.addEdge(div, Y).init(new OnnxEdge.Builder(Y.literalType, Y.shape)).as(OnnxEdge);
 
-    g.getNodeById(op.id)?.remove?.();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

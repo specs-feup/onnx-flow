@@ -1,4 +1,4 @@
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import dequantizeLinearHandler from "./handlers/DequantizeLinear.js";
 import averagePoolHandler from "./handlers/AveragePool.js";
 import clipHandler from "./handlers/Clip.js";
@@ -6,7 +6,7 @@ import concatHandler from "./handlers/Concat.js";
 import gemmHandler from "./handlers/Gemm.js";
 import padHandler from "./handlers/Pad.js";
 import sliceHandler from "./handlers/Slice.js";
-import OperationNode from "../../OperationNode.js";
+import type OperationNode from "../../OperationNode.js";
 import softmaxHandler from "./handlers/Softmax.js";
 import expandHandler from "./handlers/Expand.js";
 import quantizeLinearHandler from "./handlers/QuantizeLinear.js";
@@ -14,7 +14,7 @@ import quantizeLinearHandler from "./handlers/QuantizeLinear.js";
 export type Handler = (graph: OnnxGraph.Class, op: OperationNode.Class) => boolean;
 
 // Registry by op type
-export type HandlersRegistry = Record<string, Handler>;
+export type HandlersRegistry = Record<string, Handler | undefined>;
 
 export interface CanonicalizationOptions {
     maxPasses?: number;
@@ -51,14 +51,14 @@ export default function applyCanonicalization(
     for (let pass = 0; pass < (opts.maxPasses ?? 1); pass++) {
         let changed = false;
 
-        // snapshot to avoid visiting newly inserted nodes in the same pass
+        // Snapshot to avoid visiting newly inserted nodes in the same pass
         const ops = graph.getOperationNodes();
 
         for (const op of ops) {
             const type = op.type;
-            const handler = opts.handlers[type];
-            if (!handler) continue;
-
+            if (opts.handlers === undefined) continue;
+            const handler: Handler | undefined = opts.handlers[type];
+            if (handler === undefined) continue;
             const didChange = handler(graph, op);
             if (didChange) changed = true;
         }

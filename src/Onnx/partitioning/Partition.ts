@@ -1,10 +1,13 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import OnnxGraph from "../OnnxGraph.js";
 import TensorNode from "../TensorNode.js";
 import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
-import { PartitionSets } from "./Strategies.js";
+import type { PartitionSets } from "./Strategies.js";
+import ConstantNode from "../ConstantNode.js";
+import type { ValueNode } from "../OnnxTypes.js";
+import { asValueNode } from "../Utils.js";
 
 /**
  * Clones a TensorNode into the target graph.
@@ -12,16 +15,7 @@ import { PartitionSets } from "./Strategies.js";
 function cloneTensor(t: TensorNode.Class, targetGraph: OnnxGraph.Class): TensorNode.Class {
     return targetGraph
         .addNode(t.id)
-        .init(
-            new TensorNode.Builder(
-                t.literalType,
-                t.shape,
-                t.type,
-                t.constantValue,
-                t.originalInitializer,
-                t.extraAttrs,
-            ),
-        )
+        .init(new TensorNode.Builder(t.literalType, t.shape, t.type, t.extraAttrs))
         .as(TensorNode);
 }
 
@@ -36,17 +30,24 @@ function cloneOp(op: OperationNode.Class, targetGraph: OnnxGraph.Class): Operati
                 op.type,
                 [], // Inputs populated later to preserve order
                 op.attributes,
-                op.getSubgraphs(),
+                op.regions,
             ),
         )
         .as(OperationNode);
 }
 
+function cloneConstant(c: ConstantNode.Class, targetGraph: OnnxGraph.Class): ConstantNode.Class {
+    return targetGraph
+        .addNode(c.id)
+        .init(new ConstantNode.Builder(c.constantValue, c.isInput))
+        .as(ConstantNode);
+}
+
 /**
  * Updates the internal inputs list of an OperationNode.
  */
-function setOpInputs(op: OperationNode.Class, inputs: BaseNode.Class[]) {
-    (op.data as any)[OperationNode.TAG].inputs = inputs;
+function setOpInputs(op: OperationNode.Class, inputs: ValueNode[]) {
+    op.setInputs(inputs);
 }
 
 export function partitionGraph(
@@ -68,12 +69,16 @@ export function partitionGraph(
                 headMap.set(node.id, cloneTensor(node.as(TensorNode), headGraph));
             } else if (node.is(OperationNode)) {
                 headMap.set(node.id, cloneOp(node.as(OperationNode), headGraph));
+            } else if (node.is(ConstantNode)) {
+                headMap.set(node.id, cloneConstant(node.as(ConstantNode), headGraph));
             }
         } else if (tailIds.has(node.id)) {
             if (node.is(TensorNode)) {
                 tailMap.set(node.id, cloneTensor(node.as(TensorNode), tailGraph));
             } else if (node.is(OperationNode)) {
                 tailMap.set(node.id, cloneOp(node.as(OperationNode), tailGraph));
+            } else if (node.is(ConstantNode)) {
+                tailMap.set(node.id, cloneConstant(node.as(ConstantNode), tailGraph));
             }
         }
     });
@@ -81,9 +86,8 @@ export function partitionGraph(
     // 2. Handle Shared Initializers
     const headInitializers = new Set<string>();
     headMap.forEach((node, id) => {
-        if (node.is(TensorNode)) {
-            const t = node.as(TensorNode);
-            if (t.type === "initializer" || t.type === "constant") headInitializers.add(id);
+        if (node.is(ConstantNode)) {
+            headInitializers.add(id);
         }
     });
 
@@ -96,7 +100,7 @@ export function partitionGraph(
         // --- Case A: Op is in HEAD ---
         if (headIds.has(originalOp.id)) {
             const clonedOp = headMap.get(originalOp.id)!.as(OperationNode);
-            const newInputs: BaseNode.Class[] = [];
+            const newInputs: ValueNode[] = [];
 
             // 3.1 Head Inputs (Tensor -> Op)
             for (const input of originalInputs) {
@@ -107,7 +111,7 @@ export function partitionGraph(
                 }
 
                 const clonedInput = headMap.get(input.id)!;
-                newInputs.push(clonedInput);
+                newInputs.push(asValueNode(clonedInput));
 
                 if (clonedInput.is(TensorNode)) {
                     const t = clonedInput.as(TensorNode);
@@ -120,17 +124,12 @@ export function partitionGraph(
             setOpInputs(clonedOp, newInputs);
 
             // 3.2 Head Outputs (Op -> Tensor)
-            originalOp.outgoers.forEach((edge) => {
+            originalOp.outgoers.forEach((edge: OnnxEdge.Class) => {
                 if (edge.target.is(TensorNode) && headIds.has(edge.target.id)) {
                     const clonedT = headMap.get(edge.target.id)!.as(TensorNode);
                     headGraph
                         .addEdge(clonedOp, clonedT)
-                        .init(
-                            new OnnxEdge.Builder(
-                                edge.data[OnnxEdge.TAG].literalType,
-                                edge.data[OnnxEdge.TAG].shape,
-                            ),
-                        )
+                        .init(new OnnxEdge.Builder(edge.literalType, edge.shape))
                         .as(OnnxEdge);
                 }
             });
@@ -139,14 +138,14 @@ export function partitionGraph(
         // --- Case B: Op is in TAIL ---
         else if (tailIds.has(originalOp.id)) {
             const clonedOp = tailMap.get(originalOp.id)!.as(OperationNode);
-            const newInputs: BaseNode.Class[] = [];
+            const newInputs: ValueNode[] = [];
 
             // 3.3 Tail Inputs (Tensor -> Op)
             for (const input of originalInputs) {
                 // Option 1: Input exists in Tail (Internal flow)
                 if (tailMap.has(input.id)) {
                     const clonedInput = tailMap.get(input.id)!;
-                    newInputs.push(clonedInput);
+                    newInputs.push(asValueNode(clonedInput));
                     if (clonedInput.is(TensorNode)) {
                         const t = clonedInput.as(TensorNode);
                         tailGraph
@@ -162,11 +161,21 @@ export function partitionGraph(
                     if (headInitializers.has(input.id)) {
                         // Clone shared initializer into Tail if missing
                         if (!tailMap.has(input.id)) {
-                            const origTensor = originalGraph.getNodeById(input.id).as(TensorNode);
-                            tailMap.set(input.id, cloneTensor(origTensor, tailGraph));
+                            const origNode = originalGraph.getNodeById(input.id);
+                            if (origNode !== undefined && origNode.is(ConstantNode)) {
+                                tailMap.set(
+                                    input.id,
+                                    cloneConstant(origNode.as(ConstantNode), tailGraph),
+                                );
+                            } else {
+                                tailMap.set(
+                                    input.id,
+                                    cloneTensor(origNode!.as(TensorNode), tailGraph),
+                                );
+                            }
                         }
                         const clonedInput = tailMap.get(input.id)!;
-                        newInputs.push(clonedInput);
+                        newInputs.push(asValueNode(clonedInput));
 
                         const t = clonedInput.as(TensorNode);
                         tailGraph
@@ -177,13 +186,19 @@ export function partitionGraph(
                     }
 
                     // Boundary Tensor
-                    const headNode = headMap.get(input.id)!.as(TensorNode);
-                    if (headNode.type !== "constant" && headNode.type !== "initializer") {
-                        (headNode.data as any)[TensorNode.TAG].type = "output";
+                    const headNode = headMap.get(input.id);
+                    if (headNode !== undefined && headNode.is(TensorNode)) {
+                        headNode.as(TensorNode).setType("output");
+                    } else if (headNode !== undefined && headNode.is(ConstantNode)) {
+                        // This should be unreachable due to the headInitializers check above,
+                        // but if it happens, we should catch the structural error.
+                        throw new Error(
+                            `[Partition] ConstantNode '${input.id}' bypassed the initializer cloning phase.`,
+                        );
                     }
 
                     if (!tailMap.has(input.id)) {
-                        const origTensor = input.as(TensorNode);
+                        const origTensor = input;
                         const ghost = tailGraph
                             .addNode(input.id)
                             .init(
@@ -198,7 +213,7 @@ export function partitionGraph(
                     }
 
                     const ghostInput = tailMap.get(input.id)!;
-                    newInputs.push(ghostInput);
+                    newInputs.push(asValueNode(ghostInput));
 
                     const t = ghostInput.as(TensorNode);
                     tailGraph
@@ -210,17 +225,12 @@ export function partitionGraph(
             setOpInputs(clonedOp, newInputs);
 
             // 3.4 Tail Outputs (Op -> Tensor)
-            originalOp.outgoers.forEach((edge) => {
+            originalOp.outgoers.forEach((edge: OnnxEdge.Class) => {
                 if (edge.target.is(TensorNode) && tailIds.has(edge.target.id)) {
                     const clonedT = tailMap.get(edge.target.id)!.as(TensorNode);
                     tailGraph
                         .addEdge(clonedOp, clonedT)
-                        .init(
-                            new OnnxEdge.Builder(
-                                edge.data[OnnxEdge.TAG].literalType,
-                                edge.data[OnnxEdge.TAG].shape,
-                            ),
-                        )
+                        .init(new OnnxEdge.Builder(edge.literalType, edge.shape))
                         .as(OnnxEdge);
                 }
             });

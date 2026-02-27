@@ -1,8 +1,16 @@
-import OnnxGraph from "../../../OnnxGraph.js";
+import type OnnxGraph from "../../../OnnxGraph.js";
 import OperationNode from "../../../OperationNode.js";
 import TensorNode from "../../../TensorNode.js";
+import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { toArrayLike, uniq, addEdge, scalarOfType, constI64 } from "../../../Utils.js";
+import {
+    uniq,
+    addEdge,
+    scalarOfType,
+    constI64,
+    tryAsConcreteValueNode,
+    getIntAttr,
+} from "../../../Utils.js";
 
 /**
  * QuantizeLinear(x, scale, zero_point)
@@ -22,29 +30,34 @@ export default function quantizeLinearHandler(
 ): boolean {
     if (op.type !== "QuantizeLinear") return false;
 
-    const ins = op.getInputs?.() ?? [];
-    if (ins.length < 2) return false;
+    const ins = op.getInputs() ?? [];
+    if (ins.length < 2) {
+        throw new Error(
+            `[QuantizeLinearHandler] Node ${op.id} missing required inputs (x, y_scale).`,
+        );
+    }
 
-    const X = ins[0]?.is?.(TensorNode) ? ins[0].as(TensorNode) : undefined;
-    const S = ins[1]?.is?.(TensorNode) ? ins[1].as(TensorNode) : undefined;
+    const X = tryAsConcreteValueNode(ins[0]);
+    const S = tryAsConcreteValueNode(ins[1]);
     // Zero point is optional.
-    const Z = ins[2]?.is?.(TensorNode) ? ins[2].as(TensorNode) : undefined;
+    const Z = tryAsConcreteValueNode(ins[2]);
 
-    if (!X || !S) return false;
+    if (!X || !S) {
+        throw new Error(`[QuantizeLinearHandler] Node ${op.id} has invalid inputs.`);
+    }
 
-    const outs = toArrayLike<TensorNode.Class>(op.getOutgoers?.targets?.filterIs?.(TensorNode));
+    const outs = op.getOutputs();
     if (outs.length !== 1) return false;
     const Y = outs[0];
 
     // Target type comes from Z (if present) or Y.
-    const targetType = Z ? Z.literalType : (Y.literalType ?? DataType.UINT8);
-    const floatT = X.literalType ?? DataType.FLOAT;
+    const targetType = Z ? Z.literalType : Y.literalType;
+    const floatT = X.literalType;
 
-    const a = op.getAttributes?.() ?? op.attributes ?? {};
-    const axisAttr = Number(a.axis ?? 1);
+    const axisAttr = getIntAttr(op, "axis", 1);
 
     // 1. Prepare Inputs (Scale is float, Z needs cast to float)
-    let Zf: TensorNode.Class;
+    let Zf: ConcreteValueNode;
     if (Z) {
         const castZ = g
             .addNode(uniq(g, `QL_CastZ_${op.id}`))
@@ -60,7 +73,7 @@ export default function quantizeLinearHandler(
     }
 
     // 2. Broadcast S and Z to X's shape (Scalar or Per-Axis)
-    const rank = X.shape?.length ?? 0;
+    const rank = X.shape.length;
     const shapeXop = g
         .addNode(uniq(g, `QL_ShapeX_${op.id}`))
         .init(new OperationNode.Builder("Shape", [X], {}))
@@ -71,18 +84,18 @@ export default function quantizeLinearHandler(
         .as(TensorNode);
     addEdge(g, shapeXop, shapeX, DataType.INT64, [rank]);
 
-    const sRank = S.shape?.length ?? 0;
+    const sRank = S.shape.length;
     // Heuristic: if S has rank 1 and X has rank > 1, assume per-axis if not 1-element
     const isPerAxis = sRank === 1 && rank > 1;
 
-    let Sx: TensorNode.Class = S;
-    let Zx: TensorNode.Class = Zf;
+    let Sx: ConcreteValueNode = S;
+    let Zx: ConcreteValueNode = Zf;
 
     if (isPerAxis) {
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;
 
         // Unsqueeze on all dims EXCEPT 'axis'
-        const axesVals = [];
+        const axesVals: number[] = [];
         for (let i = 0; i < rank; i++) {
             if (i !== axis) axesVals.push(i);
         }
@@ -216,7 +229,7 @@ export default function quantizeLinearHandler(
 
     addEdge(g, finalCastOp, Y, targetType, Y.shape);
 
-    g.getNodeById(op.id).remove();
+    g.getNodeById(op.id)?.remove();
 
     return true;
 }

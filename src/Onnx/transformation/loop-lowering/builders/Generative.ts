@@ -3,9 +3,18 @@ import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import OperationNode from "../../../OperationNode.js";
 import OnnxEdge from "../../../OnnxEdge.js";
-import { DataType, TensorProto } from "../../../OnnxTypes.js";
-import { uniq, int64Vec, bool, makeTensorConst } from "../../../Utils.js";
-import { LoopCtx, BuildResult, LoopBuilder, unsqueezeIdx } from "../BuildLoop.js";
+import type { KnownShape, TensorProto } from "../../../OnnxTypes.js";
+import { DataType } from "../../../OnnxTypes.js";
+import {
+    uniq,
+    int64Vec,
+    bool,
+    makeTensorConst,
+    UNKOWN_SHAPE,
+    asConcreteValueNode,
+} from "../../../Utils.js";
+import type { LoopCtx, BuildResult, LoopBuilder } from "../BuildLoop.js";
+import { unsqueezeIdx } from "../BuildLoop.js";
 
 // Handlers needed here (Range + we allow trailing elementwise/transpose)
 import handleRange from "../handlers/Range.js";
@@ -14,7 +23,7 @@ import handleTranspose from "../handlers/Transpose.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
 
 export default class GenerativeBuilder implements LoopBuilder {
-    canHandle(chain: OperationNode.Class[]) {
+    canHandle(chain: OperationNode.Class[]): boolean {
         return chain.some((op) => op.type === "Range");
     }
 
@@ -33,19 +42,13 @@ export default class GenerativeBuilder implements LoopBuilder {
         }
 
         // Use the Range's start input to define the element type
-        const [start] = rangeOp.getInputs()!.map((n) => n.as(TensorNode));
-        const elemTy = start.literalType;
+        const rangeInputs = rangeOp.getInputs()!;
+        const startNodeRaw = rangeInputs[0];
+        const startNode = asConcreteValueNode(startNodeRaw);
+        const elemTy = startNode.literalType;
 
         // out shape is unknown-length 1D (Range defines its length at runtime)
-        const outShape: (number | string)[] = [undefined];
-
-        const inputs = new Map<string, TensorNode.Class>();
-        chain.forEach((op) =>
-            op
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .forEach((t) => inputs.set(t.id, t.as(TensorNode))),
-        );
+        const outShape: KnownShape = [-1];
 
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const iter = body
@@ -59,10 +62,10 @@ export default class GenerativeBuilder implements LoopBuilder {
         // unknown length carry → declare [-1], *no* initializer
         const carry = body
             .addNode(uniq(body, "carry"))
-            .init(new TensorNode.Builder(elemTy, [-1], "input"))
+            .init(new TensorNode.Builder(elemTy, UNKOWN_SHAPE, "input"))
             .as(TensorNode);
 
-        const axes = makeTensorConst(body, "axes", DataType.INT64, "constant", int64Vec([0]));
+        const axes = makeTensorConst(body, "axes", int64Vec([0]));
         const unsq = body
             .addNode(uniq(body, "unsq"))
             .init(new OperationNode.Builder("Unsqueeze", [iter, axes]))
@@ -106,7 +109,6 @@ export default class GenerativeBuilder implements LoopBuilder {
 
         for (const op of chain) {
             const h = handlers[op.type];
-            if (!h) throw new Error(`GenerativeBuilder: unsupported op ${op.type}`);
             const out = h(op, body, ctx);
             ctx.opMap.set(op, [op, out]);
         }
@@ -120,7 +122,7 @@ export default class GenerativeBuilder implements LoopBuilder {
         inferShapes(body);
 
         // Compute trip_count, cond, v_initial for Range at OUTER graph level
-        const [startT, limitT, deltaT] = rangeOp.getInputs()!.map((n) => n.as(TensorNode));
+        const [startT, limitT, deltaT] = rangeOp.getInputs()!.map((n) => asConcreteValueNode(n));
 
         const subN = outer
             .addNode(uniq(outer, `range_sub_${chain[0].id}`))
@@ -187,13 +189,11 @@ export default class GenerativeBuilder implements LoopBuilder {
             .init(new OnnxEdge.Builder(ceilF.literalType, ceilF.shape))
             .as(OnnxEdge);
 
-        const zeroF = makeTensorConst(
-            outer,
-            `range_zeroF_${chain[0].id}`,
-            DataType.FLOAT,
-            "constant",
-            { dataType: DataType.FLOAT, dims: [], floatData: [0] } as TensorProto,
-        );
+        const zeroF = makeTensorConst(outer, `range_zeroF_${chain[0].id}`, {
+            dataType: DataType.FLOAT,
+            dims: [],
+            floatData: [0],
+        } as TensorProto);
 
         const maxN = outer
             .addNode(uniq(outer, `range_maxF_${chain[0].id}`))
@@ -221,13 +221,7 @@ export default class GenerativeBuilder implements LoopBuilder {
             .init(new OnnxEdge.Builder(tripScalar.literalType, tripScalar.shape))
             .as(OnnxEdge);
 
-        const axes0 = makeTensorConst(
-            outer,
-            `axes0_${chain[0].id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([0]),
-        );
+        const axes0 = makeTensorConst(outer, `axes0_${chain[0].id}`, int64Vec([0]));
         const tripUnsq = outer
             .addNode(uniq(outer, `range_trip_unsq_${chain[0].id}`))
             .init(new OperationNode.Builder("Unsqueeze", [tripScalar, axes0]))
@@ -249,7 +243,7 @@ export default class GenerativeBuilder implements LoopBuilder {
 
         const zerosF = outer
             .addNode(uniq(outer, `range_initF_out_${chain[0].id}`))
-            .init(new TensorNode.Builder(DataType.FLOAT, [undefined], "intermediate"))
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1], "intermediate"))
             .as(TensorNode);
         outer
             .addEdge(cos, zerosF)
@@ -268,7 +262,7 @@ export default class GenerativeBuilder implements LoopBuilder {
 
             v_initial = outer
                 .addNode(uniq(outer, `range_init_out_${chain[0].id}`))
-                .init(new TensorNode.Builder(elemTy, [undefined], "intermediate"))
+                .init(new TensorNode.Builder(elemTy, [-1], "intermediate"))
                 .as(TensorNode);
 
             outer
@@ -278,20 +272,12 @@ export default class GenerativeBuilder implements LoopBuilder {
         }
 
         const trip = tripScalar; // scalar
-        const cond = makeTensorConst(
-            outer,
-            `cond_${chain[0].id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
+        const cond = makeTensorConst(outer, `cond_${chain[0].id}`, bool(true));
 
         // Ensure we always have an outer output tensor node for this generative chain
         if (!outTensor) {
             const shapeForOut =
-                outShape && outShape.length && typeof outShape[0] === "number"
-                    ? [outShape[0] as number]
-                    : [];
+                outShape.length && typeof outShape[0] === "number" ? [outShape[0] as number] : [];
 
             outTensor = outer
                 .addNode(uniq(outer, `out_${lastOp.id}`))
@@ -311,7 +297,6 @@ export default class GenerativeBuilder implements LoopBuilder {
             indicesOut: unsqOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

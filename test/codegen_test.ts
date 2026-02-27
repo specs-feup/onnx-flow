@@ -6,7 +6,7 @@ import OnnxGraphTransformer from "../src/Onnx/transformation/loop-lowering/index
 import OnnxGraphOptimizer from "../src/Onnx/transformation/shape-optimization/index.js";
 import { generateCode } from "../src/codeGeneration.js";
 import { fileURLToPath } from "url";
-import { typeSizeMap } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { TYPE_SIZE_MAP } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 // Dynamically determine the project root directory
 const __filename = fileURLToPath(import.meta.url);
@@ -118,14 +118,26 @@ async function runTests() {
 
     // Create a list of inputs dynamically based on the model's input specifications
     const listOfInputs: Record<string, Tensor> = {};
-    onnxObject.graph.input.forEach((input: any) => {
-        const shape = input.type.tensorType.shape.dim.map((dim: any) => parseInt(dim.dimValue, 10));
-        const elemType = getArrayType(input.type.tensorType.elemType);
-        listOfInputs[input.name] = new Tensor(
-            elemType as keyof Tensor.DataTypeMap,
-            getRandomArray(shape, elemType),
-            shape,
+    onnxObject.graph?.input?.forEach((input) => {
+        // 1. Safely resolve tensorType (handling both camelCase and snake_case)
+        const tensorType = input.type?.tensorType ?? input.type?.tensor_type;
+
+        // 2. Map dimensions safely, using Number() to handle string|number unions
+        const shape = (tensorType?.shape?.dim ?? []).map(
+            (dim) => Number(dim.dimValue ?? dim.dim_value ?? 1), // Default to 1 if unknown
         );
+
+        // 3. Extract elemType strictly as a number
+        const rawElemType = Number(tensorType?.elemType ?? tensorType?.elem_type ?? 0);
+        const elemType = getArrayType(rawElemType);
+
+        if (input.name) {
+            listOfInputs[input.name] = new Tensor(
+                elemType as keyof Tensor.DataTypeMap,
+                getRandomArray(shape, elemType),
+                shape,
+            );
+        }
     });
     console.log("Generated random inputs:", listOfInputs, "\n\n");
 
@@ -153,15 +165,37 @@ async function runTests() {
     console.log("Generated Code (with optimizations):", generatedCode2, "\n\n");
 
     // Convert the randomly generated inputs to a format accepted by the generated code
-    const formattedInputs: Record<string, any> = {};
+    const formattedInputs: Record<string, unknown> = {};
     for (const [key, tensor] of Object.entries(listOfInputs)) {
-        const elemType = onnxObject.graph.input.find((input: any) => input.name === key).type
-            .tensorType.elemType;
-        const displacement = typeSizeMap[elemType];
-        formattedInputs[`tensor_${key}`] = {};
-        for (let i = 0; i < tensor.dims.reduce((a, b) => a * b, 1); i++) {
-            formattedInputs[`tensor_${key}`][i * displacement] = tensor.data[i];
+        // 1. Safely find the input definition
+        const inputDef = onnxObject.graph?.input?.find((input) => input.name === key);
+
+        // 2. Safely drill down to the tensor type (handling snake_case fallbacks just in case)
+        const tensorType = inputDef?.type?.tensorType ?? inputDef?.type?.tensor_type;
+        const rawElemType = tensorType?.elemType ?? tensorType?.elem_type;
+
+        // 3. Stop if we couldn't resolve the type, rather than crashing
+        if (rawElemType === undefined) {
+            throw new Error(`Could not resolve elemType for input '${key}'`);
         }
+
+        // 4. Safely coerce to number for your TYPE_SIZE_MAP lookup
+        const elemType = Number(rawElemType);
+        const displacement = TYPE_SIZE_MAP[elemType];
+        formattedInputs[`tensor_${key}`] = {};
+        // 1. Create a strictly typed temporary map for the offsets
+        const tensorDataMap: Record<number, number> = {};
+
+        // 2. Calculate the total number of elements
+        const totalElements = tensor.dims.reduce((a, b) => a * b, 1);
+
+        // 3. Populate the map safely
+        for (let i = 0; i < totalElements; i++) {
+            tensorDataMap[i * displacement] = tensor.data[i] as number;
+        }
+
+        // 4. Assign the fully populated map back to your formatted inputs
+        formattedInputs[`tensor_${key}`] = tensorDataMap;
     }
     console.log("Formatted inputs for generated code:", formattedInputs, "\n\n");
 
@@ -189,26 +223,26 @@ async function runTests() {
     console.log("Generated Output (with transformations):", generatedOutput2);
 
     // Convert values to strings for comparison
-    const outputData = Array.from(outputTensor.data as any[]).map((value) => value.toString());
-    const generatedOutputValues1 = Object.values(generatedOutput1).map((value: any) =>
-        value.toString(),
+    const outputData = Array.from(outputTensor.data as unknown[]).map((value) => value?.toString());
+    const generatedOutputValues1 = Object.values(generatedOutput1).map((value) =>
+        value?.toString(),
     );
-    const generatedOutputValues2 = Object.values(generatedOutput2).map((value: any) =>
-        value.toString(),
+    const generatedOutputValues2 = Object.values(generatedOutput2).map((value) =>
+        value?.toString(),
     );
 
     // Compare the results (no optimizations)
     const tolerance = 1e-6;
     const areEqual1 = outputData.every(
         (value, index) =>
-            Math.abs(parseFloat(value) - parseFloat(generatedOutputValues1[index])) < tolerance,
+            Math.abs(parseFloat(value!) - parseFloat(generatedOutputValues1[index]!)) < tolerance,
     );
     console.log("Test (no optimizations) passed?", areEqual1);
 
     // Compare the results (with optimizations)
     const areEqual2 = outputData.every(
         (value, index) =>
-            Math.abs(parseFloat(value) - parseFloat(generatedOutputValues2[index])) < tolerance,
+            Math.abs(parseFloat(value!) - parseFloat(generatedOutputValues2[index]!)) < tolerance,
     );
     console.log("Test (with optimizations) passed?", areEqual2);
 }

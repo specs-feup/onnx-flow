@@ -1,5 +1,10 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type {
+    ConcreteValueNode,
+    KnownShape,
+    ValueNode,
+} from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
@@ -9,10 +14,13 @@ import {
     uniq,
     int64Vec,
     toStaticShape,
+    isKnownDim,
+    scalarI64,
+    as1D,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopCtx } from "../BuildLoop.js";
 import {
     unsqueezeIdx,
-    LoopCtx,
     resolveFusedInput,
     divmod,
     targetReshape,
@@ -31,19 +39,19 @@ import {
  */
 function sliceBatchThenReshape2D(
     g: OnnxGraph.Class,
-    t: TensorNode.Class,
+    t: ValueNode,
     srcBatch: number[],
     batch: number[],
     batchDigits: TensorNode.Class[],
-    axesConst: TensorNode.Class,
-    M: TensorNode.Class,
-    K_or_N: TensorNode.Class,
+    axesConst: ConcreteValueNode,
+    M: ConcreteValueNode,
+    K_or_N: ConcreteValueNode,
     tag: string,
 ): TensorNode.Class {
     let cur = t;
 
     if (batch.length > 0) {
-        const zero = makeTensorConst(g, `bz_${tag}`, DataType.INT64, "constant", scalarInt64(0));
+        const zero = makeTensorConst(g, `bz_${tag}`, scalarInt64(0));
 
         for (let ax = 0; ax < batch.length; ax++) {
             if (ax >= srcBatch.length) continue;
@@ -83,18 +91,10 @@ function sliceBatchThenReshape2D(
     return out2d;
 }
 
-function isKnownDim(d: number | undefined) {
-    return typeof d === "number" && Number.isFinite(d) && d > 0;
-}
-
-function scalarI64(g: OnnxGraph.Class, name: string, v: number) {
-    return makeTensorConst(g, name, DataType.INT64, "constant", scalarInt64(v));
-}
-
 function gatherDim(
     g: OnnxGraph.Class,
     tag: string,
-    src: TensorNode.Class, // e.g., A2D or B2D
+    src: ValueNode, // e.g., A2D or B2D
     negAxis: -2 | -1, // which trailing dim to read
 ): TensorNode.Class {
     const shape = g
@@ -118,7 +118,7 @@ function gatherDim(
         .init(new OnnxEdge.Builder(shapeO.literalType, shapeO.shape))
         .as(OnnxEdge);
 
-    const idx = makeTensorConst(g, `idx_${tag}`, DataType.INT64, "constant", int64Vec([negAxis]));
+    const idx = makeTensorConst(g, `idx_${tag}`, int64Vec([negAxis]));
     const gather = g
         .addNode(uniq(g, `g_${tag}`))
         .init(new OperationNode.Builder("Gather", [shapeO, idx], { axis: 0 }))
@@ -131,16 +131,11 @@ function gatherDim(
     return out;
 }
 
-function as1D(g: OnnxGraph.Class, name: string, scalarI64T: TensorNode.Class) {
-    const axes = makeTensorConst(g, `axes_${name}`, DataType.INT64, "constant", int64Vec([0]));
-    return unsqueezeIdx(g, scalarI64T, axes, `${name}_u`); // 1-D [1] from scalar
-}
-
 function shapeVec2(
     g: OnnxGraph.Class,
     name: string,
-    d0: TensorNode.Class, // INT64 scalar
-    d1: TensorNode.Class, // INT64 scalar
+    d0: ConcreteValueNode, // INT64 scalar
+    d1: ConcreteValueNode, // INT64 scalar
 ) {
     const d0v = as1D(g, `${name}_d0`, d0);
     const d1v = as1D(g, `${name}_d1`, d1);
@@ -175,8 +170,8 @@ export default function handleMatMul(
     const lhsTensor = resolveFusedInput(g, lhsInput, ctx, op, false, false);
     const rhsTensor = resolveFusedInput(g, rhsInput, ctx, op, false, false);
 
-    const aShape = lhsTensor.shape as (number | string)[];
-    const bShape = rhsTensor.shape as (number | string)[];
+    const aShape = lhsTensor.shape as KnownShape;
+    const bShape = rhsTensor.shape as KnownShape;
 
     // We may need to correct M if the builder's value doesn't match the real lhs size
     let M = dims.M;
@@ -255,8 +250,8 @@ export default function handleMatMul(
     let A2D = lhsTensor;
     let B2D = rhsTensor;
 
-    let bIdx: TensorNode.Class | null = null; // INT64 scalar
-    let tIn: TensorNode.Class | null = null; // INT64 scalar: within-batch-and-(i,j,k)
+    let bIdx: ConcreteValueNode | null = null; // INT64 scalar
+    let tIn: ConcreteValueNode | null = null; // INT64 scalar: within-batch-and-(i,j,k)
 
     if (batch.length > 0) {
         // b = floor(t / (M*K*N))
@@ -338,20 +333,8 @@ export default function handleMatMul(
 
     if (!ctx.coalesce) {
         // ================= NON-COALESCED =================
-        const shape1 = makeTensorConst(
-            g,
-            `shape1_${op.id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([1]),
-        );
-        const shapeK = makeTensorConst(
-            g,
-            `shapeK_${op.id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([K]),
-        );
+        const shape1 = makeTensorConst(g, `shape1_${op.id}`, int64Vec([1]));
+        const shapeK = makeTensorConst(g, `shapeK_${op.id}`, int64Vec([K]));
 
         // A2D: [M,K] -> row i -> [1,K]
         const [, rowGathered] = gatherFrom(g, A2D, `gather_${A2D.id}_${op.id}`, iU, 0);
@@ -548,7 +531,7 @@ export default function handleMatMul(
             .init(new OnnxEdge.Builder(acc.literalType, acc.shape))
             .as(OnnxEdge);
 
-        if (ctx.gateByK) {
+        if (ctx.gateByK !== undefined) {
             const one = scalarI64(g, `one_${op.id}`, 1);
             const Km1 = g
                 .addNode(uniq(g, `Km1_${op.id}`))
@@ -556,7 +539,7 @@ export default function handleMatMul(
                 .as(OperationNode);
             const Km1_out = g
                 .addNode(uniq(g, `Km1_out_${op.id}`))
-                .init(new TensorNode.Builder(DataType.INT64, [undefined], "intermediate"))
+                .init(new TensorNode.Builder(DataType.INT64, [-1], "intermediate"))
                 .as(TensorNode);
             g.addEdge(Km1, Km1_out)
                 .init(new OnnxEdge.Builder(Km1_out.literalType, Km1_out.shape))

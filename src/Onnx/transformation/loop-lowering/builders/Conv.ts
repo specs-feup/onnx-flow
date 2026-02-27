@@ -11,40 +11,14 @@ import {
     scalarInt64,
     bool,
     zeroTensor,
+    resolveShapeToNumbers,
+    isValueNode,
+    asValueNode,
 } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopBuilder, BuildResult, unsqueezeIdx, LoopCtx, decodeMixedRadix } from "../BuildLoop.js";
+import type { LoopBuilder, BuildResult, LoopCtx } from "../BuildLoop.js";
+import { unsqueezeIdx, decodeMixedRadix, createCapturedInput } from "../BuildLoop.js";
 import inferShapes from "@specs-feup/onnx-flow/Onnx/InferShapes";
-
-function resolveShape(t: TensorNode.Class): number[] {
-    if (t.shape && t.shape.length) {
-        return t.shape as number[];
-    }
-
-    // Try incoming edges first
-    const incs = t.getIncomers ?? [];
-    for (const e of incs) {
-        if (e.shape && e.shape.length) {
-            const s = e.shape.slice();
-            // Cache it on the tensor so later passes see it as well
-            t.setShape(s);
-            return s;
-        }
-    }
-
-    // Fallback: try outgoing edges (sometimes only consumers got a shape)
-    const outs = t.getOutgoers ?? [];
-    for (const e of outs) {
-        if (e.shape && e.shape.length) {
-            const s = e.shape.slice();
-
-            t.setShape(s);
-            return s;
-        }
-    }
-
-    // Still unknown
-    return [];
-}
+import type RegionArgumentNode from "@specs-feup/onnx-flow/Onnx/RegionArgumentNode";
 
 /**
  * Conv loop-lowering builder.
@@ -73,12 +47,11 @@ export default class ConvBuilder implements LoopBuilder {
         const conv = chain[0];
 
         // ---- Basic tensor plumbing ------------------------------------------------
-        const inputsArr =
-            conv
-                .getInputs()
-                ?.filter((n) => n.is(TensorNode))
-                .map((n) => n.as(TensorNode)) ?? [];
-        if (inputsArr.length < 2) {
+        const inputsArr = conv
+            .getInputs()
+            ?.filter((n) => isValueNode(n))
+            .map((n) => asValueNode(n));
+        if (!inputsArr || inputsArr.length < 2) {
             throw new Error("ConvBuilder: Conv must have at least X and W as inputs");
         }
 
@@ -94,10 +67,10 @@ export default class ConvBuilder implements LoopBuilder {
                 ? outTensor.literalType
                 : fallbackElemTy;
 
-        console.log("XSHAPE raw:", X.shape);
-        const xShape = resolveShape(X);
-        const wShape = resolveShape(W);
-        console.log("XSHAPE resolved:", xShape, "WSHAPE resolved:", wShape);
+        //console.log("XSHAPE raw:", X.shape);
+        const xShape = resolveShapeToNumbers(X);
+        const wShape = resolveShapeToNumbers(W);
+        //console.log("XSHAPE resolved:", xShape, "WSHAPE resolved:", wShape);
 
         const is2D = xShape.length === 4 && wShape.length === 4;
         const is1D = xShape.length === 3 && wShape.length === 3;
@@ -138,7 +111,7 @@ export default class ConvBuilder implements LoopBuilder {
 
         // Bias shape: allow scalar [1] or per-output-channel [M]
         // Also accept common "expanded" forms like [1, M, 1, 1] or [M, 1, 1].
-        const bShape = B ? resolveShape(B) : [];
+        const bShape = B ? resolveShapeToNumbers(B) : [];
 
         function classifyBiasShape(
             shape: number[],
@@ -168,22 +141,17 @@ export default class ConvBuilder implements LoopBuilder {
         }
 
         // ---- Attribute sanity + current restrictions -----------------------------
-        const a = conv.getAttributes?.() ?? conv.attributes ?? {};
+        const a = conv.getAttributes();
 
         // Helper: normalise ONNX-style INT[] attributes to number[]
         const attrs = a;
         const getIntsAttr = (name: string): number[] | undefined => {
+            if (!(name in attrs)) return undefined;
             const v = attrs[name];
-            if (!v) return undefined;
 
             // Already a plain JS array?
             if (Array.isArray(v)) {
                 return v.map(Number);
-            }
-
-            // ONNX-style attribute object: { ints: [...] }
-            if (Array.isArray(v.ints)) {
-                return v.ints.map((x) => Number(x));
             }
 
             return undefined;
@@ -227,7 +195,7 @@ export default class ConvBuilder implements LoopBuilder {
         const kEffH = dilH * (kH - 1) + 1;
         const kEffW = dilW * (kW - 1) + 1;
 
-        const auto_pad = (a.auto_pad ?? "NOTSET") as string;
+        const auto_pad = (a["auto_pad"] ?? "NOTSET") as string;
 
         // Helper to compute SAME_* pads for one spatial dimension
         function computeSamePads(
@@ -293,7 +261,29 @@ export default class ConvBuilder implements LoopBuilder {
             pads = [0, 0, 0, 0];
         }
 
-        const group = Number(a.group ?? 1);
+        const group = Number(a["group"] ?? 1);
+
+        // 1. Deduce C (Input Channels) if unknown
+        // If X has C=-1, but we know Weights have Cw (C_in per group), calculate C.
+        if ((!C || C < 0) && Cw > 0 && group > 0) {
+            C = Cw * group;
+            // Update xShape for consistency if needed, though local vars are what matter
+        }
+
+        // 2. Deduce M (Output Channels) from Bias if unknown
+        // If Weights have M=-1, but Bias is known, infer M from Bias.
+        if ((!M || M < 0) && B) {
+            const bShape = resolveShapeToNumbers(B);
+            const bSize = bShape.reduce((a, b) => a * Number(b), 1);
+            // Heuristic: Bias is usually [M] or [1, M, 1, 1]. If scalar, it doesn't help.
+            if (bSize > 1) {
+                M = bSize;
+            }
+        }
+
+        // 3. Deduce M from Group and Cw if W is [M, C/g, ...] and we only know C/g?
+        // (Less common, usually M is explicit in W, but if W is fully dynamic [-1,-1..],
+        // we heavily rely on Bias or downstream inference which isn't available here).
 
         if (group < 1) {
             throw new Error(`ConvBuilder: invalid group=${group}`);
@@ -349,12 +339,6 @@ export default class ConvBuilder implements LoopBuilder {
             outTensor.setShape(outShape);
         }
 
-        // `inputs` map used by BuildLoop for captured outer inputs
-        const inputs = new Map<string, TensorNode.Class>();
-        inputs.set(X.id, X);
-        inputs.set(W.id, W);
-        if (B) inputs.set(B.id, B);
-
         // ---- Build loop body graph -----------------------------------------------
         const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
 
@@ -364,7 +348,7 @@ export default class ConvBuilder implements LoopBuilder {
             .init(new TensorNode.Builder(DataType.INT64, [], "input"))
             .as(TensorNode);
 
-        // cond_in: BOOL scalar (ignored internally, just forwarded)
+        // cond_in: BOOL scalar
         const _condIn = body
             .addNode(uniq(body, "cond_in"))
             .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
@@ -376,50 +360,24 @@ export default class ConvBuilder implements LoopBuilder {
             .init(new TensorNode.Builder(elemTy, [carryLen], "input"))
             .as(TensorNode);
 
-        // Captured inputs (use same IDs as outer so BuildLoop can wire them)
-        const X_in = body
-            .addNode(X.id)
-            .init(new TensorNode.Builder(X.literalType, X.shape, "intermediate"))
-            .as(TensorNode);
-
-        const W_in = body
-            .addNode(W.id)
-            .init(new TensorNode.Builder(W.literalType, W.shape, "intermediate"))
-            .as(TensorNode);
-
-        let B_in: TensorNode.Class | undefined;
-        if (B) {
-            B_in = body
-                .addNode(B.id)
-                .init(new TensorNode.Builder(B.literalType, B.shape, "intermediate"))
-                .as(TensorNode);
-        }
+        // Captured inputs: Use RegionArgumentNode proxies via helper
+        const X_in = createCapturedInput(body, X);
+        const W_in = createCapturedInput(body, W);
+        const B_in = B ? createCapturedInput(body, B) : undefined;
 
         // axes=[0] constant
-        const axes0 = makeTensorConst(
-            body,
-            `conv_axes_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            int64Vec([0]),
-        );
+        const axes0 = makeTensorConst(body, `conv_axes_${conv.id}`, int64Vec([0]));
 
         // Unsqueezed iteration index used as ScatterElements indices
         const iterUnsq = unsqueezeIdx(body, iter, axes0, `conv_unsq_iter_${conv.id}`); // shape [1]
 
         // Optionally pad X_in spatially (H, W) before flattening
-        let X_src = X_in;
+        let X_src: TensorNode.Class | RegionArgumentNode.Class = X_in;
         if (pads.some((p) => p !== 0)) {
             // ONNX Pad uses [N_begin, C_begin, H_begin, W_begin, N_end, C_end, H_end, W_end]
             const padVec = [0, 0, padTop, padLeft, 0, 0, padBottom, padRight];
 
-            const padsConst = makeTensorConst(
-                body,
-                `conv_pads_${conv.id}`,
-                DataType.INT64,
-                "constant",
-                int64Vec(padVec),
-            );
+            const padsConst = makeTensorConst(body, `conv_pads_${conv.id}`, int64Vec(padVec));
             const padOp = body
                 .addNode(uniq(body, `conv_pad_${conv.id}`))
                 .init(new OperationNode.Builder("Pad", [X_in, padsConst]))
@@ -452,8 +410,6 @@ export default class ConvBuilder implements LoopBuilder {
         const xFlatShapeConst = makeTensorConst(
             body,
             `conv_x_flat_shape_${conv.id}`,
-            DataType.INT64,
-            "constant",
             int64Vec([-1]),
         );
         const xReshape = body
@@ -478,8 +434,6 @@ export default class ConvBuilder implements LoopBuilder {
         const wFlatShapeConst = makeTensorConst(
             body,
             `conv_w_flat_shape_${conv.id}`,
-            DataType.INT64,
-            "constant",
             int64Vec([-1]),
         );
         const wReshape = body
@@ -504,73 +458,33 @@ export default class ConvBuilder implements LoopBuilder {
         const _WoutConst = makeTensorConst(
             body,
             `conv_Wout_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(W_out)),
         );
         const WpadConst = makeTensorConst(
             body,
             `conv_Wpad_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(W_padded)),
         );
         const HpadConst = makeTensorConst(
             body,
             `conv_Hpad_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(H_padded)),
         );
-        const CConst = makeTensorConst(
-            body,
-            `conv_C_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(C)),
-        );
-        const kWConst = makeTensorConst(
-            body,
-            `conv_kW_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(kW)),
-        );
-        const kHConst = makeTensorConst(
-            body,
-            `conv_kH_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(kH)),
-        );
+        const CConst = makeTensorConst(body, `conv_C_${conv.id}`, scalarInt64(Number(C)));
+        const kWConst = makeTensorConst(body, `conv_kW_${conv.id}`, scalarInt64(Number(kW)));
+        const kHConst = makeTensorConst(body, `conv_kH_${conv.id}`, scalarInt64(Number(kH)));
         const strideHConst = makeTensorConst(
             body,
             `conv_strideH_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(strideH)),
         );
         const strideWConst = makeTensorConst(
             body,
             `conv_strideW_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(strideW)),
         );
-        const dilHConst = makeTensorConst(
-            body,
-            `conv_dilH_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(dilH)),
-        );
-        const dilWConst = makeTensorConst(
-            body,
-            `conv_dilW_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(dilW)),
-        );
+        const dilHConst = makeTensorConst(body, `conv_dilH_${conv.id}`, scalarInt64(Number(dilH)));
+        const dilWConst = makeTensorConst(body, `conv_dilW_${conv.id}`, scalarInt64(Number(dilW)));
 
         // Decode iter → (n, m, ho, wo) in row-major order over [N, M, H_out, W_out]
         const [nIdx, mIdx, ho, wo] = decodeMixedRadix(
@@ -586,15 +500,11 @@ export default class ConvBuilder implements LoopBuilder {
         const CwConst = makeTensorConst(
             body,
             `conv_Cw_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(C_per_group)),
         );
         const MperGroupConst = makeTensorConst(
             body,
             `conv_MperG_${conv.id}`,
-            DataType.INT64,
-            "constant",
             scalarInt64(Number(M_per_group)),
         );
 
@@ -643,8 +553,6 @@ export default class ConvBuilder implements LoopBuilder {
             const cRelConst = makeTensorConst(
                 body,
                 `conv_cRel_${conv.id}_${cRel}`,
-                DataType.INT64,
-                "constant",
                 scalarInt64(Number(cRel)),
             );
 
@@ -672,15 +580,11 @@ export default class ConvBuilder implements LoopBuilder {
                     const khConst = makeTensorConst(
                         body,
                         `conv_kh_${conv.id}_${cRel}_${kh}_${kw}`,
-                        DataType.INT64,
-                        "constant",
                         scalarInt64(Number(kh)),
                     );
                     const kwConst = makeTensorConst(
                         body,
                         `conv_kw_${conv.id}_${cRel}_${kh}_${kw}`,
-                        DataType.INT64,
-                        "constant",
                         scalarInt64(Number(kw)),
                     );
 
@@ -1119,7 +1023,7 @@ export default class ConvBuilder implements LoopBuilder {
         //  - "perChannel4D": B is [1,M,1,1], gather along axis=1 and squeeze.
         let yVec = accVec;
         if (B_in && biasKind !== "none") {
-            let biasScalar: TensorNode.Class;
+            let biasScalar: TensorNode.Class | RegionArgumentNode.Class;
 
             if (biasKind === "scalar") {
                 // B is effectively a scalar.
@@ -1192,25 +1096,11 @@ export default class ConvBuilder implements LoopBuilder {
 
         // ---- Outer: trip_count, cond, v_initial ------------------------------
         inferShapes(outer); // align with other builders
-        const trip = makeTensorConst(
-            outer,
-            `conv_trip_${conv.id}`,
-            DataType.INT64,
-            "constant",
-            scalarInt64(Number(numOut)),
-        );
-        const cond = makeTensorConst(
-            outer,
-            `conv_cond_${conv.id}`,
-            DataType.BOOL,
-            "constant",
-            bool(true),
-        );
+        const trip = makeTensorConst(outer, `conv_trip_${conv.id}`, scalarInt64(numOut));
+        const cond = makeTensorConst(outer, `conv_cond_${conv.id}`, bool(true));
         const v_initial = makeTensorConst(
             outer,
             `conv_init_${conv.id}`,
-            elemTy,
-            "constant",
             zeroTensor(elemTy, [carryLen]),
         );
 
@@ -1223,7 +1113,6 @@ export default class ConvBuilder implements LoopBuilder {
             indicesOut,
             elemTy,
             outShape,
-            inputs,
             outTensor,
             trip,
             cond,

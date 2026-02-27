@@ -1,10 +1,11 @@
 import BaseGraph from "@specs-feup/flow/graph/BaseGraph";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
+import type { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import TensorNode from "./TensorNode.js";
 import OperationNode from "./OperationNode.js";
 import OnnxEdge from "./OnnxEdge.js";
-import { TensorProto } from "./OnnxTypes.js";
+import ConstantNode from "./ConstantNode.js";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 
 namespace OnnxGraph {
     export const TAG = "__specs-onnx__onnx_graph";
@@ -14,14 +15,14 @@ namespace OnnxGraph {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseGraph.Class<D, S> {
-        addInitializer(_X_indicesTensor: TensorProto) {
-            throw new Error("Method not implemented.");
+        /** Retrieves all nodes in the graph (Operation, Tensor, and Constant). */
+        getNodes(): NodeCollection<BaseNode.Class> {
+            return this.nodes;
         }
-        setInputs(_arg0: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
-            throw new Error("Method not implemented.");
-        }
-        setOutputs(_bodyOutputs: TensorNode.Class<TensorNode.Data, TensorNode.ScratchData>[]) {
-            throw new Error("Method not implemented.");
+
+        /** Retrieves all ConstantNodes (Phase 3). */
+        getConstantNodes(): NodeCollection<ConstantNode.Class> {
+            return this.nodes.filterIs(ConstantNode);
         }
 
         // Retrieve all TensorNodes with type 'input'
@@ -51,9 +52,8 @@ namespace OnnxGraph {
         getEdge(sourceId: string, targetId: string): OnnxEdge.Class | undefined {
             const source = this.getNodeById(sourceId);
             const target = this.getNodeById(targetId);
-            if (!source || !target) return undefined;
 
-            return source.outgoers
+            return source?.outgoers
                 .filterIs(OnnxEdge)
                 .toArray()
                 .find((edge) => edge.target === target);

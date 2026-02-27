@@ -5,7 +5,8 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import express, { Request, Response } from "express";
+import type { Request, Response } from "express";
+import express from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from "./initGraph.js";
 import OnnxGraphTransformer from "./Onnx/transformation/loop-lowering/index.js";
@@ -16,22 +17,25 @@ import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
-import { safeWriteJson } from "./Onnx/Utils.js";
-import { DecompositionOptions, defaultDecompositionOptions } from "./DecompositionOptions.js";
+import { BASE_TEN, safeWriteJson } from "./Onnx/Utils.js";
+import type { DecompositionOptions } from "./DecompositionOptions.js";
+import { defaultDecompositionOptions } from "./DecompositionOptions.js";
 import { splitByAncestor } from "./Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "./Onnx/partitioning/Partition.js";
-import OnnxGraph from "./Onnx/OnnxGraph.js";
+import type OnnxGraph from "./Onnx/OnnxGraph.js";
+import validateGraph from "./Onnx/validation/ValidateGraph.js";
+import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
 
-export async function parseOnnxFile(inputFilePath: string) {
+export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
 }
 
-export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string) {
+export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string): Promise<void> {
     return await json2onnx(jsonFilePath, outputFilePath);
 }
 
 export function loadGraph(
-    onnxObject: any,
+    onnxObject: RawOnnxModel,
     enableLowLevel: boolean = true,
     enableOptimize: boolean = true,
     dotOutput: boolean = true,
@@ -40,8 +44,14 @@ export function loadGraph(
     coalesce: boolean = defaultDecompositionOptions.coalesce,
     loopLowering: boolean = defaultDecompositionOptions.loopLowering,
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
-) {
+    validate: boolean = true,
+): string | OnnxGraph.Class {
     let graph = createGraph(onnxObject);
+
+    // Initial Validation (Post-Adapter)
+    if (validate) {
+        validateGraph(graph);
+    }
 
     if (enableLowLevel) {
         const decompOptions: DecompositionOptions = {
@@ -52,10 +62,16 @@ export function loadGraph(
             decomposeForCgra,
         };
         graph = graph.apply(new OnnxGraphTransformer(decompOptions));
+
+        // Validation after Transformer
+        if (validate) validateGraph(graph);
     }
 
     if (enableLowLevel && enableOptimize) {
         graph = graph.apply(new OnnxGraphOptimizer());
+
+        // Validation after Optimizer
+        if (validate) validateGraph(graph);
     }
 
     if (dotOutput) {
@@ -73,7 +89,7 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
     return baseUrl + encodeURIComponent(dotGraph);
 }
 
-export function generateGraphCode(graph: any): string {
+export function generateGraphCode(graph: OnnxGraph.Class): string {
     return generateCode(graph);
 }
 
@@ -217,6 +233,12 @@ const argv = await yargs(hideBin(process.argv))
         type: "string",
         array: true,
     })
+    .option("validate", {
+        alias: "val",
+        describe: "Run structural validation after graph loading and transformations",
+        type: "boolean",
+        default: true, // Recommended: Always strictly validate by default
+    })
     // Enforce mutual exclusion at the CLI level
     .check((argv) => {
         if (argv.partition !== undefined) {
@@ -241,13 +263,14 @@ const outputFilePath = argv.output;
 const outputFormat = argv.format;
 const visualizationOption = argv.visualization;
 const dotFormatter = argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
+const validate = argv.validate;
 
 // --- Transformation Control ---
 // If partitioning is active, we override and disable other transformations
 // to ensure the split point remains stable and recognizable.
 const isPartitioning = argv.partition && argv.partition.length > 0;
 
-if (isPartitioning) {
+if (isPartitioning !== undefined) {
     argv.noLowLevel = true;
     argv.noOptimize = true;
     argv.noCodegen = true;
@@ -291,6 +314,17 @@ if (isPartitioning) {
                 loopLowering: argv.loopLowering,
             };
             graph.apply(new OnnxGraphTransformer(decompOptions));
+
+            if (validate) {
+                try {
+                    if (verbosity > 0) console.log("Running Graph Validation...");
+                    validateGraph(graph);
+                    if (verbosity > 0) console.log("Graph Validation Passed.");
+                } catch (e) {
+                    console.error("Graph Validation Failed:");
+                    throw e;
+                }
+            }
         }
 
         if (verbosity > 1) {
@@ -327,26 +361,27 @@ if (isPartitioning) {
                 targetNodeId = argv.partition[0];
             } else if (argv.partition.length === 2) {
                 const opType = argv.partition[0];
-                const instance = parseInt(argv.partition[1], 10);
+                const instance = parseInt(argv.partition[1], BASE_TEN);
                 if (isNaN(instance)) {
                     throw new Error(`Invalid instance number: ${argv.partition[1]}`);
                 }
-                const resolvedNode = (graph as any).getNodeByTypeAndInstance(opType, instance);
+                const resolvedNode = graph.getNodeByTypeAndInstance(opType, instance);
                 if (!resolvedNode) {
                     throw new Error(`Could not find instance ${instance} of operation '${opType}'`);
                 }
                 targetNodeId = resolvedNode.id;
             }
 
-            if (targetNodeId) {
+            if (targetNodeId !== undefined) {
                 if (verbosity > 0) console.log(`Partitioning graph at node: ${targetNodeId}`);
                 const sets = splitByAncestor(graph, targetNodeId);
                 partitions = partitionGraph(graph, sets);
 
-                const exportPartition = async (g: any, suffix: string) => {
-                    const base = outputFilePath
-                        ? outputFilePath.split(".").slice(0, -1).join(".")
-                        : inputFilePath.split(".").slice(0, -1).join(".");
+                const exportPartition = async (g: OnnxGraph.Class, suffix: string) => {
+                    const base =
+                        outputFilePath !== undefined
+                            ? outputFilePath.split(".").slice(0, -1).join(".")
+                            : inputFilePath.split(".").slice(0, -1).join(".");
                     const fileName = `${base}_${suffix}`;
 
                     // Always generate ONNX/JSON if reconversion is enabled
@@ -373,7 +408,7 @@ if (isPartitioning) {
             }
         }
 
-        if (outputFilePath) {
+        if (outputFilePath !== undefined) {
             if (outputFormat === "json") {
                 fs.writeFileSync(outputFilePath, JSON.stringify(graph.toCy().json(), null, 2));
             } else if (outputFormat === "dot") {
@@ -395,7 +430,7 @@ if (isPartitioning) {
         }
 
         // Convert the ONNX JSON format to ONNX binary format if not disabled
-        if (!argv.noReconversion && !isPartitioning) {
+        if (!argv.noReconversion && isPartitioning === undefined) {
             const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } =
                 getReconvertedPaths(inputFilePath);
             const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
@@ -406,14 +441,14 @@ if (isPartitioning) {
 
             await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
             console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-        } else if (verbosity > 0 && !isPartitioning) {
+        } else if (verbosity > 0 && isPartitioning === undefined) {
             console.log("Skipping ONNX reconversion.");
         }
 
         // Print the output graph to stdout
         if (verbosity > 0) {
             if (outputFormat === "json") {
-                if (isPartitioning && partitions) {
+                if (isPartitioning !== undefined && partitions) {
                     console.log(
                         "Output Head Graph in JSON Format:",
                         JSON.stringify(partitions.head.toCy().json(), null, 2),
@@ -429,7 +464,7 @@ if (isPartitioning) {
                     );
                 }
             } else if (outputFormat === "dot") {
-                if (isPartitioning && partitions) {
+                if (isPartitioning !== undefined && partitions) {
                     console.log(
                         "Output Head Graph in DOT Format:",
                         partitions.head.toString(dotFormatter),

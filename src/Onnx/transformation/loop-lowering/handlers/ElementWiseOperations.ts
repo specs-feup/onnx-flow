@@ -1,10 +1,12 @@
 import OnnxEdge from "@specs-feup/onnx-flow/Onnx/OnnxEdge";
-import OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type { Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import OperationNode from "@specs-feup/onnx-flow/Onnx/OperationNode";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
-import { uniq, toStaticShape, Shape, getLargestRankShape } from "@specs-feup/onnx-flow/Onnx/Utils";
-import { LoopCtx, resolveFusedInput, squeezeIfLen1, broadcastShapes } from "../BuildLoop.js";
+import { uniq, toStaticShape, getLargestRankShape } from "@specs-feup/onnx-flow/Onnx/Utils";
+import type { LoopCtx } from "../BuildLoop.js";
+import { resolveFusedInput, squeezeIfLen1, broadcastShapes } from "../BuildLoop.js";
 
 /* ============================== HANDLER ================================== */
 
@@ -26,7 +28,7 @@ export default function handleElementWiseOperation(
         .as(OperationNode);
 
     const allScalars = effInputs.every((t) => t.shape.length === 0);
-    let outShape: (number | string)[];
+    let outShape: Shape;
     if (allScalars) {
         outShape = [];
     } else {
@@ -48,7 +50,14 @@ export default function handleElementWiseOperation(
     g.addEdge(node, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
 
     // Gate ONLY when we’re in a coalesced + fused chain
-    if (ctx.coalesce && ctx.gateByK && ctx.kIdx && ctx.kM1) {
+    if (
+        ctx.coalesce &&
+        ctx.gateByK !== undefined &&
+        ctx.kIdx !== undefined &&
+        ctx.kIdx !== null &&
+        ctx.kM1 !== undefined &&
+        ctx.kM1 !== null
+    ) {
         const eqNode = g
             .addNode(uniq(g, `eq_k_last_${op.id}`))
             .init(new OperationNode.Builder("Equal", [ctx.kIdx, ctx.kM1]))
