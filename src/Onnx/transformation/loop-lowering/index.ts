@@ -2,7 +2,8 @@ import type Graph from "@specs-feup/flow/graph/Graph";
 import type { DecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import { defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import type OnnxGraph from "../../OnnxGraph.js";
-import applyCanonicalization from "../canonicalization/index.js";
+import { PassManager } from "../../PassManager.js";
+import { CanonicalizationPass } from "../canonicalization/index.js";
 import TransformChain from "./TransformChain.js";
 import transformForCgra from "../cgra-decomposition/index.js";
 
@@ -52,14 +53,16 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         }
 
         // 2) Canonical version of high-level operations (no explicit Loop needed)
-        const canon = applyCanonicalization(graph);
+        const pm = new PassManager();
+        pm.addPass(new CanonicalizationPass());
+        pm.run(graph);
 
         // 3) Optionally perform loop-lowering
         if (!this.loopLowering) {
             // Return canonicalised graph with no explicit Loop nodes
-            return canon;
+            return graph;
         }
 
-        return new TransformChain(this.fuse, this.recurse, this.coalesce).apply(canon);
+        return new TransformChain(this.fuse, this.recurse, this.coalesce).apply(graph);
     }
 }

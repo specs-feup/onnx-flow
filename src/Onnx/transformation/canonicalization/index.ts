@@ -10,6 +10,7 @@ import type OperationNode from "../../OperationNode.js";
 import softmaxHandler from "./handlers/Softmax.js";
 import expandHandler from "./handlers/Expand.js";
 import quantizeLinearHandler from "./handlers/QuantizeLinear.js";
+import type { GraphPass } from "../../PassManager.js";
 
 export type Handler = (graph: OnnxGraph.Class, op: OperationNode.Class) => boolean;
 
@@ -37,33 +38,42 @@ function buildDefaultRegistry(): HandlersRegistry {
     };
 }
 
-export default function applyCanonicalization(
-    graph: OnnxGraph.Class,
-    options?: CanonicalizationOptions,
-): OnnxGraph.Class {
-    const opts: CanonicalizationOptions = {
-        maxPasses: 10, // a couple passes for now
-        handlers: buildDefaultRegistry(),
-        ...options,
-    };
+export class CanonicalizationPass implements GraphPass {
+    public readonly name = "CanonicalizationPass";
+    private handlers: HandlersRegistry;
+    private maxInternalPasses: number;
 
-    // Run to fixed point (or maxPasses) to allow chained rewrites
-    for (let pass = 0; pass < (opts.maxPasses ?? 1); pass++) {
-        let changed = false;
+    constructor(options?: CanonicalizationOptions) {
+        this.handlers = options?.handlers ?? buildDefaultRegistry();
+        this.maxInternalPasses = options?.maxPasses ?? 10;
+    }
 
-        // Snapshot to avoid visiting newly inserted nodes in the same pass
-        const ops = graph.getOperationNodes();
+    run(graph: OnnxGraph.Class): boolean {
+        let anyChange = false;
 
-        for (const op of ops) {
-            const type = op.type;
-            if (opts.handlers === undefined) continue;
-            const handler: Handler | undefined = opts.handlers[type];
-            if (handler === undefined) continue;
-            const didChange = handler(graph, op);
-            if (didChange) changed = true;
+        // Run to fixed point (or maxPasses) to allow chained rewrites
+        for (let pass = 0; pass < this.maxInternalPasses; pass++) {
+            let changed = false;
+
+            // Snapshot to avoid visiting newly inserted nodes in the same pass
+            const ops = graph.getOperationNodes().toArray();
+
+            for (const op of ops) {
+                if (!graph.hasNode(op.id)) continue;
+
+                const handler = this.handlers[op.type];
+                if (handler === undefined) continue;
+
+                const didChange = handler(graph, op);
+                if (didChange) {
+                    changed = true;
+                    anyChange = true;
+                }
+            }
+
+            if (!changed) break;
         }
 
-        if (!changed) break;
+        return anyChange;
     }
-    return graph;
 }
