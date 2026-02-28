@@ -270,7 +270,7 @@ const validate = argv.validate;
 // to ensure the split point remains stable and recognizable.
 const isPartitioning = argv.partition && argv.partition.length > 0;
 
-if (isPartitioning !== undefined) {
+if (isPartitioning === true) {
     argv.noLowLevel = true;
     argv.noOptimize = true;
     argv.noCodegen = true;
@@ -430,7 +430,7 @@ if (isPartitioning !== undefined) {
         }
 
         // Convert the ONNX JSON format to ONNX binary format if not disabled
-        if (!argv.noReconversion && isPartitioning === undefined) {
+        if (!argv.noReconversion && (isPartitioning === undefined || isPartitioning === false)) {
             const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } =
                 getReconvertedPaths(inputFilePath);
             const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
@@ -441,14 +441,14 @@ if (isPartitioning !== undefined) {
 
             await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
             console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-        } else if (verbosity > 0 && isPartitioning === undefined) {
+        } else if (verbosity > 0 && (isPartitioning === undefined || isPartitioning === false)) {
             console.log("Skipping ONNX reconversion.");
         }
 
         // Print the output graph to stdout
         if (verbosity > 0) {
             if (outputFormat === "json") {
-                if (isPartitioning !== undefined && partitions) {
+                if (isPartitioning === true && partitions) {
                     console.log(
                         "Output Head Graph in JSON Format:",
                         JSON.stringify(partitions.head.toCy().json(), null, 2),
@@ -464,7 +464,7 @@ if (isPartitioning !== undefined) {
                     );
                 }
             } else if (outputFormat === "dot") {
-                if (isPartitioning !== undefined && partitions) {
+                if (isPartitioning === true && partitions) {
                     console.log(
                         "Output Head Graph in DOT Format:",
                         partitions.head.toString(dotFormatter),
