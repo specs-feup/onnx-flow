@@ -1,5 +1,15 @@
 import type { AttributeType, AttributeValue } from "../OnnxTypes.js";
 
+export enum OpCategory {
+    ElementWise = "ElementWise",
+    Reduction = "Reduction",
+    Spatial = "Spatial",
+    DataMovement = "DataMovement",
+    ControlFlow = "ControlFlow",
+    Normalization = "Normalization",
+    Other = "Other",
+}
+
 /**
  * Defines a single attribute for an operator (e.g., 'kernel_shape' for Conv).
  */
@@ -30,12 +40,14 @@ export interface OpSchema {
     domain?: string; // Default is 'ai.onnx' (empty string)
     sinceVersion: number; // The opset version where this definition became valid
 
+    category: OpCategory;
+    broadcastable: boolean;
+    hasState: boolean;
+
     inputs: IOInterface[];
     outputs: IOInterface[];
-
     attributes: Record<string, AttributeDefinition>;
-
-    typeConstraints?: Record<string, string[]>; // e.g. { "T": ["tensor(float)", "tensor(int64)"] }
+    typeConstraints?: Record<string, string[]>;
 
     /**
      * Optional: Logic to infer output shapes based on inputs and attributes.

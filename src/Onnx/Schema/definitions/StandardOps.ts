@@ -1,5 +1,5 @@
 import { AttributeType } from "../../OnnxTypes.js";
-import type { OpSchema } from "../OpSchema.js";
+import { OpCategory, type OpSchema } from "../OpSchema.js";
 
 // --- Helper for common types ---
 const T_FLOAT = "tensor(float)";
@@ -27,6 +27,9 @@ export const ElementWiseOps: OpSchema[] = [
 ].map((opType) => ({
     opType,
     sinceVersion: 7, // Stable baseline for elementwise
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [
         { name: "A", typeConstraint: T_ANY },
         { name: "B", typeConstraint: T_ANY },
@@ -36,7 +39,7 @@ export const ElementWiseOps: OpSchema[] = [
     typeConstraints: { T: [T_FLOAT, "tensor(int32)", T_INT] },
 }));
 
-// Fix: Bitwise/Logical ops return BOOL
+// Bitwise/Logical ops return BOOL
 [
     "And",
     "Or",
@@ -52,6 +55,17 @@ export const ElementWiseOps: OpSchema[] = [
     schema.outputs[0].typeConstraint = T_BOOL;
 });
 
+export const Not: OpSchema = {
+    opType: "Not",
+    sinceVersion: 1,
+    category: OpCategory.ElementWise,
+    broadcastable: true, // While technically unary, it follows elementwise propagation rules
+    hasState: false,
+    inputs: [{ name: "X", typeConstraint: T_BOOL }],
+    outputs: [{ name: "Y", typeConstraint: T_BOOL }],
+    attributes: {},
+};
+
 export const UnaryOps: OpSchema[] = [
     "Relu",
     "Sigmoid",
@@ -62,9 +76,13 @@ export const UnaryOps: OpSchema[] = [
     "Neg",
     "Floor",
     "Ceil",
+    "Round",
 ].map((opType) => ({
     opType,
     sinceVersion: 6,
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [{ name: "X", typeConstraint: T_ANY }],
     outputs: [{ name: "Y", typeConstraint: T_ANY }],
     attributes: {},
@@ -74,6 +92,9 @@ export const UnaryOps: OpSchema[] = [
 export const LeakyRelu: OpSchema = {
     opType: "LeakyRelu",
     sinceVersion: 6,
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [{ name: "X", typeConstraint: T_ANY }],
     outputs: [{ name: "Y", typeConstraint: T_ANY }],
     attributes: {
@@ -84,6 +105,9 @@ export const LeakyRelu: OpSchema = {
 export const Clip: OpSchema = {
     opType: "Clip",
     sinceVersion: 11, // In 11, min/max moved to inputs
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [
         { name: "input", typeConstraint: T_ANY },
         { name: "min", typeConstraint: T_ANY, optional: true },
@@ -96,6 +120,9 @@ export const Clip: OpSchema = {
 export const MatMul: OpSchema = {
     opType: "MatMul",
     sinceVersion: 1,
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "A", typeConstraint: T_ANY },
         { name: "B", typeConstraint: T_ANY },
@@ -107,6 +134,9 @@ export const MatMul: OpSchema = {
 export const Gemm: OpSchema = {
     opType: "Gemm",
     sinceVersion: 11, // beta/transA/transB attributes support
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "A", typeConstraint: T_ANY },
         { name: "B", typeConstraint: T_ANY },
@@ -124,6 +154,9 @@ export const Gemm: OpSchema = {
 export const Conv: OpSchema = {
     opType: "Conv",
     sinceVersion: 11,
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "X", typeConstraint: T_ANY },
         { name: "W", typeConstraint: T_ANY },
@@ -148,6 +181,9 @@ export const Conv: OpSchema = {
 export const PoolingOps: OpSchema[] = ["MaxPool", "AveragePool"].map((opType) => ({
     opType,
     sinceVersion: 12, // Stable pooling
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
     inputs: [{ name: "X", typeConstraint: T_ANY }],
     outputs: [
         { name: "Y", typeConstraint: T_ANY },
@@ -175,9 +211,25 @@ export const PoolingOps: OpSchema[] = ["MaxPool", "AveragePool"].map((opType) =>
     },
 }));
 
+export const GlobalPoolingOps: OpSchema[] = ["GlobalAveragePool", "GlobalMaxPool"].map(
+    (opType) => ({
+        opType,
+        sinceVersion: 1,
+        category: OpCategory.Spatial,
+        broadcastable: false,
+        hasState: false,
+        inputs: [{ name: "X", typeConstraint: T_ANY }],
+        outputs: [{ name: "Y", typeConstraint: T_ANY }],
+        attributes: {},
+    }),
+);
+
 export const BatchNormalization: OpSchema = {
     opType: "BatchNormalization",
     sinceVersion: 9,
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "X", typeConstraint: T_ANY },
         { name: "scale", typeConstraint: T_ANY },
@@ -205,6 +257,9 @@ export const BatchNormalization: OpSchema = {
 export const Reshape: OpSchema = {
     opType: "Reshape",
     sinceVersion: 5,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "shape", typeConstraint: T_INT },
@@ -218,6 +273,9 @@ export const Reshape: OpSchema = {
 export const Transpose: OpSchema = {
     opType: "Transpose",
     sinceVersion: 1,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [{ name: "data", typeConstraint: T_ANY }],
     outputs: [{ name: "transposed", typeConstraint: T_ANY }],
     attributes: {
@@ -228,6 +286,9 @@ export const Transpose: OpSchema = {
 export const Softmax: OpSchema = {
     opType: "Softmax",
     sinceVersion: 13, // Axis handling stabilized
+    category: OpCategory.Normalization,
+    broadcastable: false,
+    hasState: false,
     inputs: [{ name: "input", typeConstraint: T_ANY }],
     outputs: [{ name: "output", typeConstraint: T_ANY }],
     attributes: {
@@ -238,6 +299,9 @@ export const Softmax: OpSchema = {
 export const Slice: OpSchema = {
     opType: "Slice",
     sinceVersion: 13, // Inputs: data, starts, ends, axes, steps
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "starts", typeConstraint: T_INT },
@@ -252,6 +316,9 @@ export const Slice: OpSchema = {
 export const Pad: OpSchema = {
     opType: "Pad",
     sinceVersion: 11, // Pads moved to input
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "pads", typeConstraint: T_INT },
@@ -271,11 +338,45 @@ export const Pad: OpSchema = {
 export const Concat: OpSchema = {
     opType: "Concat",
     sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [{ name: "inputs", typeConstraint: T_ANY, variadic: true }],
     outputs: [{ name: "concat_result", typeConstraint: T_ANY }],
     attributes: {
         axis: { name: "axis", type: AttributeType.INT, required: true },
     },
+};
+
+export const Split: OpSchema = {
+    opType: "Split",
+    sinceVersion: 13, // In opset 13, 'split' moved from attribute to input
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "input", typeConstraint: T_ANY },
+        { name: "split", typeConstraint: T_INT, optional: true }, // 1D Tensor of lengths
+    ],
+    outputs: [{ name: "outputs", typeConstraint: T_ANY, variadic: true }],
+    attributes: {
+        axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: 0 },
+        num_outputs: { name: "num_outputs", type: AttributeType.INT, required: false }, // Useful if 'split' input is omitted
+    },
+};
+
+export const Tile: OpSchema = {
+    opType: "Tile",
+    sinceVersion: 6,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "input", typeConstraint: T_ANY },
+        { name: "repeats", typeConstraint: T_INT }, // 1D Tensor specifying replication
+    ],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {},
 };
 
 export const ReductionOps: OpSchema[] = [
@@ -292,9 +393,9 @@ export const ReductionOps: OpSchema[] = [
 ].map((opType) => ({
     opType,
     sinceVersion: 13, // Axes moved to input (mostly) - Note: ONNX 13 moved axes to input for ReduceSum but others followed later.
-    // This schema assumes the modern 'Input' approach or 'Attribute' approach based on specific op history.
-    // For simplicity in your Phase 1, we define axes as Attribute (older) or Input (newer).
-    // To support *all*, we mark it as Input, and your Adapter (Phase 2) will move it there.
+    category: OpCategory.Reduction,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "axes", typeConstraint: T_INT, optional: true },
@@ -314,6 +415,9 @@ export const ReductionOps: OpSchema[] = [
 export const Gather: OpSchema = {
     opType: "Gather",
     sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "indices", typeConstraint: T_INT },
@@ -324,9 +428,105 @@ export const Gather: OpSchema = {
     },
 };
 
+export const GatherElements: OpSchema = {
+    opType: "GatherElements",
+    sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "data", typeConstraint: T_ANY },
+        { name: "indices", typeConstraint: T_INT },
+    ],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: 0 },
+    },
+};
+
+export const GatherND: OpSchema = {
+    opType: "GatherND",
+    sinceVersion: 12,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "data", typeConstraint: T_ANY },
+        { name: "indices", typeConstraint: T_INT },
+    ],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        batch_dims: {
+            name: "batch_dims",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+    },
+};
+
+export const Scatter: OpSchema = {
+    opType: "Scatter",
+    sinceVersion: 9,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "data", typeConstraint: T_ANY },
+        { name: "indices", typeConstraint: T_INT },
+        { name: "updates", typeConstraint: T_ANY },
+    ],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: 0 },
+    },
+};
+
+export const ScatterElements: OpSchema = {
+    opType: "ScatterElements",
+    sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "data", typeConstraint: T_ANY },
+        { name: "indices", typeConstraint: T_INT },
+        { name: "updates", typeConstraint: T_ANY },
+    ],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: 0 },
+    },
+};
+
+export const ScatterND: OpSchema = {
+    opType: "ScatterND",
+    sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "data", typeConstraint: T_ANY },
+        { name: "indices", typeConstraint: T_INT },
+        { name: "updates", typeConstraint: T_ANY },
+    ],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        reduction: {
+            name: "reduction",
+            type: AttributeType.STRING,
+            required: false,
+            defaultValue: "none",
+        },
+    },
+};
+
 export const Unsqueeze: OpSchema = {
     opType: "Unsqueeze",
     sinceVersion: 13, // Axes moved to input
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "axes", typeConstraint: T_INT },
@@ -338,6 +538,9 @@ export const Unsqueeze: OpSchema = {
 export const Squeeze: OpSchema = {
     opType: "Squeeze",
     sinceVersion: 13, // Axes moved to input
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "data", typeConstraint: T_ANY },
         { name: "axes", typeConstraint: T_INT, optional: true },
@@ -349,6 +552,9 @@ export const Squeeze: OpSchema = {
 export const Cast: OpSchema = {
     opType: "Cast",
     sinceVersion: 9,
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [{ name: "input", typeConstraint: "T1" }],
     outputs: [{ name: "output", typeConstraint: "T2" }],
     attributes: {
@@ -359,6 +565,9 @@ export const Cast: OpSchema = {
 export const Range: OpSchema = {
     opType: "Range",
     sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "start", typeConstraint: T_ANY },
         { name: "limit", typeConstraint: T_ANY },
@@ -371,6 +580,9 @@ export const Range: OpSchema = {
 export const Where: OpSchema = {
     opType: "Where",
     sinceVersion: 9,
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [
         { name: "condition", typeConstraint: "B" },
         { name: "X", typeConstraint: T_ANY },
@@ -383,6 +595,9 @@ export const Where: OpSchema = {
 export const Flatten: OpSchema = {
     opType: "Flatten",
     sinceVersion: 11,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [{ name: "input", typeConstraint: T_ANY }],
     outputs: [{ name: "output", typeConstraint: T_ANY }],
     attributes: {
@@ -393,6 +608,9 @@ export const Flatten: OpSchema = {
 export const Expand: OpSchema = {
     opType: "Expand",
     sinceVersion: 8,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "input", typeConstraint: T_ANY },
         { name: "shape", typeConstraint: T_INT },
@@ -404,6 +622,9 @@ export const Expand: OpSchema = {
 export const Shape: OpSchema = {
     opType: "Shape",
     sinceVersion: 15, // Added 'start' and 'end'
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [{ name: "data", typeConstraint: T_ANY }],
     outputs: [{ name: "shape", typeConstraint: T_INT }],
     attributes: {
@@ -412,9 +633,25 @@ export const Shape: OpSchema = {
     },
 };
 
+export const ConstantOfShape: OpSchema = {
+    opType: "ConstantOfShape",
+    sinceVersion: 9,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [{ name: "input", typeConstraint: T_INT, optional: true }], // The shape
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        value: { name: "value", type: AttributeType.TENSOR, required: false }, // defaults to float 0.0
+    },
+};
+
 export const OneHot: OpSchema = {
     opType: "OneHot",
     sinceVersion: 9,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "indices", typeConstraint: "T1" },
         { name: "depth", typeConstraint: "T2" },
@@ -429,6 +666,9 @@ export const OneHot: OpSchema = {
 export const Loop: OpSchema = {
     opType: "Loop",
     sinceVersion: 13, // Use 13 or 16
+    category: OpCategory.ControlFlow,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "trip_count", typeConstraint: "I", optional: true },
         { name: "cond", typeConstraint: "B", optional: true },
@@ -440,9 +680,28 @@ export const Loop: OpSchema = {
     },
 };
 
+export const If: OpSchema = {
+    opType: "If",
+    sinceVersion: 13, // Opset 13 aligns with Loop/Scan graph semantics
+    category: OpCategory.ControlFlow,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "cond", typeConstraint: "B" }, // Boolean scalar
+    ],
+    outputs: [{ name: "outputs", typeConstraint: T_ANY, variadic: true }],
+    attributes: {
+        then_branch: { name: "then_branch", type: AttributeType.GRAPH, required: true },
+        else_branch: { name: "else_branch", type: AttributeType.GRAPH, required: true },
+    },
+};
+
 export const Scan: OpSchema = {
     opType: "Scan",
     sinceVersion: 9,
+    category: OpCategory.ControlFlow,
+    broadcastable: false,
+    hasState: false,
     inputs: [
         { name: "sequence_lens", typeConstraint: "I", optional: true },
         { name: "initial_state_and_inputs", typeConstraint: "V", variadic: true },
@@ -469,6 +728,9 @@ export const Scan: OpSchema = {
 export const LSTM: OpSchema = {
     opType: "LSTM",
     sinceVersion: 14, // Stable version with layout support (optional)
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: true,
     inputs: [
         { name: "X", typeConstraint: T_ANY }, // [seq_length, batch_size, input_size]
         { name: "W", typeConstraint: T_ANY }, // [num_directions, hidden_size, input_size]
@@ -509,6 +771,9 @@ export const LSTM: OpSchema = {
 export const QuantizeLinear: OpSchema = {
     opType: "QuantizeLinear",
     sinceVersion: 13, // Standard definition
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [
         { name: "x", typeConstraint: "T1" },
         { name: "y_scale", typeConstraint: "T1" },
@@ -525,6 +790,9 @@ export const QuantizeLinear: OpSchema = {
 export const DequantizeLinear: OpSchema = {
     opType: "DequantizeLinear",
     sinceVersion: 13,
+    category: OpCategory.ElementWise,
+    broadcastable: true,
+    hasState: false,
     inputs: [
         { name: "x", typeConstraint: "T1" },
         { name: "x_scale", typeConstraint: "T2" },
@@ -534,6 +802,17 @@ export const DequantizeLinear: OpSchema = {
     attributes: {
         axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: 1 },
     },
+};
+
+export const Identity: OpSchema = {
+    opType: "Identity",
+    sinceVersion: 1,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [{ name: "input", typeConstraint: T_ANY }],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {},
 };
 
 // --- Aggregate all into one export ---
@@ -569,4 +848,16 @@ export const StandardOps: OpSchema[] = [
     Scan,
     QuantizeLinear,
     DequantizeLinear,
+    Identity,
+    ScatterElements,
+    ConstantOfShape,
+    If,
+    GatherElements,
+    GatherND,
+    Scatter,
+    ScatterND,
+    Split,
+    Tile,
+    Not,
+    ...GlobalPoolingOps,
 ];
