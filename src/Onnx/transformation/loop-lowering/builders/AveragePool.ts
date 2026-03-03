@@ -34,24 +34,16 @@ class AveragePoolBuilder implements LoopBuilder {
 
         const a = op.getAttributes();
 
-        const autoPad = (a["auto_pad"] ?? "NOTSET") as string;
-        const ceilMode = Number(a["ceil_mode"] ?? 0);
+        const _autoPad = (a["auto_pad"] ?? "NOTSET") as string;
+        const _ceilMode = Number(a["ceil_mode"] ?? 0);
         const kernelShape = (a["kernel_shape"] ?? []) as number[];
         const strides = (a["strides"] ?? []) as number[];
-        const pads = (a["pads"] ?? []) as number[];
+        const _pads = (a["pads"] ?? []) as number[];
 
         // Only 2D spatial; if no proper kernel/stride, let other passes handle it.
         if (kernelShape.length !== 2 || strides.length !== 2) return false;
 
-        const [kH, kW] = kernelShape.map(Number);
-        const [sH, sW] = strides.map(Number);
-        const allPadsZero = pads.length === 0 || pads.every((p) => Number(p) === 0);
-
-        // Match the tiled global-like pooling:
-        const looksLikeTiled =
-            autoPad === "NOTSET" && ceilMode === 0 && allPadsZero && kH === sH && kW === sW;
-
-        return looksLikeTiled;
+        return true;
     }
 
     build(

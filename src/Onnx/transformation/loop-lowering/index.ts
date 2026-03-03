@@ -3,9 +3,28 @@ import type { DecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOp
 import { defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import type OnnxGraph from "../../OnnxGraph.js";
 import { PassManager } from "../../PassManager.js";
-import { CanonicalizationPass } from "../canonicalization/index.js";
-import TransformChain from "./TransformChain.js";
-import transformForCgra from "../cgra-decomposition/index.js";
+import { OrchestratorPass } from "../OrchestratorPass.js";
+import { MatMulGridDecompositionRecipe } from "../cgra-decomposition/MatMul.js";
+import { AddGridDecompositionRecipe } from "../cgra-decomposition/Add.js";
+import { ReluGridDecompositionRecipe } from "../cgra-decomposition/Relu.js";
+import { LowerMatMulRecipe } from "./recipes/LowerMatMulRecipe.js";
+import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
+import { LowerTransposeRecipe } from "./recipes/LowerTransposeRecipe.js";
+import { LowerRangeRecipe } from "./recipes/LowerRangeRecipe.js";
+import { LowerElementWiseRecipe } from "./recipes/LowerElementWiseRecipe.js";
+import { LowerReductionRecipe } from "./recipes/LowerReductionRecipe.js";
+import { InferShapesPass } from "../InferShapesPass.js";
+import { initializeSchemaRegistry } from "../../Schema/index.js";
+import { LowerClipRecipe } from "../canonicalization/recipes/LowerClipRecipe.js";
+import { LowerGemmRecipe } from "../canonicalization/recipes/LowerGemmRecipe.js";
+import { LowerAveragePoolRecipe } from "../canonicalization/recipes/LowerAveragePoolRecipe.js";
+import { LowerConcatRecipe } from "../canonicalization/recipes/LowerConcatRecipe.js";
+import { LowerDequantizeLinearRecipe } from "../canonicalization/recipes/LowerDequantizeLinearRecipe.js";
+import { LowerExpandRecipe } from "../canonicalization/recipes/LowerExpandRecipe.js";
+import { LowerPadRecipe } from "../canonicalization/recipes/LowerPadRecipe.js";
+import { LowerQuantizeLinearRecipe } from "../canonicalization/recipes/LowerQuantizeLinearRecipe.js";
+import { LowerSliceRecipe } from "../canonicalization/recipes/LowerSliceRecipe.js";
+import { LowerSoftmaxRecipe } from "../canonicalization/recipes/LowerSoftmaxRecipe.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -47,22 +66,61 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     }
 
     apply(graph: OnnxGraph.Class): OnnxGraph.Class {
-        // 1) If CGRA decomposition is enabled, perform it only
-        if (this.decomposeForCgra) {
-            return transformForCgra(graph);
-        }
-
-        // 2) Canonical version of high-level operations (no explicit Loop needed)
+        initializeSchemaRegistry();
         const pm = new PassManager();
-        pm.addPass(new CanonicalizationPass());
-        pm.run(graph);
 
-        // 3) Optionally perform loop-lowering
-        if (!this.loopLowering) {
-            // Return canonicalised graph with no explicit Loop nodes
+        // 1) If CGRA decomposition is enabled, perform it only
+        if (this.decomposeForCgra === true) {
+            pm.addPass(
+                new OrchestratorPass("SpatialDecomposition", [
+                    new MatMulGridDecompositionRecipe(),
+                    new AddGridDecompositionRecipe(),
+                    new ReluGridDecompositionRecipe(),
+                ]),
+            );
+
+            pm.run(graph);
             return graph;
         }
 
-        return new TransformChain(this.fuse, this.recurse, this.coalesce).apply(graph);
+        // 2) Canonical version of high-level operations (no explicit Loop needed)
+        pm.addPass(
+            new OrchestratorPass("CanonicalizationPass", [
+                new LowerAveragePoolRecipe(),
+                new LowerClipRecipe(),
+                new LowerConcatRecipe(),
+                new LowerDequantizeLinearRecipe(),
+                new LowerExpandRecipe(),
+                new LowerGemmRecipe(),
+                new LowerPadRecipe(),
+                new LowerQuantizeLinearRecipe(),
+                new LowerSliceRecipe(),
+                new LowerSoftmaxRecipe(),
+            ]),
+        );
+
+        //pm.addPass(new DeadCodeEliminationPass());
+
+        pm.addPass(new InferShapesPass());
+
+        // 3) Optionally perform loop-lowering
+        if (this.loopLowering === true) {
+            pm.addPass(
+                new OrchestratorPass("TemporalLowering", [
+                    new LowerMatMulRecipe(),
+                    new LowerConvRecipe(),
+                    new LowerTransposeRecipe(),
+                    new LowerRangeRecipe(),
+                    new LowerElementWiseRecipe(),
+                    new LowerReductionRecipe(),
+                ]),
+            );
+
+            //pm.addPass(new DeadCodeEliminationPass());
+            pm.addPass(new InferShapesPass());
+        }
+
+        pm.run(graph);
+        return graph;
     }
 }

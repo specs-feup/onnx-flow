@@ -32,9 +32,14 @@ function fixBuffers(obj: unknown): unknown {
         return obj.map(fixBuffers);
     }
 
-    if (obj !== undefined && typeof obj === "object") {
+    if (obj !== undefined && obj !== null && typeof obj === "object") {
         const record = obj as Record<string, unknown>;
-        if (record["type"] === "Buffer" && Array.isArray(record["data"])) {
+        if (
+            "type" in record &&
+            record["type"] === "Buffer" &&
+            "data" in record &&
+            Array.isArray(record["data"])
+        ) {
             return Buffer.from(record["data"]);
         }
         for (const key of Object.keys(record)) {

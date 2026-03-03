@@ -1,4 +1,5 @@
 import type { OpSchema } from "./OpSchema.js";
+import { StandardOps } from "./definitions/StandardOps.js";
 
 export class OpRegistry {
     private static instance: OpRegistry | undefined;
@@ -10,6 +11,9 @@ export class OpRegistry {
     public static getInstance(): OpRegistry {
         if (OpRegistry.instance === undefined) {
             OpRegistry.instance = new OpRegistry();
+
+            // Auto-initialize standard schemas so the registry is never empty
+            OpRegistry.instance.registerAll(StandardOps);
         }
         return OpRegistry.instance;
     }
@@ -33,15 +37,12 @@ export class OpRegistry {
 
     /**
      * Retrieve the schema for a specific operator and opset version.
-     * It implements "backwards compatibility" logic: finding the highest version
-     * defined that is less than or equal to the requested version.
      */
     public get(opType: string, opsetVersion: number): OpSchema | undefined {
         const versionMap = this.schemas.get(opType);
         if (!versionMap) return undefined;
 
         let bestVersion = -1;
-        // Find the closest version definition (standard ONNX resolution logic)
         for (const v of versionMap.keys()) {
             if (v <= opsetVersion && v > bestVersion) {
                 bestVersion = v;

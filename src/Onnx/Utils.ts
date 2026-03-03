@@ -17,6 +17,7 @@ import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
 import { unsqueezeIdx } from "./transformation/loop-lowering/BuildLoop.js";
+import type { GraphBuilder } from "./GraphBuilder.js";
 
 // =====================================================================================
 // SECTION 1: CONSTANTS
@@ -747,7 +748,8 @@ export function toNumShape(s?: Array<Dim>): Array<number | undefined> | undefine
     return s.map(toNum);
 }
 
-export function asStaticDims(shape: Shape): StaticShape {
+export function asStaticDims(shape?: Shape): StaticShape {
+    if (!shape || !Array.isArray(shape)) return [];
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined && n > 0 ? n : 1;
@@ -758,7 +760,8 @@ export function isKnownDim(d: number | undefined): boolean {
     return typeof d === "number" && Number.isFinite(d) && d > 0;
 }
 
-export function toStaticShape(shape: Shape): StaticShape {
+export function toStaticShape(shape?: Shape): StaticShape {
+    if (!shape || !Array.isArray(shape)) return [];
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined ? n : UNKOWN_SHAPE[0];
@@ -963,6 +966,34 @@ export function as1D(
 // SECTION 8: GRAPH ALGORITHMS
 // =====================================================================================
 
+/**
+ * Slices a tensor along a specific axis into 1D chunks using ONNX Gather.
+ * Example: A [M, K] tensor chunked on axis 0 returns M tensors of shape [K].
+ */
+export function chunkTensor(
+    builder: GraphBuilder,
+    tensor: ConcreteValueNode,
+    axis: number,
+): ConcreteValueNode[] {
+    const shape = toStaticShape(tensor.shape);
+    const dim = shape[axis];
+    const chunks: ConcreteValueNode[] = [];
+
+    for (let i = 0; i < dim; i++) {
+        // Create a scalar index for Gather
+        const idxConst = builder.createConstant(
+            `${tensor.id}_idx_${i}`,
+            makeTensorProto(DataType.INT64, [1], [i]),
+        );
+
+        // Gather(tensor, index) returns the slice
+        const gatherOut = builder.createOp("Gather", [tensor, idxConst], { axis })[0];
+        chunks.push(gatherOut);
+    }
+
+    return chunks;
+}
+
 export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
     const sorted: OperationNode.Class[] = [];
     const visited = new Set<string>();
@@ -1097,7 +1128,11 @@ export function safeWriteJson(filePath: string, obj: unknown): void {
             return;
         }
         const t = typeof value;
-        if (t === "number" || t === "boolean") {
+        if (t === "number") {
+            write(Number.isFinite(value as number) ? String(value) : "null");
+            return;
+        }
+        if (t === "boolean") {
             write(String(value));
             return;
         }

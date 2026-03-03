@@ -47,7 +47,7 @@ export default class OnnxDotFormatter<
             }),
             Node.Case(ConstantNode, (node) => {
                 const val = readTensorData(node);
-                attrs["label"] = val!.slice(0, 5).toString();
+                attrs["label"] = val ? val.slice(0, 5).toString() : "empty";
                 attrs["shape"] = "box";
                 attrs["color"] = "maroon";
             }),

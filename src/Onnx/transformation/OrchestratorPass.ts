@@ -15,36 +15,42 @@ export class OrchestratorPass implements GraphPass {
     }
 
     run(graph: OnnxGraph.Class): boolean {
-        let changed = false;
+        let globalChanged = false;
+        let localChanged = true;
+        let passCount = 0;
         const builder = new GraphBuilder(graph);
         const registry = OpRegistry.getInstance();
 
-        // We use topological sort to process nodes in execution order safely
-        const ops = topologicalSortOperationNodes(graph);
+        while (localChanged && passCount < 10) {
+            localChanged = false;
+            passCount++;
 
-        for (const op of ops) {
-            if (!graph.hasNode(op.id)) continue; // Skip if it was already removed by a previous recipe
+            const ops = topologicalSortOperationNodes(graph);
 
-            const schema = registry.get(op.type, 19);
-            const category = schema?.category;
+            for (const op of ops) {
+                if (!graph.hasNode(op.id)) continue;
 
-            // Find the first recipe that matches the OpType or Category, AND passes the canApply check
-            const recipe = this.recipes.find(
-                (r) =>
-                    (r.targetOp === op.type ||
-                        (category !== undefined && r.targetOp === category)) &&
-                    r.canApply(op),
-            );
+                const schema = registry.get(op.type, 19);
+                const category = schema?.category;
 
-            if (recipe) {
-                console.log(
-                    `[${this.name}] Applying recipe '${recipe.name}' to ${op.id} (${op.type})`,
+                const recipe = this.recipes.find(
+                    (r) =>
+                        (r.targetOp === op.type ||
+                            (category !== undefined && r.targetOp === category)) &&
+                        r.canApply(op),
                 );
-                recipe.apply(op, builder);
-                changed = true;
+
+                if (recipe) {
+                    console.log(
+                        `[${this.name}] Applying recipe '${recipe.name}' to ${op.id} (${op.type})`,
+                    );
+                    recipe.apply(op, builder);
+                    localChanged = true;
+                    globalChanged = true;
+                }
             }
         }
 
-        return changed;
+        return globalChanged;
     }
 }

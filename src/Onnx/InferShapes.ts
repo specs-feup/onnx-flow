@@ -3,7 +3,7 @@ import type OnnxGraph from "./OnnxGraph.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
-import type { Shape } from "./OnnxTypes.js";
+import type { Shape, TensorProto, ValueNode } from "./OnnxTypes.js";
 import { DataType } from "./OnnxTypes.js";
 import {
     broadcastShapes,
@@ -76,21 +76,21 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
     const ops = topologicalSortOperationNodes(graph);
 
     for (const node of ops) {
-        const inputs = node.getInputs() ?? [];
+        const inputs: (ValueNode | undefined)[] = node.getInputs() ?? [];
 
-        const infos = inputs.map((inp) => {
+        const infos = inputs.map((inp: ValueNode | undefined) => {
             let shape: Shape = [];
             let dtype = DataType.UNDEFINED;
 
-            if (inp.is(ConstantNode)) {
+            if (inp !== undefined && inp.is(ConstantNode)) {
                 const cn = inp.as(ConstantNode);
                 shape = cn.shape;
                 dtype = cn.literalType;
-            } else if (inp.is(RegionArgumentNode)) {
+            } else if (inp !== undefined && inp.is(RegionArgumentNode)) {
                 const ra = inp.as(RegionArgumentNode);
                 shape = ra.shape;
                 dtype = ra.literalType;
-            } else if (inp.is(TensorNode)) {
+            } else if (inp !== undefined && inp.is(TensorNode)) {
                 const tns = inp.as(TensorNode);
                 const directEdge = graph.getEdge(inp.id, node.id)?.tryAs(OnnxEdge);
 
@@ -124,8 +124,8 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             for (let i = 0; i < loopInputs.length - 2; i++) {
                 const vInit = loopInputs[i + 2];
                 const vBody = bodyInputs[i + 2]; // skip iter, cond
-                vBody.setShape(resolveTensorShape(vInit));
-                vBody.setLiteralType(resolveLiteralType(vInit));
+                if (vInit !== undefined) vBody.setShape(resolveTensorShape(vInit));
+                if (vInit !== undefined) vBody.setLiteralType(resolveLiteralType(vInit));
             }
 
             // 3. Recurse
@@ -151,11 +151,12 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 } else {
                     // Scan output (prepend dimension, usually trip count or symbolic)
                     // Ideally we find 'trip_count' from input[0]
-                    const tripCnt = inputs[0]?.is(ConstantNode)
-                        ? decodeIntegerVectorFromTensorProto(
-                              inputs[0].as(ConstantNode).constantValue,
-                          )![0]
-                        : undefined;
+                    const tripCnt =
+                        inputs[0] !== undefined && inputs[0].is(ConstantNode)
+                            ? decodeIntegerVectorFromTensorProto(
+                                  inputs[0].as(ConstantNode).constantValue,
+                              )![0]
+                            : undefined;
                     const dim0 = tripCnt !== undefined ? tripCnt : UNKOWN_SHAPE[0];
                     lOut.setShape([dim0, ...bOut.shape]);
                     lOut.setLiteralType(bOut.literalType);
@@ -293,10 +294,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── Reshape (ONNX rules: 0 / -1, product preserved) ───── */
             case "Reshape": {
                 const inputShape = infos[0]?.shape ?? [];
-                const shapeInput = inputs[1]; // BaseNode
+                const shapeInput: ValueNode | undefined = inputs[1];
                 let target: number[] = [];
 
-                if (shapeInput.is(ConstantNode)) {
+                if (shapeInput !== undefined && shapeInput.is(ConstantNode)) {
                     target =
                         decodeIntegerVectorFromTensorProto(
                             shapeInput.as(ConstantNode).constantValue,
@@ -345,10 +346,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── Unsqueeze / Squeeze ───── */
             case "Unsqueeze": {
                 const tensorShape = infos[0]?.shape ?? [];
-                const axesNode = inputs[1];
+                const axesNode: ValueNode | undefined = inputs[1];
 
                 let raw: number[] = [];
-                if (axesNode.is(ConstantNode)) {
+                if (axesNode !== undefined && axesNode.is(ConstantNode)) {
                     raw =
                         decodeIntegerVectorFromTensorProto(
                             axesNode.as(ConstantNode).constantValue,
@@ -363,10 +364,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
             case "Squeeze": {
                 const inputShape = infos[0]?.shape ?? [];
-                const axesNode = inputs[1];
+                const axesNode: ValueNode | undefined = inputs[1];
 
                 let axes: number[] = [];
-                if (axesNode.is(ConstantNode)) {
+                if (axesNode !== undefined && axesNode.is(ConstantNode)) {
                     axes =
                         decodeIntegerVectorFromTensorProto(
                             axesNode.as(ConstantNode).constantValue,
@@ -443,35 +444,35 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     break;
                 }
 
-                const startsNode = inputs[1];
-                const endsNode = inputs[2];
-                const axesNode = inputs[3];
-                const stepsNode = inputs[4];
+                const startsNode: ValueNode | undefined = inputs[1];
+                const endsNode: ValueNode | undefined = inputs[2];
+                const axesNode: ValueNode | undefined = inputs[3];
+                const stepsNode: ValueNode | undefined = inputs[4];
 
                 let starts: number[] = [];
                 let ends: number[] = [];
                 let axes: number[] = [];
                 let steps: number[] = [];
 
-                if (startsNode.is(ConstantNode)) {
+                if (startsNode !== undefined && startsNode.is(ConstantNode)) {
                     starts =
                         decodeIntegerVectorFromTensorProto(
                             startsNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
-                if (endsNode.is(ConstantNode)) {
+                if (endsNode !== undefined && endsNode.is(ConstantNode)) {
                     ends =
                         decodeIntegerVectorFromTensorProto(
                             endsNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
-                if (axesNode.is(ConstantNode)) {
+                if (axesNode !== undefined && axesNode.is(ConstantNode)) {
                     axes =
                         decodeIntegerVectorFromTensorProto(
                             axesNode.as(ConstantNode).constantValue,
                         ) ?? [];
                 }
-                if (stepsNode.is(ConstantNode)) {
+                if (stepsNode !== undefined && stepsNode.is(ConstantNode)) {
                     steps =
                         decodeIntegerVectorFromTensorProto(
                             stepsNode.as(ConstantNode).constantValue,
@@ -517,10 +518,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── Pad ───── */
             case "Pad": {
                 const dataShape = infos[0]?.shape ?? [];
-                const padsNode = inputs[1];
+                const padsNode: ValueNode | undefined = inputs[1];
 
                 let pads: number[] = [];
-                if (padsNode.is(ConstantNode)) {
+                if (padsNode !== undefined && padsNode.is(ConstantNode)) {
                     pads =
                         decodeIntegerVectorFromTensorProto(
                             padsNode.as(ConstantNode).constantValue,
@@ -558,8 +559,8 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                       : undefined;
 
                 if (!axes) {
-                    const axesNode = inputs[1];
-                    if (axesNode.is(ConstantNode)) {
+                    const axesNode: ValueNode | undefined = inputs[1];
+                    if (axesNode !== undefined && axesNode.is(ConstantNode)) {
                         const raw =
                             decodeIntegerVectorFromTensorProto(
                                 axesNode.as(ConstantNode).constantValue,
@@ -678,10 +679,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
             /** ───── ConstantOfShape (with Shape(X) fallback) ───── */
             case "ConstantOfShape": {
-                const shapeTensor = inputs[0]; // BaseNode
+                const shapeTensor: ValueNode | undefined = inputs[0]; // BaseNode
                 let shape: Shape = [];
 
-                if (shapeTensor.is(ConstantNode)) {
+                if (shapeTensor !== undefined && shapeTensor.is(ConstantNode)) {
                     const arr =
                         decodeIntegerVectorFromTensorProto(
                             shapeTensor.as(ConstantNode).constantValue,
@@ -692,7 +693,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                 }
 
                 if (!shape.length) {
-                    const producers = shapeTensor.incomers.sources;
+                    const producers = shapeTensor!.incomers.sources;
                     const shapeOp = producers
                         .filterIs(OperationNode)
                         .filter((op) => op.type === "Shape")
@@ -727,10 +728,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             case "OneHot": {
                 const indicesShape = infos[0]?.shape ?? [];
 
-                const depthTensorNode = inputs[1];
+                const depthTensorNode: ValueNode | undefined = inputs[1];
                 let depth = 0;
 
-                if (depthTensorNode.is(ConstantNode)) {
+                if (depthTensorNode !== undefined && depthTensorNode.is(ConstantNode)) {
                     const depthArr =
                         decodeIntegerVectorFromTensorProto(
                             depthTensorNode.as(ConstantNode).constantValue,
@@ -744,10 +745,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     outShape = depth > 0 ? [depth] : [];
                 }
 
-                const valuesTensor = inputs[2];
-                if (valuesTensor.is(ConstantNode)) {
+                const valuesTensor: ValueNode | undefined = inputs[2];
+                if (valuesTensor !== undefined && valuesTensor.is(ConstantNode)) {
                     outDtype = valuesTensor.as(ConstantNode).literalType;
-                } else if (valuesTensor.is(TensorNode)) {
+                } else if (valuesTensor !== undefined && valuesTensor.is(TensorNode)) {
                     outDtype = valuesTensor.as(TensorNode).literalType;
                 } else {
                     outDtype = DataType.FLOAT;
@@ -782,10 +783,10 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
             /** ───── Expand (with Expand(x, Shape(X)) pattern) ───── */
             case "Expand": {
                 const dataShape = infos[0]?.shape ?? [];
-                const shapeInput = inputs[1]; // BaseNode
+                const shapeInput: ValueNode | undefined = inputs[1]; // BaseNode
                 let targetShape: Shape = [];
 
-                if (shapeInput.is(ConstantNode)) {
+                if (shapeInput !== undefined && shapeInput.is(ConstantNode)) {
                     const arr =
                         decodeIntegerVectorFromTensorProto(
                             shapeInput.as(ConstantNode).constantValue,
@@ -795,7 +796,7 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
                     }
                 }
 
-                const producers = shapeInput.incomers.sources;
+                const producers = shapeInput!.incomers.sources;
                 const shapeOp = producers
                     .filterIs(OperationNode)
                     .filter((op) => op.type === "Shape")
@@ -960,37 +961,36 @@ export default function inferShapes(graph: OnnxGraph.Class): void {
 
             /** ───── Range (1D) ───── */
             case "Range": {
-                let st: number[] = [];
-                let ed: number[] = [];
-                let dt: number[] = [];
+                const getScalar = (inp: ValueNode | undefined): number | undefined => {
+                    if (inp !== undefined && inp.is(ConstantNode)) {
+                        const proto: TensorProto = inp.as(ConstantNode).constantValue;
 
-                if (inputs[0]?.is(ConstantNode)) {
-                    st =
-                        decodeIntegerVectorFromTensorProto(
-                            inputs[0].as(ConstantNode).constantValue,
-                        ) ?? [];
-                }
-                if (inputs[1]?.is(ConstantNode)) {
-                    ed =
-                        decodeIntegerVectorFromTensorProto(
-                            inputs[1].as(ConstantNode).constantValue,
-                        ) ?? [];
-                }
-                if (inputs[2]?.is(ConstantNode)) {
-                    dt =
-                        decodeIntegerVectorFromTensorProto(
-                            inputs[2].as(ConstantNode).constantValue,
-                        ) ?? [];
-                }
+                        // 1. Try parsed arrays first
+                        if (proto.floatData && proto.floatData.length > 0)
+                            return proto.floatData[0];
+                        if (proto.doubleData && proto.doubleData.length > 0)
+                            return proto.doubleData[0];
+                        if (proto.int64Data && proto.int64Data.length > 0)
+                            return Number(proto.int64Data[0]);
+                        if (proto.int32Data && proto.int32Data.length > 0)
+                            return proto.int32Data[0];
 
-                if (st.length && ed.length && dt.length) {
-                    const start = st[0];
-                    const end = ed[0];
-                    const step = dt[0] || 1;
+                        // 2. Fallback to existing integer decoder
+                        const arr = decodeIntegerVectorFromTensorProto(proto);
+                        if (arr && arr.length > 0) return arr[0];
+                    }
+                    return undefined;
+                };
+
+                const start = getScalar(inputs[0]);
+                const end = getScalar(inputs[1]);
+                const step = getScalar(inputs[2]);
+
+                if (start !== undefined && end !== undefined && step !== undefined && step !== 0) {
                     const len = Math.max(0, Math.ceil((end - start) / step));
                     outShape = [len];
                 } else {
-                    outShape = [];
+                    outShape = []; // Fallback to unknown shape
                 }
                 break;
             }

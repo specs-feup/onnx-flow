@@ -72,7 +72,8 @@ export default function sliceHandler(g: OnnxGraph.Class, sl: OperationNode.Class
         if (ax < 0 || ax >= rank) continue; // Should not happen in valid ONNX
 
         const dim = inShape[ax]; // Dimension size
-        const dimVal = dim > 0 ? dim : 2147483647; // Handle unknown dim safely if needed
+        if (dim <= 0) return false; // CANNOT CANONICALIZE DYNAMIC DIMENSIONS SAFELY
+        const dimVal = dim;
 
         let s = Number(starts[i]);
         let e = Number(ends[i]);
