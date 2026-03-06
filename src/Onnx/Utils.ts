@@ -1001,7 +1001,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
 
     const opNodes = graph.getOperationNodes().toArray();
 
-    // Map tensor id -> producing op
+    // Map tensor id -> producing op in the CURRENT graph
     const tensorProducers = new Map<string, OperationNode.Class>();
     for (const op of opNodes) {
         const outTensors = op.getOutgoers.targets.filter((n) => n.is(TensorNode)).toArray();
@@ -1010,34 +1010,39 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
     }
 
-    // Extra deps from implicit subgraph captures (Phase 4: Explicit RegionArgumentNode)
+    // Extra deps from implicit subgraph captures
     const extraDeps = new Map<string, Set<OperationNode.Class>>();
 
-    for (const op of opNodes) {
-        // Iterate over strict regions
-        const regions = op.regions;
+    // Helper to recursively find dependencies from inner regions
+    const findImplicitDeps = (opId: string, sg: OnnxGraph.Class) => {
+        const innerOps = sg.getOperationNodes().toArray();
+        for (const innerOp of innerOps) {
+            const inputs = innerOp.getInputs() ?? [];
+            for (const input of inputs) {
+                // Check if this input comes from the outer graph
+                const parentProd = tensorProducers.get(input.id);
 
-        for (const sg of regions) {
-            // Find explicit captures via RegionArgumentNode
-            const nodes = sg.getNodes().toArray();
-            for (const node of nodes) {
-                if (node.is(RegionArgumentNode)) {
-                    const arg = node.as(RegionArgumentNode);
-                    const parentName = arg.originalName;
-
-                    const parentProd = tensorProducers.get(parentName);
-
-                    // If the parent node is produced by an op in the current graph, we depend on it.
-                    if (parentProd && parentProd.id !== op.id) {
-                        let deps = extraDeps.get(op.id);
-                        if (!deps) {
-                            deps = new Set<OperationNode.Class>();
-                            extraDeps.set(op.id, deps);
-                        }
-                        deps.add(parentProd);
+                if (parentProd && parentProd.id !== opId) {
+                    let deps = extraDeps.get(opId);
+                    if (!deps) {
+                        deps = new Set<OperationNode.Class>();
+                        extraDeps.set(opId, deps);
                     }
+                    deps.add(parentProd);
                 }
             }
+            
+            // Recurse into nested regions (e.g., loops inside loops)
+            for (const nestedSg of innerOp.regions) {
+                findImplicitDeps(opId, nestedSg);
+            }
+        }
+    };
+
+    // Find all implicit dependencies across boundaries
+    for (const op of opNodes) {
+        for (const sg of op.regions) {
+            findImplicitDeps(op.id, sg);
         }
     }
 
@@ -1049,7 +1054,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
         temp.add(node.id);
 
-        // 1. Explicit Captures dependencies
+        // 1. Implicit Closure dependencies
         const implicitPreds = extraDeps.get(node.id);
         if (implicitPreds) implicitPreds.forEach(visit);
 

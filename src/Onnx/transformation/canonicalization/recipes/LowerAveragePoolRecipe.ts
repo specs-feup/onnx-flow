@@ -67,7 +67,6 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
             `AvgPool_W_${op.id}`,
             makeTensorProto(dtype, [C, 1, kH, kW], wData),
         );
-        wOnes.setShape([C, 1, kH, kW]);
 
         const convAttrs: Record<string, AttributeValue> = {
             group: C,
@@ -78,7 +77,6 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
 
         // 2. Compute Sum = Conv(X, Wones)
         const sumOut = builder.createOp("Conv", [X, wOnes], convAttrs)[0];
-        sumOut.setShape(Y.shape as KnownShape);
 
         // 3. Compute Divisor
         let divisor: ConcreteValueNode;
@@ -88,28 +86,22 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
                 `AvgPool_Div_${op.id}`,
                 makeTensorProto(dtype, [], [kH * kW]),
             );
-            divisor.setShape([]);
         } else {
             // Complex case: Convolve a mask of 1s to count valid pixels
             const shapeX = builder.createOp("Shape", [X])[0];
-            shapeX.setShape([xShape.length]);
 
             const oneSc = builder.createConstant(
                 `AvgPool_One_${op.id}`,
                 makeTensorProto(dtype, [], [1]),
             );
-            oneSc.setShape([]);
 
             const mask = builder.createOp("Expand", [oneSc, shapeX])[0];
-            mask.setShape(X.shape as KnownShape);
 
             divisor = builder.createOp("Conv", [mask, wOnes], convAttrs)[0];
-            divisor.setShape(Y.shape as KnownShape);
         }
 
         // 4. Final Divide
         const finalY = builder.createOp("Div", [sumOut, divisor])[0];
-        finalY.setShape(Y.shape as KnownShape);
 
         builder.replaceAllUsesWith(Y, finalY);
         op.remove();

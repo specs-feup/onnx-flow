@@ -74,7 +74,6 @@ export class LowerPadRecipe implements DecompositionRecipe {
 
             cur = builder.createOp("Slice", [cur, start1, end1, axVec])[0];
             curShape[ax] -= negB + negE;
-            cur.setShape([...curShape]);
 
             beg[ax] = Math.max(0, beg[ax]);
             end[ax] = Math.max(0, end[ax]);
@@ -157,7 +156,6 @@ export class LowerPadRecipe implements DecompositionRecipe {
 
             cur = builder.createOp("Concat", parts, { axis: ax })[0];
             curShape[ax] += pBeg + pEnd;
-            cur.setShape([...curShape]);
         }
 
         if (cur === Xin) cur = builder.createOp("Identity", [Xin])[0];

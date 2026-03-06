@@ -15,6 +15,7 @@ import OnnxEdge from "./OnnxEdge.js";
 import { bool, scalarInt64, uniq, zeroTensor } from "./Utils.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
 import Graph from "@specs-feup/flow/graph/Graph";
+import { inferNodeShape } from "./InferShapes.js";
 
 export class GraphBuilder {
     constructor(
@@ -96,6 +97,21 @@ export class GraphBuilder {
                 .init(new OnnxEdge.Builder(outTensor.literalType, outTensor.shape))
                 .as(OnnxEdge);
             outputs.push(outTensor);
+        }
+
+        // 4. Automatically infer shapes for the newly created operation
+        inferNodeShape(op, this.graph);
+
+        // 5. Explicitly specified expectedOutputs take ultimate precedence
+        if (expectedOutputs) {
+            for (let i = 0; i < expectedOutputs.length; i++) {
+                if (outputs[i] && expectedOutputs[i].shape.length > 0) {
+                    outputs[i].setShape(expectedOutputs[i].shape);
+                }
+                if (outputs[i] && expectedOutputs[i].type !== DataType.UNDEFINED) {
+                    outputs[i].setLiteralType(expectedOutputs[i].type);
+                }
+            }
         }
 
         return outputs;
