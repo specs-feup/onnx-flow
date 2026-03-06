@@ -25,6 +25,7 @@ import { LowerPadRecipe } from "../canonicalization/recipes/LowerPadRecipe.js";
 import { LowerQuantizeLinearRecipe } from "../canonicalization/recipes/LowerQuantizeLinearRecipe.js";
 import { LowerSliceRecipe } from "../canonicalization/recipes/LowerSliceRecipe.js";
 import { LowerSoftmaxRecipe } from "../canonicalization/recipes/LowerSoftmaxRecipe.js";
+import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -107,7 +108,8 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         if (this.loopLowering === true) {
             pm.addPass(
                 new OrchestratorPass("TemporalLowering", [
-                    new LowerMatMulRecipe(),
+                    //new LowerMatMulRecipe(),
+                    new LowerCoalescedMatMulRecipe(),
                     new LowerConvRecipe(),
                     new LowerTransposeRecipe(),
                     new LowerRangeRecipe(),
