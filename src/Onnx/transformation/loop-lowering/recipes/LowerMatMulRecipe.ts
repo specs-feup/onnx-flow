@@ -91,7 +91,7 @@ export class LowerMatMulRecipe implements DecompositionRecipe {
             makeTensorProto(DataType.INT64, [outShape.length], outShape),
         );
 
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createLoopRegion(
+        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
             builder,
             totalElements,
             dtype,

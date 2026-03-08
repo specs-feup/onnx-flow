@@ -51,7 +51,7 @@ export class LowerElementWiseRecipe implements DecompositionRecipe {
         const totalElements = outShape.reduce((a, b) => a * b, 1);
 
         // 2. Generate Loop
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createLoopRegion(
+        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
             builder,
             totalElements,
             dtype,

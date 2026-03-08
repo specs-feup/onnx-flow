@@ -1,4 +1,4 @@
-import OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import TensorNode from "../../TensorNode.js";
 import { GraphBuilder } from "../../GraphBuilder.js";
@@ -57,7 +57,7 @@ export class LoopLoweringPass implements GraphPass {
         return this.getRecipeFor(op) !== undefined;
     }
 
-    private getBoundsFor(op: OperationNode.Class): { totalIters: number; carryShape: KnownShape } {
+    private getBoundsFor(op: OperationNode.Class): { totalIters: number | ValueNode; carryShape: KnownShape | ValueNode } {
         const recipe = this.getRecipeFor(op)!;
         const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
         const originalOutShape: KnownShape =
@@ -94,7 +94,7 @@ export class LoopLoweringPass implements GraphPass {
         // This handles creating the inner graph, standard inputs (iter, cond, carry),
         // the outer constants, and the Loop node itself with the region attached.
         const { innerBuilder, trip, vInitial, loopOutput, finalize } =
-            outerBuilder.createLoopRegion(
+            outerBuilder.createForLoopRegion(
                 outerBuilder,
                 totalIters,
                 elemTy,
@@ -177,6 +177,32 @@ export class LoopLoweringPass implements GraphPass {
         chain.forEach((op) => op.remove());
     }
 
+    private compareIters(a: number | ValueNode, b: number | ValueNode): boolean {
+        if (typeof a === 'number' && typeof b === 'number') {
+            return a === b;
+        }
+        if (typeof a !== 'number' && typeof b !== 'number') {
+            // Both are ValueNodes; compare by ID
+            return a.id === b.id;
+        }
+        return false; // One is static, one is dynamic
+    }
+
+    private compareCarryShapes(a: KnownShape | ValueNode, b: KnownShape | ValueNode): boolean {
+        const isArrayA = Array.isArray(a);
+        const isArrayB = Array.isArray(b);
+
+        if (isArrayA && isArrayB) {
+            // Both are static KnownShapes (arrays); use the string comparison
+            return (a as KnownShape).join(",") === (b as KnownShape).join(",");
+        }
+        if (!isArrayA && !isArrayB) {
+            // Both are ValueNodes; compare by ID
+            return (a as ValueNode).id === (b as ValueNode).id;
+        }
+        return false; // One is static, one is dynamic
+    }
+
     private findSingleOpChains(graph: OnnxGraph.Class): OperationNode.Class[][] {
         return graph
             .getOperationNodes()
@@ -228,8 +254,8 @@ export class LoopLoweringPass implements GraphPass {
                         if (this.isSupported(prod)) {
                             const prodBounds = this.getBoundsFor(prod);
                             if (
-                                prodBounds.totalIters === rootBounds.totalIters &&
-                                prodBounds.carryShape.join(",") === rootBounds.carryShape.join(",")
+                                this.compareIters(prodBounds.totalIters, rootBounds.totalIters) &&
+                                this.compareCarryShapes(prodBounds.carryShape, rootBounds.carryShape)
                             ) {
                                 queue.push(prod);
                             }

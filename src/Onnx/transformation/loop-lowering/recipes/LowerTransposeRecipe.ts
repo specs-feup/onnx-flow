@@ -43,7 +43,7 @@ export class LowerTransposeRecipe implements DecompositionRecipe {
             makeTensorProto(DataType.INT64, [rank], outShape),
         );
 
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createLoopRegion(
+        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
             builder,
             totalElements,
             dtype,

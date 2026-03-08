@@ -12,7 +12,7 @@ import {
     uniq,
     int64Vec,
 } from "../../Utils.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
+import type { GraphBuilder } from "../../GraphBuilder.js";
 
 /**
  * Decodes a linear iteration index into a multi-index based on output radices.

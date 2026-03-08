@@ -1,7 +1,7 @@
 import type OperationNode from "../../OperationNode.js";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type { ConcreteValueNode, ValueNode, KnownShape } from "../../OnnxTypes.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
+import type { GraphBuilder } from "../../GraphBuilder.js";
 
 export type RecipeApplyResult = ValueNode | { resultNode: ValueNode; nextCarry: ValueNode };
 
@@ -16,10 +16,10 @@ export interface LoopLoweringRecipe {
      * If omitted, the pass defaults to `totalIters = product(outShape)`
      * and `carryShape = [totalIters]`.
      */
-    getLoopBounds?(
-        op: OperationNode.Class,
-        outShape: KnownShape,
-    ): { totalIters: number; carryShape: KnownShape };
+    getLoopBounds?(op: OperationNode.Class, outShape: KnownShape): { 
+        totalIters: number | ValueNode, 
+        carryShape: KnownShape | ValueNode 
+    };
 
     /**
      * Optional: Performs operations on the loop output before final reshaping.

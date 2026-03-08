@@ -76,7 +76,7 @@ export class LowerReductionRecipe implements DecompositionRecipe {
         // Ensure we always pass at least [1] for the carry state to avoid scalar reshape bugs
         const carryShape = [carryLen];
 
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createLoopRegion(
+        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
             builder,
             totalElements,
             dtype,

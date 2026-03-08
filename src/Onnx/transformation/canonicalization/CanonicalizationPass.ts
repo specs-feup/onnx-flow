@@ -11,7 +11,7 @@ import { LowerExpandRecipe } from "./recipes/LowerExpandRecipe.js";
 import { LowerConcatRecipe } from "./recipes/LowerConcatRecipe.js";
 import { LowerClipRecipe } from "./recipes/LowerClipRecipe.js";
 import { LowerAveragePoolRecipe } from "./recipes/LowerAveragePoolRecipe.js";
-import { DecompositionRecipe } from "../Recipe.js";
+import type { DecompositionRecipe } from "../Recipe.js";
 import { GraphBuilder } from "../../GraphBuilder.js";
 
 export class CanonicalizationPass implements GraphPass {

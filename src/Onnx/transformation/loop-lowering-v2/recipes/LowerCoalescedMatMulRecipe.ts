@@ -1,5 +1,5 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
-import OperationNode from "../../../OperationNode.js";
+import type OperationNode from "../../../OperationNode.js";
 import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { asStaticDims, scalarInt64, broadcastShapes, computeStrides } from "../../../Utils.js";

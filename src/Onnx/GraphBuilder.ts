@@ -210,14 +210,16 @@ export class GraphBuilder {
 
     /**
      * Creates a fully wired ONNX Loop node and its internal subgraph.
-     * @param tripCount The node representing the maximum number of iterations.
-     * @param stateInits The initial values for the loop-carried states (e.g., zero-tensors).
+     * Supports both static and dynamic trip counts and carry shapes.
+     * * @param tripCount The maximum number of iterations (number or ValueNode).
+     * @param elemTy The data type of the loop-carried state.
+     * @param carryLen The shape/length of the carried state (StaticShape or ValueNode).
      */
-    public createLoopRegion(
+    public createForLoopRegion(
         outerBuilder: GraphBuilder,
-        totalIters: number,
+        totalIters: number | ValueNode,
         elemTy: DataType,
-        carryLen: StaticShape,
+        carryLen: StaticShape | ValueNode,
         tag: string = "loop",
     ): {
         loopOp: OperationNode.Class;
@@ -228,7 +230,39 @@ export class GraphBuilder {
         loopOutput: TensorNode.Class;
         finalize: (nextStates: ConcreteValueNode[]) => void;
     } {
-        // 1. The Loop Body (region/inner graph)
+        // 1. Resolve Outer Inputs
+        // Trip Count (Input 0)
+        const tripInp =
+            typeof totalIters === "number"
+                ? outerBuilder.createConstant(`trip_count_${tag}`, scalarInt64(totalIters))
+                : totalIters;
+
+        // Condition (Input 1) - Usually hardcoded to true for lowering standard ops
+        const condInInp = outerBuilder.createConstant(`cond_${tag}`, bool(true));
+
+        // Initial Carry (Input 2)
+        let vInitialInp: ValueNode;
+        let internalCarryShape: KnownShape;
+
+        if (Array.isArray(carryLen)) {
+            // Static path
+            vInitialInp = outerBuilder.createConstant(
+                `init_carry_${tag}`,
+                zeroTensor(elemTy, carryLen),
+            );
+            internalCarryShape = carryLen;
+        } else {
+            // Dynamic path: Use Expand(scalar_zero, shape_tensor)
+            const zeroScalar = outerBuilder.createConstant(`zero_${tag}`, zeroTensor(elemTy, []));
+            [vInitialInp] = outerBuilder.createOp("Expand", [zeroScalar, carryLen]);
+            // If the shape tensor is dynamic, we use a placeholder rank/shape
+            internalCarryShape =
+                carryLen.shape.length === 0
+                    ? [-1]
+                    : new Array(carryLen.shape[0] as number).fill(-1);
+        }
+
+        // 2. The Loop Body (region/inner graph)
         const innerGraph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const innerBuilder = new GraphBuilder(innerGraph, tag);
 
@@ -242,15 +276,8 @@ export class GraphBuilder {
             .as(TensorNode);
         const vInitial = innerGraph
             .addNode(uniq(innerGraph, "carry"))
-            .init(new TensorNode.Builder(elemTy, carryLen, "input"))
+            .init(new TensorNode.Builder(elemTy, internalCarryShape, "input"))
             .as(TensorNode);
-
-        const tripInp = outerBuilder.createConstant(`trip_count_${tag}`, scalarInt64(totalIters));
-        const condInInp = outerBuilder.createConstant(`cond_${tag}`, bool(true));
-        const vInitialInp = outerBuilder.createConstant(
-            `init_carry_${tag}`,
-            zeroTensor(elemTy, carryLen),
-        );
 
         const loopInputs = [tripInp, condInInp, vInitialInp];
 
@@ -272,12 +299,10 @@ export class GraphBuilder {
 
         // 4. The Finalizer (Wires the inner results to the loop boundary)
         const finalize = (nextStates: ConcreteValueNode[]) => {
-            // Wire next states
             nextStates.forEach((state, idx) => {
                 const expectedType = idx === 0 ? vInitial.literalType : state.literalType;
                 const expectedShape = idx === 0 ? vInitial.shape : state.shape;
 
-                // Create the formal output node
                 const stateOut = innerGraph
                     .addNode(uniq(innerGraph, `${this.scopeTag}_${idx}_state_out_${tag}`))
                     .init(new TensorNode.Builder(expectedType, expectedShape, "output"))
@@ -303,7 +328,7 @@ export class GraphBuilder {
             .init(new OperationNode.Builder("Loop", loopInputs, {}, [innerGraph]))
             .as(OperationNode);
 
-        // 6. Wire inputs
+        // 6. Wire Outer Graph Edges
         loopInputs.forEach((input) => {
             if (this.graph.hasNode(input.id))
                 this.graph

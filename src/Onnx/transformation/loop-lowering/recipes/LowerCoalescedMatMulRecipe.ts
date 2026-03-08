@@ -113,7 +113,7 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
             vInitial: carryInit,
             loopOutput,
             finalize,
-        } = builder.createLoopRegion(
+        } = builder.createForLoopRegion(
             builder,
             totalIters,
             dtype,

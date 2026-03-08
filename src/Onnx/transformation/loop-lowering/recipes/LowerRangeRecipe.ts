@@ -115,7 +115,7 @@ export class LowerRangeRecipe implements DecompositionRecipe {
         // ==========================================
         // 3. Generate Loop
         // ==========================================
-        const { loopOp, innerBuilder, trip, loopOutput, finalize } = builder.createLoopRegion(
+        const { loopOp, innerBuilder, trip, loopOutput, finalize } = builder.createForLoopRegion(
             builder,
             tripCountVal, // Use static trip count if available
             dtype,

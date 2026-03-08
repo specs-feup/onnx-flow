@@ -3,30 +3,9 @@ import type { DecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOp
 import { defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import type OnnxGraph from "../../OnnxGraph.js";
 import { PassManager } from "../../PassManager.js";
-import { OrchestratorPass } from "../OrchestratorPass.js";
-import { MatMulGridDecompositionRecipe } from "../cgra-decomposition/MatMul.js";
-import { AddGridDecompositionRecipe } from "../cgra-decomposition/Add.js";
-import { ReluGridDecompositionRecipe } from "../cgra-decomposition/Relu.js";
-import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
-import { LowerTransposeRecipe } from "./recipes/LowerTransposeRecipe.js";
-import { LowerRangeRecipe } from "./recipes/LowerRangeRecipe.js";
-import { LowerElementWiseRecipe } from "./recipes/LowerElementWiseRecipe.js";
-import { LowerReductionRecipe } from "./recipes/LowerReductionRecipe.js";
 import { InferShapesPass } from "../InferShapesPass.js";
 import { initializeSchemaRegistry } from "../../Schema/index.js";
-import { LowerClipRecipe } from "../canonicalization/recipes/LowerClipRecipe.js";
-import { LowerGemmRecipe } from "../canonicalization/recipes/LowerGemmRecipe.js";
-import { LowerAveragePoolRecipe } from "../canonicalization/recipes/LowerAveragePoolRecipe.js";
-import { LowerConcatRecipe } from "../canonicalization/recipes/LowerConcatRecipe.js";
-import { LowerDequantizeLinearRecipe } from "../canonicalization/recipes/LowerDequantizeLinearRecipe.js";
-import { LowerExpandRecipe } from "../canonicalization/recipes/LowerExpandRecipe.js";
-import { LowerPadRecipe } from "../canonicalization/recipes/LowerPadRecipe.js";
-import { LowerQuantizeLinearRecipe } from "../canonicalization/recipes/LowerQuantizeLinearRecipe.js";
-import { LowerSliceRecipe } from "../canonicalization/recipes/LowerSliceRecipe.js";
-import { LowerSoftmaxRecipe } from "../canonicalization/recipes/LowerSoftmaxRecipe.js";
-import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
 import { CanonicalizationPass } from "../canonicalization/CanonicalizationPass.js";
-import { DeadCodeEliminationPass } from "../optimization/DeadCodeEliminationPass.js";
 import { LoopLoweringPass } from "../loop-lowering-v2/LoopLoweringPass.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
