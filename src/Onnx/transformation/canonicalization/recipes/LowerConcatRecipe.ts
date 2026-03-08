@@ -52,7 +52,9 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         const Yshape = toStaticShape(Y.shape);
 
         // 1. Extract shapes and sum sizes along the target axis
-        const shape0 = builder.createOp("Shape", [inputs[0]], {}, [{ type: DataType.INT64, shape: [rank] }])[0];
+        const shape0 = builder.createOp("Shape", [inputs[0]], {}, [
+            { type: DataType.INT64, shape: [rank] },
+        ])[0];
 
         const sizeScalars: ConcreteValueNode[] = [];
         const axisIdxConst = builder.createConstant(
@@ -61,13 +63,19 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         );
 
         for (let i = 0; i < inputs.length; i++) {
-            const shapeI = builder.createOp("Shape", [inputs[i]], {}, [{ type: DataType.INT64, shape: [rank] }])[0];
-            const size1D = builder.createOp("Gather", [shapeI, axisIdxConst], { axis: 0 }, [{ type: DataType.INT64, shape: [1] }])[0];
+            const shapeI = builder.createOp("Shape", [inputs[i]], {}, [
+                { type: DataType.INT64, shape: [rank] },
+            ])[0];
+            const size1D = builder.createOp("Gather", [shapeI, axisIdxConst], { axis: 0 }, [
+                { type: DataType.INT64, shape: [1] },
+            ])[0];
             const zeroConst = builder.createConstant(
                 `Concat_sq_axes_${i}_${op.id}`,
                 makeTensorProto(DataType.INT64, [1], [0]),
             );
-            const sizeSc = builder.createOp("Squeeze", [size1D, zeroConst], {}, [{ type: DataType.INT64, shape: [] }])[0];
+            const sizeSc = builder.createOp("Squeeze", [size1D, zeroConst], {}, [
+                { type: DataType.INT64, shape: [] },
+            ])[0];
             sizeScalars.push(sizeSc);
         }
 
@@ -83,17 +91,26 @@ export class LowerConcatRecipe implements DecompositionRecipe {
             `Concat_unsq_axes_${op.id}`,
             makeTensorProto(DataType.INT64, [1], [0]),
         );
-        const sumAxis1D = builder.createOp("Unsqueeze", [sumAxis, unsqZeroConst], {}, [{ type: DataType.INT64, shape: [1] }])[0];
-        const outShape1D = builder.createOp("ScatterElements", [shape0, axisIdxConst, sumAxis1D], {
-            axis: 0,
-        }, [{ type: DataType.INT64, shape: [rank] }])[0];
+        const sumAxis1D = builder.createOp("Unsqueeze", [sumAxis, unsqZeroConst], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ])[0];
+        const outShape1D = builder.createOp(
+            "ScatterElements",
+            [shape0, axisIdxConst, sumAxis1D],
+            {
+                axis: 0,
+            },
+            [{ type: DataType.INT64, shape: [rank] }],
+        )[0];
 
         // 2. Initialize Y with Expand(0, out_shape)
         const zeroVal = builder.createConstant(
             `Concat_zero_${op.id}`,
             makeTensorProto(dtype, [], [0]),
         );
-        let curY = builder.createOp("Expand", [zeroVal, outShape1D], {}, [{ type: dtype, shape: Yshape }])[0];
+        let curY = builder.createOp("Expand", [zeroVal, outShape1D], {}, [
+            { type: dtype, shape: Yshape },
+        ])[0];
 
         // 3. Incrementally Scatter inputs into the constructed Y
         let offsetSc: ConcreteValueNode = builder.createConstant(
@@ -113,7 +130,7 @@ export class LowerConcatRecipe implements DecompositionRecipe {
 
             const axisDim = Array.isArray(Xi.shape) ? Xi.shape[axis] : undefined;
             const range1D = builder.createOp("Range", [offsetSc, endSc, oneSc], {}, [
-                { type: DataType.INT64, shape: [axisDim] as KnownShape }
+                { type: DataType.INT64, shape: [axisDim] as KnownShape },
             ])[0];
 
             const axesToUnsq = Array.from({ length: rank }, (_, idx) => idx).filter(
@@ -126,28 +143,32 @@ export class LowerConcatRecipe implements DecompositionRecipe {
                     `Concat_unsq_idx_${i}_${op.id}`,
                     makeTensorProto(DataType.INT64, [axesToUnsq.length], axesToUnsq),
                 );
-                
+
                 const idxShape = Array.isArray(Xi.shape)
                     ? [...Xi.shape]
                     : new Array(rank).fill(undefined);
                 for (const d of axesToUnsq) {
                     idxShape[d] = 1;
                 }
-                
+
                 idxRanked = builder.createOp("Unsqueeze", [range1D, axesConst], {}, [
-                    { type: DataType.INT64, shape: idxShape as KnownShape }
+                    { type: DataType.INT64, shape: idxShape as KnownShape },
                 ])[0];
             }
 
             const shapeI = builder.createOp("Shape", [Xi])[0];
-            const idxFull = builder.createOp("Expand", [idxRanked, shapeI], {}, [{ type: DataType.INT64, shape: Xi.shape as KnownShape }])[0];
+            const idxFull = builder.createOp("Expand", [idxRanked, shapeI], {}, [
+                { type: DataType.INT64, shape: Xi.shape as KnownShape },
+            ])[0];
 
             curY = builder.createOp("ScatterElements", [curY, idxFull, Xi], { axis })[0];
 
             offsetSc = endSc;
         }
 
-        const finalId = builder.createOp("Identity", [curY], {}, [{ type: dtype, shape: Yshape }])[0];
+        const finalId = builder.createOp("Identity", [curY], {}, [
+            { type: dtype, shape: Yshape },
+        ])[0];
         builder.replaceAllUsesWith(Y, finalId);
         op.remove();
     }

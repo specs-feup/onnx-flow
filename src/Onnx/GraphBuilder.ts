@@ -105,10 +105,14 @@ export class GraphBuilder {
         // 5. Explicitly specified expectedOutputs take ultimate precedence
         if (expectedOutputs) {
             for (let i = 0; i < expectedOutputs.length; i++) {
-                if (outputs[i] && expectedOutputs[i].shape.length > 0) {
+                if (
+                    i in outputs &&
+                    expectedOutputs[i].shape !== undefined &&
+                    expectedOutputs[i].shape.length > 0
+                ) {
                     outputs[i].setShape(expectedOutputs[i].shape);
                 }
-                if (outputs[i] && expectedOutputs[i].type !== DataType.UNDEFINED) {
+                if (i in outputs && expectedOutputs[i].type !== DataType.UNDEFINED) {
                     outputs[i].setLiteralType(expectedOutputs[i].type);
                 }
             }

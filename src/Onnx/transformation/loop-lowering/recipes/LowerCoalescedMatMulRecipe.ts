@@ -107,12 +107,12 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
         // ====================================================================
         // 1. Single Coalesced Loop Region (Iterates BatchProd * M * N * K times)
         // ====================================================================
-        const { 
-            innerBuilder: loopBuilder, 
-            trip, 
-            vInitial: carryInit, 
-            loopOutput, 
-            finalize 
+        const {
+            innerBuilder: loopBuilder,
+            trip,
+            vInitial: carryInit,
+            loopOutput,
+            finalize,
         } = builder.createLoopRegion(
             builder,
             totalIters,
@@ -125,24 +125,43 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
         // Decode `trip` into [batchIter, i, j, k]
         // K is the innermost (fastest changing) index.
         // --------------------------------------------------------------------
-        const MNKConst = loopBuilder.createConstant(`MNK_${op.id}`, makeTensorProto(DataType.INT64, [], [M * N * K]));
-        const NKConst  = loopBuilder.createConstant(`NK_${op.id}`, makeTensorProto(DataType.INT64, [], [N * K]));
-        const KConst   = loopBuilder.createConstant(`K_${op.id}`, makeTensorProto(DataType.INT64, [], [K]));
-        const NConst   = loopBuilder.createConstant(`N_${op.id}`, makeTensorProto(DataType.INT64, [], [N]));
+        const MNKConst = loopBuilder.createConstant(
+            `MNK_${op.id}`,
+            makeTensorProto(DataType.INT64, [], [M * N * K]),
+        );
+        const NKConst = loopBuilder.createConstant(
+            `NK_${op.id}`,
+            makeTensorProto(DataType.INT64, [], [N * K]),
+        );
+        const KConst = loopBuilder.createConstant(
+            `K_${op.id}`,
+            makeTensorProto(DataType.INT64, [], [K]),
+        );
+        const NConst = loopBuilder.createConstant(
+            `N_${op.id}`,
+            makeTensorProto(DataType.INT64, [], [N]),
+        );
 
         const batchIter = loopBuilder.createOp("Div", [trip, MNKConst])[0];
-        const remMNK    = loopBuilder.createOp("Mod", [trip, MNKConst])[0];
-        
-        const iIdx      = loopBuilder.createOp("Div", [remMNK, NKConst])[0];
-        const remNK     = loopBuilder.createOp("Mod", [remMNK, NKConst])[0];
-        
-        const jIdx      = loopBuilder.createOp("Div", [remNK, KConst])[0];
-        const kIdx      = loopBuilder.createOp("Mod", [remNK, KConst])[0];
+        const remMNK = loopBuilder.createOp("Mod", [trip, MNKConst])[0];
+
+        const iIdx = loopBuilder.createOp("Div", [remMNK, NKConst])[0];
+        const remNK = loopBuilder.createOp("Mod", [remMNK, NKConst])[0];
+
+        const jIdx = loopBuilder.createOp("Div", [remNK, KConst])[0];
+        const kIdx = loopBuilder.createOp("Mod", [remNK, KConst])[0];
 
         // Local helper to decode `batchIter` into flat batch offsets for A and B
-        const buildBatchIndex = (batchOutDims: number[], inBatchDims: number[], tag: string): ConcreteValueNode => {
+        const buildBatchIndex = (
+            batchOutDims: number[],
+            inBatchDims: number[],
+            tag: string,
+        ): ConcreteValueNode => {
             if (inBatchDims.length === 0) {
-                return loopBuilder.createConstant(`${tag}_zero`, makeTensorProto(DataType.INT64, [], [0]));
+                return loopBuilder.createConstant(
+                    `${tag}_zero`,
+                    makeTensorProto(DataType.INT64, [], [0]),
+                );
             }
 
             const rankOut = batchOutDims.length;
@@ -150,17 +169,26 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
 
             const outStrides = new Array(rankOut);
             let acc = 1;
-            for (let i = rankOut - 1; i >= 0; i--) { outStrides[i] = acc; acc *= batchOutDims[i]; }
+            for (let i = rankOut - 1; i >= 0; i--) {
+                outStrides[i] = acc;
+                acc *= batchOutDims[i];
+            }
 
             const inStrides = new Array(rankIn);
             acc = 1;
-            for (let i = rankIn - 1; i >= 0; i--) { inStrides[i] = acc; acc *= inBatchDims[i]; }
+            for (let i = rankIn - 1; i >= 0; i--) {
+                inStrides[i] = acc;
+                acc *= inBatchDims[i];
+            }
 
-            let flatInIdx: ConcreteValueNode = loopBuilder.createConstant(`${tag}_zero`, makeTensorProto(DataType.INT64, [], [0]));
+            let flatInIdx: ConcreteValueNode = loopBuilder.createConstant(
+                `${tag}_zero`,
+                makeTensorProto(DataType.INT64, [], [0]),
+            );
 
             for (let i = 0; i < rankIn; i++) {
                 const inDim = inBatchDims[i];
-                if (inDim === 1) continue; 
+                if (inDim === 1) continue;
 
                 const outPos = rankOut - rankIn + i;
                 const outStride = outStrides[outPos];
@@ -168,14 +196,23 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
 
                 let dimIdx: ValueNode = batchIter;
                 if (outStride > 1) {
-                    const outStrideConst = loopBuilder.createConstant(`${tag}_ostride_${i}`, makeTensorProto(DataType.INT64, [], [outStride]));
+                    const outStrideConst = loopBuilder.createConstant(
+                        `${tag}_ostride_${i}`,
+                        makeTensorProto(DataType.INT64, [], [outStride]),
+                    );
                     dimIdx = loopBuilder.createOp("Div", [dimIdx, outStrideConst])[0];
                 }
 
-                const outDimConst = loopBuilder.createConstant(`${tag}_odim_${i}`, makeTensorProto(DataType.INT64, [], [outDim]));
+                const outDimConst = loopBuilder.createConstant(
+                    `${tag}_odim_${i}`,
+                    makeTensorProto(DataType.INT64, [], [outDim]),
+                );
                 dimIdx = loopBuilder.createOp("Mod", [dimIdx, outDimConst])[0];
 
-                const inStrideConst = loopBuilder.createConstant(`${tag}_istride_${i}`, makeTensorProto(DataType.INT64, [], [inStrides[i]]));
+                const inStrideConst = loopBuilder.createConstant(
+                    `${tag}_istride_${i}`,
+                    makeTensorProto(DataType.INT64, [], [inStrides[i]]),
+                );
                 const offset = loopBuilder.createOp("Mul", [dimIdx, inStrideConst])[0];
                 flatInIdx = loopBuilder.createOp("Add", [flatInIdx, offset])[0];
             }
@@ -188,8 +225,8 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
         // --------------------------------------------------------------------
         // Fetch A_val and B_val, then Multiply
         // --------------------------------------------------------------------
-        const A_matrix = loopBuilder.createOp("Gather", [A3D, batchIdxA], { axis: 0 })[0]; 
-        const B_matrix = loopBuilder.createOp("Gather", [B3D, batchIdxB], { axis: 0 })[0]; 
+        const A_matrix = loopBuilder.createOp("Gather", [A3D, batchIdxA], { axis: 0 })[0];
+        const B_matrix = loopBuilder.createOp("Gather", [B3D, batchIdxB], { axis: 0 })[0];
 
         const rowA = loopBuilder.createOp("Gather", [A_matrix, iIdx], { axis: 0 })[0]; // -> [K]
         const valA = loopBuilder.createOp("Gather", [rowA, kIdx], { axis: 0 })[0]; // -> []
@@ -202,22 +239,30 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
         // --------------------------------------------------------------------
         // Compute Flat Output Index for C: (batchIter * M * N) + (iIdx * N) + jIdx
         // --------------------------------------------------------------------
-        const MNConst = loopBuilder.createConstant(`MN_${op.id}`, makeTensorProto(DataType.INT64, [], [M * N]));
+        const MNConst = loopBuilder.createConstant(
+            `MN_${op.id}`,
+            makeTensorProto(DataType.INT64, [], [M * N]),
+        );
         const batchOffset = loopBuilder.createOp("Mul", [batchIter, MNConst])[0];
         const iOffset = loopBuilder.createOp("Mul", [iIdx, NConst])[0];
-        
+
         const iPlusJ = loopBuilder.createOp("Add", [iOffset, jIdx])[0];
         const flatOutIdx = loopBuilder.createOp("Add", [batchOffset, iPlusJ])[0]; // -> []
 
         // --------------------------------------------------------------------
         // Update Carried State (Gather -> Add -> ScatterElements)
         // --------------------------------------------------------------------
-        const flatAxes = loopBuilder.createConstant(`axes_${op.id}`, makeTensorProto(DataType.INT64, [1], [0]));
+        const flatAxes = loopBuilder.createConstant(
+            `axes_${op.id}`,
+            makeTensorProto(DataType.INT64, [1], [0]),
+        );
         const flatOutIdxUnsq = loopBuilder.createOp("Unsqueeze", [flatOutIdx, flatAxes])[0]; // -> [1]
 
         // 1. Fetch current accumulated value at C[flatOutIdx]
-        const currentSum = loopBuilder.createOp("Gather", [carryInit, flatOutIdxUnsq], { axis: 0 })[0]; // -> [1]
-        
+        const currentSum = loopBuilder.createOp("Gather", [carryInit, flatOutIdxUnsq], {
+            axis: 0,
+        })[0]; // -> [1]
+
         // 2. Add the new product
         const prodUnsq = loopBuilder.createOp("Unsqueeze", [prod, flatAxes])[0]; // -> [1]
         const newSum = loopBuilder.createOp("Add", [currentSum, prodUnsq])[0]; // -> [1]
@@ -225,9 +270,9 @@ export class LowerCoalescedMatMulRecipe implements DecompositionRecipe {
         // 3. Scatter back into the carried 1D state array.
         // All ranks match: carryInit[TotalElements], flatOutIdxUnsq[1], newSum[1]
         const nextCarry = loopBuilder.createOp(
-            "ScatterElements", 
-            [carryInit, flatOutIdxUnsq, newSum], 
-            { axis: 0 }
+            "ScatterElements",
+            [carryInit, flatOutIdxUnsq, newSum],
+            { axis: 0 },
         )[0];
 
         finalize([nextCarry]);

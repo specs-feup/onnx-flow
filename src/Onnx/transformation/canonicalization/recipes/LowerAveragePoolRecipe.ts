@@ -1,7 +1,7 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, AttributeValue, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, AttributeValue } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     getIntAttr,
@@ -27,7 +27,27 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const kernelShape = getIntsAttr(op, "kernel_shape", []);
         if (kernelShape.length !== 2) return false;
 
-        return xShape.length === 4 && xShape[1] > 0;
+        if (xShape.length !== 4 || xShape[1] <= 0) return false;
+
+        // Hoist the optimization check here!
+        const [kH, kW] = kernelShape;
+        const strides = getIntsAttr(op, "strides", [1, 1]);
+        const padsAttr = getIntsAttr(op, "pads", [0, 0, 0, 0]);
+        const pads = padsAttr.length === 4 ? padsAttr.map(Number) : [0, 0, 0, 0];
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        const ceilMode = getIntAttr(op, "ceil_mode", 0);
+
+        if (
+            autoPad === "NOTSET" &&
+            ceilMode === 0 &&
+            pads.every((p) => p === 0) &&
+            kH === strides[0] &&
+            kW === strides[1]
+        ) {
+            return false; // Skip rewriting, Orchestrator will leave it for TransformChain
+        }
+
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -41,24 +61,10 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const kernelShape = getIntsAttr(op, "kernel_shape", []);
         const [kH, kW] = kernelShape;
         const strides = getIntsAttr(op, "strides", [1, 1]);
-
         const padsAttr = getIntsAttr(op, "pads", [0, 0, 0, 0]);
         const pads = padsAttr.length === 4 ? padsAttr.map(Number) : [0, 0, 0, 0];
-
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const countIncludePad = getIntAttr(op, "count_include_pad", 0);
-        const ceilMode = getIntAttr(op, "ceil_mode", 0);
-
-        // Optimization: Leave tiled global pooling for loop-lowering
-        if (
-            autoPad === "NOTSET" &&
-            ceilMode === 0 &&
-            pads.every((p) => p === 0) &&
-            kH === strides[0] &&
-            kW === strides[1]
-        ) {
-            return; // Skip rewriting, Orchestrator will leave it for TransformChain
-        }
 
         // 1. Create Weight Tensor (Ones) -> [C, 1, kH, kW]
         const wElements = C * kH * kW;

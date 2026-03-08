@@ -1031,7 +1031,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
                     deps.add(parentProd);
                 }
             }
-            
+
             // Recurse into nested regions (e.g., loops inside loops)
             for (const nestedSg of innerOp.regions) {
                 findImplicitDeps(opId, nestedSg);

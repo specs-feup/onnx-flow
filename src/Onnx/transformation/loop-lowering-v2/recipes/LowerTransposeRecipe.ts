@@ -1,16 +1,22 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
 import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
-import { toStaticShape, makeTensorConst, scalarInt64, computeStrides, getAttr, toScalar } from "../../../Utils.js";
+import { toStaticShape, scalarInt64, computeStrides, getAttr } from "../../../Utils.js";
 import type { LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
-import { resolveRecipeInput } from "../RecipeUtils.js";
-import { decodeMixedRadix, buildLinearIndex, unsqueezeIdx, gatherFrom, ensureFlatInput } from "../../loop-lowering/BuildLoop.js";
+import {
+    resolveRecipeInput,
+    decodeMixedRadix,
+    buildLinearIndex,
+    ensureFlatInput,
+    squeezeIfLen1,
+} from "../RecipeUtils.js";
+import { GraphBuilder } from "../../../GraphBuilder.js";
 
 export class LowerTransposeRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
-        // Reject Transpose if it's missing inputs
-        if (op.type !== "Transpose" || !op.getInputs() || op.getInputs()!.length === 0) return false;
-        return true;
+        if (op.type !== "Transpose") return false;
+        const inputs = op.getInputs();
+        return !!inputs && inputs.length > 0;
     }
 
     apply(
@@ -19,21 +25,25 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         valueMap: Map<string, ValueNode>,
         iter: ConcreteValueNode,
         axes: ConcreteValueNode,
-        outShape: KnownShape
+        outShape: KnownShape,
+        carryNode: ConcreteValueNode,
     ): ValueNode {
+        const builder = new GraphBuilder(body, `tp_${op.id}`);
         const xIn = op.getInputs()![0];
-        
-        // Flattened outer tensor (no gather yet!)
-        const X = resolveRecipeInput(body, xIn, valueMap, iter, axes, outShape, false, false);
+
+        // Resolve input as a captured tensor without gathering yet
+        const X = resolveRecipeInput(builder, xIn, valueMap, iter, axes, outShape, false, false);
 
         const inShapeNum = toStaticShape(X.shape as KnownShape);
         const rank = inShapeNum.length;
 
+        // Determine permutation
         let perm = getAttr(op, "perm");
         if (!Array.isArray(perm) || perm.length !== rank) {
             perm = Array.from({ length: rank }, (_, i) => rank - 1 - i);
         }
 
+        // Compute inverse permutation to map output axes back to input axes
         const inversePerm: number[] = new Array(rank);
         const validPerm = perm as number[];
         for (let outAxis = 0; outAxis < rank; outAxis++) {
@@ -42,30 +52,31 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
 
         const transposeOutShape = validPerm.map((p) => inShapeNum[p]);
         const decodeDims = transposeOutShape.map((d) => (d > 0 ? d : 1));
-        
-        // Decode iter into output coordinates
-        const oDigits = decodeMixedRadix(body, iter, decodeDims, `tp_${op.id}`);
 
-        // Map back to input coordinates
+        // 1. Decode global iter into output-space coordinates
+        const oDigits = decodeMixedRadix(builder, iter, decodeDims, `decode`);
+
+        // 2. Map coordinates back to input-space
         const iDigits: ConcreteValueNode[] = [];
         for (let k = 0; k < rank; k++) {
             const inDim = inShapeNum[k] > 0 ? inShapeNum[k] : 1;
             if (inDim === 1) {
-                iDigits.push(makeTensorConst(body, `tp_zero_${op.id}_${k}`, scalarInt64(0)));
+                iDigits.push(builder.createConstant(`zero_${k}`, scalarInt64(0)));
             } else {
-                const outPos = inversePerm[k]; 
+                const outPos = inversePerm[k];
                 iDigits.push(oDigits[outPos]);
             }
         }
 
-        // Linearize and gather
+        // 3. Linearize input coordinates and gather the scalar
         const strides = computeStrides(inShapeNum.map((d) => (d > 0 ? d : 1)));
-        const lin = buildLinearIndex(body, iDigits, strides, `tp_lin_${op.id}`);
-        const linU = unsqueezeIdx(body, lin, axes, `tp_linU_${op.id}`);
+        const lin = buildLinearIndex(builder, iDigits, strides, `lin`);
+        const [linU] = builder.createOp("Unsqueeze", [lin, axes]);
 
-        const flat = ensureFlatInput(body, X);
-        const [, gathered] = gatherFrom(body, flat, `tp_g_${op.id}`, linU, 0);
+        const flat = ensureFlatInput(builder, X);
+        const [gathered] = builder.createOp("Gather", [flat, linU], { axis: 0 });
 
-        return toScalar(body, gathered, `tp_scalar_${op.id}`);
+        // Ensure the result is a pure scalar []
+        return squeezeIfLen1(builder, gathered, axes, `scalar`);
     }
 }
