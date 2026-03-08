@@ -71,10 +71,32 @@ export class LoopLoweringPass implements GraphPass {
             return recipe.getLoopBounds(op, safeOut);
         }
 
+        // --- NEW DYNAMIC FALLBACK ---
+        // If the shape has dynamic dimensions (-1) or is completely unknown, build the bounds dynamically
+        if ((safeOut.includes(-1) || safeOut.length === 0) && outTensors.length > 0) {
+            const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `bounds_fallback_${op.id}`);
+            const outTensor = outTensors[0];
+            
+            const [shapeNode] = builder.createOp("Shape", [outTensor]);
+            const axesConst = builder.createConstant(`axes_fallback_${op.id}`, int64Vec([0]));
+            
+            // Multiply all dimensions to get total iterations
+            const [totalItersRaw] = builder.createOp("ReduceProd", [shapeNode, axesConst], { keepdims: 0 });
+            
+            // Ensure totalIters is a pure scalar []
+            const [totalIters] = builder.createOp("Squeeze", [totalItersRaw, axesConst]);
+            
+            // carryShape expects a 1D tensor [totalIters]
+            const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axesConst]);
+            
+            return { totalIters, carryShape };
+        }
+        // ----------------------------
+
         const totalIters = safeOut.length === 0 ? 1 : safeOut.reduce((a, b) => a * b, 1);
         return { totalIters, carryShape: [totalIters] };
     }
-
+    
     private lowerFlatLoopChain(graph: OnnxGraph.Class, chain: OperationNode.Class[]): void {
         const rootOp = chain[chain.length - 1];
         const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;

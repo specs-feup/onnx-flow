@@ -5,8 +5,7 @@ import { DataType } from "../../../OnnxTypes.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
 import { resolveRecipeInput } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
-import { int64Vec, readScalarFromTensorNode } from "@specs-feup/onnx-flow/Onnx/Utils";
-import ConstantNode from "@specs-feup/onnx-flow/Onnx/ConstantNode";
+import { int64Vec } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 export class LowerRangeRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {

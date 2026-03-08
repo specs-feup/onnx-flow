@@ -22,6 +22,7 @@ import {
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import ConstantNode from "../../../ConstantNode.js";
+import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode";
 
 export class LowerReductionRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
@@ -43,6 +44,29 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
 
         if (axes.length === 0) axes = Array.from({ length: rank }, (_, i) => i);
         else axes = axes.map((a) => (a < 0 ? a + rank : a));
+
+        // --- NEW DYNAMIC SUPPORT ---
+        if (inShape.includes(-1) || rank === 0) {
+            const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `bounds_red_${op.id}`);
+            const inputNode = inputs[0];
+            
+            // totalIters = ReduceProd(Shape(input))
+            const [shapeNode] = builder.createOp("Shape", [inputNode]);
+            const axesConst0 = builder.createConstant(`axes_fallback_${op.id}_0`, int64Vec([0]));
+            const [totalItersRaw] = builder.createOp("ReduceProd", [shapeNode, axesConst0], { keepdims: 0 });
+            const [totalIters] = builder.createOp("Squeeze", [totalItersRaw, axesConst0]);
+            
+            // carryShape = ReduceProd(Shape(outTensors[0])) 
+            // (Since reduction output is exactly the carry size)
+            const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
+            const [outShapeNode] = builder.createOp("Shape", [outTensors[0]]);
+            const [carryLenRaw] = builder.createOp("ReduceProd", [outShapeNode, axesConst0], { keepdims: 0 });
+            const [carryLen] = builder.createOp("Squeeze", [carryLenRaw, axesConst0]);
+            const [carryShape] = builder.createOp("Unsqueeze", [carryLen, axesConst0]);
+
+            return { totalIters, carryShape };
+        }
+        // ---------------------------
 
         const accShape = inShape.slice();
         for (const ax of axes) accShape[ax] = 1;
@@ -154,7 +178,31 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
 
         if (op.type === "ReduceMean") {
             const bounds = this.getLoopBounds(op, []);
-            const count = bounds.totalIters / (bounds.carryShape[0] as number);
+            
+            // --- NEW DYNAMIC SUPPORT ---
+            // Use Array.isArray to prove to TypeScript whether carryShape is a static array or a ValueNode
+            const isDynamic = typeof bounds.totalIters !== "number" || !Array.isArray(bounds.carryShape);
+
+            if (isDynamic) {
+                // Bounds are ValueNodes; construct division dynamically
+                const iterNode = typeof bounds.totalIters === "number" 
+                    ? builder.createConstant(`mean_iters`, scalarInt64(bounds.totalIters))
+                    : bounds.totalIters;
+                    
+                const carryLenNode = Array.isArray(bounds.carryShape) 
+                    ? builder.createConstant(`mean_carry`, scalarInt64(bounds.carryShape[0] as number))
+                    : builder.createOp("Squeeze", [bounds.carryShape, builder.createConstant("sq_ax", int64Vec([0]))])[0];
+
+                const [countRaw] = builder.createOp("Div", [iterNode, carryLenNode]);
+                const [countCast] = builder.createOp("Cast", [countRaw], { to: loopOut.literalType || DataType.FLOAT });
+                
+                return builder.createOp("Div", [loopOut, countCast])[0];
+            }
+            // ---------------------------
+            
+            // Static fallback: Because of the check above, TypeScript knows bounds.carryShape is an Array here~
+            const boundsCarryShape = bounds.carryShape as KnownShape
+            const count = (bounds.totalIters as number) / (boundsCarryShape[0] as number);
             const countConst = builder.createConstant(`mean_count`, {
                 dataType: loopOut.literalType || DataType.FLOAT,
                 dims: [],

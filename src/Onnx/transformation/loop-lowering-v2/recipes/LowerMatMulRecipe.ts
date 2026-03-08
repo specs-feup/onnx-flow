@@ -11,7 +11,7 @@ import {
     int64Vec,
 } from "../../../Utils.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
-import { resolveRecipeInput, buildLinearIndex, decodeMixedRadix } from "../RecipeUtils.js";
+import { resolveRecipeInput, buildLinearIndex, decodeMixedRadix, squeezeIfLen1 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 
 export class LowerMatMulRecipe implements LoopLoweringRecipe {
@@ -37,26 +37,60 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `matmul_${op.id}`);
         const inputs = op.getInputs()!;
-        const dtype = (op.getOutputs()[0].literalType as DataType) ?? DataType.FLOAT;
 
-        let shapeA = asStaticDims(inputs[0].shape);
-        let shapeB = asStaticDims(inputs[1].shape);
+        let staticShapeA = asStaticDims(inputs[0].shape);
+        let staticShapeB = asStaticDims(inputs[1].shape);
 
-        // Normalize 1D vectors to 2D
-        if (shapeA.length === 1) shapeA = [1, shapeA[0]];
-        if (shapeB.length === 1) shapeB = [shapeB[0], 1];
+        // Normalize 1D vectors to 2D for static checks
+        if (staticShapeA.length === 1) staticShapeA = [1, staticShapeA[0]];
+        if (staticShapeB.length === 1) staticShapeB = [staticShapeB[0], 1];
 
-        const M = shapeA[shapeA.length - 2];
-        const K = shapeA[shapeA.length - 1];
-        const N = shapeB[shapeB.length - 1];
+        // --- NEW DYNAMIC SUPPORT: Extract M, K, N ---
+        let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
+        let batchA: number[], batchB: number[], batchOut: number[];
 
-        const batchA = shapeA.slice(0, -2);
-        const batchB = shapeB.slice(0, -2);
-        const batchOut = broadcastShapes(...[batchA, batchB]);
+        const isDynamicA = staticShapeA.includes(-1) || staticShapeA.length === 0;
+        const isDynamicB = staticShapeB.includes(-1) || staticShapeB.length === 0;
+
+        if (isDynamicA || isDynamicB) {
+            // Helper to gather a dimension from the back (e.g., -1 is last, -2 is second to last)
+            const getDimNode = (tensor: ValueNode, rankNode: ValueNode, offsetFromEnd: number, tag: string) => {
+                const [shapeNode] = builder.createOp("Shape", [tensor]);
+                const offsetNode = builder.createConstant(`${tag}_offset`, scalarInt64(offsetFromEnd));
+                const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]); // rank + (-offset)
+                const [dimRaw] = builder.createOp("Gather", [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]], { axis: 0 });
+                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+            };
+
+            const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [inputs[0]])[0]]);
+            const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [inputs[1]])[0]]);
+
+            M = isDynamicA ? getDimNode(inputs[0], rankA, -2, "M") : staticShapeA[staticShapeA.length - 2];
+            K = isDynamicA ? getDimNode(inputs[0], rankA, -1, "K") : staticShapeA[staticShapeA.length - 1];
+            N = isDynamicB ? getDimNode(inputs[1], rankB, -1, "N") : staticShapeB[staticShapeB.length - 1];
+        } else {
+            M = staticShapeA[staticShapeA.length - 2];
+            K = staticShapeA[staticShapeA.length - 1];
+            N = staticShapeB[staticShapeB.length - 1];
+        }
+
+        // For fully dynamic batches, we rely on the pass's Shape inference to populate outShape.
+        // We slice the broadcasted shapes out of the statically known bounds for now.
+        batchA = staticShapeA.slice(0, -2);
+        batchB = staticShapeB.slice(0, -2);
+        batchOut = broadcastShapes(...[batchA as number[], batchB as number[]]); // Needs dynamic broadcast support if batches vary
 
         // 1. Decode global loop iteration into Batch, I, and J indices
-        const MNConst = builder.createConstant(`MN`, scalarInt64(M * N));
-        const NConst = builder.createConstant(`N`, scalarInt64(N));
+        let MNConst: ValueNode, NConst: ValueNode;
+        
+        if (typeof M === "number" && typeof N === "number") {
+            MNConst = builder.createConstant(`MN`, scalarInt64(M * N));
+            NConst = builder.createConstant(`N`, scalarInt64(N));
+        } else {
+            const mNode = typeof M === "number" ? builder.createConstant(`M_const`, scalarInt64(M)) : M as ValueNode;
+            NConst = typeof N === "number" ? builder.createConstant(`N_const`, scalarInt64(N)) : N as ValueNode;
+            [MNConst] = builder.createOp("Mul", [mNode, NConst]);
+        }
 
         const [batchIter] = builder.createOp("Div", [iter, MNConst]);
         const [remMN] = builder.createOp("Mod", [iter, MNConst]);
@@ -89,35 +123,19 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         const bOffsetB = getBatchOffset(batchB, "bB");
 
         // 3. Capture and Reshape inputs to 3D [Batch, Dim1, Dim2] for easier gathering
-        const tInnerA = resolveRecipeInput(
-            builder,
-            inputs[0],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-        );
-        const tInnerB = resolveRecipeInput(
-            builder,
-            inputs[1],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-        );
+        const tInnerA = resolveRecipeInput(builder, inputs[0], valueMap, iter, axes, outShape, false, false);
+        const tInnerB = resolveRecipeInput(builder, inputs[1], valueMap, iter, axes, outShape, false, false);
 
-        const [A3D] = builder.createOp("Reshape", [
-            tInnerA,
-            builder.createConstant("shapeA3D", int64Vec([-1, M, K])),
-        ]);
-        const [B3D] = builder.createOp("Reshape", [
-            tInnerB,
-            builder.createConstant("shapeB3D", int64Vec([-1, K, N])),
-        ]);
+        // Build dynamic 3D shapes [-1, M, K] and [-1, K, N] using Concat
+        const build3DShape = (dim1: number | ValueNode, dim2: number | ValueNode, tag: string) => {
+            const minusOne = builder.createConstant(`${tag}_m1`, int64Vec([-1]));
+            const d1 = typeof dim1 === "number" ? builder.createConstant(`${tag}_d1`, int64Vec([dim1])) : builder.createOp("Unsqueeze", [dim1, axes])[0];
+            const d2 = typeof dim2 === "number" ? builder.createConstant(`${tag}_d2`, int64Vec([dim2])) : builder.createOp("Unsqueeze", [dim2, axes])[0];
+            return builder.createOp("Concat", [minusOne, d1, d2], { axis: 0 })[0];
+        };
+
+        const [A3D] = builder.createOp("Reshape", [tInnerA, build3DShape(M, K, "A")]);
+        const [B3D] = builder.createOp("Reshape", [tInnerB, build3DShape(K, N, "B")]);
 
         // 4. Gather the specific Matrix, Row, and Column for this iteration
         const [bA_unsq] = builder.createOp("Unsqueeze", [bOffsetA, axes]);
