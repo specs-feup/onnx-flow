@@ -178,18 +178,35 @@ function adaptResize(node: RawOnnxNode, graph: RawOnnxGraph) {
     }
 }
 
+function adaptReductions(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    const reductionOps = [
+        "ReduceSum", "ReduceMean", "ReduceMax", "ReduceMin", 
+        "ReduceProd", "ReduceLogSum", "ReduceLogSumExp", 
+        "ReduceSumSquare", "ReduceL1", "ReduceL2"
+    ];
+    if (opType === undefined || !reductionOps.includes(opType)) return;
+
+    // Opset 13: axes moved from attribute to input[1]
+    moveAttributeToInput(node, graph, "axes", 1, "ints");
+}
+
+function adaptTopK(node: RawOnnxNode, graph: RawOnnxGraph) {
+    const opType = node.opType ?? node.op_type;
+    if (opType !== "TopK") return;
+    // Opset 10: k moved from attribute to input[1]
+    moveAttributeToInput(node, graph, "k", 1, "int");
+}
+
 // --- Main Entry Point ---
 export function applyAdapters(data: RawOnnxModel): void {
     if (!data.graph?.node) return;
     const graph = data.graph;
     if (!graph.node) return;
 
-    for (const node of graph.node) {
-        // We call freezeOverridableInputs once per graph, not per node, to be safe.
-        // It was inside the loop in the original code, but it operates on `data`,
-        // so doing it on the first iteration is enough (or pulling it out of the loop).
-        freezeOverridableInputs(data);
+    freezeOverridableInputs(data);
 
+    for (const node of graph.node) {
         adaptPad(node, graph);
         adaptClip(node, graph);
         adaptSlice(node, graph);
@@ -198,5 +215,7 @@ export function applyAdapters(data: RawOnnxModel): void {
         adaptSplit(node, graph);
         adaptBatchNormalization(node, graph);
         adaptResize(node, graph);
+        adaptReductions(node, graph);
+        adaptTopK(node, graph);       
     }
 }
