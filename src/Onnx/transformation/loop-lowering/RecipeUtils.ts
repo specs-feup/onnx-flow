@@ -78,7 +78,7 @@ export function buildLinearIndex(
  * Ensures an input is 1D by reshaping it if necessary.
  */
 export function ensureFlatInput(builder: GraphBuilder, t: ValueNode): ValueNode {
-    if (t.shape.length <= 1) return t;
+    if (!(t.shape as Shape | KnownShape | undefined) || t.shape.length <= 1) return t;
 
     const shapeConst = builder.createConstant(`flat_shape_${t.id}`, int64Vec([-1]));
     const [flat] = builder.createOp("Reshape", [t, shapeConst]);
@@ -147,8 +147,13 @@ export function resolveRecipeInput(
         }
     }
 
-    if (!returnGather || tInner.shape.length === 0) {
-        return flatten ? ensureFlatInput(builder, tInner) : tInner;
+    if (
+        !returnGather ||
+        ((tInner.shape as Shape | KnownShape | undefined) && tInner.shape.length === 0)
+    ) {
+        const res = flatten ? ensureFlatInput(builder, tInner) : tInner;
+        valueMap.set(input.id, res);
+        return res;
     }
 
     const inDimsStatic = toStaticShape(tInner.shape as Shape);
@@ -308,7 +313,10 @@ export function resolveRecipeInput(
 
     const flatT = ensureFlatInput(builder, tInner);
     const [gathered] = builder.createOp("Gather", [flatT, linU], { axis: 0 });
-    return squeezeIfLen1(builder, gathered, axes, `gb_sq_${tInner.id}`);
+    const finalScalar = squeezeIfLen1(builder, gathered, axes, `gb_sq_${tInner.id}`);
+
+    valueMap.set(input.id, finalScalar);
+    return finalScalar;
 }
 
 export function squeezeIfLen1(
@@ -317,7 +325,7 @@ export function squeezeIfLen1(
     axes: ConcreteValueNode,
     _tag: string,
 ): ValueNode {
-    if (t.shape.length === 1 && t.shape[0] === 1) {
+    if ((t.shape as Shape | KnownShape | undefined) && t.shape.length === 1 && t.shape[0] === 1) {
         const [out] = builder.createOp("Squeeze", [t, axes]);
         return out;
     }

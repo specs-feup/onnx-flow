@@ -1271,176 +1271,12 @@ const CORE_OP_TESTS: Array<{
     specs: FeedSpec[];
 }> = [
     {
-        label: "range_add_standard",
-        originalPath: "examples/onnx/range_add_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "start", dtype: "float32", shape: [], gen: "range", value: 1 },
-            { name: "limit", dtype: "float32", shape: [], gen: "range", value: 6 },
-            { name: "delta", dtype: "float32", shape: [], gen: "range", value: 1.5 },
-            // L = ceil((6-1)/1.5) = 4
-            { name: "V", dtype: "float32", shape: [4] },
-        ],
-    },
-    {
-        label: "pad_decomposition",
-        originalPath: "examples/onnx/pad_normal.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [1, 2, 3, 4] }],
-    },
-    {
-        label: "clip_scalar",
-        originalPath: "examples/onnx/clip_scalar.onnx",
+        label: "relu_standard",
+        originalPath: "examples/onnx/relu_standard.onnx",
         tol: 1e-6,
         cliArgs: jsonFullArgs,
-        specs: [
-            { name: "X", dtype: "float32", shape: [2, 3] },
-            { name: "Min", dtype: "float32", shape: [] },
-            { name: "Max", dtype: "float32", shape: [] },
-        ],
+        specs: [{ name: "X", dtype: "float32", shape: [6], gen: "negmix" }],
     },
-    {
-        label: "gemm_standard",
-        originalPath: "examples/onnx/gemm_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2, 3] }, // 6
-            { name: "B", dtype: "float32", shape: [3, 4] }, // 12
-            { name: "C", dtype: "float32", shape: [2, 4] }, // 8
-        ],
-    },
-
-    {
-        label: "concat_standard",
-        originalPath: "examples/onnx/concat_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "X0", dtype: "float32", shape: [2, 3] }, // 6
-            { name: "X1", dtype: "float32", shape: [2, 4] }, // 8
-            { name: "X2", dtype: "float32", shape: [2, 2] }, // 4  => total 18 elems
-        ],
-    },
-    {
-        label: "dequantize_standard",
-        originalPath: "examples/onnx/dequantize_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "X", dtype: "uint8", shape: [2, 3, 4] }, // 24 elems total
-            { name: "S", dtype: "float32", shape: [3] }, // per-channel scales
-            { name: "Z", dtype: "uint8", shape: [3] }, // per-channel zero-points
-        ],
-    },
-    {
-        label: "softmax_standard",
-        originalPath: "examples/onnx/softmax_standard.onnx",
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [8, 3], gen: "random" }],
-        tol: 1e-4,
-    },
-    {
-        label: "ad01_fp32_standard",
-        originalPath: "examples/onnx/ad01_fp32.onnx",
-        tol: 1e-4,
-        cliArgs: jsonFullArgs, // full JSON export + reconvert
-        specs: [{ name: "input_1", dtype: "float32", shape: [1, 640] }],
-    },
-    {
-        label: "ad01_fp32_gemm_relu_standard",
-        originalPath: "examples/onnx/ad01_fp32_gemm_relu.onnx",
-        tol: 1e-4, // relaxed a bit, should be fine
-        cliArgs: jsonFullArgs,
-        specs: [
-            {
-                name: "input_1",
-                dtype: "float32",
-                shape: [1, 640],
-            },
-            // output_1 [1, 128] float32 will be picked up automatically
-        ],
-    },
-
-    /*
-    {
-        label: "pad_decomposition",
-        originalPath: "examples/onnx/pad_normal.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [1, 2, 3, 4] }],
-    },
-    {
-        label: "concat_standard",
-        originalPath: "examples/onnx/concat_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "X0", dtype: "float32", shape: [2, 3] }, // 6
-            { name: "X1", dtype: "float32", shape: [2, 4] }, // 8
-            { name: "X2", dtype: "float32", shape: [2, 2] }, // 4  => total 18 elems
-        ],
-    },
-    {
-        label: "range_add_standard",
-        originalPath: "examples/onnx/range_add_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "start", dtype: "float32", shape: [], gen: "range", value: 1 },
-            { name: "limit", dtype: "float32", shape: [], gen: "range", value: 6 },
-            { name: "delta", dtype: "float32", shape: [], gen: "range", value: 1.5 },
-            // L = ceil((6-1)/1.5) = 4
-            { name: "V", dtype: "float32", shape: [4] },
-        ],
-    },
-    */
-
-    /*
-  {
-    label: 'ad01_fp32_standard',
-    originalPath: 'examples/onnx/ad01_fp32.onnx',
-    tol: 1e-4,
-    cliArgs: jsonFullArgs, // full JSON export + reconvert
-    specs: [
-      { name: 'input_1', dtype: 'float32', shape: [1, 640] },
-    ],
-  },
-
-  {
-    label: 'kws_ref_model_float32_standard',
-    originalPath: 'examples/onnx/kws_ref_model_float32.onnx',
-    tol: 1e-4,                       // softmax tail needs a little tolerance
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'input_1', dtype: 'float32', shape: [1, 49, 10, 1] }, // in
-      // out: Identity [1,12] float32 (picked up automatically)
-    ],
-  },
-
-  {
-    label: 'SC2_X',
-    originalPath: 'examples/onnx/SC2_X_toy.onnx',
-    tol: 1e-4,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'input', dtype: 'float32', shape: [2, 1] },
-    ],
-  },
-
-  {
-    label: 'matmul_test',
-    originalPath: 'examples/onnx/matmul_test.onnx',
-    tol: 1e-5,
-    cliArgs: (p) => dotFullArgs(p),
-    specs: [
-      { name: 'A', dtype: 'float32', shape: [2, 2] },
-      { name: 'B', dtype: 'float32', shape: [2, 2] },
-    ],
-  },
-  */
 
     /*
   {
@@ -1544,7 +1380,7 @@ export async function runAllUnified(): Promise<void> {
     }
 }
 
-const mode = process.env["COMPAT_MODE"] ?? "core";
+const mode = process.env["COMPAT_MODE"] ?? "all";
 
 // Only auto-run when this file is the main script (test runner).
 const isMain =

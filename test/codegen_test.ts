@@ -178,7 +178,7 @@ async function runTests() {
             throw new Error(`Could not resolve elemType for input '${key}'`);
         }
 
-        // 4. Safely coerce to number for your TYPE_SIZE_MAP lookup
+        // 4. Safely coerce to number for TYPE_SIZE_MAP lookup
         const elemType = Number(rawElemType);
         const displacement = TYPE_SIZE_MAP[elemType];
         formattedInputs[`tensor_${key}`] = {};
@@ -193,7 +193,7 @@ async function runTests() {
             tensorDataMap[i * displacement] = tensor.data[i] as number;
         }
 
-        // 4. Assign the fully populated map back to your formatted inputs
+        // 4. Assign the fully populated map back to the formatted inputs
         formattedInputs[`tensor_${key}`] = tensorDataMap;
     }
     console.log("Formatted inputs for generated code:", formattedInputs, "\n\n");

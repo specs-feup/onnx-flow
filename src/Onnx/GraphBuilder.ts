@@ -81,7 +81,7 @@ export class GraphBuilder {
                     inferredType = DataType.BOOL;
                 } else if (["Shape", "Size"].includes(type)) {
                     inferredType = DataType.INT64;
-                    inferredShape = [inputs[0].shape.length];
+                    inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
                 } else if (type === "Cast" && "to" in attributes) {
                     inferredType = attributes["to"] as DataType;
                 }
