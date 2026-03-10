@@ -9,11 +9,10 @@ import type { Request, Response } from "express";
 import express from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from "./initGraph.js";
-import OnnxGraphTransformer from "./Onnx/transformation/loop-lowering/index.js";
-import OnnxGraphOptimizer from "./Onnx/transformation/shape-optimization/index.js";
+//import OnnxGraphOptimizer from "./Onnx/transformation/shape-optimization/index.js";
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
-import { generateCode } from "./codeGeneration.js";
+//import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
@@ -25,6 +24,7 @@ import { partitionGraph } from "./Onnx/partitioning/Partition.js";
 import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import validateGraph from "./Onnx/validation/ValidateGraph.js";
 import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
+import OnnxGraphTransformer from "./Onnx/transformation/index.js";
 
 export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
@@ -68,7 +68,7 @@ export function loadGraph(
     }
 
     if (enableLowLevel && enableOptimize) {
-        graph = graph.apply(new OnnxGraphOptimizer());
+        //graph = graph.apply(new OnnxGraphOptimizer());
 
         // Validation after Optimizer
         if (validate) validateGraph(graph);
@@ -89,8 +89,9 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
     return baseUrl + encodeURIComponent(dotGraph);
 }
 
-export function generateGraphCode(graph: OnnxGraph.Class): string {
-    return generateCode(graph);
+export function generateGraphCode(_graph: OnnxGraph.Class): string {
+    //return generateCode(graph);
+    return "TODO";
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -350,7 +351,7 @@ if (isPartitioning === true) {
         }
 
         if (!argv.noLowLevel && !argv.noOptimize) {
-            graph.apply(new OnnxGraphOptimizer());
+            //graph.apply(new OnnxGraphOptimizer());
         }
 
         // --- Partitioning Logic ---
@@ -479,10 +480,11 @@ if (isPartitioning === true) {
             }
         }
 
-        // Step 4: Code generation
+        // Step 4: Code generation [TODO]
         if (!argv.noLowLevel && !argv.noCodegen) {
-            const generatedCode = generateGraphCode(graph);
-            if (verbosity > 0) console.log("Generated Code:", generatedCode);
+            //const generatedCode = generateGraphCode(graph);
+            //if (verbosity > 0) console.log("Generated Code:", generatedCode);
+            console.log("Code Generation: TODO")
         }
 
         // Optional: run ORT equivalence check
