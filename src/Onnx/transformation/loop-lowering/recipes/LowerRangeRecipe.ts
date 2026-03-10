@@ -1,216 +1,134 @@
-import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
-import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto, toStaticShape } from "../../../Utils.js";
-import OnnxEdge from "../../../OnnxEdge.js";
-import RegionArgumentNode from "../../../RegionArgumentNode.js";
 import type OnnxGraph from "../../../OnnxGraph.js";
+import type OperationNode from "../../../OperationNode.js";
+import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
+import { DataType } from "../../../OnnxTypes.js";
+import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import { resolveRecipeInput } from "../RecipeUtils.js";
+import { GraphBuilder } from "../../../GraphBuilder.js";
+import { int64Vec, scalarInt64, readScalarFromTensorNode } from "../../../Utils.js";
+import ConstantNode from "../../../ConstantNode.js";
 
-export class LowerRangeRecipe implements DecompositionRecipe {
-    public readonly name = "LowerRange";
-    public readonly targetOp = "Range";
-    public readonly exposesControlFlow = true;
-    public readonly exposesDataAccess = true;
-    public readonly producedOps = [
-        "Loop",
-        "Mul",
-        "Add",
-        "ScatterElements",
-        "Sub",
-        "Div",
-        "Ceil",
-        "Max",
-        "Cast",
-        "Expand",
-        "Unsqueeze",
-        "Squeeze",
-    ];
-
+export class LowerRangeRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
         return op.type === "Range";
     }
 
-    apply(op: OperationNode.Class, builder: GraphBuilder): void {
-        const inputs = op.getInputs() as ConcreteValueNode[];
-        const start = inputs[0];
-        const limit = inputs[1];
-        const delta = inputs[2];
+    getLoopBounds(
+        op: OperationNode.Class,
+        _outShape: KnownShape,
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: number[] | ConcreteValueNode;
+    } {
+        const inputs = op.getInputs()!;
 
-        const output = op.getOutputs()[0];
+        // --- STATIC EVALUATION PATH (Fixes Slice Canonicalization) ---
+        // If the inputs are constants, we calculate the bounds statically.
+        // This avoids dynamic shape ValueNodes that cause ORT to crash with strict Loop carry shape mismatches.
+        if (
+            inputs[0].is(ConstantNode) &&
+            inputs[1].is(ConstantNode) &&
+            inputs[2].is(ConstantNode)
+        ) {
+            const start = readScalarFromTensorNode(inputs[0]) ?? 0;
+            const limit = readScalarFromTensorNode(inputs[1]) ?? 0;
+            const delta = readScalarFromTensorNode(inputs[2]) ?? 1;
 
-        let dtype = (output.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-        if (dtype === DataType.UNDEFINED) {
-            dtype = (start.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
+            const tripCount = Math.max(0, Math.ceil((limit - start) / delta));
+
+            return { totalIters: tripCount, carryShape: [tripCount] };
         }
-        if (dtype === DataType.UNDEFINED) {
-            dtype = DataType.FLOAT;
-        }
 
-        // Check if InferShapes was able to determine a static shape for this Range op
-        const outShape = toStaticShape(output.shape);
-        const isStatic = outShape.length === 1 && outShape[0] > 0;
-        const tripCountVal = isStatic ? outShape[0] : -1;
-        const shapeArr = isStatic ? [tripCountVal] : [-1];
+        // --- DYNAMIC FALLBACK PATH (For purely dynamic Range ops) ---
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `bounds_${op.id}`);
 
-        // Ensure start, limit, and delta are 0D scalars to prevent [1, 1] unsqueeze issues
-        const forceScalar = (node: ConcreteValueNode, name: string) => {
-            if (Array.isArray(node.shape) && node.shape.length === 0) return node;
-            const axes = builder.createConstant(
-                `sq_axes_${name}_${op.id}`,
-                makeTensorProto(DataType.INT64, [1], [0]),
-            );
-            return builder.createOp("Squeeze", [node, axes], {}, [
-                { type: node.literalType as DataType, shape: [] },
-            ])[0];
-        };
+        // 1. Calculate (limit - start)
+        const sub = builder.createOp("Sub", [inputs[1], inputs[0]])[0];
 
-        const startS = forceScalar(start, "start");
-        const limitS = forceScalar(limit, "limit");
-        const deltaS = forceScalar(delta, "delta");
+        // 2. Cast to FLOAT so ONNX Ceil doesn't crash
+        const subFloat = builder.createOp("Cast", [sub], { to: DataType.FLOAT })[0];
+        const deltaFloat = builder.createOp("Cast", [inputs[2]], { to: DataType.FLOAT })[0];
 
-        // ==========================================
-        // 1. Compute dynamic trip count in the graph (used for the Expand/Loop node inputs)
-        // trip_count = max(ceil((limit - start) / delta), 0)
-        // ==========================================
-        const subLimStart = builder.createOp("Sub", [limitS, startS])[0];
-        const subF = builder.createOp("Cast", [subLimStart], { to: DataType.FLOAT })[0];
-        const deltaF = builder.createOp("Cast", [deltaS], { to: DataType.FLOAT })[0];
-        const divF = builder.createOp("Div", [subF, deltaF])[0];
-        const ceilF = builder.createOp("Ceil", [divF])[0];
+        // 3. Div & Ceil & Cast back to INT64
+        const div = builder.createOp("Div", [subFloat, deltaFloat])[0];
+        const ceil = builder.createOp("Ceil", [div])[0];
+        const cast = builder.createOp("Cast", [ceil], { to: DataType.INT64 })[0];
 
-        const zeroF = builder.createConstant(
-            `range_zeroF_${op.id}`,
-            makeTensorProto(DataType.FLOAT, [], [0]),
-        );
-        const maxF = builder.createOp("Max", [ceilF, zeroF])[0];
-        const tripCountScalar = builder.createOp("Cast", [maxF], { to: DataType.INT64 }, [
-            { type: DataType.INT64, shape: [] },
-        ])[0];
+        // 4. Force strictly to a scalar (safeguards against inputs that are 1D arrays of size 1)
+        const scalarShape = builder.createConstant(`scalar_shape_${op.id}`, int64Vec([]));
+        const castScalar = builder.createOp("Reshape", [cast, scalarShape])[0];
 
-        // ==========================================
-        // 2. Initialize Carry State using Expand
-        // ==========================================
-        const axes0 = builder.createConstant(
-            `axes0_${op.id}`,
-            makeTensorProto(DataType.INT64, [1], [0]),
-        );
-        const tripCount1D = builder.createOp("Unsqueeze", [tripCountScalar, axes0], {}, [
-            { type: DataType.INT64, shape: [1] },
-        ])[0];
+        // 5. trip_count = max(0, ...)
+        const zeroConst = builder.createConstant(`zero_${op.id}`, scalarInt64(0));
+        const tripCount = builder.createOp("Max", [castScalar, zeroConst])[0];
 
-        const zeroVal = builder.createConstant(
-            `range_zeroVal_${op.id}`,
-            makeTensorProto(dtype, [], [0]),
-        );
+        // 6. For Range, the carry is 1D with length = tripCount
+        const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
+        const tripCount1D = builder.createOp("Unsqueeze", [tripCount, axes0])[0];
 
-        // Expand(0, [trip_count]) -> array of zeros of size trip_count
-        const vInitial = builder.createOp("Expand", [zeroVal, tripCount1D])[0];
+        // Return the ValueNode `tripCount1D` directly so GraphBuilder
+        // triggers the dynamic array allocation path using Expand(zeros, tripCount1D).
+        return { totalIters: tripCount, carryShape: tripCount1D, targetShape: tripCount1D };
+    }
 
-        // Pass the statically determined shape (or [-1]) instead of hardcoding [-1]
-        vInitial.setShape(shapeArr);
-        vInitial.setLiteralType(dtype);
+    apply(
+        op: OperationNode.Class,
+        body: OnnxGraph.Class,
+        valueMap: Map<string, ValueNode>,
+        iter: ConcreteValueNode,
+        axes: ConcreteValueNode,
+        outShape: KnownShape,
+        _carryNode: ConcreteValueNode,
+        targetShapeNode: ValueNode,
+    ): RecipeApplyResult {
+        const builder = new GraphBuilder(body, `range_${op.id}`);
+        const inputs = op.getInputs()!;
 
-        // ==========================================
-        // 3. Generate Loop
-        // ==========================================
-        const { loopOp, innerBuilder, trip, loopOutput, finalize } = builder.createForLoopRegion(
+        let start = resolveRecipeInput(
             builder,
-            tripCountVal, // Use static trip count if available
-            dtype,
-            shapeArr, // Use static shape if available
-            `RangeLoop_${op.id}`,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            true,
+            targetShapeNode,
+        );
+        let delta = resolveRecipeInput(
+            builder,
+            inputs[2],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            true,
+            targetShapeNode,
         );
 
-        // Access the underlying outer graph to safely manipulate edges
-        const outerGraph = builder.graph as OnnxGraph.Class;
-        const oldInputs = loopOp.getInputs()!;
+        const dtype = start.literalType || DataType.FLOAT;
 
-        loopOp.incomers.toArray().forEach((e) => {
-            if (oldInputs.some((inp) => inp.id === e.source.id)) {
-                const tensorNode = e.source;
-                e.remove();
+        // Create an empty 1D tensor to represent a scalar shape target
+        const scalarShape = builder.createConstant(`scalar_shape_range_${op.id}`, int64Vec([]));
 
-                // Remove the dangling Constant Nodes to resolve ORT warnings
-                if (tensorNode.outgoers.length === 0) {
-                    const producerEdge = tensorNode.incomers.first();
-                    tensorNode.remove();
-                    if (producerEdge) {
-                        const producer = producerEdge.source;
-                        if (producer.outgoers.length === 0) producer.remove();
-                    }
-                }
-            }
-        });
+        // UNCONDITIONALLY force them to scalars at runtime, ignoring compile-time shapes
+        start = builder.createOp("Reshape", [start, scalarShape])[0];
+        delta = builder.createOp("Reshape", [delta, scalarShape])[0];
 
-        const trueCond = builder.createConstant(
-            `cond_true_${op.id}`,
-            makeTensorProto(DataType.BOOL, [], [1]),
-        );
+        // 2. Cast current iteration index to the target data type
+        const [iterCast] = builder.createOp("Cast", [iter], { to: dtype });
 
-        loopOp.setInputs([tripCountScalar, trueCond, vInitial]);
+        // 3. Compute current value: start + (iter * delta)
+        const [iterStep] = builder.createOp("Mul", [iterCast, delta]);
+        const [currentVal] = builder.createOp("Add", [start, iterStep]);
 
-        outerGraph
-            .addEdge(tripCountScalar, loopOp)
-            .init(new OnnxEdge.Builder(tripCountScalar.literalType, tripCountScalar.shape))
-            .as(OnnxEdge);
-        outerGraph
-            .addEdge(trueCond, loopOp)
-            .init(new OnnxEdge.Builder(trueCond.literalType, trueCond.shape))
-            .as(OnnxEdge);
-        outerGraph
-            .addEdge(vInitial, loopOp)
-            .init(new OnnxEdge.Builder(vInitial.literalType, vInitial.shape))
-            .as(OnnxEdge);
+        // UNCONDITIONALLY force the output to a 0D scalar
+        const [currentValScalar] = builder.createOp("Reshape", [currentVal, scalarShape], {}, [
+            { type: dtype, shape: [] },
+        ]);
 
-        // ==========================================
-        // 4. INSIDE LOOP: Calculate y = start + (iter * delta)
-        // ==========================================
-        const innerGraph = innerBuilder.graph as OnnxGraph.Class;
-
-        const captureNode = (outerNode: ConcreteValueNode) => {
-            return innerGraph
-                .addNode(outerNode.id)
-                .init(
-                    new RegionArgumentNode.Builder(
-                        0,
-                        outerNode.id,
-                        outerNode.literalType,
-                        outerNode.shape,
-                    ),
-                )
-                .as(RegionArgumentNode);
-        };
-
-        const innerStart = captureNode(startS);
-        const innerDelta = captureNode(deltaS);
-
-        const flatAxes = innerBuilder.createConstant(
-            `axes_${op.id}`,
-            makeTensorProto(DataType.INT64, [1], [0]),
-        );
-        const iterCast = innerBuilder.createOp("Cast", [trip], { to: dtype })[0];
-
-        const iterStep = innerBuilder.createOp("Mul", [iterCast, innerDelta])[0];
-        const currentVal = innerBuilder.createOp("Add", [innerStart, iterStep])[0];
-
-        const iterIdx = innerBuilder.createOp("Unsqueeze", [trip, flatAxes])[0];
-        const updateVal = innerBuilder.createOp("Unsqueeze", [currentVal, flatAxes])[0];
-
-        const innerCarry = innerGraph
-            .getInputTensorNodes()
-            .toArray()
-            .find((n) => n.id.includes("carry"))!;
-        const nextCarry = innerBuilder.createOp(
-            "ScatterElements",
-            [innerCarry, iterIdx, updateVal],
-            { axis: 0 },
-        )[0];
-
-        finalize([nextCarry]);
-
-        builder.replaceAllUsesWith(output, loopOutput);
-        op.remove();
+        return currentValScalar;
     }
 }

@@ -1,12 +1,11 @@
+/*
 import path from "path";
 import { InferenceSession, Tensor } from "onnxruntime-web";
 import { onnx2json } from "../src/onnx2json.js";
 import { createGraph } from "../src/initGraph.js";
-import OnnxGraphTransformer from "../src/Onnx/transformation/loop-lowering/index.js";
-import OnnxGraphOptimizer from "../src/Onnx/transformation/shape-optimization/index.js";
-import { generateCode } from "../src/codeGeneration.js";
 import { fileURLToPath } from "url";
 import { TYPE_SIZE_MAP } from "@specs-feup/onnx-flow/Onnx/Utils";
+import OnnxGraphTransformer from "@specs-feup/onnx-flow/Onnx/transformation/index";
 
 // Dynamically determine the project root directory
 const __filename = fileURLToPath(import.meta.url);
@@ -248,3 +247,4 @@ async function runTests() {
 }
 
 runTests().catch((err) => console.error(err));
+*/

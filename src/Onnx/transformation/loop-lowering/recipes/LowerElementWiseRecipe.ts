@@ -1,111 +1,127 @@
+import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
-import type { DecompositionRecipe } from "../../Recipe.js";
-import { OpCategory } from "../../../Schema/OpSchema.js";
+import {
+    type ValueNode,
+    type ConcreteValueNode,
+    type KnownShape,
+    DataType,
+} from "../../../OnnxTypes.js";
+import type { LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
+import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
-import type { ConcreteValueNode } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
-import { broadcastShapes, getIntAttr, makeTensorProto, toStaticShape } from "../../../Utils.js";
-import { buildBroadcastGather } from "./RecipeUtils.js";
+import { OpCategory } from "../../../Schema/OpSchema.js";
+import { GraphBuilder } from "../../../GraphBuilder.js";
+import { asStaticDims, int64Vec, UNKOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
 
-export class LowerElementWiseRecipe implements DecompositionRecipe {
-    public readonly name = "LowerElementWise";
-    public readonly targetOp = OpCategory.ElementWise;
-    public readonly exposesControlFlow = true;
-    public readonly exposesDataAccess = true;
-    public readonly producedOps = ["Loop", "Gather", "ScatterElements"];
-
+export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);
         if (schema?.category !== OpCategory.ElementWise) return false;
 
         const inputs = op.getInputs() ?? [];
-        if (!inputs.some((input) => input.shape.length > 0)) return false;
-
-        // Strict guard against dynamic shapes
-        const outShape = toStaticShape(op.getOutputs()[0]?.shape);
-        if (!Array.isArray(outShape)) return false;
-
-        return outShape.every((d) => typeof d === "number" && !isNaN(d) && d > 0);
-    }
-
-    apply(op: OperationNode.Class, builder: GraphBuilder): void {
-        const inputs = op.getInputs() as ConcreteValueNode[];
-        const output = op.getOutputs()[0];
-
-        const inShapes = inputs.map((i) => toStaticShape(i.shape));
-        const outShape = broadcastShapes(...inShapes);
-
-        let dtype = (output.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-
-        if (dtype === DataType.UNDEFINED && op.type === "Cast") {
-            dtype = getIntAttr(op, "to", DataType.UNDEFINED);
+        if (
+            inputs.length > 0 &&
+            inputs.every((inp) => inp.shape !== undefined && inp.shape!.length === 0)
+        ) {
+            return false;
         }
 
-        if (dtype === DataType.UNDEFINED)
-            dtype =
-                (inputs[0].literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-        if (dtype === DataType.UNDEFINED) dtype = DataType.FLOAT;
+        return true;
+    }
 
-        // 1. Calculate trip count
-        const totalElements = outShape.reduce((a, b) => a * b, 1);
+    getLoopBounds(
+        op: OperationNode.Class,
+        outShape: KnownShape,
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: number[] | ConcreteValueNode;
+    } {
+        const inputs = op.getInputs()!;
+        const staticOut = asStaticDims(outShape);
 
-        // 2. Generate Loop
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
-            builder,
-            totalElements,
-            dtype,
-            [totalElements],
-            `Loop_${op.id}`,
-        );
+        // 1. Static Case
+        if (staticOut.length > 0 && !outShape.includes(-1)) {
+            const totalIters = staticOut.reduce((a, b) => a * b, 1);
+            return { totalIters, carryShape: staticOut };
+        }
 
-        // 3. INSIDE LOOP: Gather inputs
-        const gatheredInputs = inputs.map((input, idx) => {
-            return buildBroadcastGather(
-                innerBuilder,
-                input,
-                trip,
-                outShape,
-                toStaticShape(input.shape),
-                `gath_${op.id}_${idx}`,
-            );
+        // 2. Dynamic Case (compute broadcasted shape via dummy math)
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `ew_bounds_${op.id}`);
+        const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
+
+        let currentDummy: ValueNode | undefined = undefined;
+
+        for (let i = 0; i < inputs.length; i++) {
+            const inp = inputs[i];
+
+            const [shapeNode] = builder.createOp("Shape", [inp]);
+            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+            const [dummy] = builder.createOp("ConstantOfShape", [shapeNode], {}, expectedCoS);
+
+            if (!currentDummy) {
+                currentDummy = dummy;
+            } else {
+                const expectedAdd = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+                [currentDummy] = builder.createOp("Add", [currentDummy, dummy], {}, expectedAdd);
+            }
+        }
+
+        if (!currentDummy) return { totalIters: 1, carryShape: [1] };
+
+        const [targetShapeNode] = builder.createOp("Shape", [currentDummy]);
+        const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
+            keepdims: 0,
         });
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0]);
 
-        // 4. INSIDE LOOP: Perform Math
-        const innerMathResult = innerBuilder.createOp(
+        return { totalIters, carryShape, targetShape: targetShapeNode };
+    }
+
+    apply(
+        op: OperationNode.Class,
+        body: OnnxGraph.Class,
+        valueMap: Map<string, ValueNode>,
+        iter: ConcreteValueNode,
+        axes: ConcreteValueNode,
+        outShape: KnownShape,
+        _carryNode: ConcreteValueNode,
+        targetShapeNode: ValueNode,
+    ): ValueNode {
+        const builder = new GraphBuilder(body, `ew_${op.id}`);
+
+        // 1. Resolve scalar inputs (safely handling optional/undefined inputs)
+        const inputs = op
+            .getInputs()!
+            .map((inp) =>
+                inp !== undefined
+                    ? resolveRecipeInput(
+                          builder,
+                          inp,
+                          valueMap,
+                          iter,
+                          axes,
+                          outShape,
+                          true,
+                          true,
+                          targetShapeNode,
+                      )
+                    : undefined,
+            );
+
+        // Turn [1] -> [] (pure scalar) to match element-wise expectations in the loop body
+        const effInputs = inputs.map((inp, i) =>
+            inp ? squeezeIfLen1(builder, inp, axes, `${op.id}_in${i}_scalar`) : undefined,
+        );
+
+        // 2. Perform the operation on the scalars
+        // Pass op.attributes to preserve required attributes (like 'to' for Cast, 'alpha' for LeakyRelu)
+        const [out] = builder.createOp(
             op.type,
-            gatheredInputs,
-            op.getAttributes(),
-        )[0];
-
-        // 5. INSIDE LOOP: ScatterElements into the Carry State
-        const flatAxes = innerBuilder.createConstant(
-            `flat_axes_${op.id}`,
-            makeTensorProto(DataType.INT64, [1], [0]),
+            effInputs.filter((inp) => inp !== undefined),
+            op.attributes,
         );
 
-        const iterIdx = innerBuilder.createOp("Unsqueeze", [trip, flatAxes])[0];
-        const updateVal = innerBuilder.createOp("Unsqueeze", [innerMathResult, flatAxes])[0];
-
-        const scatterOut = innerBuilder.createOp(
-            "ScatterElements",
-            [vInitial, iterIdx, updateVal],
-            { axis: 0 },
-        )[0];
-
-        // 6. Finalize
-        finalize([scatterOut]);
-
-        // OUTER GRAPH: Reshape back to the original multi-dimensional tensor
-        const origShapeConst = builder.createConstant(
-            `origShape_${op.id}`,
-            makeTensorProto(DataType.INT64, [outShape.length], outShape),
-        );
-        const finalReshape = builder.createOp("Reshape", [loopOutput, origShapeConst], {}, [
-            { type: dtype, shape: outShape },
-        ])[0];
-
-        builder.replaceAllUsesWith(output, finalReshape);
-        op.remove();
+        return out!;
     }
 }

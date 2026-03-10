@@ -1,31 +1,31 @@
+import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
-import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, ValueNode } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
-import { makeTensorProto, toStaticShape, broadcastShapes } from "../../../Utils.js";
+import {
+    type ValueNode,
+    type ConcreteValueNode,
+    type KnownShape,
+    DataType,
+} from "../../../OnnxTypes.js";
+import {
+    asStaticDims,
+    broadcastShapes,
+    scalarInt64,
+    computeStrides,
+    int64Vec,
+    UNKOWN_SHAPE,
+} from "../../../Utils.js";
+import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import {
+    resolveRecipeInput,
+    buildLinearIndex,
+    decodeMixedRadix,
+    squeezeIfLen1,
+} from "../RecipeUtils.js";
+import { GraphBuilder } from "../../../GraphBuilder.js";
 
-export class LowerMatMulRecipe implements DecompositionRecipe {
-    public readonly name = "LowerMatMul";
-    public readonly targetOp = "MatMul";
-    public readonly exposesControlFlow = true;
-    public readonly exposesDataAccess = true;
-    public readonly producedOps = [
-        "Loop",
-        "Gather",
-        "Mul",
-        "ReduceSum",
-        "ScatterElements",
-        "Reshape",
-        "Div",
-        "Mod",
-        "Add",
-        "Unsqueeze",
-    ];
-
+export class LowerMatMulRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
         if (op.type !== "MatMul") return false;
-
         const inputs = op.getInputs();
         return (
             !!inputs &&
@@ -35,207 +35,248 @@ export class LowerMatMulRecipe implements DecompositionRecipe {
         );
     }
 
-    apply(op: OperationNode.Class, builder: GraphBuilder): void {
-        const [A, B] = op.getInputs() as ConcreteValueNode[];
-        const output = op.getOutputs()[0];
+    getLoopBounds(
+        op: OperationNode.Class,
+        _outShape: KnownShape,
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: number[] | ConcreteValueNode;
+    } {
+        const inputs = op.getInputs()!;
 
-        let shapeA = toStaticShape(A.shape);
-        let shapeB = toStaticShape(B.shape);
+        // 1. Static Case
+        if (
+            !inputs[0].shape.includes(-1) &&
+            !inputs[1].shape.includes(-1) &&
+            inputs[0].shape.length > 0 &&
+            inputs[1].shape.length > 0
+        ) {
+            let sA = asStaticDims(inputs[0].shape),
+                sB = asStaticDims(inputs[1].shape);
+            if (sA.length === 1) sA = [1, sA[0]];
+            if (sB.length === 1) sB = [sB[0], 1];
 
-        // 1. Robust DType Inference (Fixes matmuladd_test INT32 crash)
-        let dtype = (output.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-        if (dtype === DataType.UNDEFINED) {
-            dtype = (A.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-        }
-        if (dtype === DataType.UNDEFINED) {
-            dtype = DataType.FLOAT;
-        }
+            const M = sA[sA.length - 2],
+                N = sB[sB.length - 1];
+            const batchOut = broadcastShapes(...[sA.slice(0, -2), sB.slice(0, -2)]);
+            const prodBatch = batchOut.reduce((a, b) => a * b, 1);
 
-        // Standardize 1D inputs to 2D
-        let is1DA = false;
-        let is1DB = false;
-
-        if (shapeA.length === 1) {
-            is1DA = true;
-            shapeA = [1, shapeA[0]];
-        }
-        if (shapeB.length === 1) {
-            is1DB = true;
-            shapeB = [shapeB[0], 1];
-        }
-
-        const M = shapeA[shapeA.length - 2];
-        const K = shapeA[shapeA.length - 1];
-        const N = shapeB[shapeB.length - 1];
-
-        // Extract batch dimensions and compute broadcasted batch shape
-        const batchA = shapeA.slice(0, -2);
-        const batchB = shapeB.slice(0, -2);
-        const batchOut = broadcastShapes(batchA, batchB);
-
-        // Establish output shape
-        let outShape = toStaticShape(output.shape);
-        if (outShape.length === 0) {
-            outShape = [...batchOut];
-            if (!is1DA) outShape.push(M);
-            if (!is1DB) outShape.push(N);
-            if (outShape.length === 0) outShape = [1];
+            const totalIters = prodBatch * M * N;
+            return { totalIters, carryShape: [totalIters] };
         }
 
-        // Calculate loop properties
-        const prodBatch = batchOut.reduce((a, b) => a * b, 1);
-        const totalElements = prodBatch * M * N;
+        // 2. Dynamic Case
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `mm_bounds_${op.id}`);
+        const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        const shapeConst = builder.createConstant(
-            `shape_${op.id}`,
-            makeTensorProto(DataType.INT64, [outShape.length], outShape),
-        );
+        const [shapeA] = builder.createOp("Shape", [inputs[0]]);
+        const [shapeB] = builder.createOp("Shape", [inputs[1]]);
 
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
-            builder,
-            totalElements,
-            dtype,
-            [totalElements],
-            `MatMulLoop_${op.id}`,
-        );
+        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const [dummyA] = builder.createOp("ConstantOfShape", [shapeA], {}, expectedCoS);
+        const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
 
-        // 2. Decode iterator into Batch, Row (i), and Column (j) indices
-        const MNConst = innerBuilder.createConstant(
-            `MN_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [M * N]),
-        );
-        const NConst = innerBuilder.createConstant(
-            `N_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [N]),
-        );
+        const expectedMM = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const [dummyOut] = builder.createOp("MatMul", [dummyA, dummyB], {}, expectedMM);
 
-        const batchIter = innerBuilder.createOp("Div", [trip, MNConst])[0];
-        const remMN = innerBuilder.createOp("Mod", [trip, MNConst])[0];
-        const iIdx = innerBuilder.createOp("Div", [remMN, NConst])[0];
-        const jIdx = innerBuilder.createOp("Mod", [remMN, NConst])[0];
+        const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
+        const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
+            keepdims: 0,
+        });
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0]);
 
-        // 3. Local helper to decode `batchIter` into flattened input batch offsets
-        const buildBatchIndex = (
-            batchOutDims: number[],
-            inBatchDims: number[],
-            tag: string,
-        ): ConcreteValueNode => {
-            if (inBatchDims.length === 0) {
-                return innerBuilder.createConstant(
-                    `${tag}_zero`,
-                    makeTensorProto(DataType.INT64, [], [0]),
+        return { totalIters, carryShape, targetShape: targetShapeNode };
+    }
+
+    apply(
+        op: OperationNode.Class,
+        body: OnnxGraph.Class,
+        valueMap: Map<string, ValueNode>,
+        iter: ConcreteValueNode,
+        axes: ConcreteValueNode,
+        outShape: KnownShape,
+        _carryNode: ConcreteValueNode,
+        targetShapeNode: ValueNode,
+    ): RecipeApplyResult {
+        const builder = new GraphBuilder(body, `matmul_${op.id}`);
+        const inputs = op.getInputs()!;
+
+        let staticShapeA = asStaticDims(inputs[0].shape);
+        let staticShapeB = asStaticDims(inputs[1].shape);
+
+        // Normalize 1D vectors to 2D for static checks
+        if (staticShapeA.length === 1) staticShapeA = [1, staticShapeA[0]];
+        if (staticShapeB.length === 1) staticShapeB = [staticShapeB[0], 1];
+
+        // --- NEW DYNAMIC SUPPORT: Extract M, K, N ---
+        let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
+
+        const isDynamicA = inputs[0].shape.includes(-1) || inputs[0].shape.length === 0;
+        const isDynamicB = inputs[1].shape.includes(-1) || inputs[1].shape.length === 0;
+
+        if (isDynamicA || isDynamicB) {
+            // Helper to gather a dimension from the back (e.g., -1 is last, -2 is second to last)
+            const getDimNode = (
+                tensor: ValueNode,
+                rankNode: ValueNode,
+                offsetFromEnd: number,
+                tag: string,
+            ) => {
+                const [shapeNode] = builder.createOp("Shape", [tensor]);
+                const offsetNode = builder.createConstant(
+                    `${tag}_offset`,
+                    scalarInt64(offsetFromEnd),
                 );
-            }
+                const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]); // rank + (-offset)
+                const [dimRaw] = builder.createOp(
+                    "Gather",
+                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
+                    { axis: 0 },
+                );
+                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+            };
 
-            const rankOut = batchOutDims.length;
-            const rankIn = inBatchDims.length;
+            const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [inputs[0]])[0]]);
+            const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [inputs[1]])[0]]);
 
-            const outStrides = new Array(rankOut);
-            let acc = 1;
-            for (let i = rankOut - 1; i >= 0; i--) {
-                outStrides[i] = acc;
-                acc *= batchOutDims[i];
-            }
+            M = isDynamicA
+                ? getDimNode(inputs[0], rankA, -2, "M")
+                : staticShapeA[staticShapeA.length - 2];
+            K = isDynamicA
+                ? getDimNode(inputs[0], rankA, -1, "K")
+                : staticShapeA[staticShapeA.length - 1];
+            N = isDynamicB
+                ? getDimNode(inputs[1], rankB, -1, "N")
+                : staticShapeB[staticShapeB.length - 1];
+        } else {
+            M = staticShapeA[staticShapeA.length - 2];
+            K = staticShapeA[staticShapeA.length - 1];
+            N = staticShapeB[staticShapeB.length - 1];
+        }
 
-            const inStrides = new Array(rankIn);
-            acc = 1;
-            for (let i = rankIn - 1; i >= 0; i--) {
-                inStrides[i] = acc;
-                acc *= inBatchDims[i];
-            }
+        // For fully dynamic batches, we rely on the pass's Shape inference to populate outShape.
+        // We slice the broadcasted shapes out of the statically known bounds for now.
+        const batchA = staticShapeA.slice(0, -2);
+        const batchB = staticShapeB.slice(0, -2);
+        const batchOut = broadcastShapes(...[batchA as number[], batchB as number[]]); // Needs dynamic broadcast support if batches vary
 
-            let flatInIdx: ConcreteValueNode = innerBuilder.createConstant(
-                `${tag}_zero`,
-                makeTensorProto(DataType.INT64, [], [0]),
+        // 1. Decode global loop iteration into Batch, I, and J indices
+        let MNConst: ValueNode, NConst: ValueNode;
+
+        if (typeof M === "number" && typeof N === "number") {
+            MNConst = builder.createConstant(`MN`, scalarInt64(M * N));
+            NConst = builder.createConstant(`N`, scalarInt64(N));
+        } else {
+            const mNode =
+                typeof M === "number"
+                    ? builder.createConstant(`M_const`, scalarInt64(M))
+                    : (M as ValueNode);
+            NConst =
+                typeof N === "number"
+                    ? builder.createConstant(`N_const`, scalarInt64(N))
+                    : (N as ValueNode);
+            [MNConst] = builder.createOp("Mul", [mNode, NConst]);
+        }
+
+        const [batchIter] = builder.createOp("Div", [iter, MNConst]);
+        const [remMN] = builder.createOp("Mod", [iter, MNConst]);
+        const [iIdx] = builder.createOp("Div", [remMN, NConst]);
+        const [jIdx] = builder.createOp("Mod", [remMN, NConst]);
+
+        // 2. Resolve batch offsets for inputs
+        const getBatchOffset = (targetBatch: number[], tag: string) => {
+            if (targetBatch.length === 0)
+                return builder.createConstant(`${tag}_zero`, scalarInt64(0));
+            const batchIndices = decodeMixedRadix(builder, batchIter, batchOut, `${tag}_decode`);
+
+            // Handle broadcasting for the batch dimensions
+            const actualIndices = targetBatch.map((dim, i) => {
+                const outPos = batchOut.length - targetBatch.length + i;
+                return dim === 1
+                    ? builder.createConstant(`${tag}_dim_${i}_zero`, scalarInt64(0))
+                    : batchIndices[outPos];
+            });
+
+            return buildLinearIndex(
+                builder,
+                actualIndices,
+                computeStrides(targetBatch),
+                `${tag}_offset`,
             );
-
-            for (let i = 0; i < rankIn; i++) {
-                const inDim = inBatchDims[i];
-                if (inDim === 1) continue; // broadcast dimension
-
-                const outPos = rankOut - rankIn + i;
-                const outStride = outStrides[outPos];
-                const outDim = batchOutDims[outPos];
-
-                let dimIdx: ValueNode = batchIter;
-                if (outStride > 1) {
-                    const outStrideConst = innerBuilder.createConstant(
-                        `${tag}_ostride_${i}`,
-                        makeTensorProto(DataType.INT64, [], [outStride]),
-                    );
-                    dimIdx = innerBuilder.createOp("Div", [dimIdx, outStrideConst])[0];
-                }
-
-                const outDimConst = innerBuilder.createConstant(
-                    `${tag}_odim_${i}`,
-                    makeTensorProto(DataType.INT64, [], [outDim]),
-                );
-                dimIdx = innerBuilder.createOp("Mod", [dimIdx, outDimConst])[0];
-
-                const inStrideConst = innerBuilder.createConstant(
-                    `${tag}_istride_${i}`,
-                    makeTensorProto(DataType.INT64, [], [inStrides[i]]),
-                );
-                const offset = innerBuilder.createOp("Mul", [dimIdx, inStrideConst])[0];
-                flatInIdx = innerBuilder.createOp("Add", [flatInIdx, offset])[0];
-            }
-
-            return flatInIdx;
         };
 
-        const batchIdxA = buildBatchIndex(batchOut, batchA, `bA_${op.id}`);
-        const batchIdxB = buildBatchIndex(batchOut, batchB, `bB_${op.id}`);
+        const bOffsetA = getBatchOffset(batchA, "bA");
+        const bOffsetB = getBatchOffset(batchB, "bB");
 
-        // 4. Flatten the inputs down to 3D: [BatchProd, M, K] and [BatchProd, K, N]
-        const prodBatchA = batchA.reduce((a, b) => a * b, 1);
-        const prodBatchB = batchB.reduce((a, b) => a * b, 1);
-
-        const shapeA3DConst = innerBuilder.createConstant(
-            `shapeA3D_${op.id}`,
-            makeTensorProto(DataType.INT64, [3], [prodBatchA, M, K]),
+        // 3. Capture and Reshape inputs to 3D [Batch, Dim1, Dim2] for easier gathering
+        const tInnerA = resolveRecipeInput(
+            builder,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+            targetShapeNode,
         );
-        const shapeB3DConst = innerBuilder.createConstant(
-            `shapeB3D_${op.id}`,
-            makeTensorProto(DataType.INT64, [3], [prodBatchB, K, N]),
+        const tInnerB = resolveRecipeInput(
+            builder,
+            inputs[1],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+            targetShapeNode,
         );
 
-        const A3D = innerBuilder.createOp("Reshape", [A, shapeA3DConst])[0];
-        const B3D = innerBuilder.createOp("Reshape", [B, shapeB3DConst])[0];
+        // Build dynamic 3D shapes [-1, M, K] and [-1, K, N] using Concat
+        const build3DShape = (dim1: number | ValueNode, dim2: number | ValueNode, tag: string) => {
+            const minusOne = builder.createConstant(`${tag}_m1`, int64Vec([-1]));
+            const d1 =
+                typeof dim1 === "number"
+                    ? builder.createConstant(`${tag}_d1`, int64Vec([dim1]))
+                    : builder.createOp("Unsqueeze", [dim1, axes])[0];
+            const d2 =
+                typeof dim2 === "number"
+                    ? builder.createConstant(`${tag}_d2`, int64Vec([dim2]))
+                    : builder.createOp("Unsqueeze", [dim2, axes])[0];
+            return builder.createOp("Concat", [minusOne, d1, d2], { axis: 0 })[0];
+        };
 
-        // 5. Gather the matrices using scalar indices to drop the axis dimension
-        const A_matrix = innerBuilder.createOp("Gather", [A3D, batchIdxA], { axis: 0 })[0]; // -> [M, K]
-        const B_matrix = innerBuilder.createOp("Gather", [B3D, batchIdxB], { axis: 0 })[0]; // -> [K, N]
+        const [A3D] = builder.createOp("Reshape", [tInnerA, build3DShape(M, K, "A")]);
+        const [B3D] = builder.createOp("Reshape", [tInnerB, build3DShape(K, N, "B")]);
 
-        // 6. Gather row and col
-        const rowA = innerBuilder.createOp("Gather", [A_matrix, iIdx], { axis: 0 })[0]; // -> [K]
-        const colB = innerBuilder.createOp("Gather", [B_matrix, jIdx], { axis: 1 })[0]; // -> [K]
+        // 4. Gather the specific Matrix, Row, and Column for this iteration
+        const [bA_unsq] = builder.createOp("Unsqueeze", [bOffsetA, axes]);
+        const [AMatrix] = builder.createOp("Gather", [A3D, bA_unsq], { axis: 0 });
 
-        // 7. Dot Product
-        const mul = innerBuilder.createOp("Mul", [rowA, colB])[0];
-        const sumScalar = innerBuilder.createOp("ReduceSum", [mul], { keepdims: 0 })[0]; // -> []
+        const [bB_unsq] = builder.createOp("Unsqueeze", [bOffsetB, axes]);
+        const [BMatrix] = builder.createOp("Gather", [B3D, bB_unsq], { axis: 0 });
 
-        // 8. Scatter
-        const flatAxes = innerBuilder.createConstant(
-            `axes_${op.id}`,
-            makeTensorProto(DataType.INT64, [1], [0]),
-        );
-        const iterUnsq = innerBuilder.createOp("Unsqueeze", [trip, flatAxes])[0]; // -> [1]
-        const updateVal = innerBuilder.createOp("Unsqueeze", [sumScalar, flatAxes])[0]; // -> [1]
+        const [iIdx_unsq] = builder.createOp("Unsqueeze", [iIdx, axes]);
+        const [rowA] = builder.createOp("Gather", [AMatrix, iIdx_unsq], { axis: 1 });
 
-        const scatterOut = innerBuilder.createOp(
-            "ScatterElements",
-            [vInitial, iterUnsq, updateVal],
-            { axis: 0 },
-        )[0];
+        const [jIdx_unsq] = builder.createOp("Unsqueeze", [jIdx, axes]);
+        const [colB] = builder.createOp("Gather", [BMatrix, jIdx_unsq], { axis: 2 });
 
-        finalize([scatterOut]);
+        // Reshape both vectors to 1D [-1] so they align for element-wise multiplication
+        const [rowA_flat] = builder.createOp("Reshape", [
+            rowA,
+            builder.createConstant("K_flat_A", int64Vec([-1])),
+        ]);
+        const [colB_flat] = builder.createOp("Reshape", [
+            colB,
+            builder.createConstant("K_flat_B", int64Vec([-1])),
+        ]);
 
-        // 9. Final reshape in the outer graph
-        const finalReshape = builder.createOp("Reshape", [loopOutput, shapeConst], {}, [
-            { type: dtype, shape: outShape },
-        ])[0];
+        // 5. Mul computes [A_ik * B_kj] for k=0..K-1
+        const [mulOp] = builder.createOp("Mul", [rowA_flat, colB_flat]);
+        const [sumOut] = builder.createOp("ReduceSum", [mulOp], { keepdims: 0 });
 
-        builder.replaceAllUsesWith(output, finalReshape);
-        op.remove();
+        return sumOut;
     }
 }

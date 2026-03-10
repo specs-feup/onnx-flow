@@ -1,87 +1,188 @@
+import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
-import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode } from "../../../OnnxTypes.js";
+import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
-    toStaticShape,
+    asStaticDims,
     getIntsAttr,
-    makeTensorProto,
     getStringAttr,
     getIntAttr,
+    scalarInt64,
+    int64Vec,
+    UNKOWN_SHAPE,
 } from "../../../Utils.js";
+import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
+import { GraphBuilder } from "../../../GraphBuilder.js";
 
-export class LowerConvRecipe implements DecompositionRecipe {
-    public readonly name = "LowerConv";
-    public readonly targetOp = "Conv";
-    public readonly exposesControlFlow = true;
-    public readonly exposesDataAccess = true;
-    public readonly producedOps = [
-        "Loop",
-        "Slice",
-        "Gather",
-        "Mul",
-        "ReduceSum",
-        "ScatterElements",
-        "Pad",
-    ];
-
+export class LowerConvRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
         return op.type === "Conv";
     }
 
-    apply(op: OperationNode.Class, builder: GraphBuilder): void {
-        const inputs = op.getInputs() as ConcreteValueNode[];
-        const X = inputs[0];
-        const W = inputs[1];
-        const B_bias = inputs.length > 2 ? inputs[2] : null;
+    getLoopBounds(
+        op: OperationNode.Class,
+        outShape: KnownShape,
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: number[] | ConcreteValueNode;
+    } {
+        const inputs = op.getInputs()!;
+        const staticOut = asStaticDims(outShape);
 
-        const output = op.getOutputs()[0];
+        // 1. Static Case
+        if (staticOut.length > 0 && !outShape.includes(-1) && !inputs[0].shape.includes(-1)) {
+            const totalIters = staticOut.reduce((a, b) => a * b, 1);
+            return { totalIters, carryShape: [totalIters] };
+        }
 
-        let dtype = (output.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-        if (dtype === DataType.UNDEFINED)
-            dtype = (X.literalType as unknown as DataType | undefined) ?? DataType.UNDEFINED;
-        if (dtype === DataType.UNDEFINED) dtype = DataType.FLOAT;
+        // 2. Dynamic Case
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `conv_bounds_${op.id}`);
+        const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        const xShape = toStaticShape(X.shape);
-        const wShape = toStaticShape(W.shape);
-        const N = xShape[0];
-        const C = xShape[1];
-        const H = xShape[2];
-        const Win = xShape[3];
+        const [shapeX] = builder.createOp("Shape", [inputs[0]]);
+        const [shapeW] = builder.createOp("Shape", [inputs[1]]);
+
+        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const [dummyX] = builder.createOp("ConstantOfShape", [shapeX], {}, expectedCoS);
+        const [dummyW] = builder.createOp("ConstantOfShape", [shapeW], {}, expectedCoS);
+
+        const dummyInputs = [dummyX, dummyW];
+        if (inputs.length > 2 && inputs[2]) {
+            const [shapeB] = builder.createOp("Shape", [inputs[2]]);
+            const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
+            dummyInputs.push(dummyB);
+        }
+
+        const expectedConv = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const [dummyOut] = builder.createOp("Conv", dummyInputs, op.attributes, expectedConv);
+
+        const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
+        const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
+            keepdims: 0,
+        });
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0]);
+
+        return { totalIters, carryShape, targetShape: targetShapeNode };
+    }
+
+    apply(
+        op: OperationNode.Class,
+        body: OnnxGraph.Class,
+        valueMap: Map<string, ValueNode>,
+        iter: ConcreteValueNode,
+        axes: ConcreteValueNode,
+        outShape: KnownShape,
+        _carryNode: ConcreteValueNode,
+        targetShapeNode: ValueNode,
+    ): RecipeApplyResult {
+        const builder = new GraphBuilder(body, `conv_${op.id}`);
+        const inputs = op.getInputs()!;
+
+        // 1. Resolve inputs (Captured Tensors)
+        const X = resolveRecipeInput(
+            builder,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+            targetShapeNode,
+        );
+        const W = resolveRecipeInput(
+            builder,
+            inputs[1],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+            targetShapeNode,
+        );
+        const B_bias =
+            inputs.length > 2
+                ? resolveRecipeInput(
+                      builder,
+                      inputs[2],
+                      valueMap,
+                      iter,
+                      axes,
+                      outShape,
+                      false,
+                      false,
+                      targetShapeNode,
+                  )
+                : null;
+
+        const xShape = asStaticDims(inputs[0].shape);
+        const wShape = asStaticDims(inputs[1].shape);
+
+        // Kernel parameters are always static in ONNX
+        const C = xShape[1] !== -1 ? xShape[1] : 1; // Fallback if C is unknown (rare)
         const M = wShape[0];
+
+        // --- NEW DYNAMIC SUPPORT: Extract H and Win ---
+        let H: number | ValueNode = xShape[2];
+        let Win: number | ValueNode = xShape[3];
+
+        if (inputs[0].shape.includes(-1) || inputs[0].shape.length === 0) {
+            const [shapeX] = builder.createOp("Shape", [inputs[0]]);
+            const rankX = builder.createOp("Size", [shapeX])[0];
+
+            const getSpatialDim = (offsetFromEnd: number, tag: string) => {
+                const offsetNode = builder.createConstant(
+                    `${tag}_offset`,
+                    scalarInt64(offsetFromEnd),
+                );
+                const [targetAxis] = builder.createOp("Add", [rankX, offsetNode]);
+                const [dimRaw] = builder.createOp(
+                    "Gather",
+                    [shapeX, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
+                    { axis: 0 },
+                );
+                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+            };
+
+            H = xShape[2] === -1 ? getSpatialDim(-2, "H") : xShape[2];
+            Win = xShape[3] === -1 ? getSpatialDim(-1, "Win") : xShape[3];
+        }
+        // ----------------------------------------------
 
         const strides = getIntsAttr(op, "strides", [1, 1]);
         const dilations = getIntsAttr(op, "dilations", [1, 1]);
         const kernelShape = getIntsAttr(op, "kernel_shape", [wShape[2], wShape[3]]);
         let pads = getIntsAttr(op, "pads", []);
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
-
         const group = getIntAttr(op, "group", 1);
 
-        const kH = kernelShape[0];
-        const kW = kernelShape[1];
-        const sH = strides[0];
-        const sW = strides[1];
-        const dH = dilations[0];
-        const dW = dilations[1];
+        const kH = kernelShape[0],
+            kW = kernelShape[1];
+        const sH = strides[0],
+            sW = strides[1];
+        const dH = dilations[0],
+            dW = dilations[1];
 
         const kEffH = dH * (kH - 1) + 1;
         const kEffW = dW * (kW - 1) + 1;
 
+        // 2. Handle Padding logic
         if (pads.length === 0) {
             if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
+                if (typeof H !== "number" || typeof Win !== "number") {
+                    throw new Error(
+                        "Dynamic spatial dimensions with auto_pad is not supported. Run CanonicalizePadPass first.",
+                    );
+                }
                 const isLower = autoPad === "SAME_LOWER";
-                const outH_temp = Math.ceil(H / sH);
-                const outW_temp = Math.ceil(Win / sW);
-                const padH = Math.max((outH_temp - 1) * sH + kEffH - H, 0);
-                const padW = Math.max((outW_temp - 1) * sW + kEffW - Win, 0);
-
+                const padH = Math.max((Math.ceil(H / sH) - 1) * sH + kEffH - H, 0);
+                const padW = Math.max((Math.ceil(Win / sW) - 1) * sW + kEffW - Win, 0);
                 const pT = isLower ? Math.ceil(padH / 2) : Math.floor(padH / 2);
-                const pB = padH - pT;
                 const pL = isLower ? Math.ceil(padW / 2) : Math.floor(padW / 2);
-                const pR = padW - pL;
-                pads = [pT, pL, pB, pR];
+                pads = [pT, pL, padH - pT, padW - pL];
             } else {
                 pads = [0, 0, 0, 0];
             }
@@ -92,231 +193,151 @@ export class LowerConvRecipe implements DecompositionRecipe {
             pB = pads[2] ?? 0,
             pR = pads[3] ?? 0;
 
-        const H_padded = H + pT + pB;
-        const W_padded = Win + pL + pR;
-
-        const M_out = M;
-        const H_out = Math.floor((H_padded - kEffH) / sH + 1);
-        const W_out = Math.floor((W_padded - kEffW) / sW + 1);
-
-        const outShape = [N, M_out, H_out, W_out];
-
-        // Pad X if necessary
-        let paddedX = X;
-        if (pads.some((p) => p !== 0)) {
-            const padVec = [0, 0, pT, pL, 0, 0, pB, pR];
-            const padsConst = builder.createConstant(
-                `pads_${op.id}`,
-                makeTensorProto(DataType.INT64, [8], padVec),
+        const buildOutDim = (
+            dimIn: number | ValueNode,
+            pA: number,
+            pB_pad: number,
+            kEff: number,
+            stride: number,
+            tag: string,
+        ) => {
+            if (typeof dimIn === "number") {
+                return Math.floor((dimIn + pA + pB_pad - kEff) / stride + 1);
+            }
+            // Math.floor((dim + pA + pB_pad - kEff) / stride + 1)
+            const numOffset = builder.createConstant(
+                `${tag}_num_off`,
+                scalarInt64(pA + pB_pad - kEff),
             );
-            paddedX = builder.createOp("Pad", [X, padsConst])[0];
+            const [numAdd] = builder.createOp("Add", [dimIn, numOffset]);
+
+            const strideConst = builder.createConstant(`${tag}_stride`, scalarInt64(stride));
+            const [divOut] = builder.createOp("Div", [numAdd, strideConst]); // Integer division acts as floor for positives
+
+            const oneConst = builder.createConstant(`${tag}_one`, scalarInt64(1));
+            return builder.createOp("Add", [divOut, oneConst])[0];
+        };
+
+        const H_out = buildOutDim(H, pT, pB, kEffH, sH, "H_out");
+        const W_out = buildOutDim(Win, pL, pR, kEffW, sW, "W_out");
+        // --------------------------------------------
+
+        let paddedX = X;
+        // Cast `p` to Number to safely handle BigInt 0n vs Number 0
+        if (pads.some((p) => Number(p) !== 0)) {
+            const padsConst = builder.createConstant(`pads`, {
+                dataType: DataType.INT64,
+                dims: [8],
+                // Cast all values to standard JS Numbers to prevent JSON serialization dropping them
+                int64Data: [0, 0, Number(pT), Number(pL), 0, 0, Number(pB), Number(pR)],
+            });
+            [paddedX] = builder.createOp("Pad", [X, padsConst]);
         }
 
-        const totalElements = outShape.reduce((a, b) => a * b, 1);
-        const shapeConst = builder.createConstant(
-            `shape_${op.id}`,
-            makeTensorProto(DataType.INT64, [outShape.length], outShape),
-        );
+        // 3. Decode iteration index into N, M, Y, X coordinates
+        const mConst = builder.createConstant(`M_const`, scalarInt64(M));
+        const hOutNode =
+            typeof H_out === "number"
+                ? builder.createConstant(`H_out_const`, scalarInt64(H_out))
+                : H_out;
+        const wOutNode =
+            typeof W_out === "number"
+                ? builder.createConstant(`W_out_const`, scalarInt64(W_out))
+                : W_out;
 
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = builder.createForLoopRegion(
-            builder,
-            totalElements,
-            dtype,
-            [totalElements],
-            `ConvLoop_${op.id}`,
-        );
+        const [hwOutNode] = builder.createOp("Mul", [hOutNode, wOutNode]);
+        const [mHwOutNode] = builder.createOp("Mul", [mConst, hwOutNode]);
 
-        const M_HW = innerBuilder.createConstant(
-            `M_HW_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [M_out * H_out * W_out]),
-        );
-        const HW = innerBuilder.createConstant(
-            `HW_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [H_out * W_out]),
-        );
-        const W_const = innerBuilder.createConstant(
-            `Wout_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [W_out]),
-        );
+        const [nIdx] = builder.createOp("Div", [iter, mHwOutNode]);
+        const [remN] = builder.createOp("Mod", [iter, mHwOutNode]);
+        const [mIdx] = builder.createOp("Div", [remN, hwOutNode]);
+        const [rem] = builder.createOp("Mod", [remN, hwOutNode]);
+        const [yIdx] = builder.createOp("Div", [rem, wOutNode]);
+        const [xIdx] = builder.createOp("Mod", [rem, wOutNode]);
 
-        const nIdx = innerBuilder.createOp("Div", [trip, M_HW])[0];
-        const remN = innerBuilder.createOp("Mod", [trip, M_HW])[0];
-        const mIdx = innerBuilder.createOp("Div", [remN, HW])[0];
-        const rem = innerBuilder.createOp("Mod", [remN, HW])[0];
-        const yIdx = innerBuilder.createOp("Div", [rem, W_const])[0];
-        const xIdx = innerBuilder.createOp("Mod", [rem, W_const])[0];
+        // 4. Calculate Slice bounds for the input patch
+        const [yStart] = builder.createOp("Mul", [
+            yIdx,
+            builder.createConstant(`sH`, scalarInt64(sH)),
+        ]);
+        const [xStart] = builder.createOp("Mul", [
+            xIdx,
+            builder.createConstant(`sW`, scalarInt64(sW)),
+        ]);
+        const [yEnd] = builder.createOp("Add", [
+            yStart,
+            builder.createConstant(`keH`, scalarInt64(kEffH)),
+        ]);
+        const [xEnd] = builder.createOp("Add", [
+            xStart,
+            builder.createConstant(`keW`, scalarInt64(kEffW)),
+        ]);
+        const [nEnd] = builder.createOp("Add", [
+            nIdx,
+            builder.createConstant(`one`, scalarInt64(1)),
+        ]);
 
-        const strideYConst = innerBuilder.createConstant(
-            `sY_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [sH]),
-        );
-        const strideXConst = innerBuilder.createConstant(
-            `sX_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [sW]),
-        );
-        const kEffHConst = innerBuilder.createConstant(
-            `kEffH_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [kEffH]),
-        );
-        const kEffWConst = innerBuilder.createConstant(
-            `kEffW_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [kEffW]),
-        );
-
-        const yStart = innerBuilder.createOp("Mul", [yIdx, strideYConst])[0];
-        const xStart = innerBuilder.createOp("Mul", [xIdx, strideXConst])[0];
-        const yEnd = innerBuilder.createOp("Add", [yStart, kEffHConst])[0]; // Use Effective kernel sizes for Ends
-        const xEnd = innerBuilder.createOp("Add", [xStart, kEffWConst])[0];
-
-        const flatAxes = innerBuilder.createConstant(
-            `flatAxes_${op.id}`,
-            makeTensorProto(DataType.INT64, [1], [0]),
-        );
-        const oneConst = innerBuilder.createConstant(
-            `one_${op.id}`,
-            makeTensorProto(DataType.INT64, [], [1]),
-        );
-        const nEnd = innerBuilder.createOp("Add", [nIdx, oneConst])[0];
-
-        let starts: ConcreteValueNode;
-        let ends: ConcreteValueNode;
-        let sliceAxes: ConcreteValueNode;
-        let sliceSteps: ConcreteValueNode;
+        let starts: ValueNode, ends: ValueNode, sliceAxes: ValueNode, sliceSteps: ValueNode;
 
         if (group > 1) {
-            // Group > 1 requires us to slice C to extract only the channels belonging to the current output channel (mIdx)
-            const C_per_group = Math.floor(C / group);
-            const M_per_group = Math.floor(M / group);
+            const MperG = Math.floor(M / group),
+                CperG = Math.floor(C / group);
+            const [gIdx] = builder.createOp("Div", [
+                mIdx,
+                builder.createConstant(`MperG`, scalarInt64(MperG)),
+            ]);
+            const [cStart] = builder.createOp("Mul", [
+                gIdx,
+                builder.createConstant(`CperG`, scalarInt64(CperG)),
+            ]);
+            const [cEnd] = builder.createOp("Add", [
+                cStart,
+                builder.createConstant(`CperG_val`, scalarInt64(CperG)),
+            ]);
 
-            const MperGroupConst = innerBuilder.createConstant(
-                `MperG_${op.id}`,
-                makeTensorProto(DataType.INT64, [], [M_per_group]),
+            const coordsS = [nIdx, cStart, yStart, xStart].map(
+                (c, _i) => builder.createOp("Unsqueeze", [c, axes])[0],
             );
-            const CperGroupConst = innerBuilder.createConstant(
-                `CperG_${op.id}`,
-                makeTensorProto(DataType.INT64, [], [C_per_group]),
+            [starts] = builder.createOp("Concat", coordsS, { axis: 0 });
+
+            const coordsE = [nEnd, cEnd, yEnd, xEnd].map(
+                (c, _i) => builder.createOp("Unsqueeze", [c, axes])[0],
             );
+            [ends] = builder.createOp("Concat", coordsE, { axis: 0 });
 
-            const gIdx = innerBuilder.createOp("Div", [mIdx, MperGroupConst])[0];
-            const cStart = innerBuilder.createOp("Mul", [gIdx, CperGroupConst])[0];
-            const cEnd = innerBuilder.createOp("Add", [cStart, CperGroupConst])[0];
-
-            starts = innerBuilder.createOp(
-                "Concat",
-                [
-                    innerBuilder.createOp("Unsqueeze", [nIdx, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [cStart, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [yStart, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [xStart, flatAxes])[0],
-                ],
-                { axis: 0 },
-            )[0];
-
-            ends = innerBuilder.createOp(
-                "Concat",
-                [
-                    innerBuilder.createOp("Unsqueeze", [nEnd, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [cEnd, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [yEnd, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [xEnd, flatAxes])[0],
-                ],
-                { axis: 0 },
-            )[0];
-
-            sliceAxes = innerBuilder.createConstant(
-                `sliceAxes_${op.id}`,
-                makeTensorProto(DataType.INT64, [4], [0, 1, 2, 3]),
-            );
-            sliceSteps = innerBuilder.createConstant(
-                `sliceSteps_${op.id}`,
-                makeTensorProto(DataType.INT64, [4], [1, 1, dH, dW]),
-            );
+            sliceAxes = builder.createConstant(`sliceAxes`, int64Vec([0, 1, 2, 3]));
+            sliceSteps = builder.createConstant(`sliceSteps`, int64Vec([1, 1, dH, dW]));
         } else {
-            starts = innerBuilder.createOp(
-                "Concat",
-                [
-                    innerBuilder.createOp("Unsqueeze", [nIdx, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [yStart, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [xStart, flatAxes])[0],
-                ],
-                { axis: 0 },
-            )[0];
-
-            ends = innerBuilder.createOp(
-                "Concat",
-                [
-                    innerBuilder.createOp("Unsqueeze", [nEnd, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [yEnd, flatAxes])[0],
-                    innerBuilder.createOp("Unsqueeze", [xEnd, flatAxes])[0],
-                ],
-                { axis: 0 },
-            )[0];
-
-            sliceAxes = innerBuilder.createConstant(
-                `sliceAxes_${op.id}`,
-                makeTensorProto(DataType.INT64, [3], [0, 2, 3]),
+            const coordsS = [nIdx, yStart, xStart].map(
+                (c, _i) => builder.createOp("Unsqueeze", [c, axes])[0],
             );
-            // Apply Dilations naturally via Slice steps
-            sliceSteps = innerBuilder.createConstant(
-                `sliceSteps_${op.id}`,
-                makeTensorProto(DataType.INT64, [3], [1, dH, dW]),
+            [starts] = builder.createOp("Concat", coordsS, { axis: 0 });
+
+            const coordsE = [nEnd, yEnd, xEnd].map(
+                (c, _i) => builder.createOp("Unsqueeze", [c, axes])[0],
             );
+            [ends] = builder.createOp("Concat", coordsE, { axis: 0 });
+
+            sliceAxes = builder.createConstant(`sliceAxes`, int64Vec([0, 2, 3]));
+            sliceSteps = builder.createConstant(`sliceSteps`, int64Vec([1, dH, dW]));
         }
 
-        const patch = innerBuilder.createOp("Slice", [
-            paddedX,
-            starts,
-            ends,
-            sliceAxes,
-            sliceSteps,
-        ])[0];
+        // 5. Extract patch, gather kernel, and perform dot product
+        const [patch] = builder.createOp("Slice", [paddedX, starts, ends, sliceAxes, sliceSteps]);
+        const [mIdxUnsq] = builder.createOp("Unsqueeze", [mIdx, axes]);
+        const [kernel] = builder.createOp("Gather", [W, mIdxUnsq], { axis: 0 });
 
-        const mUnsq = innerBuilder.createOp("Unsqueeze", [mIdx, flatAxes])[0];
-        const kernel = innerBuilder.createOp("Gather", [W, mUnsq], { axis: 0 })[0];
+        const [mulOut] = builder.createOp("Mul", [patch, kernel]);
+        const [sumOut] = builder.createOp("ReduceSum", [mulOut], { keepdims: 0 });
 
-        const mul = innerBuilder.createOp("Mul", [patch, kernel])[0];
-        const sumScalar = innerBuilder.createOp("ReduceSum", [mul], { keepdims: 0 })[0];
-
-        let finalScalar = sumScalar;
+        // 6. Final bias Addition
+        let finalScalar = sumOut;
         if (B_bias) {
-            let biasSq: ConcreteValueNode;
-            const bShape = toStaticShape(B_bias.shape);
-            if (bShape.length === 1 && bShape[0] === M) {
-                const biasVal = innerBuilder.createOp("Gather", [B_bias, mUnsq], { axis: 0 })[0];
-                biasSq = innerBuilder.createOp("Squeeze", [biasVal, flatAxes])[0];
-            } else if (bShape.length === 4 && bShape[1] === M) {
-                // [1, M, 1, 1]
-                const biasVal = innerBuilder.createOp("Gather", [B_bias, mUnsq], { axis: 1 })[0];
-                const squeezeAxes = innerBuilder.createConstant(
-                    `sqAxes_${op.id}`,
-                    makeTensorProto(DataType.INT64, [3], [0, 1, 2]),
-                );
-                biasSq = innerBuilder.createOp("Squeeze", [biasVal, squeezeAxes])[0];
-            } else {
-                const zeroIdx = innerBuilder.createConstant(
-                    `zero_${op.id}`,
-                    makeTensorProto(DataType.INT64, [1], [0]),
-                );
-                const biasVal = innerBuilder.createOp("Gather", [B_bias, zeroIdx], { axis: 0 })[0];
-                biasSq = innerBuilder.createOp("Squeeze", [biasVal, flatAxes])[0];
-            }
-            finalScalar = innerBuilder.createOp("Add", [sumScalar, biasSq])[0];
+            const [gBiasOut] = builder.createOp("Gather", [B_bias, mIdxUnsq], { axis: 0 });
+            const biasSq = squeezeIfLen1(builder, gBiasOut, axes, `sqBias`);
+            [finalScalar] = builder.createOp("Add", [sumOut, biasSq]);
         }
 
-        const iterUnsq = innerBuilder.createOp("Unsqueeze", [trip, flatAxes])[0];
-        const updateVal = innerBuilder.createOp("Unsqueeze", [finalScalar, flatAxes])[0];
-        const scatterOut = innerBuilder.createOp(
-            "ScatterElements",
-            [vInitial, iterUnsq, updateVal],
-            { axis: 0 },
-        )[0];
-
-        finalize([scatterOut]);
-
-        const finalReshape = builder.createOp("Reshape", [loopOutput, shapeConst], {}, [
-            { type: dtype, shape: outShape },
-        ])[0];
-        builder.replaceAllUsesWith(output, finalReshape);
-        op.remove();
+        return finalScalar;
     }
 }
