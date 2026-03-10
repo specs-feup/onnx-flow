@@ -7,7 +7,6 @@ import {
     decodeIntegerVectorFromTensorProto,
     getStringAttr,
     makeTensorProto,
-    readScalarFromTensorNode,
     toStaticShape,
 } from "../../../Utils.js";
 import ConstantNode from "../../../ConstantNode.js";
@@ -66,7 +65,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
 
         // Keep valNode as a TensorNode so it supports dynamic graphs and all dtypes natively
         let valNode: ConcreteValueNode;
-        if (ins.length > 2 && ins[2]) {
+        if (ins.length > 2 && 2 in ins) {
             valNode = ins[2];
         } else {
             valNode = builder.createConstant(
@@ -122,7 +121,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
                         ax,
                         pBeg,
                         dtype,
-                        valNode, 
+                        valNode,
                         `${op.id}_${ax}_L`,
                     );
                 if (pEnd > 0)
@@ -132,7 +131,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
                         ax,
                         pEnd,
                         dtype,
-                        valNode, 
+                        valNode,
                         `${op.id}_${ax}_R`,
                     );
             } else if (mode === "edge") {
@@ -185,7 +184,10 @@ export class LowerPadRecipe implements DecompositionRecipe {
             cur = builder.createOp("Concat", parts, { axis: ax }, expectedConcatOut)[0];
         }
 
-        if (cur === Xin) cur = builder.createOp("Identity", [Xin], {}, [{type: Xin.literalType, shape: Xin.shape as KnownShape}] )[0];
+        if (cur === Xin)
+            cur = builder.createOp("Identity", [Xin], {}, [
+                { type: Xin.literalType, shape: Xin.shape as KnownShape },
+            ])[0];
         builder.replaceAllUsesWith(Y, cur);
         op.remove();
     }

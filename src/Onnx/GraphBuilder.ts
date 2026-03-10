@@ -145,7 +145,7 @@ export class GraphBuilder {
         const updateUsesInGraph = (g: OnnxGraph.Class) => {
             for (const op of g.getOperationNodes().toArray()) {
                 const currentInputs = op.getInputs() ?? [];
-                let changed = false;
+                let changed: boolean = false;
 
                 const updatedInputs = currentInputs.map((input) => {
                     if (input.id === oldNode.id) {
@@ -172,7 +172,7 @@ export class GraphBuilder {
 
                 // Recursively update control-flow subgraphs (Loop, If, Scan bodies)
                 // Assuming OperationNode stores subgraphs in an accessible array:
-                for (const sub of (op as any).subgraphs || []) {
+                for (const sub of op.regions || []) {
                     updateUsesInGraph(sub as OnnxGraph.Class);
                 }
             }

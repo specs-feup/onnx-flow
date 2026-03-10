@@ -6,7 +6,6 @@ import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Node from "@specs-feup/flow/graph/Node";
 import TensorNode from "../TensorNode.js";
-import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
 import { readConstIntegerVectorFromTensorNode, readTensorData, TYPE_SIZE_MAP } from "../Utils.js";
@@ -52,11 +51,6 @@ export default class CgraDotFormatter<
                 } else if (node.type === "output") {
                     attrs["size"] = size.toString();
                 }
-            }),
-            Node.Case(VariableNode, (node) => {
-                attrs["label"] = node.name;
-                // attrs.address = '0';
-                // attrs.size = '1';
             }),
             Node.Case(ConstantNode, (node) => {
                 const val = readTensorData(node);

@@ -1,3 +1,4 @@
+/*
 import OperationNode from "../../OperationNode.js";
 import OnnxEdge from "../../OnnxEdge.js";
 import type OnnxGraph from "../../OnnxGraph.js";
@@ -119,3 +120,4 @@ export default function optimizeSimpleLoopOperations(
             .as(OnnxInnerEdge);
     }
 }
+*/

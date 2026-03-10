@@ -16,7 +16,6 @@ import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
-import { unsqueezeIdx } from "./transformation/loop-lowering/BuildLoop.js";
 import type { GraphBuilder } from "./GraphBuilder.js";
 
 // =====================================================================================
@@ -951,6 +950,24 @@ export function getLargestRankShape(tensors: ValueNode[]): Shape {
         if (tensors[i].shape.length > largest.length) largest = tensors[i].shape;
     }
     return largest;
+}
+
+export function unsqueezeIdx(
+    g: OnnxGraph.Class,
+    idx: ConcreteValueNode,
+    axes: ConcreteValueNode,
+    tag: string,
+): TensorNode.Class {
+    const unsq = g
+        .addNode(uniq(g, tag))
+        .init(new OperationNode.Builder("Unsqueeze", [idx, axes]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `${tag}_out`))
+        .init(new TensorNode.Builder(idx.literalType, [1], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(unsq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
 }
 
 export function as1D(

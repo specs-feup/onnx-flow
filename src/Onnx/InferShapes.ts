@@ -291,7 +291,9 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             let target: number[] = [];
 
             if (shapeInput !== undefined && shapeInput.is(ConstantNode)) {
-                target = decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ?? [];
+                target =
+                    decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ??
+                    [];
             }
 
             if (target.length > 0) {
@@ -303,10 +305,13 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                     let knownProd = 1;
                     const resolved = target.slice();
 
-                    resolved.forEach((d, i) => { if (d === 0) resolved[i] = inNums[i] ?? 1; });
+                    resolved.forEach((d, i) => {
+                        if (d === 0) resolved[i] = inNums[i] ?? 1;
+                    });
                     resolved.forEach((d, i) => {
                         if (d === -1) {
-                            if (inferIndex !== -1) throw new Error("Reshape: multiple -1 in target");
+                            if (inferIndex !== -1)
+                                throw new Error("Reshape: multiple -1 in target");
                             inferIndex = i;
                         } else {
                             knownProd *= d || 1;
@@ -318,7 +323,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                     }
                     outShape = resolved;
                 } else {
-                    outShape = target.map(d => (d === 0 || d === -1) ? -1 : d);
+                    outShape = target.map((d) => (d === 0 || d === -1 ? -1 : d));
                 }
             } else {
                 // FIX: Target shape is dynamic. DO NOT fall back to inputShape.slice()!
@@ -326,7 +331,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                 if (typeof targetRank === "number" && targetRank > 0) {
                     outShape = Array(targetRank).fill(-1);
                 } else {
-                    outShape = [-1]; 
+                    outShape = [-1];
                 }
             }
             break;
@@ -501,7 +506,9 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
 
             let pads: number[] = [];
             if (padsNode !== undefined && padsNode.is(ConstantNode)) {
-                pads = decodeIntegerVectorFromTensorProto(padsNode.as(ConstantNode).constantValue) ?? [];
+                pads =
+                    decodeIntegerVectorFromTensorProto(padsNode.as(ConstantNode).constantValue) ??
+                    [];
             }
 
             const rank = dataShape.length;
@@ -749,7 +756,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             outShape = [...ref];
             let sum = 0;
             for (const s of inputShapes) {
-                if (!s || s.length <= axis) {
+                if (s === undefined || s.length <= axis) {
                     sum = -1;
                     break;
                 }
@@ -781,22 +788,26 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
 
         /** ───── Expand (with Expand(x, Shape(X)) pattern) ───── */
         case "Expand": {
-            const dataShape = infos[0]?.shape ?? [];
             const shapeInput: ValueNode | undefined = inputs[1]; // BaseNode
             let targetShape: Shape = [];
 
             if (shapeInput !== undefined && shapeInput.is(ConstantNode)) {
-                const arr = decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ?? [];
+                const arr =
+                    decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ??
+                    [];
                 if (arr.length) targetShape = arr;
             }
 
             const producers = shapeInput?.incomers.sources;
-            const shapeOp = producers?.filterIs(OperationNode).filter((op) => op.type === "Shape").first();
+            const shapeOp = producers
+                ?.filterIs(OperationNode)
+                .filter((op) => op.type === "Shape")
+                .first();
 
             if (shapeOp) {
                 const shapeInputs = shapeOp.getInputs() ?? [];
-                const xTensor = shapeInputs[0];
-                if (xTensor) {
+                const xTensor: ValueNode | undefined = shapeInputs[0];
+                if (xTensor !== undefined) {
                     const xShape = resolveTensorShape(xTensor);
                     if (xShape.length) targetShape = xShape.slice();
                 }
@@ -959,7 +970,8 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                     const proto: TensorProto = inp.as(ConstantNode).constantValue;
                     if (proto.floatData && proto.floatData.length > 0) return proto.floatData[0];
                     if (proto.doubleData && proto.doubleData.length > 0) return proto.doubleData[0];
-                    if (proto.int64Data && proto.int64Data.length > 0) return Number(proto.int64Data[0]);
+                    if (proto.int64Data && proto.int64Data.length > 0)
+                        return Number(proto.int64Data[0]);
                     if (proto.int32Data && proto.int32Data.length > 0) return proto.int32Data[0];
                     const arr = decodeIntegerVectorFromTensorProto(proto);
                     if (arr && arr.length > 0) return arr[0];
@@ -976,7 +988,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                 outShape = [len];
             } else {
                 // Fallback must be [-1] (unknown 1D tensor), NOT [] (0D scalar)
-                outShape = UNKOWN_SHAPE; 
+                outShape = UNKOWN_SHAPE;
             }
             break;
         }
@@ -1032,6 +1044,8 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             }
         }
     }
+
+    //console.log(`[InferShapes] Op: ${node.id} (${node.type}) -> inferred outShape: [${outShape}]`);
 }
 
 /** Main shape inference */

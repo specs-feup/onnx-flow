@@ -175,7 +175,9 @@ export class LowerConcatRecipe implements DecompositionRecipe {
                 { type: DataType.INT64, shape: Xi.shape as KnownShape },
             ])[0];
 
-            curY = builder.createOp("ScatterElements", [curY, idxFull, Xi], { axis }, [{ type: dtype, shape: Yshape }])[0];
+            curY = builder.createOp("ScatterElements", [curY, idxFull, Xi], { axis }, [
+                { type: dtype, shape: Yshape },
+            ])[0];
 
             offsetSc = endSc;
         }

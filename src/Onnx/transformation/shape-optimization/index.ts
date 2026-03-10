@@ -1,3 +1,4 @@
+/*
 import type Graph from "@specs-feup/flow/graph/Graph";
 import OperationNode from "../../OperationNode.js";
 import type OnnxGraph from "../../OnnxGraph.js";
@@ -24,3 +25,4 @@ export default class OnnxGraphOptimizer implements Graph.Transformation<
         return graph;
     }
 }
+*/
