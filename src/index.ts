@@ -38,6 +38,7 @@ export function loadGraph(
     enableLowLevel: boolean = true,
     enableOptimize: boolean = true,
     dotOutput: boolean = true,
+    canonicalize: boolean = defaultDecompositionOptions.canonicalize,
     fuse: boolean = defaultDecompositionOptions.fuse,
     recurse: boolean = defaultDecompositionOptions.recurse,
     coalesce: boolean = defaultDecompositionOptions.coalesce,
@@ -54,6 +55,7 @@ export function loadGraph(
 
     if (enableLowLevel) {
         const decompOptions: DecompositionOptions = {
+            canonicalize,
             fuse,
             recurse,
             coalesce,
@@ -202,6 +204,13 @@ const argv = await yargs(hideBin(process.argv))
         type: "boolean",
         default: defaultDecompositionOptions.recurse,
     })
+    .option("canonicalize", {
+        alias: "can",
+        describe:
+            "Canonicalize complex operations into simpler primitives (use --no-canonicalize to disable)",
+        type: "boolean",
+        default: defaultDecompositionOptions.canonicalize,
+    })
     .option("loopLowering", {
         alias: "ll",
         describe: "Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable",
@@ -307,6 +316,7 @@ if (isPartitioning === true) {
 
         if (!argv.noLowLevel) {
             const decompOptions: DecompositionOptions = {
+                canonicalize: argv.canonicalize,
                 fuse: argv.fuse,
                 recurse: argv.recurse,
                 coalesce: argv.coalesce,

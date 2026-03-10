@@ -52,7 +52,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         if (axes.length === 0) axes = Array.from({ length: rank }, (_, i) => i);
         else axes = axes.map((a) => (a < 0 ? a + rank : a));
 
-        // --- NEW DYNAMIC SUPPORT ---
+        // --- DYNAMIC SUPPORT ---
         if (inputs[0].shape.includes(-1) || rank === 0) {
             const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `bounds_red_${op.id}`);
             const inputNode = inputs[0];
@@ -194,7 +194,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         if (op.type === "ReduceMean") {
             const bounds = this.getLoopBounds(op, []);
 
-            // --- NEW DYNAMIC SUPPORT ---
+            // --- DYNAMIC SUPPORT ---
             // Use Array.isArray to prove to TypeScript whether carryShape is a static array or a ValueNode
             const isDynamic =
                 typeof bounds.totalIters !== "number" || !Array.isArray(bounds.carryShape);

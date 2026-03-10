@@ -62,7 +62,7 @@ namespace TensorNode {
             this.data[TAG].metadata[key] = value;
         }
 
-        // Helper for legacy 'address' support (optional, if you want to keep the API logic)
+        // (optional, to keep the API logic)
         get address(): number | undefined {
             return this.getMetadata("address") as number | undefined;
         }

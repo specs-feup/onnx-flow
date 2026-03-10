@@ -168,7 +168,7 @@ export function resolveRecipeInput(
         const rO = outDimsStatic.length;
         const rI = inDimsStatic.length;
 
-        // --- NEW DYNAMIC SUPPORT ---
+        // --- DYNAMIC SUPPORT ---
         const outDims: (number | ValueNode)[] = outDimsStatic;
         let inDims: (number | ValueNode)[] = inDimsStatic;
 

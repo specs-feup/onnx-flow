@@ -685,9 +685,6 @@ export function readTensorData(node?: BaseNode.Class): number[] | undefined {
                 break;
             case 16: // BFLOAT16 (Rough approximation: high 16 bits of F32)
                 // JS doesn't have native BFloat16, usually we treat as Float32 truncated
-                // Shift left 16 to simulate F32, then read.
-                // Simple hack: Just cast to UInt16 for now if you don't need math precision
-                // or implement full decoder if critical.
                 out.push(dv.getUint16(i * 2, true));
                 break;
 

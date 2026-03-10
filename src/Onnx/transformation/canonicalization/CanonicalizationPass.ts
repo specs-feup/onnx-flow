@@ -46,7 +46,6 @@ export class CanonicalizationPass implements GraphPass {
 
                 const recipe = this.registry.get(op.type);
 
-                // NEW LOGIC: Use canApply() and assume mutation if apply() succeeds
                 if (recipe && recipe.canApply(op)) {
                     const builder = new GraphBuilder(graph, `lowering_${op.id}`);
                     recipe.apply(op, builder);

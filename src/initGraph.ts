@@ -153,7 +153,6 @@ function addNodes(
             // However, since we parse recursively, the parent *is* built up to the point of this Loop node.
 
             // Note: OnnxGraph.hasNode is purely local.
-            // We need a way to ask the parent: "Do you have 'name'?"
             if (parentGraph.hasNode(name)) {
                 const parentNode = parentGraph.getNodeById(name);
 

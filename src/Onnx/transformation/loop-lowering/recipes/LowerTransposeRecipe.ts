@@ -96,7 +96,7 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
             inversePerm[validPerm[outAxis]] = outAxis;
         }
 
-        // --- NEW DYNAMIC SUPPORT ---
+        // --- DYNAMIC SUPPORT ---
         let decodeDims: (number | ValueNode)[] = [];
         let inDims: (number | ValueNode)[] = [];
 

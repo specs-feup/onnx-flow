@@ -109,7 +109,7 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         if (staticShapeA.length === 1) staticShapeA = [1, staticShapeA[0]];
         if (staticShapeB.length === 1) staticShapeB = [staticShapeB[0], 1];
 
-        // --- NEW DYNAMIC SUPPORT: Extract M, K, N ---
+        // --- DYNAMIC SUPPORT: Extract M, K, N ---
         let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
 
         const isDynamicA = inputs[0].shape.includes(-1) || inputs[0].shape.length === 0;

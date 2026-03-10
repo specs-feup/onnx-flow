@@ -94,7 +94,7 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
             ];
             const sRanked = builder.createOp("Unsqueeze", [Sf, axesConst], {}, expectedSUnsq)[0];
 
-            // FIX: Only Unsqueeze Zf if Z was provided. Otherwise, it is a scalar and shouldn't be unsqueezed.
+            // Only Unsqueeze Zf if Z was provided. Otherwise, it is a scalar and shouldn't be unsqueezed.
             const zRanked = Z
                 ? builder.createOp("Unsqueeze", [Zf, axesConst], {}, expectedSUnsq)[0]
                 : Zf;

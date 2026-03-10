@@ -126,7 +126,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         if (sA.length === 1) sA = [1, sA[0]];
         if (sB.length === 1) sB = [sB[0], 1];
 
-        // --- NEW DYNAMIC SUPPORT: Extract M, K, N ---
+        // --- DYNAMIC SUPPORT: Extract M, K, N ---
         let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
 
         const isDynamicA = inputs[0].shape.includes(-1) || inputs[0].shape.length === 0;
@@ -221,7 +221,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
                         : batchIndices[outPos];
                 });
 
-                // --- NEW DYNAMIC STRIDE COMPUTATION ---
+                // --- DYNAMIC STRIDE COMPUTATION ---
                 const strides: (number | ValueNode)[] = new Array(targetBatch.length).fill(1);
                 let currentStride: ValueNode | number = 1;
                 for (let i = targetBatch.length - 1; i >= 0; i--) {

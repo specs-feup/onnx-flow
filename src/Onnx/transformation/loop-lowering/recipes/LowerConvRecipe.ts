@@ -125,7 +125,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const C = xShape[1] !== -1 ? xShape[1] : 1; // Fallback if C is unknown (rare)
         const M = wShape[0];
 
-        // --- NEW DYNAMIC SUPPORT: Extract H and Win ---
+        // --- DYNAMIC SUPPORT: Extract H and Win ---
         let H: number | ValueNode = xShape[2];
         let Win: number | ValueNode = xShape[3];
 
