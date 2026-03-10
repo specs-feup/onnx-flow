@@ -49,7 +49,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const [dummyW] = builder.createOp("ConstantOfShape", [shapeW], {}, expectedCoS);
 
         const dummyInputs = [dummyX, dummyW];
-        if (inputs.length > 2 && inputs[2]) {
+        if (inputs.length > 2) {
             const [shapeB] = builder.createOp("Shape", [inputs[2]]);
             const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
             dummyInputs.push(dummyB);

@@ -326,8 +326,8 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                     outShape = target.map((d) => (d === 0 || d === -1 ? -1 : d));
                 }
             } else {
-                // FIX: Target shape is dynamic. DO NOT fall back to inputShape.slice()!
-                const targetRank = shapeInput?.shape?.[0];
+                // Target shape is dynamic. DO NOT fall back to inputShape.slice()!
+                const targetRank = shapeInput?.shape[0];
                 if (typeof targetRank === "number" && targetRank > 0) {
                     outShape = Array(targetRank).fill(-1);
                 } else {
@@ -756,7 +756,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             outShape = [...ref];
             let sum = 0;
             for (const s of inputShapes) {
-                if (s === undefined || s.length <= axis) {
+                if (s.length <= axis) {
                     sum = -1;
                     break;
                 }
@@ -806,8 +806,8 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
 
             if (shapeOp) {
                 const shapeInputs = shapeOp.getInputs() ?? [];
-                const xTensor: ValueNode | undefined = shapeInputs[0];
-                if (xTensor !== undefined) {
+                if (0 in shapeInputs) {
+                    const xTensor: ValueNode = shapeInputs[0];
                     const xShape = resolveTensorShape(xTensor);
                     if (xShape.length) targetShape = xShape.slice();
                 }
@@ -818,7 +818,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             } else {
                 // Expand changes the shape. Do not fall back to dataShape!
                 // If target shape is dynamic, output shape is unknown.
-                const rank = shapeInput?.shape?.[0];
+                const rank = shapeInput?.shape[0];
                 outShape = Array(typeof rank === "number" && rank > 0 ? rank : 1).fill(-1);
             }
             break;

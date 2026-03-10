@@ -19,10 +19,7 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         if (schema?.category !== OpCategory.ElementWise) return false;
 
         const inputs = op.getInputs() ?? [];
-        if (
-            inputs.length > 0 &&
-            inputs.every((inp) => inp.shape !== undefined && inp.shape!.length === 0)
-        ) {
+        if (inputs.length > 0 && inputs.every((inp) => inp.shape.length === 0)) {
             return false;
         }
 
@@ -94,33 +91,27 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         const inputs = op
             .getInputs()!
             .map((inp) =>
-                inp !== undefined
-                    ? resolveRecipeInput(
-                          builder,
-                          inp,
-                          valueMap,
-                          iter,
-                          axes,
-                          outShape,
-                          true,
-                          true,
-                          targetShapeNode,
-                      )
-                    : undefined,
+                resolveRecipeInput(
+                    builder,
+                    inp,
+                    valueMap,
+                    iter,
+                    axes,
+                    outShape,
+                    true,
+                    true,
+                    targetShapeNode,
+                ),
             );
 
         // Turn [1] -> [] (pure scalar) to match element-wise expectations in the loop body
         const effInputs = inputs.map((inp, i) =>
-            inp ? squeezeIfLen1(builder, inp, axes, `${op.id}_in${i}_scalar`) : undefined,
+            squeezeIfLen1(builder, inp, axes, `${op.id}_in${i}_scalar`),
         );
 
         // 2. Perform the operation on the scalars
         // Pass op.attributes to preserve required attributes (like 'to' for Cast, 'alpha' for LeakyRelu)
-        const [out] = builder.createOp(
-            op.type,
-            effInputs.filter((inp) => inp !== undefined),
-            op.attributes,
-        );
+        const [out] = builder.createOp(op.type, effInputs, op.attributes);
 
         return out!;
     }

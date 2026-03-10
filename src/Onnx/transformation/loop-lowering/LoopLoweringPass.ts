@@ -81,9 +81,7 @@ export class LoopLoweringPass implements GraphPass {
         const recipe = this.getRecipeFor(op)!;
         const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
         const originalOutShape: KnownShape =
-            outTensors.length > 0 && outTensors[0].shape !== undefined
-                ? [...(outTensors[0].shape as KnownShape)]
-                : UNKOWN_SHAPE;
+            outTensors.length > 0 ? [...(outTensors[0].shape as KnownShape)] : UNKOWN_SHAPE;
 
         const safeOut = asStaticDims(originalOutShape);
 
@@ -131,10 +129,7 @@ export class LoopLoweringPass implements GraphPass {
     private lowerFlatLoopChain(graph: OnnxGraph.Class, chain: OperationNode.Class[]): void {
         const rootOp = chain[chain.length - 1];
         const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;
-        const originalOutShape: KnownShape =
-            rootOutNodeRaw.shape === undefined
-                ? UNKOWN_SHAPE
-                : [...(rootOutNodeRaw.shape as KnownShape)];
+        const originalOutShape: KnownShape = [...(rootOutNodeRaw.shape as KnownShape)];
         const elemTy = rootOutNodeRaw.literalType || DataType.FLOAT;
 
         const bounds = this.getBoundsFor(rootOp);

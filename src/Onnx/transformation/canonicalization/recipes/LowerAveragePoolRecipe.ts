@@ -73,7 +73,10 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
             const W = xShape[3];
 
             if (typeof H === "number" && typeof W === "number") {
-                let [pT, pL, pB, pR] = pads;
+                const pT = pads[0];
+                const pL = pads[1];
+                let pB = pads[2];
+                let pR = pads[3];
                 const [sH, sW] = strides.map(Number);
 
                 // Calculate if an extra step is required due to ceiling

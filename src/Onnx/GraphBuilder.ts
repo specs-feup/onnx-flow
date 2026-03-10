@@ -105,11 +105,7 @@ export class GraphBuilder {
         // 5. Explicitly specified expectedOutputs take ultimate precedence
         if (expectedOutputs) {
             for (let i = 0; i < expectedOutputs.length; i++) {
-                if (
-                    i in outputs &&
-                    expectedOutputs[i].shape !== undefined &&
-                    expectedOutputs[i].shape.length > 0
-                ) {
+                if (i in outputs && expectedOutputs[i].shape.length > 0) {
                     outputs[i].setShape(expectedOutputs[i].shape);
                 }
                 if (i in outputs && expectedOutputs[i].type !== DataType.UNDEFINED) {
@@ -145,17 +141,16 @@ export class GraphBuilder {
         const updateUsesInGraph = (g: OnnxGraph.Class) => {
             for (const op of g.getOperationNodes().toArray()) {
                 const currentInputs = op.getInputs() ?? [];
-                let changed: boolean = false;
 
-                const updatedInputs = currentInputs.map((input) => {
-                    if (input.id === oldNode.id) {
-                        changed = true;
-                        return newNode;
-                    }
-                    return input;
-                });
+                // Use .some() to cleanly check if we need to make a change
+                const changed = currentInputs.some((input) => input.id === oldNode.id);
 
                 if (changed) {
+                    // Only run .map() if we know a change is happening
+                    const updatedInputs = currentInputs.map((input) =>
+                        input.id === oldNode.id ? newNode : input,
+                    );
+
                     op.setInputs(updatedInputs);
 
                     // Disconnect old edge if it exists at this graph level
@@ -172,7 +167,7 @@ export class GraphBuilder {
 
                 // Recursively update control-flow subgraphs (Loop, If, Scan bodies)
                 // Assuming OperationNode stores subgraphs in an accessible array:
-                for (const sub of op.regions || []) {
+                for (const sub of op.regions) {
                     updateUsesInGraph(sub as OnnxGraph.Class);
                 }
             }

@@ -9,7 +9,6 @@ import type { Request, Response } from "express";
 import express from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from "./initGraph.js";
-//import OnnxGraphOptimizer from "./Onnx/transformation/shape-optimization/index.js";
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 //import { generateCode } from "./codeGeneration.js";

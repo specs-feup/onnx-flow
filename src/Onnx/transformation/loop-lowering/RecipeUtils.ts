@@ -147,7 +147,7 @@ export function resolveRecipeInput(
         }
     }
 
-    if (!returnGather || (tInner.shape !== undefined && tInner.shape.length === 0)) {
+    if (!returnGather || tInner.shape.length === 0) {
         return flatten ? ensureFlatInput(builder, tInner) : tInner;
     }
 
