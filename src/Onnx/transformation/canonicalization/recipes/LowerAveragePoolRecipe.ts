@@ -62,9 +62,36 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const [kH, kW] = kernelShape;
         const strides = getIntsAttr(op, "strides", [1, 1]);
         const padsAttr = getIntsAttr(op, "pads", [0, 0, 0, 0]);
-        const pads = padsAttr.length === 4 ? padsAttr.map(Number) : [0, 0, 0, 0];
+        let pads = padsAttr.length === 4 ? padsAttr.map(Number) : [0, 0, 0, 0];
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const countIncludePad = getIntAttr(op, "count_include_pad", 0);
+        const ceilMode = getIntAttr(op, "ceil_mode", 0);
+
+        // --- Handle ceil_mode dynamically by augmenting right/bottom padding ---
+        if (ceilMode === 1 && autoPad === "NOTSET") {
+            const H = xShape[2];
+            const W = xShape[3];
+
+            if (typeof H === "number" && typeof W === "number") {
+                let [pT, pL, pB, pR] = pads;
+                const [sH, sW] = strides.map(Number);
+
+                // Calculate if an extra step is required due to ceiling
+                const outHFloor = Math.floor((H + pT + pB - kH) / sH) + 1;
+                const outHCeil = Math.ceil((H + pT + pB - kH) / sH) + 1;
+                if (outHCeil > outHFloor) {
+                    pB += (outHCeil - outHFloor) * sH; // Inject enough padding to push floor to ceil
+                }
+
+                const outWFloor = Math.floor((W + pL + pR - kW) / sW) + 1;
+                const outWCeil = Math.ceil((W + pL + pR - kW) / sW) + 1;
+                if (outWCeil > outWFloor) {
+                    pR += (outWCeil - outWFloor) * sW;
+                }
+
+                pads = [pT, pL, pB, pR];
+            }
+        }
 
         // 1. Create Weight Tensor (Ones) -> [C, 1, kH, kW]
         const wElements = C * kH * kW;

@@ -71,7 +71,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         // This looks at our clean, primitive graph and finds chains (Transpose -> Add)
         // and lowers them directly into single, highly optimized ONNX Loops.
         if (this.loopLowering)
-            pm.addPass(new LoopLoweringPass({ coalesce: this.coalesce, fuse: this.fuse }));
+            pm.addPass(new LoopLoweringPass({ coalesce: this.coalesce, fuse: false }));
 
         // =========================================================================
         // PHASE 3: Final Cleanup

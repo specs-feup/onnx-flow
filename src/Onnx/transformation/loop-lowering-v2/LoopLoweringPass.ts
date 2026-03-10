@@ -4,7 +4,13 @@ import TensorNode from "../../TensorNode.js";
 import { GraphBuilder } from "../../GraphBuilder.js";
 import { DataType } from "../../OnnxTypes.js";
 import type { ConcreteValueNode, ValueNode, KnownShape, StaticShape } from "../../OnnxTypes.js";
-import { int64Vec, asStaticDims, UNKOWN_SHAPE } from "../../Utils.js";
+import {
+    int64Vec,
+    asStaticDims,
+    UNKOWN_SHAPE,
+    topologicalSortOperationNodesSubset,
+    topologicalSortOperationNodes,
+} from "../../Utils.js";
 import type { GraphPass } from "../../PassManager.js";
 
 import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
@@ -18,6 +24,11 @@ import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe
 
 export class LoopLoweringPass implements GraphPass {
     public readonly name = "LoopLoweringV2";
+
+    private boundsCache = new Map<
+        string,
+        { totalIters: number | ValueNode; carryShape: KnownShape | ValueNode }
+    >();
 
     private recipes: LoopLoweringRecipe[];
 
@@ -35,6 +46,8 @@ export class LoopLoweringPass implements GraphPass {
     }
 
     public run(graph: OnnxGraph.Class): boolean {
+        this.boundsCache.clear();
+
         let changed = false;
 
         const chains = this.options.fuse
@@ -57,7 +70,15 @@ export class LoopLoweringPass implements GraphPass {
         return this.getRecipeFor(op) !== undefined;
     }
 
-    private getBoundsFor(op: OperationNode.Class): { totalIters: number | ValueNode; carryShape: KnownShape | ValueNode } {
+    private getBoundsFor(op: OperationNode.Class): {
+        totalIters: number | ValueNode;
+        carryShape: KnownShape | ValueNode;
+        targetShape?: KnownShape | ValueNode;
+    } {
+        if (this.boundsCache.has(op.id)) {
+            return this.boundsCache.get(op.id)!;
+        }
+
         const recipe = this.getRecipeFor(op)!;
         const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
         const originalOutShape: KnownShape =
@@ -68,35 +89,43 @@ export class LoopLoweringPass implements GraphPass {
         const safeOut = asStaticDims(originalOutShape);
 
         if (recipe.getLoopBounds) {
-            return recipe.getLoopBounds(op, safeOut);
+            const result = recipe.getLoopBounds(op, safeOut);
+            this.boundsCache.set(op.id, result);
+            return result;
         }
 
-        // --- NEW DYNAMIC FALLBACK ---
+        // --- DYNAMIC FALLBACK ---
         // If the shape has dynamic dimensions (-1) or is completely unknown, build the bounds dynamically
         if ((safeOut.includes(-1) || safeOut.length === 0) && outTensors.length > 0) {
-            const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `bounds_fallback_${op.id}`);
-            const outTensor = outTensors[0];
+            const builder = new GraphBuilder(
+                op.graph as OnnxGraph.Class,
+                `bounds_fallback_${op.id}`,
+            );
             
-            const [shapeNode] = builder.createOp("Shape", [outTensor]);
+            const targetTensor = outTensors[0]; 
+            const [targetShapeNode] = builder.createOp("Shape", [targetTensor]);
             const axesConst = builder.createConstant(`axes_fallback_${op.id}`, int64Vec([0]));
-            
-            // Multiply all dimensions to get total iterations
-            const [totalItersRaw] = builder.createOp("ReduceProd", [shapeNode, axesConst], { keepdims: 0 });
-            
-            // Ensure totalIters is a pure scalar []
+
+            const [totalItersRaw] = builder.createOp("ReduceProd", [targetShapeNode, axesConst], {
+                keepdims: 0,
+            });
             const [totalIters] = builder.createOp("Squeeze", [totalItersRaw, axesConst]);
-            
-            // carryShape expects a 1D tensor [totalIters]
             const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axesConst]);
-            
-            return { totalIters, carryShape };
+
+            // Pass targetShapeNode downstream to avoid the Flattening bug
+            const result = { totalIters, carryShape, targetShape: targetShapeNode };
+            this.boundsCache.set(op.id, result);
+            return result;
         }
-        // ----------------------------
 
         const totalIters = safeOut.length === 0 ? 1 : safeOut.reduce((a, b) => a * b, 1);
-        return { totalIters, carryShape: [totalIters] };
+
+        const result = { totalIters, carryShape: [totalIters] };
+        this.boundsCache.set(op.id, result);
+
+        return result;
     }
-    
+
     private lowerFlatLoopChain(graph: OnnxGraph.Class, chain: OperationNode.Class[]): void {
         const rootOp = chain[chain.length - 1];
         const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;
@@ -166,8 +195,9 @@ export class LoopLoweringPass implements GraphPass {
         } else {
             const finalScalar = valueMap.get(rootOutNodeRaw.id)!;
 
-            const [iterUnsq] = innerBuilder.createOp("Unsqueeze", [trip, axes]);
-            const [finalUnsq] = innerBuilder.createOp("Unsqueeze", [finalScalar, axes]);
+            const oneShape = innerBuilder.createConstant("one_shape", int64Vec([1]));
+            const [iterUnsq] = innerBuilder.createOp("Reshape", [trip, oneShape]);
+            const [finalUnsq] = innerBuilder.createOp("Reshape", [finalScalar, oneShape]);
 
             [carryOutNode] = innerBuilder.createOp(
                 "ScatterElements",
@@ -188,11 +218,53 @@ export class LoopLoweringPass implements GraphPass {
         }
 
         // 5. Final Reshape to target shape
-        const shapeConst = outerBuilder.createConstant(
-            `final_shape`,
-            int64Vec(originalOutShape as number[]),
+        const originalIsDynamic = originalOutShape.includes(-1) || originalOutShape.length === 0;
+        const carryIsStatic = Array.isArray(carryShape);
+
+        let targetShapeNode: ValueNode;
+
+        if (bounds.targetShape) {
+            // Use the explicit N-D target shape if the recipe or fallback provided it
+            targetShapeNode = bounds.targetShape as ValueNode;
+        } else if (carryIsStatic) {
+            // Static Carry Shape Logic
+            const staticCarryShape = carryShape as number[];
+            const expectedSize = originalIsDynamic
+                ? -1
+                : originalOutShape.reduce((a, b) => (a as number) * (b as number), 1);
+            const actualSize = staticCarryShape.reduce((a, b) => a * b, 1);
+
+            let safeFinalShape = originalOutShape as number[];
+
+            if (!originalIsDynamic && expectedSize !== actualSize) {
+                console.warn(
+                    `[LoopLoweringPass] WARNING: Shape mismatch for node ${rootOp.id}. ` +
+                        `Original model expects shape [${originalOutShape.join(",")}] (${expectedSize} elements), ` +
+                        `but loop lowered to ${actualSize} elements. Falling back to the inferred carry shape.`,
+                );
+                safeFinalShape = staticCarryShape;
+            }
+
+            targetShapeNode = outerBuilder.createConstant(`final_shape`, int64Vec(safeFinalShape));
+        } else {
+            // Dynamic Carry Shape Logic
+            // The carryShape is already a ValueNode containing the dynamic 1D shape tensor
+            if (!originalIsDynamic) {
+                console.warn(
+                    `[LoopLoweringPass] WARNING: Original shape for ${rootOp.id} is static [${originalOutShape.join(",")}], ` +
+                        `but the loop lowered to a dynamic shape. Falling back to the dynamic inferred shape.`,
+                );
+            }
+            targetShapeNode = carryShape as ValueNode;
+        }
+
+        const expectedShapeOut = [{ type: elemTy, shape: originalOutShape as KnownShape }];
+        const [reshaped] = outerBuilder.createOp(
+            "Reshape", 
+            [processedOut, targetShapeNode], 
+            {}, 
+            expectedShapeOut
         );
-        const [reshaped] = outerBuilder.createOp("Reshape", [processedOut, shapeConst]);
 
         // 6. Integrate results back into the main graph
         outerBuilder.replaceAllUsesWith(rootOutNodeRaw, reshaped);
@@ -200,10 +272,10 @@ export class LoopLoweringPass implements GraphPass {
     }
 
     private compareIters(a: number | ValueNode, b: number | ValueNode): boolean {
-        if (typeof a === 'number' && typeof b === 'number') {
+        if (typeof a === "number" && typeof b === "number") {
             return a === b;
         }
-        if (typeof a !== 'number' && typeof b !== 'number') {
+        if (typeof a !== "number" && typeof b !== "number") {
             // Both are ValueNodes; compare by ID
             return a.id === b.id;
         }
@@ -226,28 +298,47 @@ export class LoopLoweringPass implements GraphPass {
     }
 
     private findSingleOpChains(graph: OnnxGraph.Class): OperationNode.Class[][] {
-        return graph
-            .getOperationNodes()
-            .toArray()
+        return topologicalSortOperationNodes(graph)
             .filter((op) => this.isSupported(op))
             .map((op) => [op]);
     }
 
     private findFuseableChains(graph: OnnxGraph.Class): OperationNode.Class[][] {
         const chains: OperationNode.Class[][] = [];
-        const ops = graph.getOperationNodes().toArray();
+        const ops = topologicalSortOperationNodes(graph);
         const visited = new Set<string>();
 
         const roots = ops.filter((op) => {
             if (!this.isSupported(op)) return false;
             const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
             const goesToGraphOutput = outTensors.some((t) => t.type === "output");
-            const consumedByUnsupported = outTensors.some((t) =>
-                t.outgoers.targets
-                    .filterIs(OperationNode)
-                    .some((consumer) => !this.isSupported(consumer)),
-            );
-            return goesToGraphOutput || consumedByUnsupported;
+
+            const consumers = new Set<OperationNode.Class>();
+            for (const t of outTensors) {
+                t.outgoers.targets.filterIs(OperationNode).forEach((c) => consumers.add(c));
+            }
+
+            // 1. STRICT FUSION RULE:
+            // A node MUST be a root (cannot be fused) if it goes to a graph output,
+            // or if it has multiple consumers (it must materialize its output for all of them).
+            if (goesToGraphOutput || consumers.size !== 1) {
+                return true;
+            }
+
+            // It has exactly 1 consumer. We can only fuse if bounds match.
+            const consumer = Array.from(consumers)[0];
+            if (!this.isSupported(consumer)) return true;
+
+            const prodBounds = this.getBoundsFor(op);
+            const consBounds = this.getBoundsFor(consumer);
+            if (
+                !this.compareIters(prodBounds.totalIters, consBounds.totalIters) ||
+                !this.compareCarryShapes(prodBounds.carryShape, consBounds.carryShape)
+            ) {
+                return true; // Different loop iteration spaces
+            }
+
+            return false;
         });
 
         for (const root of roots) {
@@ -268,31 +359,42 @@ export class LoopLoweringPass implements GraphPass {
                     current
                         .getInputs()
                         ?.filter(
-                            (n) => n.is(TensorNode) && n.as(TensorNode).type === "intermediate",
+                            (n) =>
+                                n && n.is(TensorNode) && n.as(TensorNode).type === "intermediate",
                         ) || [];
+
                 for (const t of inTensors) {
                     const producers = t.incomers.sources.filterIs(OperationNode).toArray();
                     for (const prod of producers) {
-                        if (this.isSupported(prod)) {
-                            const prodBounds = this.getBoundsFor(prod);
-                            if (
-                                this.compareIters(prodBounds.totalIters, rootBounds.totalIters) &&
-                                this.compareCarryShapes(prodBounds.carryShape, rootBounds.carryShape)
-                            ) {
-                                queue.push(prod);
+                        if (this.isSupported(prod) && !visited.has(prod.id)) {
+                            // 2. ONLY absorb the producer if it is NOT a root itself!
+                            if (!roots.includes(prod)) {
+                                const prodBounds = this.getBoundsFor(prod);
+                                if (
+                                    this.compareIters(
+                                        prodBounds.totalIters,
+                                        rootBounds.totalIters,
+                                    ) &&
+                                    this.compareCarryShapes(
+                                        prodBounds.carryShape,
+                                        rootBounds.carryShape,
+                                    )
+                                ) {
+                                    queue.push(prod);
+                                }
                             }
                         }
                     }
                 }
             }
 
-            chains.push(this.topologicalSort(cluster));
+            chains.push(this.localTopologicalSort(cluster));
         }
 
         return chains;
     }
 
-    private topologicalSort(ops: OperationNode.Class[]): OperationNode.Class[] {
+    private localTopologicalSort(ops: OperationNode.Class[]): OperationNode.Class[] {
         const visited = new Set<string>();
         const sorted: OperationNode.Class[] = [];
 

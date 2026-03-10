@@ -291,46 +291,43 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             let target: number[] = [];
 
             if (shapeInput !== undefined && shapeInput.is(ConstantNode)) {
-                target =
-                    decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ??
-                    [];
+                target = decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ?? [];
             }
 
-            if (target.length > 0 && inputShape.length > 0) {
-                const inNums = inputShape.map((d) => toNum(d) ?? 1);
-                const prodIn = inNums.reduce((a, b) => a * (b || 1), 1) || 1;
+            if (target.length > 0) {
+                if (inputShape.length > 0) {
+                    const inNums = inputShape.map((d) => toNum(d) ?? 1);
+                    const prodIn = inNums.reduce((a, b) => a * (b || 1), 1) || 1;
 
-                let inferIndex = -1;
-                let knownProd = 1;
-                const resolved = target.slice();
+                    let inferIndex = -1;
+                    let knownProd = 1;
+                    const resolved = target.slice();
 
-                // 0 → copy from input
-                resolved.forEach((d, i) => {
-                    if (d === 0) {
-                        resolved[i] = inNums[i] ?? 1;
-                    }
-                });
-
-                // -1 → infer from remaining product
-                resolved.forEach((d, i) => {
-                    if (d === -1) {
-                        if (inferIndex !== -1) {
-                            throw new Error("Reshape: multiple -1 in target shape not allowed");
+                    resolved.forEach((d, i) => { if (d === 0) resolved[i] = inNums[i] ?? 1; });
+                    resolved.forEach((d, i) => {
+                        if (d === -1) {
+                            if (inferIndex !== -1) throw new Error("Reshape: multiple -1 in target");
+                            inferIndex = i;
+                        } else {
+                            knownProd *= d || 1;
                         }
-                        inferIndex = i;
-                    } else {
-                        knownProd *= d || 1;
+                    });
+
+                    if (inferIndex !== -1) {
+                        resolved[inferIndex] = prodIn / (knownProd || 1);
                     }
-                });
-
-                if (inferIndex !== -1) {
-                    const missing = prodIn / (knownProd || 1);
-                    resolved[inferIndex] = missing;
+                    outShape = resolved;
+                } else {
+                    outShape = target.map(d => (d === 0 || d === -1) ? -1 : d);
                 }
-
-                outShape = resolved;
             } else {
-                outShape = inputShape.slice();
+                // FIX: Target shape is dynamic. DO NOT fall back to inputShape.slice()!
+                const targetRank = shapeInput?.shape?.[0];
+                if (typeof targetRank === "number" && targetRank > 0) {
+                    outShape = Array(targetRank).fill(-1);
+                } else {
+                    outShape = [-1]; 
+                }
             }
             break;
         }
@@ -504,17 +501,20 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
 
             let pads: number[] = [];
             if (padsNode !== undefined && padsNode.is(ConstantNode)) {
-                pads =
-                    decodeIntegerVectorFromTensorProto(padsNode.as(ConstantNode).constantValue) ??
-                    [];
+                pads = decodeIntegerVectorFromTensorProto(padsNode.as(ConstantNode).constantValue) ?? [];
             }
 
             const rank = dataShape.length;
             outShape = dataShape.slice();
             if (pads.length === 2 * rank) {
                 for (let i = 0; i < rank; i++) {
-                    outShape[i] =
-                        (toNum(outShape[i]) ?? 0) + (pads[i] ?? 0) + (pads[i + rank] ?? 0);
+                    const dim = toNum(outShape[i]);
+                    // Prevent falling back to 0 if the dimension is dynamic/unknown
+                    if (dim === undefined || dim < 0) {
+                        outShape[i] = -1;
+                    } else {
+                        outShape[i] = dim + (pads[i] ?? 0) + (pads[i + rank] ?? 0);
+                    }
                 }
             }
             break;
@@ -741,9 +741,27 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
         case "Concat": {
             const axis = getAttr(node, "axis", 0) as number;
             const inputShapes = infos.map((i) => i.shape);
-            const ref = inputShapes.find((s) => s.length) ?? [];
+            const ref = inputShapes.find((s) => s.length > 0) ?? [];
+            if (ref.length === 0) {
+                outShape = [];
+                break;
+            }
             outShape = [...ref];
-            outShape[axis] = inputShapes.reduce((sum, s) => sum + (toNum(s[axis]) ?? 0), 0);
+            let sum = 0;
+            for (const s of inputShapes) {
+                if (!s || s.length <= axis) {
+                    sum = -1;
+                    break;
+                }
+                const dim = toNum(s[axis]);
+                // Prevent falling back to 0 if the dimension is dynamic/unknown
+                if (dim === undefined || dim < 0) {
+                    sum = -1;
+                    break;
+                }
+                sum += dim;
+            }
+            outShape[axis] = sum;
             break;
         }
 
@@ -768,33 +786,29 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             let targetShape: Shape = [];
 
             if (shapeInput !== undefined && shapeInput.is(ConstantNode)) {
-                const arr =
-                    decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ??
-                    [];
-                if (arr.length) {
-                    targetShape = arr;
-                }
+                const arr = decodeIntegerVectorFromTensorProto(shapeInput.as(ConstantNode).constantValue) ?? [];
+                if (arr.length) targetShape = arr;
             }
 
-            const producers = shapeInput!.incomers.sources;
-            const shapeOp = producers
-                .filterIs(OperationNode)
-                .filter((op) => op.type === "Shape")
-                .first();
+            const producers = shapeInput?.incomers.sources;
+            const shapeOp = producers?.filterIs(OperationNode).filter((op) => op.type === "Shape").first();
 
             if (shapeOp) {
                 const shapeInputs = shapeOp.getInputs() ?? [];
                 const xTensor = shapeInputs[0];
-                const xShape = resolveTensorShape(xTensor);
-                if (xShape.length) targetShape = xShape.slice();
+                if (xTensor) {
+                    const xShape = resolveTensorShape(xTensor);
+                    if (xShape.length) targetShape = xShape.slice();
+                }
             }
 
             if (targetShape.length > 0) {
                 outShape = targetShape;
-            } else if (dataShape.length > 0) {
-                outShape = dataShape.slice();
             } else {
-                outShape = [];
+                // Expand changes the shape. Do not fall back to dataShape!
+                // If target shape is dynamic, output shape is unknown.
+                const rank = shapeInput?.shape?.[0];
+                outShape = Array(typeof rank === "number" && rank > 0 ? rank : 1).fill(-1);
             }
             break;
         }
@@ -943,15 +957,10 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             const getScalar = (inp: ValueNode | undefined): number | undefined => {
                 if (inp !== undefined && inp.is(ConstantNode)) {
                     const proto: TensorProto = inp.as(ConstantNode).constantValue;
-
-                    // 1. Try parsed arrays first
                     if (proto.floatData && proto.floatData.length > 0) return proto.floatData[0];
                     if (proto.doubleData && proto.doubleData.length > 0) return proto.doubleData[0];
-                    if (proto.int64Data && proto.int64Data.length > 0)
-                        return Number(proto.int64Data[0]);
+                    if (proto.int64Data && proto.int64Data.length > 0) return Number(proto.int64Data[0]);
                     if (proto.int32Data && proto.int32Data.length > 0) return proto.int32Data[0];
-
-                    // 2. Fallback to existing integer decoder
                     const arr = decodeIntegerVectorFromTensorProto(proto);
                     if (arr && arr.length > 0) return arr[0];
                 }
@@ -966,7 +975,8 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                 const len = Math.max(0, Math.ceil((end - start) / step));
                 outShape = [len];
             } else {
-                outShape = []; // Fallback to unknown shape
+                // Fallback must be [-1] (unknown 1D tensor), NOT [] (0D scalar)
+                outShape = UNKOWN_SHAPE; 
             }
             break;
         }

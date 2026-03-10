@@ -181,9 +181,16 @@ function adaptResize(node: RawOnnxNode, graph: RawOnnxGraph) {
 function adaptReductions(node: RawOnnxNode, graph: RawOnnxGraph) {
     const opType = node.opType ?? node.op_type;
     const reductionOps = [
-        "ReduceSum", "ReduceMean", "ReduceMax", "ReduceMin", 
-        "ReduceProd", "ReduceLogSum", "ReduceLogSumExp", 
-        "ReduceSumSquare", "ReduceL1", "ReduceL2"
+        "ReduceSum",
+        "ReduceMean",
+        "ReduceMax",
+        "ReduceMin",
+        "ReduceProd",
+        "ReduceLogSum",
+        "ReduceLogSumExp",
+        "ReduceSumSquare",
+        "ReduceL1",
+        "ReduceL2",
     ];
     if (opType === undefined || !reductionOps.includes(opType)) return;
 
@@ -216,6 +223,6 @@ export function applyAdapters(data: RawOnnxModel): void {
         adaptBatchNormalization(node, graph);
         adaptResize(node, graph);
         adaptReductions(node, graph);
-        adaptTopK(node, graph);       
+        adaptTopK(node, graph);
     }
 }

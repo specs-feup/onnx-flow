@@ -16,9 +16,13 @@ export interface LoopLoweringRecipe {
      * If omitted, the pass defaults to `totalIters = product(outShape)`
      * and `carryShape = [totalIters]`.
      */
-    getLoopBounds?(op: OperationNode.Class, outShape: KnownShape): { 
-        totalIters: number | ValueNode, 
-        carryShape: KnownShape | ValueNode 
+    getLoopBounds?(
+        op: OperationNode.Class,
+        outShape: KnownShape,
+    ): {
+        totalIters: number | ValueNode;
+        carryShape: KnownShape | ValueNode;
+        targetShape?: KnownShape | ValueNode;
     };
 
     /**

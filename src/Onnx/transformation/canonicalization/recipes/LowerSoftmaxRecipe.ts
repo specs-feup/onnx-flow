@@ -30,7 +30,11 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
         }
 
         // 1. M = ReduceMax(X, axes=[axis], keepdims=1)
-        const M = builder.createOp("ReduceMax", [X], { keepdims: 1, axes: [axis] })[0];
+        const axesConst = builder.createConstant(
+            `axes_${op.id}`,
+            makeTensorProto(DataType.INT64, [1], [axis]),
+        );
+        const M = builder.createOp("ReduceMax", [X, axesConst], { keepdims: 1 })[0];
 
         // 2. SH = Sub(X, M)
         const SH = builder.createOp("Sub", [X, M])[0];
@@ -39,11 +43,6 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
         const EX = builder.createOp("Exp", [SH])[0];
 
         // 4. DEN = ReduceSum(EX, axes=[axis], keepdims=1)
-        // Note: For ReduceSum, newer ONNX opsets use `axes` as an input rather than an attribute.
-        const axesConst = builder.createConstant(
-            `sm_axes_${op.id}`,
-            makeTensorProto(DataType.INT64, [1], [axis]),
-        );
         const DEN = builder.createOp("ReduceSum", [EX, axesConst], { keepdims: 1 })[0];
 
         // 5. Y = Div(EX, DEN)

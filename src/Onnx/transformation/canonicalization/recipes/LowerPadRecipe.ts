@@ -1,7 +1,7 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     decodeIntegerVectorFromTensorProto,
@@ -36,22 +36,47 @@ export class LowerPadRecipe implements DecompositionRecipe {
         const Y = op.getOutputs()[0];
 
         const rank = Xin.shape.length;
-        const pads = decodeIntegerVectorFromTensorProto(padsNode.constantValue) ?? [];
+
+        // Safely parse pads as Numbers to avoid BigInt Math/JSON crashes
+        const rawPads = (decodeIntegerVectorFromTensorProto(padsNode.constantValue) ?? []).map(
+            Number,
+        );
         const mode = getStringAttr(op, "mode", "constant").toLowerCase();
 
-        let padValue = 0;
-        if (ins.length > 2) {
-            const rawPadValue = ins[2];
-            const s = readScalarFromTensorNode(rawPadValue);
-            if (typeof s === "number" && Number.isFinite(s)) padValue = s;
+        // Correctly map pads to the proper axes if the `axes` input is present
+        let axes = Array.from({ length: rank }, (_, i) => i);
+        if (ins.length > 3 && ins[3]?.is(ConstantNode)) {
+            const decodedAxes = decodeIntegerVectorFromTensorProto(
+                (ins[3] as ConstantNode.Class).constantValue,
+            );
+            if (decodedAxes) axes = decodedAxes.map(Number);
+        }
+
+        const numAxes = axes.length;
+        const beg = new Array(rank).fill(0);
+        const end = new Array(rank).fill(0);
+        for (let i = 0; i < numAxes; i++) {
+            const ax = axes[i];
+            const realAx = ax < 0 ? ax + rank : ax; // Handle negative axes
+            beg[realAx] = rawPads[i];
+            end[realAx] = rawPads[i + numAxes];
         }
 
         const dtype = Xin.literalType as DataType;
+
+        // Keep valNode as a TensorNode so it supports dynamic graphs and all dtypes natively
+        let valNode: ConcreteValueNode;
+        if (ins.length > 2 && ins[2]) {
+            valNode = ins[2];
+        } else {
+            valNode = builder.createConstant(
+                `pad_val_default_${op.id}`,
+                makeTensorProto(dtype, [], [0]),
+            );
+        }
+
         let cur = Xin;
         const curShape = toStaticShape(Xin.shape);
-
-        const beg = pads.slice(0, rank);
-        const end = pads.slice(rank);
 
         // 1. Negative pads (Crop)
         for (let ax = 0; ax < rank; ax++) {
@@ -72,8 +97,9 @@ export class LowerPadRecipe implements DecompositionRecipe {
                 makeTensorProto(DataType.INT64, [1], [ax]),
             );
 
-            cur = builder.createOp("Slice", [cur, start1, end1, axVec])[0];
             curShape[ax] -= negB + negE;
+            const expectedSliceOut = [{ type: dtype, shape: [...curShape] }];
+            cur = builder.createOp("Slice", [cur, start1, end1, axVec], {}, expectedSliceOut)[0];
 
             beg[ax] = Math.max(0, beg[ax]);
             end[ax] = Math.max(0, end[ax]);
@@ -96,7 +122,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
                         ax,
                         pBeg,
                         dtype,
-                        padValue,
+                        valNode, 
                         `${op.id}_${ax}_L`,
                     );
                 if (pEnd > 0)
@@ -106,7 +132,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
                         ax,
                         pEnd,
                         dtype,
-                        padValue,
+                        valNode, 
                         `${op.id}_${ax}_R`,
                     );
             } else if (mode === "edge") {
@@ -154,11 +180,12 @@ export class LowerPadRecipe implements DecompositionRecipe {
             parts.push(cur);
             if (right) parts.push(right);
 
-            cur = builder.createOp("Concat", parts, { axis: ax })[0];
             curShape[ax] += pBeg + pEnd;
+            const expectedConcatOut = [{ type: dtype, shape: [...curShape] }];
+            cur = builder.createOp("Concat", parts, { axis: ax }, expectedConcatOut)[0];
         }
 
-        if (cur === Xin) cur = builder.createOp("Identity", [Xin])[0];
+        if (cur === Xin) cur = builder.createOp("Identity", [Xin], {}, [{type: Xin.literalType, shape: Xin.shape as KnownShape}] )[0];
         builder.replaceAllUsesWith(Y, cur);
         op.remove();
     }
@@ -169,7 +196,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
         axis: number,
         size: number,
         dtype: DataType,
-        padValue: number,
+        valNode: ConcreteValueNode,
         tag: string,
     ) {
         const slabShape = [...curShape];
@@ -178,11 +205,10 @@ export class LowerPadRecipe implements DecompositionRecipe {
             `pad_sh_${tag}`,
             makeTensorProto(DataType.INT64, [slabShape.length], slabShape),
         );
-        const kT = builder.createConstant(`pad_val_${tag}`, makeTensorProto(dtype, [], [padValue]));
 
         // Statically typed!
         const expectedOut = [{ type: dtype, shape: slabShape }];
-        return builder.createOp("Expand", [kT, newShape], {}, expectedOut)[0];
+        return builder.createOp("Expand", [valNode, newShape], {}, expectedOut)[0];
     }
 
     private ensureEdgeSlab(

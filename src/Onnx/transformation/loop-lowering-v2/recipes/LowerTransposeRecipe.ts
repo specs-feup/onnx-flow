@@ -52,7 +52,7 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         // --- NEW DYNAMIC SUPPORT ---
         let decodeDims: (number | ValueNode)[] = [];
         let inDims: (number | ValueNode)[] = [];
-        
+
         if (inShapeNum.includes(-1)) {
             // Dynamic shape: generate Shape node and extract individual dimensions
             const [shapeNode] = builder.createOp("Shape", [X]);
@@ -85,15 +85,21 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         // We calculate strides dynamically by accumulating (CumProd-like approach) backwards
         let strides: (number | ValueNode)[] = new Array(rank).fill(1);
         let currentStride: ValueNode | number = 1;
-        
+
         for (let i = rank - 1; i >= 0; i--) {
             strides[i] = currentStride;
             if (i > 0) {
                 if (typeof currentStride === "number" && typeof inDims[i] === "number") {
                     currentStride = currentStride * (inDims[i] as number);
                 } else {
-                    const cNode = typeof currentStride === "number" ? builder.createConstant(`cs_${i}`, scalarInt64(currentStride)) : currentStride;
-                    const dNode = typeof inDims[i] === "number" ? builder.createConstant(`cd_${i}`, scalarInt64(inDims[i] as number)) : inDims[i] as ValueNode;
+                    const cNode =
+                        typeof currentStride === "number"
+                            ? builder.createConstant(`cs_${i}`, scalarInt64(currentStride))
+                            : currentStride;
+                    const dNode =
+                        typeof inDims[i] === "number"
+                            ? builder.createConstant(`cd_${i}`, scalarInt64(inDims[i] as number))
+                            : (inDims[i] as ValueNode);
                     [currentStride] = builder.createOp("Mul", [cNode, dNode]);
                 }
             }

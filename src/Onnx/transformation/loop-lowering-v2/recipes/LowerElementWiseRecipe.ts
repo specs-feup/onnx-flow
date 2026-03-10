@@ -10,7 +10,17 @@ import { GraphBuilder } from "../../../GraphBuilder.js";
 export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);
-        return schema?.category === OpCategory.ElementWise;
+        if (schema?.category !== OpCategory.ElementWise) return false;
+
+        const inputs = op.getInputs() ?? [];
+        if (
+            inputs.length > 0 &&
+            inputs.every((inp) => inp && inp.shape && inp.shape.length === 0)
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     apply(
@@ -22,22 +32,28 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         outShape: KnownShape,
         carryNode: ConcreteValueNode,
     ): ValueNode {
-        const builder = new GraphBuilder(body, `lowering_${op.id}`);
+        const builder = new GraphBuilder(body, `ew_${op.id}`);
 
-        // 1. Resolve scalar inputs
+        // 1. Resolve scalar inputs (safely handling optional/undefined inputs)
         const inputs = op
             .getInputs()!
-            .map((inp) => resolveRecipeInput(builder, inp, valueMap, iter, axes, outShape));
+            .map((inp) =>
+                inp ? resolveRecipeInput(builder, inp, valueMap, iter, axes, outShape) : undefined,
+            );
 
         // Turn [1] -> [] (pure scalar) to match element-wise expectations in the loop body
         const effInputs = inputs.map((inp, i) =>
-            squeezeIfLen1(builder, inp, axes, `${op.id}_in${i}_scalar`),
+            inp ? squeezeIfLen1(builder, inp, axes, `${op.id}_in${i}_scalar`) : undefined,
         );
 
         // 2. Perform the operation on the scalars
-        // createOp handles node creation, wiring, and shape inference automatically.
-        const [out] = builder.createOp(op.type, effInputs);
+        // Pass op.attributes to preserve required attributes (like 'to' for Cast, 'alpha' for LeakyRelu)
+        const [out] = builder.createOp(
+            op.type,
+            effInputs.filter((inp) => inp !== undefined),
+            op.attributes,
+        );
 
-        return out;
+        return out!;
     }
 }

@@ -11,7 +11,12 @@ import {
     int64Vec,
 } from "../../../Utils.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
-import { resolveRecipeInput, buildLinearIndex, decodeMixedRadix, squeezeIfLen1 } from "../RecipeUtils.js";
+import {
+    resolveRecipeInput,
+    buildLinearIndex,
+    decodeMixedRadix,
+    squeezeIfLen1,
+} from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 
 export class LowerMatMulRecipe implements LoopLoweringRecipe {
@@ -54,20 +59,38 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
 
         if (isDynamicA || isDynamicB) {
             // Helper to gather a dimension from the back (e.g., -1 is last, -2 is second to last)
-            const getDimNode = (tensor: ValueNode, rankNode: ValueNode, offsetFromEnd: number, tag: string) => {
+            const getDimNode = (
+                tensor: ValueNode,
+                rankNode: ValueNode,
+                offsetFromEnd: number,
+                tag: string,
+            ) => {
                 const [shapeNode] = builder.createOp("Shape", [tensor]);
-                const offsetNode = builder.createConstant(`${tag}_offset`, scalarInt64(offsetFromEnd));
+                const offsetNode = builder.createConstant(
+                    `${tag}_offset`,
+                    scalarInt64(offsetFromEnd),
+                );
                 const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]); // rank + (-offset)
-                const [dimRaw] = builder.createOp("Gather", [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]], { axis: 0 });
+                const [dimRaw] = builder.createOp(
+                    "Gather",
+                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
+                    { axis: 0 },
+                );
                 return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
             };
 
             const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [inputs[0]])[0]]);
             const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [inputs[1]])[0]]);
 
-            M = isDynamicA ? getDimNode(inputs[0], rankA, -2, "M") : staticShapeA[staticShapeA.length - 2];
-            K = isDynamicA ? getDimNode(inputs[0], rankA, -1, "K") : staticShapeA[staticShapeA.length - 1];
-            N = isDynamicB ? getDimNode(inputs[1], rankB, -1, "N") : staticShapeB[staticShapeB.length - 1];
+            M = isDynamicA
+                ? getDimNode(inputs[0], rankA, -2, "M")
+                : staticShapeA[staticShapeA.length - 2];
+            K = isDynamicA
+                ? getDimNode(inputs[0], rankA, -1, "K")
+                : staticShapeA[staticShapeA.length - 1];
+            N = isDynamicB
+                ? getDimNode(inputs[1], rankB, -1, "N")
+                : staticShapeB[staticShapeB.length - 1];
         } else {
             M = staticShapeA[staticShapeA.length - 2];
             K = staticShapeA[staticShapeA.length - 1];
@@ -82,13 +105,19 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
 
         // 1. Decode global loop iteration into Batch, I, and J indices
         let MNConst: ValueNode, NConst: ValueNode;
-        
+
         if (typeof M === "number" && typeof N === "number") {
             MNConst = builder.createConstant(`MN`, scalarInt64(M * N));
             NConst = builder.createConstant(`N`, scalarInt64(N));
         } else {
-            const mNode = typeof M === "number" ? builder.createConstant(`M_const`, scalarInt64(M)) : M as ValueNode;
-            NConst = typeof N === "number" ? builder.createConstant(`N_const`, scalarInt64(N)) : N as ValueNode;
+            const mNode =
+                typeof M === "number"
+                    ? builder.createConstant(`M_const`, scalarInt64(M))
+                    : (M as ValueNode);
+            NConst =
+                typeof N === "number"
+                    ? builder.createConstant(`N_const`, scalarInt64(N))
+                    : (N as ValueNode);
             [MNConst] = builder.createOp("Mul", [mNode, NConst]);
         }
 
@@ -123,14 +152,38 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         const bOffsetB = getBatchOffset(batchB, "bB");
 
         // 3. Capture and Reshape inputs to 3D [Batch, Dim1, Dim2] for easier gathering
-        const tInnerA = resolveRecipeInput(builder, inputs[0], valueMap, iter, axes, outShape, false, false);
-        const tInnerB = resolveRecipeInput(builder, inputs[1], valueMap, iter, axes, outShape, false, false);
+        const tInnerA = resolveRecipeInput(
+            builder,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+        );
+        const tInnerB = resolveRecipeInput(
+            builder,
+            inputs[1],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+        );
 
         // Build dynamic 3D shapes [-1, M, K] and [-1, K, N] using Concat
         const build3DShape = (dim1: number | ValueNode, dim2: number | ValueNode, tag: string) => {
             const minusOne = builder.createConstant(`${tag}_m1`, int64Vec([-1]));
-            const d1 = typeof dim1 === "number" ? builder.createConstant(`${tag}_d1`, int64Vec([dim1])) : builder.createOp("Unsqueeze", [dim1, axes])[0];
-            const d2 = typeof dim2 === "number" ? builder.createConstant(`${tag}_d2`, int64Vec([dim2])) : builder.createOp("Unsqueeze", [dim2, axes])[0];
+            const d1 =
+                typeof dim1 === "number"
+                    ? builder.createConstant(`${tag}_d1`, int64Vec([dim1]))
+                    : builder.createOp("Unsqueeze", [dim1, axes])[0];
+            const d2 =
+                typeof dim2 === "number"
+                    ? builder.createConstant(`${tag}_d2`, int64Vec([dim2]))
+                    : builder.createOp("Unsqueeze", [dim2, axes])[0];
             return builder.createOp("Concat", [minusOne, d1, d2], { axis: 0 })[0];
         };
 

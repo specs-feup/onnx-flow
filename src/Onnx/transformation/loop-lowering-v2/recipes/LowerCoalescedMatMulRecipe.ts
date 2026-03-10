@@ -2,7 +2,13 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
 import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { asStaticDims, scalarInt64, broadcastShapes, computeStrides, int64Vec } from "../../../Utils.js";
+import {
+    asStaticDims,
+    scalarInt64,
+    broadcastShapes,
+    computeStrides,
+    int64Vec,
+} from "../../../Utils.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
 import {
     resolveRecipeInput,
@@ -32,26 +38,35 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const [A, B] = op.getInputs()!;
         let sA = asStaticDims(A.shape),
             sB = asStaticDims(B.shape);
-            
+
         // --- NEW DYNAMIC SUPPORT ---
         if (sA.includes(-1) || sB.includes(-1)) {
             const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `coal_bounds_${op.id}`);
             const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
-            
+
             // Total iterations = ReduceProd(Shape(out)) * K
             const [outShapeNode] = builder.createOp("Shape", [outTensors[0]]);
             const axesConst = builder.createConstant(`axes`, int64Vec([0]));
-            const [outSize] = builder.createOp("ReduceProd", [outShapeNode, axesConst], { keepdims: 0 });
-            
+            const [outSize] = builder.createOp("ReduceProd", [outShapeNode, axesConst], {
+                keepdims: 0,
+            });
+
             // Get K dynamically from A
             const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [A])[0]]);
             const kOffset = builder.createConstant(`k_off`, scalarInt64(-1));
             const [kAxis] = builder.createOp("Add", [rankA, kOffset]);
-            const [kVal] = builder.createOp("Gather", [builder.createOp("Shape", [A])[0], builder.createOp("Unsqueeze", [kAxis, axesConst])[0]], { axis: 0 });
-            
+            const [kVal] = builder.createOp(
+                "Gather",
+                [
+                    builder.createOp("Shape", [A])[0],
+                    builder.createOp("Unsqueeze", [kAxis, axesConst])[0],
+                ],
+                { axis: 0 },
+            );
+
             const [totalItersRaw] = builder.createOp("Mul", [outSize, kVal]);
             const [totalIters] = builder.createOp("Squeeze", [totalItersRaw, axesConst]);
-            
+
             // Carry shape is just the broadcasted batch * M * N, which matches the output shape!
             const [carrySize] = builder.createOp("Squeeze", [outSize, axesConst]);
             const [carryShape] = builder.createOp("Unsqueeze", [carrySize, axesConst]);
@@ -59,7 +74,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
             return { totalIters, carryShape };
         }
         // ---------------------------
-        
+
         if (sA.length === 1) sA = [1, sA[0]];
         if (sB.length === 1) sB = [sB[0], 1];
 
@@ -98,11 +113,23 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const isDynamicB = sB.includes(-1) || sB.length === 0;
 
         if (isDynamicA || isDynamicB) {
-            const getDimNode = (tensor: ValueNode, rankNode: ValueNode, offsetFromEnd: number, tag: string) => {
+            const getDimNode = (
+                tensor: ValueNode,
+                rankNode: ValueNode,
+                offsetFromEnd: number,
+                tag: string,
+            ) => {
                 const [shapeNode] = builder.createOp("Shape", [tensor]);
-                const offsetNode = builder.createConstant(`${tag}_offset`, scalarInt64(offsetFromEnd));
+                const offsetNode = builder.createConstant(
+                    `${tag}_offset`,
+                    scalarInt64(offsetFromEnd),
+                );
                 const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]);
-                const [dimRaw] = builder.createOp("Gather", [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]], { axis: 0 });
+                const [dimRaw] = builder.createOp(
+                    "Gather",
+                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
+                    { axis: 0 },
+                );
                 return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
             };
 
@@ -123,9 +150,18 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         batchOut = broadcastShapes(...[bA as number[], bB as number[]]);
 
         // 1. Decode multi-index: Batch, I, J, K
-        const mNode = typeof M === "number" ? builder.createConstant(`M_const`, scalarInt64(M)) : M as ValueNode;
-        const kNode = typeof K === "number" ? builder.createConstant(`K_const`, scalarInt64(K)) : K as ValueNode;
-        const nNode = typeof N === "number" ? builder.createConstant(`N_const`, scalarInt64(N)) : N as ValueNode;
+        const mNode =
+            typeof M === "number"
+                ? builder.createConstant(`M_const`, scalarInt64(M))
+                : (M as ValueNode);
+        const kNode =
+            typeof K === "number"
+                ? builder.createConstant(`K_const`, scalarInt64(K))
+                : (K as ValueNode);
+        const nNode =
+            typeof N === "number"
+                ? builder.createConstant(`N_const`, scalarInt64(N))
+                : (N as ValueNode);
 
         const [nkNode] = builder.createOp("Mul", [nNode, kNode]);
         const [mnkNode] = builder.createOp("Mul", [mNode, nkNode]);
@@ -146,10 +182,18 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
             cols: number | ValueNode,
             tag: string,
         ) => {
-            let batchOffset: ValueNode = builder.createConstant(`${tag}_batch_zero`, scalarInt64(0));
+            let batchOffset: ValueNode = builder.createConstant(
+                `${tag}_batch_zero`,
+                scalarInt64(0),
+            );
 
             if (targetBatch.length > 0) {
-                const batchIndices = decodeMixedRadix(builder, batchIter, batchOut, `${tag}_decode`);
+                const batchIndices = decodeMixedRadix(
+                    builder,
+                    batchIter,
+                    batchOut,
+                    `${tag}_decode`,
+                );
                 const actualIndices = targetBatch.map((dim, i) => {
                     const outPos = batchOut.length - targetBatch.length + i;
                     return dim === 1
@@ -167,24 +211,44 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
                         if (typeof currentStride === "number" && typeof dim === "number") {
                             currentStride = currentStride * dim;
                         } else {
-                            const cNode = typeof currentStride === "number" ? builder.createConstant(`${tag}_cs_${i}`, scalarInt64(currentStride)) : currentStride;
-                            const dNode = typeof dim === "number" ? builder.createConstant(`${tag}_cd_${i}`, scalarInt64(dim)) : dim as ValueNode;
+                            const cNode =
+                                typeof currentStride === "number"
+                                    ? builder.createConstant(
+                                          `${tag}_cs_${i}`,
+                                          scalarInt64(currentStride),
+                                      )
+                                    : currentStride;
+                            const dNode =
+                                typeof dim === "number"
+                                    ? builder.createConstant(`${tag}_cd_${i}`, scalarInt64(dim))
+                                    : (dim as ValueNode);
                             [currentStride] = builder.createOp("Mul", [cNode, dNode]);
                         }
                     }
                 }
                 // --------------------------------------
 
-                batchOffset = buildLinearIndex(builder, actualIndices, strides, `${tag}_batch_offset`);
+                batchOffset = buildLinearIndex(
+                    builder,
+                    actualIndices,
+                    strides,
+                    `${tag}_batch_offset`,
+                );
             }
 
-            const rowsNode = typeof rows === "number" ? builder.createConstant(`${tag}_rows`, scalarInt64(rows)) : rows as ValueNode;
-            const colsNode = typeof cols === "number" ? builder.createConstant(`${tag}_cols`, scalarInt64(cols)) : cols as ValueNode;
-            
+            const rowsNode =
+                typeof rows === "number"
+                    ? builder.createConstant(`${tag}_rows`, scalarInt64(rows))
+                    : (rows as ValueNode);
+            const colsNode =
+                typeof cols === "number"
+                    ? builder.createConstant(`${tag}_cols`, scalarInt64(cols))
+                    : (cols as ValueNode);
+
             const [rcMul] = builder.createOp("Mul", [rowsNode, colsNode]);
             const [offset] = builder.createOp("Mul", [batchOffset, rcMul]);
             const [rowOff] = builder.createOp("Mul", [rowIdx, colsNode]);
-            
+
             const [base] = builder.createOp("Add", [offset, rowOff]);
             return builder.createOp("Add", [base, colIdx])[0];
         };

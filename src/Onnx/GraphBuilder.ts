@@ -12,7 +12,7 @@ import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import OnnxEdge from "./OnnxEdge.js";
-import { bool, scalarInt64, uniq, zeroTensor } from "./Utils.js";
+import { bool, int64Vec, scalarInt64, uniq, UNKOWN_SHAPE, zeroTensor } from "./Utils.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { inferNodeShape } from "./InferShapes.js";
@@ -136,39 +136,55 @@ export class GraphBuilder {
      * Automatically deletes `oldNode` if it becomes orphaned and is purely intermediate.
      */
     public replaceAllUsesWith(oldNode: ValueNode, newNode: ValueNode): void {
-        const outEdges = oldNode.outgoers.toArray();
-
-        // 1. Detect if the node we are replacing is a global graph output
         let isGraphOutput = false;
         if (oldNode.is(TensorNode) && oldNode.as(TensorNode).type === "output") {
             isGraphOutput = true;
         }
 
-        // 2. Rewire all existing consumers
-        for (const edge of outEdges) {
-            const targetOp = edge.target;
+        // 1. Recursive helper to update uses inside the current graph AND subgraphs
+        const updateUsesInGraph = (g: OnnxGraph.Class) => {
+            for (const op of g.getOperationNodes().toArray()) {
+                const currentInputs = op.getInputs() ?? [];
+                let changed = false;
 
-            // Wire newNode to targetOp
-            this.graph
-                .addEdge(newNode, targetOp)
-                .init(new OnnxEdge.Builder(newNode.literalType, newNode.shape))
-                .as(OnnxEdge);
+                const updatedInputs = currentInputs.map((input) => {
+                    if (input.id === oldNode.id) {
+                        changed = true;
+                        return newNode;
+                    }
+                    return input;
+                });
 
-            // Update the targetOp's internal inputs array
-            if (targetOp.is(OperationNode)) {
-                const targetOpNode = targetOp.as(OperationNode);
-                const currentInputs = targetOpNode.getInputs() ?? [];
-                const updatedInputs = currentInputs.map((input) =>
-                    input.id === oldNode.id ? newNode : input,
-                );
-                targetOpNode.setInputs(updatedInputs);
+                if (changed) {
+                    op.setInputs(updatedInputs);
+
+                    // Disconnect old edge if it exists at this graph level
+                    const existingEdge = g.getEdge(oldNode.id, op.id);
+                    if (existingEdge) existingEdge.remove();
+
+                    // Connect new edge (only if newNode is visible/accessible in this scope)
+                    if (g.hasNode(newNode.id) || g === this.graph) {
+                        g.addEdge(newNode, op)
+                            .init(new OnnxEdge.Builder(newNode.literalType, newNode.shape))
+                            .as(OnnxEdge);
+                    }
+                }
+
+                // Recursively update control-flow subgraphs (Loop, If, Scan bodies)
+                // Assuming OperationNode stores subgraphs in an accessible array:
+                for (const sub of (op as any).subgraphs || []) {
+                    updateUsesInGraph(sub as OnnxGraph.Class);
+                }
             }
+        };
 
-            // Disconnect old edge
-            edge.remove();
-        }
+        // Start recursive replacement
+        updateUsesInGraph(this.graph);
 
-        // 3. Clean up or redirect
+        // Disconnect any remaining outgoers manually
+        oldNode.outgoers.toArray().forEach((edge) => edge.remove());
+
+        // 2. Clean up or redirect
         if (isGraphOutput) {
             // We cannot delete a graph output. We must route the new node into it!
             const producers = newNode.incomers.sources.filterIs(OperationNode).toArray();
@@ -245,21 +261,30 @@ export class GraphBuilder {
         let internalCarryShape: KnownShape;
 
         if (Array.isArray(carryLen)) {
-            // Static path
+            // Static path - ALWAYS flatten the carry state for loop lowering
+            const flatLen = carryLen.reduce((a, b) => a * b, 1);
             vInitialInp = outerBuilder.createConstant(
                 `init_carry_${tag}`,
-                zeroTensor(elemTy, carryLen),
+                zeroTensor(elemTy, [flatLen]), // Create a 1D flattened zero tensor
             );
-            internalCarryShape = carryLen;
+            internalCarryShape = [flatLen]; // The loop internally carries a 1D tensor
         } else {
-            // Dynamic path: Use Expand(scalar_zero, shape_tensor)
             const zeroScalar = outerBuilder.createConstant(`zero_${tag}`, zeroTensor(elemTy, []));
-            [vInitialInp] = outerBuilder.createOp("Expand", [zeroScalar, carryLen]);
-            // If the shape tensor is dynamic, we use a placeholder rank/shape
-            internalCarryShape =
-                carryLen.shape.length === 0
-                    ? [-1]
-                    : new Array(carryLen.shape[0] as number).fill(-1);
+
+            // ALWAYS flatten dynamic carry state to 1D to match loop semantics
+            // 1. Calculate flat trip count = ReduceProd(carryLen)
+            const axes0 = outerBuilder.createConstant(`ax0_fl_${tag}`, int64Vec([0]));
+            const flatTrip = outerBuilder.createOp("ReduceProd", [carryLen, axes0], {
+                keepdims: 0,
+            })[0];
+            const flatTrip1D = outerBuilder.createOp("Unsqueeze", [flatTrip, axes0])[0];
+
+            // 2. Expand to 1D shape and enforce [-1] to prevent InferShapes propagation bugs
+            [vInitialInp] = outerBuilder.createOp("Expand", [zeroScalar, flatTrip1D], {}, [
+                { type: elemTy, shape: UNKOWN_SHAPE },
+            ]);
+
+            internalCarryShape = UNKOWN_SHAPE; // The loop internally carries a 1D tensor
         }
 
         // 2. The Loop Body (region/inner graph)

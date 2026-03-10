@@ -34,9 +34,39 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const dtype = (op.getOutputs()[0].literalType as DataType) ?? DataType.FLOAT;
 
         // 1. Resolve inputs (Captured Tensors)
-        const X = resolveRecipeInput(builder, inputs[0], valueMap, iter, axes, outShape, false, false);
-        const W = resolveRecipeInput(builder, inputs[1], valueMap, iter, axes, outShape, false, false);
-        const B_bias = inputs.length > 2 ? resolveRecipeInput(builder, inputs[2], valueMap, iter, axes, outShape, false, false) : null;
+        const X = resolveRecipeInput(
+            builder,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+        );
+        const W = resolveRecipeInput(
+            builder,
+            inputs[1],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+        );
+        const B_bias =
+            inputs.length > 2
+                ? resolveRecipeInput(
+                      builder,
+                      inputs[2],
+                      valueMap,
+                      iter,
+                      axes,
+                      outShape,
+                      false,
+                      false,
+                  )
+                : null;
 
         const xShape = asStaticDims(inputs[0].shape);
         const wShape = asStaticDims(inputs[1].shape);
@@ -52,11 +82,18 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         if (xShape.includes(-1) || xShape.length === 0) {
             const [shapeX] = builder.createOp("Shape", [inputs[0]]);
             const rankX = builder.createOp("Size", [shapeX])[0];
-            
+
             const getSpatialDim = (offsetFromEnd: number, tag: string) => {
-                const offsetNode = builder.createConstant(`${tag}_offset`, scalarInt64(offsetFromEnd));
+                const offsetNode = builder.createConstant(
+                    `${tag}_offset`,
+                    scalarInt64(offsetFromEnd),
+                );
                 const [targetAxis] = builder.createOp("Add", [rankX, offsetNode]);
-                const [dimRaw] = builder.createOp("Gather", [shapeX, builder.createOp("Unsqueeze", [targetAxis, axes])[0]], { axis: 0 });
+                const [dimRaw] = builder.createOp(
+                    "Gather",
+                    [shapeX, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
+                    { axis: 0 },
+                );
                 return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
             };
 
@@ -72,9 +109,12 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const group = getIntAttr(op, "group", 1);
 
-        const kH = kernelShape[0], kW = kernelShape[1];
-        const sH = strides[0], sW = strides[1];
-        const dH = dilations[0], dW = dilations[1];
+        const kH = kernelShape[0],
+            kW = kernelShape[1];
+        const sH = strides[0],
+            sW = strides[1];
+        const dH = dilations[0],
+            dW = dilations[1];
 
         const kEffH = dH * (kH - 1) + 1;
         const kEffW = dW * (kW - 1) + 1;
@@ -83,7 +123,9 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         if (pads.length === 0) {
             if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
                 if (typeof H !== "number" || typeof Win !== "number") {
-                    throw new Error("Dynamic spatial dimensions with auto_pad is not supported. Run CanonicalizePadPass first.");
+                    throw new Error(
+                        "Dynamic spatial dimensions with auto_pad is not supported. Run CanonicalizePadPass first.",
+                    );
                 }
                 const isLower = autoPad === "SAME_LOWER";
                 const padH = Math.max((Math.ceil(H / sH) - 1) * sH + kEffH - H, 0);
@@ -96,22 +138,35 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             }
         }
 
-        const pT = pads[0] ?? 0, pL = pads[1] ?? 0, pB = pads[2] ?? 0, pR = pads[3] ?? 0;
+        const pT = pads[0] ?? 0,
+            pL = pads[1] ?? 0,
+            pB = pads[2] ?? 0,
+            pR = pads[3] ?? 0;
 
         // --- NEW DYNAMIC MATH FOR H_out AND W_out ---
         let H_out: number | ValueNode, W_out: number | ValueNode;
 
-        const buildOutDim = (dimIn: number | ValueNode, pA: number, pB_pad: number, kEff: number, stride: number, tag: string) => {
+        const buildOutDim = (
+            dimIn: number | ValueNode,
+            pA: number,
+            pB_pad: number,
+            kEff: number,
+            stride: number,
+            tag: string,
+        ) => {
             if (typeof dimIn === "number") {
                 return Math.floor((dimIn + pA + pB_pad - kEff) / stride + 1);
             }
             // Math.floor((dim + pA + pB_pad - kEff) / stride + 1)
-            const numOffset = builder.createConstant(`${tag}_num_off`, scalarInt64(pA + pB_pad - kEff));
+            const numOffset = builder.createConstant(
+                `${tag}_num_off`,
+                scalarInt64(pA + pB_pad - kEff),
+            );
             const [numAdd] = builder.createOp("Add", [dimIn, numOffset]);
-            
+
             const strideConst = builder.createConstant(`${tag}_stride`, scalarInt64(stride));
             const [divOut] = builder.createOp("Div", [numAdd, strideConst]); // Integer division acts as floor for positives
-            
+
             const oneConst = builder.createConstant(`${tag}_one`, scalarInt64(1));
             return builder.createOp("Add", [divOut, oneConst])[0];
         };
@@ -121,19 +176,27 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         // --------------------------------------------
 
         let paddedX = X;
-        if (pads.some((p) => p !== 0)) {
+        // Cast `p` to Number to safely handle BigInt 0n vs Number 0
+        if (pads.some((p) => Number(p) !== 0)) {
             const padsConst = builder.createConstant(`pads`, {
                 dataType: DataType.INT64,
                 dims: [8],
-                int64Data: [0, 0, BigInt(pT), BigInt(pL), 0, 0, BigInt(pB), BigInt(pR)],
+                // Cast all values to standard JS Numbers to prevent JSON serialization dropping them
+                int64Data: [0, 0, Number(pT), Number(pL), 0, 0, Number(pB), Number(pR)],
             });
             [paddedX] = builder.createOp("Pad", [X, padsConst]);
         }
 
         // 3. Decode iteration index into N, M, Y, X coordinates
         const mConst = builder.createConstant(`M_const`, scalarInt64(M));
-        const hOutNode = typeof H_out === "number" ? builder.createConstant(`H_out_const`, scalarInt64(H_out)) : H_out;
-        const wOutNode = typeof W_out === "number" ? builder.createConstant(`W_out_const`, scalarInt64(W_out)) : W_out;
+        const hOutNode =
+            typeof H_out === "number"
+                ? builder.createConstant(`H_out_const`, scalarInt64(H_out))
+                : H_out;
+        const wOutNode =
+            typeof W_out === "number"
+                ? builder.createConstant(`W_out_const`, scalarInt64(W_out))
+                : W_out;
 
         const [hwOutNode] = builder.createOp("Mul", [hOutNode, wOutNode]);
         const [mHwOutNode] = builder.createOp("Mul", [mConst, hwOutNode]);
@@ -144,7 +207,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const [rem] = builder.createOp("Mod", [remN, hwOutNode]);
         const [yIdx] = builder.createOp("Div", [rem, wOutNode]);
         const [xIdx] = builder.createOp("Mod", [rem, wOutNode]);
-        
+
         // 4. Calculate Slice bounds for the input patch
         const [yStart] = builder.createOp("Mul", [
             yIdx,

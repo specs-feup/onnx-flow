@@ -995,11 +995,17 @@ export function chunkTensor(
 }
 
 export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
+    const opNodes = graph.getOperationNodes().toArray();
+    return topologicalSortOperationNodesSubset(graph, opNodes);
+}
+
+export function topologicalSortOperationNodesSubset(
+    graph: OnnxGraph.Class,
+    opNodes: OperationNode.Class[],
+): OperationNode.Class[] {
     const sorted: OperationNode.Class[] = [];
     const visited = new Set<string>();
     const temp = new Set<string>();
-
-    const opNodes = graph.getOperationNodes().toArray();
 
     // Map tensor id -> producing op in the CURRENT graph
     const tensorProducers = new Map<string, OperationNode.Class>();

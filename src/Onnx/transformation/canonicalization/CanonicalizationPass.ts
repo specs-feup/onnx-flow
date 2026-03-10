@@ -13,6 +13,7 @@ import { LowerClipRecipe } from "./recipes/LowerClipRecipe.js";
 import { LowerAveragePoolRecipe } from "./recipes/LowerAveragePoolRecipe.js";
 import type { DecompositionRecipe } from "../Recipe.js";
 import { GraphBuilder } from "../../GraphBuilder.js";
+import { topologicalSortOperationNodes } from "../../Utils.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -38,7 +39,7 @@ export class CanonicalizationPass implements GraphPass {
         while (localChanged) {
             localChanged = false;
 
-            const ops = graph.getOperationNodes().toArray();
+            const ops = topologicalSortOperationNodes(graph);
 
             for (const op of ops) {
                 if (!graph.hasNode(op.id)) continue;

@@ -29,7 +29,7 @@ export function decodeMixedRadix(
     for (let k = dims.length - 1; k >= 0; k--) {
         const dim = dims[k];
         let dConst: ValueNode;
-        
+
         // --- CHANGED: Handle dynamic ValueNode dims ---
         if (typeof dim === "number") {
             const safeDim = dim > 0 ? dim : 1;
@@ -65,7 +65,10 @@ export function buildLinearIndex(
         // --- CHANGED: Handle dynamic ValueNode strides ---
         let sNode: ValueNode;
         if (typeof strides[i] === "number") {
-            sNode = builder.createConstant(`lin_stride_${tag}_${i}`, scalarInt64(strides[i] as number));
+            sNode = builder.createConstant(
+                `lin_stride_${tag}_${i}`,
+                scalarInt64(strides[i] as number),
+            );
         } else {
             sNode = strides[i] as ValueNode;
         }
@@ -158,8 +161,8 @@ export function resolveRecipeInput(
 
     // If shapes are purely static, use a string key. If dynamic, fallback to node ID to avoid cache collisions.
     const isDynamic = inDimsStatic.includes(-1) || outDimsStatic.includes(-1);
-    const shapeKey = isDynamic 
-        ? `__idx_cache_dyn_${tInner.id}_to_out` 
+    const shapeKey = isDynamic
+        ? `__idx_cache_dyn_${tInner.id}_to_out`
         : `__idx_cache_${inDimsStatic.join(",")}_to_${outDimsStatic.join(",")}`;
 
     let linU: ConcreteValueNode;
@@ -178,7 +181,7 @@ export function resolveRecipeInput(
             const extractDims = (tensor: ValueNode, staticDims: number[], isOut: boolean) => {
                 const dims: (number | ValueNode)[] = [];
                 let shapeNode: ValueNode | null = null;
-                
+
                 for (let i = 0; i < staticDims.length; i++) {
                     if (staticDims[i] !== -1) {
                         dims.push(staticDims[i]);
@@ -186,8 +189,13 @@ export function resolveRecipeInput(
                         if (!shapeNode) {
                             shapeNode = builder.createOp("Shape", [tensor])[0];
                         }
-                        const iConst = builder.createConstant(`dim_idx_${isOut ? 'out' : 'in'}_${i}`, int64Vec([i]));
-                        const [dimRaw] = builder.createOp("Gather", [shapeNode, iConst], { axis: 0 });
+                        const iConst = builder.createConstant(
+                            `dim_idx_${isOut ? "out" : "in"}_${i}`,
+                            int64Vec([i]),
+                        );
+                        const [dimRaw] = builder.createOp("Gather", [shapeNode, iConst], {
+                            axis: 0,
+                        });
                         dims.push(squeezeIfLen1(builder, dimRaw, axes, `sq_dim`));
                     }
                 }
@@ -195,7 +203,7 @@ export function resolveRecipeInput(
             };
 
             inDims = extractDims(tInner, inDimsStatic, false);
-            // Note: For outShape, we assume the outer builder already placed the final Loop output shape 
+            // Note: For outShape, we assume the outer builder already placed the final Loop output shape
             // logic somewhere, but usually in element-wise ops, outShape comes from the broadcasted result.
             // If outShape is dynamic, we assume the pass provided it correctly or it mirrors the largest input.
             // If we don't have a direct tensor for outShape, we map it to -1 and handle it appropriately.
@@ -221,20 +229,25 @@ export function resolveRecipeInput(
         for (let k = 0; k < rI; k++) {
             const inDim = inRadix[k];
             const outPos = rO - rI + k;
-            
+
             if (outPos < 0) {
                 iDigits.push(builder.createConstant(`gb_zero_${tInner.id}_${k}`, scalarInt64(0)));
             } else if (typeof inDim === "number") {
                 if (inDim === 1) {
-                    iDigits.push(builder.createConstant(`gb_zero_${tInner.id}_${k}`, scalarInt64(0)));
+                    iDigits.push(
+                        builder.createConstant(`gb_zero_${tInner.id}_${k}`, scalarInt64(0)),
+                    );
                 } else {
                     iDigits.push(oDigits[outPos]);
                 }
             } else {
                 // Dynamic Broadcast Check: Where(Equal(inDim, 1), 0, oDigits[outPos])
                 const oneConst = builder.createConstant(`gb_one_${tInner.id}_${k}`, scalarInt64(1));
-                const zeroConst = builder.createConstant(`gb_zero_${tInner.id}_${k}`, scalarInt64(0));
-                
+                const zeroConst = builder.createConstant(
+                    `gb_zero_${tInner.id}_${k}`,
+                    scalarInt64(0),
+                );
+
                 const [isOne] = builder.createOp("Equal", [inDim, oneConst]);
                 const [bcastIdx] = builder.createOp("Where", [isOne, zeroConst, oDigits[outPos]]);
                 iDigits.push(bcastIdx as ConcreteValueNode);
@@ -251,8 +264,14 @@ export function resolveRecipeInput(
                 if (typeof currentStride === "number" && typeof dim === "number") {
                     currentStride = currentStride * dim;
                 } else {
-                    const cNode = typeof currentStride === "number" ? builder.createConstant(`cs_${i}`, scalarInt64(currentStride)) : currentStride;
-                    const dNode = typeof dim === "number" ? builder.createConstant(`cd_${i}`, scalarInt64(dim)) : dim as ValueNode;
+                    const cNode =
+                        typeof currentStride === "number"
+                            ? builder.createConstant(`cs_${i}`, scalarInt64(currentStride))
+                            : currentStride;
+                    const dNode =
+                        typeof dim === "number"
+                            ? builder.createConstant(`cd_${i}`, scalarInt64(dim))
+                            : (dim as ValueNode);
                     [currentStride] = builder.createOp("Mul", [cNode, dNode]);
                 }
             }

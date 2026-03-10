@@ -17,9 +17,10 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         "Squeeze",
         "Unsqueeze",
         "ScatterElements",
-        "Expand",
         "Range",
         "Identity",
+        "ConstantOfShape",
+        "Cast",
     ];
 
     canApply(op: OperationNode.Class): boolean {
@@ -103,14 +104,17 @@ export class LowerConcatRecipe implements DecompositionRecipe {
             [{ type: DataType.INT64, shape: [rank] }],
         )[0];
 
-        // 2. Initialize Y with Expand(0, out_shape)
-        const zeroVal = builder.createConstant(
-            `Concat_zero_${op.id}`,
-            makeTensorProto(dtype, [], [0]),
-        );
-        let curY = builder.createOp("Expand", [zeroVal, outShape1D], {}, [
-            { type: dtype, shape: Yshape },
+        // 2. Initialize Y safely using ConstantOfShape to bypass Expand canonicalization bugs
+        let curY = builder.createOp("ConstantOfShape", [outShape1D], {}, [
+            { type: DataType.FLOAT, shape: Yshape },
         ])[0];
+
+        // Explicitly cast the default float32 zeros to the required data type
+        if (dtype !== DataType.FLOAT) {
+            curY = builder.createOp("Cast", [curY], { to: dtype }, [
+                { type: dtype, shape: Yshape },
+            ])[0];
+        }
 
         // 3. Incrementally Scatter inputs into the constructed Y
         let offsetSc: ConcreteValueNode = builder.createConstant(
@@ -128,7 +132,8 @@ export class LowerConcatRecipe implements DecompositionRecipe {
 
             const endSc: ConcreteValueNode = builder.createOp("Add", [offsetSc, sizeSc])[0];
 
-            const axisDim = Array.isArray(Xi.shape) ? Xi.shape[axis] : undefined;
+            const axisDim =
+                Array.isArray(Xi.shape) && Xi.shape[axis] !== undefined ? Xi.shape[axis] : -1;
             const range1D = builder.createOp("Range", [offsetSc, endSc, oneSc], {}, [
                 { type: DataType.INT64, shape: [axisDim] as KnownShape },
             ])[0];
@@ -144,9 +149,7 @@ export class LowerConcatRecipe implements DecompositionRecipe {
                     makeTensorProto(DataType.INT64, [axesToUnsq.length], axesToUnsq),
                 );
 
-                const idxShape = Array.isArray(Xi.shape)
-                    ? [...Xi.shape]
-                    : new Array(rank).fill(undefined);
+                const idxShape = Array.isArray(Xi.shape) ? [...Xi.shape] : new Array(rank).fill(-1);
                 for (const d of axesToUnsq) {
                     idxShape[d] = 1;
                 }
@@ -157,11 +160,22 @@ export class LowerConcatRecipe implements DecompositionRecipe {
             }
 
             const shapeI = builder.createOp("Shape", [Xi])[0];
-            const idxFull = builder.createOp("Expand", [idxRanked, shapeI], {}, [
+
+            // Generate INT64 zeros of exact shapeI, then Add to idxRanked to force broadcast.
+            // This safely bypasses the Expand canonicalization type mismatch.
+            let idxFullZeros = builder.createOp("ConstantOfShape", [shapeI], {}, [
+                { type: DataType.FLOAT, shape: Xi.shape as KnownShape },
+            ])[0];
+
+            idxFullZeros = builder.createOp("Cast", [idxFullZeros], { to: DataType.INT64 }, [
                 { type: DataType.INT64, shape: Xi.shape as KnownShape },
             ])[0];
 
-            curY = builder.createOp("ScatterElements", [curY, idxFull, Xi], { axis })[0];
+            const idxFull = builder.createOp("Add", [idxRanked, idxFullZeros], {}, [
+                { type: DataType.INT64, shape: Xi.shape as KnownShape },
+            ])[0];
+
+            curY = builder.createOp("ScatterElements", [curY, idxFull, Xi], { axis }, [{ type: dtype, shape: Yshape }])[0];
 
             offsetSc = endSc;
         }
