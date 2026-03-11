@@ -20,6 +20,8 @@ import { LowerReductionRecipe } from "./recipes/LowerReductionRecipe.js";
 import { LowerMatMulRecipe } from "./recipes/LowerMatMulRecipe.js";
 import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
 import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
+import { OpCategory } from "../../Schema/OpSchema.js";
+import { OpRegistry } from "../../Schema/OpRegistry.js";
 
 export class LoopLoweringPass implements GraphPass {
     public readonly name = "LoopLoweringV2";
@@ -313,6 +315,8 @@ export class LoopLoweringPass implements GraphPass {
         const ops = topologicalSortOperationNodes(graph);
         const visited = new Set<string>();
 
+        const registry = OpRegistry.getInstance();
+
         const roots = ops.filter((op) => {
             if (!this.isSupported(op)) return false;
             const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
@@ -333,6 +337,17 @@ export class LoopLoweringPass implements GraphPass {
             // It has exactly 1 consumer. We can only fuse if bounds match.
             const consumer = Array.from(consumers)[0];
             if (!this.isSupported(consumer)) return true;
+
+            // ===================================================================
+            // NEW SCHEMA CHECK:
+            // We can only safely fuse into scalar loops if the consumer is 
+            // strictly an ElementWise operation (e.g. Add, Mul, Relu). 
+            // DataMovement operations (like Transpose) require full tensor access.
+            // ===================================================================
+            const consumerSchema = registry.get(consumer.type, 19); 
+            if (consumerSchema?.category !== OpCategory.ElementWise) {
+                return true; 
+            }
 
             const prodBounds = this.getBoundsFor(op);
             const consBounds = this.getBoundsFor(consumer);
