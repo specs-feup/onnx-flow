@@ -14,7 +14,7 @@ import {
     toNum,
     topologicalSortOperationNodes,
     toStaticShape,
-    UNKOWN_SHAPE,
+    UNKNOWN_SHAPE,
 } from "./Utils.js";
 import OnnxEdge from "./OnnxEdge.js";
 import OperationNode from "./OperationNode.js";
@@ -154,7 +154,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                               inputs[0].as(ConstantNode).constantValue,
                           )![0]
                         : undefined;
-                const dim0 = tripCnt !== undefined ? tripCnt : UNKOWN_SHAPE[0];
+                const dim0 = tripCnt !== undefined ? tripCnt : UNKNOWN_SHAPE[0];
                 lOut.setShape([dim0, ...bOut.shape]);
                 lOut.setLiteralType(bOut.literalType);
             }
@@ -988,7 +988,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
                 outShape = [len];
             } else {
                 // Fallback must be [-1] (unknown 1D tensor), NOT [] (0D scalar)
-                outShape = UNKOWN_SHAPE;
+                outShape = UNKNOWN_SHAPE;
             }
             break;
         }

@@ -49,7 +49,7 @@ export const TYPE_SIZE_MAP: Record<number, number> = {
 };
 
 export const SCALAR_SHAPE: number[] = [];
-export const UNKOWN_SHAPE = [-1];
+export const UNKNOWN_SHAPE = [-1];
 
 export const BASE_TEN = 10;
 
@@ -760,7 +760,7 @@ export function toStaticShape(shape?: Shape): StaticShape {
     if (!shape || !Array.isArray(shape)) return [];
     return shape.map((d) => {
         const n = toNum(d);
-        return n !== undefined ? n : UNKOWN_SHAPE[0];
+        return n !== undefined ? n : UNKNOWN_SHAPE[0];
     });
 }
 

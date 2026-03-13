@@ -9,7 +9,7 @@ import {
     getIntAttr,
     scalarInt64,
     int64Vec,
-    UNKOWN_SHAPE,
+    UNKNOWN_SHAPE,
 } from "../../../Utils.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
 import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
@@ -44,7 +44,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const [shapeX] = builder.createOp("Shape", [inputs[0]]);
         const [shapeW] = builder.createOp("Shape", [inputs[1]]);
 
-        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
         const [dummyX] = builder.createOp("ConstantOfShape", [shapeX], {}, expectedCoS);
         const [dummyW] = builder.createOp("ConstantOfShape", [shapeW], {}, expectedCoS);
 
@@ -55,7 +55,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             dummyInputs.push(dummyB);
         }
 
-        const expectedConv = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const expectedConv = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
         const [dummyOut] = builder.createOp("Conv", dummyInputs, op.attributes, expectedConv);
 
         const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);

@@ -12,7 +12,7 @@ import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import OnnxEdge from "./OnnxEdge.js";
-import { bool, int64Vec, scalarInt64, uniq, UNKOWN_SHAPE, zeroTensor } from "./Utils.js";
+import { bool, int64Vec, scalarInt64, uniq, UNKNOWN_SHAPE, zeroTensor } from "./Utils.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { inferNodeShape } from "./InferShapes.js";
@@ -276,10 +276,10 @@ export class GraphBuilder {
 
             // 2. Expand to 1D shape and enforce [-1] to prevent InferShapes propagation bugs
             [vInitialInp] = outerBuilder.createOp("Expand", [zeroScalar, flatTrip1D], {}, [
-                { type: elemTy, shape: UNKOWN_SHAPE },
+                { type: elemTy, shape: UNKNOWN_SHAPE },
             ]);
 
-            internalCarryShape = UNKOWN_SHAPE; // The loop internally carries a 1D tensor
+            internalCarryShape = UNKNOWN_SHAPE; // The loop internally carries a 1D tensor
         }
 
         // 2. The Loop Body (region/inner graph)

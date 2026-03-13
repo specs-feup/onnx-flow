@@ -7,7 +7,7 @@ import type { ConcreteValueNode, ValueNode, KnownShape, StaticShape } from "../.
 import {
     int64Vec,
     asStaticDims,
-    UNKOWN_SHAPE,
+    UNKNOWN_SHAPE,
     topologicalSortOperationNodes,
 } from "../../Utils.js";
 import type { GraphPass } from "../../PassManager.js";
@@ -83,7 +83,7 @@ export class LoopLoweringPass implements GraphPass {
         const recipe = this.getRecipeFor(op)!;
         const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
         const originalOutShape: KnownShape =
-            outTensors.length > 0 ? [...(outTensors[0].shape as KnownShape)] : UNKOWN_SHAPE;
+            outTensors.length > 0 ? [...(outTensors[0].shape as KnownShape)] : UNKNOWN_SHAPE;
 
         const safeOut = asStaticDims(originalOutShape);
 
@@ -340,13 +340,13 @@ export class LoopLoweringPass implements GraphPass {
 
             // ===================================================================
             // NEW SCHEMA CHECK:
-            // We can only safely fuse into scalar loops if the consumer is 
-            // strictly an ElementWise operation (e.g. Add, Mul, Relu). 
+            // We can only safely fuse into scalar loops if the consumer is
+            // strictly an ElementWise operation (e.g. Add, Mul, Relu).
             // DataMovement operations (like Transpose) require full tensor access.
             // ===================================================================
-            const consumerSchema = registry.get(consumer.type, 19); 
+            const consumerSchema = registry.get(consumer.type, 19);
             if (consumerSchema?.category !== OpCategory.ElementWise) {
-                return true; 
+                return true;
             }
 
             const prodBounds = this.getBoundsFor(op);

@@ -11,7 +11,7 @@ import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
-import { asStaticDims, int64Vec, UNKOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { asStaticDims, int64Vec, UNKNOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     canApply(op: OperationNode.Class): boolean {
@@ -53,13 +53,13 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
             const inp = inputs[i];
 
             const [shapeNode] = builder.createOp("Shape", [inp]);
-            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
             const [dummy] = builder.createOp("ConstantOfShape", [shapeNode], {}, expectedCoS);
 
             if (!currentDummy) {
                 currentDummy = dummy;
             } else {
-                const expectedAdd = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+                const expectedAdd = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
                 [currentDummy] = builder.createOp("Add", [currentDummy, dummy], {}, expectedAdd);
             }
         }

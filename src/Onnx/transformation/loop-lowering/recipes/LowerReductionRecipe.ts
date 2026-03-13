@@ -9,7 +9,7 @@ import {
     scalarInt64,
     computeStrides,
     int64Vec,
-    UNKOWN_SHAPE,
+    UNKNOWN_SHAPE,
 } from "../../../Utils.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
@@ -65,7 +65,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             });
 
             // To avoid cycle, use the dummy approach to find the output shape safely
-            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
             const [dummyInput] = builder.createOp("ConstantOfShape", [shapeNode], {}, expectedCoS);
 
             const dummyInputs: ValueNode[] = [dummyInput];

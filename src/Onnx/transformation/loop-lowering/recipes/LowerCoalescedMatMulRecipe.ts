@@ -11,7 +11,7 @@ import {
     scalarInt64,
     broadcastShapes,
     int64Vec,
-    UNKOWN_SHAPE,
+    UNKNOWN_SHAPE,
 } from "../../../Utils.js";
 import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
 import {
@@ -76,11 +76,11 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const [shapeA] = builder.createOp("Shape", [A]);
         const [shapeB] = builder.createOp("Shape", [B]);
 
-        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
         const [dummyA] = builder.createOp("ConstantOfShape", [shapeA], {}, expectedCoS);
         const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
 
-        const expectedMM = [{ type: DataType.FLOAT, shape: UNKOWN_SHAPE }];
+        const expectedMM = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
         const [dummyOut] = builder.createOp("MatMul", [dummyA, dummyB], {}, expectedMM);
 
         // Get K dynamically from A
