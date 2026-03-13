@@ -493,7 +493,8 @@ if (isPartitioning === true) {
         if (!argv.noLowLevel && !argv.noCodegen) {
             //const generatedCode = generateGraphCode(graph);
             //if (verbosity > 0) console.log("Generated Code:", generatedCode);
-            console.log("Code Generation: TODO");
+            //console.log("Code Generation: TODO");
+            console.log("");
         }
 
         // Optional: run ORT equivalence check
