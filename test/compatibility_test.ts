@@ -159,7 +159,7 @@ function generateReconvertedNow(originalPath: string, cliArgs: string) {
     }
 
     // Run the CLI (will throw on non-zero exit)
-    execSync(`node ./out/src/index.js ${originalPath} ${cliArgs}`, { stdio: "inherit" });
+    execSync(`node ./out/src/index.js "${originalPath}" ${cliArgs}`, { stdio: "inherit" });
 
     // Confirm the file exists and was (re)created after we started.
     if (!fs.existsSync(reconvertedPath)) return { generatedNow: false, reconvertedPath };
@@ -1271,11 +1271,14 @@ const CORE_OP_TESTS: Array<{
     specs: FeedSpec[];
 }> = [
     {
-        label: "relu_standard",
-        originalPath: "examples/onnx/relu_standard.onnx",
-        tol: 1e-6,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [6], gen: "negmix" }],
+        label:"sub",
+        originalPath: "examples/onnx/sub.onnx",
+        tol: 1e-5,
+        cliArgs:jsonFullArgs,
+        specs:[
+            {name: "A",dtype: "float32",shape: [2] },
+            {name: "B",dtype: "float32",shape: [2] },
+        ],
     },
 
     /*
