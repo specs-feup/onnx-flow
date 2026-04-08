@@ -16,6 +16,7 @@ import { GraphBuilder } from "../../GraphBuilder.js";
 import { topologicalSortOperationNodes } from "../../Utils.js";
 import { LowerReluRecipe } from "./recipes/LowerReluRecipe.js";
 import { LowerSubRecipe } from "./recipes/LowerSubRecipe.js";
+import { LowerExpRecipe } from "./recipes/LowerExpRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -36,6 +37,8 @@ export class CanonicalizationPass implements GraphPass {
         // ElementWise Operations
         ["Relu", new LowerReluRecipe()],
         ["Sub", new LowerSubRecipe()],
+
+        //["Exp", new LowerExpRecipe()],
     ]);
 
     public run(graph: OnnxGraph.Class): boolean {

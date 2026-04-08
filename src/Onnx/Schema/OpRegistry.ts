@@ -1,5 +1,5 @@
 import type { OpSchema } from "./OpSchema.js";
-import { StandardOps } from "./definitions/StandardOps.js";
+import { StandardOps } from "./definitions/StandardOps/index.js";
 
 export class OpRegistry {
     private static instance: OpRegistry | undefined;

@@ -280,8 +280,12 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         let starts: ValueNode, ends: ValueNode, sliceAxes: ValueNode, sliceSteps: ValueNode;
 
         if (group > 1) {
-            const MperG = Math.floor(M / group),
-                CperG = Math.floor(C / group);
+            const MperG = Math.floor(M / group);
+
+            // Safely derive CperG directly from the weight tensor's shape [M, C/group, ...],
+            // bypassing the potentially dynamic input tensor shape (C).
+            const CperG = wShape[1] !== -1 ? wShape[1] : Math.floor(C / group);
+
             const [gIdx] = builder.createOp("Div", [
                 mIdx,
                 builder.createConstant(`MperG`, scalarInt64(MperG)),

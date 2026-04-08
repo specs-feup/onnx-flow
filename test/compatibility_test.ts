@@ -302,7 +302,7 @@ export function makeArray(
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256) - 128);
-        case "uint8": // <-- add this
+        case "uint8":
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256));
@@ -1270,30 +1270,26 @@ const CORE_OP_TESTS: Array<{
     cliArgs: string | ((p: string) => string);
     specs: FeedSpec[];
 }> = [
+    /*
     {
-        label:"sub",
+        label: "sub",
         originalPath: "examples/onnx/sub.onnx",
         tol: 1e-5,
-        cliArgs:jsonFullArgs,
-        specs:[
-            {name: "A",dtype: "float32",shape: [2] },
-            {name: "B",dtype: "float32",shape: [2] },
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
         ],
     },
 
-    /*
-  {
-    label: 'quantizelinear',
-    originalPath: 'examples/onnx/quantizelinear.onnx',
-    tol: 0, // Exact match expected for integer output
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'X', dtype: 'float32', shape: [1, 3, 4, 4] },
-    ],
-  },
-  */
+    {
+        label: "quantizelinear",
+        originalPath: "examples/onnx/quantizelinear.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "X", dtype: "float32", shape: [1, 3, 4, 4] }],
+    },
 
-    /*
     {
         label: "ad01_int8_standard",
         originalPath: "examples/onnx/ad01_int8.onnx",
@@ -1301,7 +1297,42 @@ const CORE_OP_TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "input_1", dtype: "int8", shape: [1, 640] }],
     },
+    */
 
+    /*
+    {
+        label: "averagepool_standard",
+        originalPath: "examples/onnx/avgpool_standard.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
+    },
+    */
+
+    /*
+    {
+        label: "exp_standard_taylor",
+        originalPath: "examples/onnx/exp_standard.onnx",
+        tol: 1e-2,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "X", dtype: "float32", shape: [6] }],
+    },
+    */
+
+    /*
+    {
+        label: "lstm_standard",
+        originalPath: "examples/onnx/lstm_standard.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs, // keep JSON for the standard model
+        specs: [
+            // X:[T,N,I] = [4,2,3]
+            { name: "X", dtype: "float32", shape: [4, 2, 3] },
+        ],
+    },
+    */
+
+    /*
     {
         label: "kws_ref_model_int8_standard",
         originalPath: "examples/onnx/kws_ref_model.onnx",

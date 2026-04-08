@@ -13,6 +13,7 @@ import TensorNode from "./Onnx/TensorNode.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
+import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
 
 const IR_VERSION = 9;
 const OPSET_IMPORT = 19;
@@ -96,7 +97,11 @@ export function convertFlowGraphToOnnxJson(
             const value = (tensor as Record<string, unknown>)[key];
             if (value !== undefined && value !== null) {
                 if (Array.isArray(value)) {
-                    sanitized[key] = value.map((v) => (typeof v === "string" ? Number(v) : v));
+                    sanitized[key] = value.map((v) => {
+                        if (typeof v === "bigint") return Number(v);
+                        if (typeof v === "string") return Number(v);
+                        return v;
+                    });
                 } else if (
                     key.endsWith("Data") &&
                     tensor.rawData !== undefined &&
@@ -227,28 +232,44 @@ export function convertFlowGraphToOnnxJson(
 
         const baseAttrs: RawOnnxAttribute[] = [];
 
+        // Get the schema for this operation to correctly type numerical attributes
+        const schema = OpRegistry.getInstance().get(opType, OPSET_IMPORT);
+
         // Serialize attributes
         for (const [name, value] of Object.entries(opNode.attributes)) {
             // Skip handled regions logic
             if (typeof value === "object" && ("g" in value || "type" in value)) {
                 const valObj = value as Record<string, unknown>;
-
                 baseAttrs.push({
                     name,
                     type: (valObj["type"] as number | string | undefined) ?? AttributeType.GRAPH,
                     ...valObj,
                 } as unknown as RawOnnxAttribute);
-
                 continue;
             }
 
+            const attrDef = schema?.attributes?.[name];
+            const expectedType = attrDef?.type;
+
             const attr: RawOnnxAttribute = { name };
             if (Array.isArray(value)) {
-                attr.ints = value as (number | string)[];
-                attr.type = AttributeType.INTS;
+                // Determine if it should be FLOATS or INTS
+                if (expectedType === AttributeType.FLOATS) {
+                    attr.floats = value as number[];
+                    attr.type = AttributeType.FLOATS;
+                } else {
+                    attr.ints = value as (number | string)[];
+                    attr.type = AttributeType.INTS;
+                }
             } else if (typeof value === "number") {
-                attr.i = value;
-                attr.type = AttributeType.INT;
+                // Distinguish between FLOAT and INT based on the schema
+                if (expectedType === AttributeType.FLOAT) {
+                    attr.f = value;
+                    attr.type = AttributeType.FLOAT;
+                } else {
+                    attr.i = value;
+                    attr.type = AttributeType.INT;
+                }
             } else if (typeof value === "string") {
                 attr.s = value;
                 attr.type = AttributeType.STRING;
@@ -257,8 +278,6 @@ export function convertFlowGraphToOnnxJson(
                 "type" in value &&
                 (value as Record<string, unknown>)["type"] === "TENSOR"
             ) {
-                // Prove to TypeScript it's an object with a 'type' property,
-                // and explicitly cast it for the sanitize function
                 attr.t = sanitizeTensor(value as Partial<TensorProto>);
                 attr.type = AttributeType.TENSOR;
             }

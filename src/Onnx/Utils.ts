@@ -470,6 +470,7 @@ export function decodeIntegerVectorFromTensorProto(tv: TensorProto): number[] | 
     const out: number[] = [];
     for (let i = 0; i < n; i++) {
         const off = i * elemBytes;
+        if (off + elemBytes > dv.byteLength) break;
         out.push(i64 ? Number(dv.getBigInt64(off, true)) : dv.getInt32(off, true));
     }
     return out;
@@ -874,6 +875,9 @@ export function broadcastShapes(...shapes: number[][]): number[] {
     return shapes.reduce((acc, s) => broadcastTwoShapes(acc, s), []);
 }
 
+/**
+ * Infers the output dimension for a single spatial axis in a pooling operation.
+ */
 export function inferPoolDim(
     inDim: number,
     k: number,
@@ -881,9 +885,21 @@ export function inferPoolDim(
     padHead: number,
     padTail: number,
     dil: number,
+    ceilMode: number = 0, // New parameter
 ): number {
     const effectiveK = dil * (k - 1) + 1;
-    return Math.floor((inDim + padHead + padTail - effectiveK) / stride + 1);
+    const value = (inDim + padHead + padTail - effectiveK) / stride + 1;
+
+    // Ensure the output dimension is at least 1 if the input exists
+    const outDim = ceilMode === 1 ? Math.ceil(value) : Math.floor(value);
+
+    // Safety check: if ceil_mode is 1, the last pooling window
+    // must start within the input + padding range.
+    if (ceilMode === 1 && (outDim - 1) * stride >= inDim + padHead) {
+        return outDim - 1;
+    }
+
+    return Math.max(0, outDim);
 }
 
 export function inferConvDim(
@@ -1155,6 +1171,10 @@ export function safeWriteJson(filePath: string, obj: unknown): void {
         const t = typeof value;
         if (t === "number") {
             write(Number.isFinite(value as number) ? String(value) : "null");
+            return;
+        }
+        if (t === "bigint") {
+            write(String(value));
             return;
         }
         if (t === "boolean") {

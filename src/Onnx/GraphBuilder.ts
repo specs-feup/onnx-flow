@@ -31,11 +31,12 @@ export class GraphBuilder {
         inputs: ValueNode[],
         attributes: AttributeMap = {},
         expectedOutputs?: { type: DataType; shape: KnownShape }[],
+        regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
         // 1. Build Operation Node
         const op = this.graph
             .addNode(uniq(this.graph, `${this.scopeTag}_${type}`))
-            .init(new OperationNode.Builder(type, inputs, attributes))
+            .init(new OperationNode.Builder(type, inputs, attributes, regions))
             .as(OperationNode);
 
         // 2. Wire incoming edges using the resolved proxy nodes
@@ -51,7 +52,14 @@ export class GraphBuilder {
         // 3. Provision Output Tensors
         // Look up the schema to know how many outputs to generate (default to 1)
         const schema = OpRegistry.getInstance().get(type, 19);
-        const numOutputs = schema ? schema.outputs.length : 1;
+        let numOutputs = schema ? schema.outputs.length : 1;
+
+        // Override output count for variadic ops like Split
+        if (expectedOutputs !== undefined && expectedOutputs.length > numOutputs) {
+            numOutputs = expectedOutputs.length;
+        } else if (attributes !== undefined && attributes["num_outputs"] !== undefined) {
+            numOutputs = attributes["num_outputs"] as number;
+        }
 
         const outputs: ConcreteValueNode[] = [];
         for (let i = 0; i < numOutputs; i++) {
@@ -105,11 +113,26 @@ export class GraphBuilder {
         // 5. Explicitly specified expectedOutputs take ultimate precedence
         if (expectedOutputs) {
             for (let i = 0; i < expectedOutputs.length; i++) {
-                if (i in outputs && expectedOutputs[i].shape.length > 0) {
+                if (
+                    i in outputs &&
+                    expectedOutputs[i].shape &&
+                    expectedOutputs[i].shape.length > 0
+                ) {
                     outputs[i].setShape(expectedOutputs[i].shape);
                 }
                 if (i in outputs && expectedOutputs[i].type !== DataType.UNDEFINED) {
                     outputs[i].setLiteralType(expectedOutputs[i].type);
+                }
+
+                if (i in outputs) {
+                    const edge = this.graph.getEdge(op.id, outputs[i].id);
+                    if (edge) {
+                        edge.remove();
+                        this.graph
+                            .addEdge(op, outputs[i])
+                            .init(new OnnxEdge.Builder(outputs[i].literalType, outputs[i].shape))
+                            .as(OnnxEdge);
+                    }
                 }
             }
         }
