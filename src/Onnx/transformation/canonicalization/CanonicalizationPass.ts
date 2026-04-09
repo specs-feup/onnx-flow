@@ -30,6 +30,13 @@ import { LowerMishRecipe } from "./recipes/LowerMishRecipe.js";
 import { LowerEluRecipe } from "./recipes/LowerEluRecipe.js";
 import { LowerCeluRecipe } from "./recipes/LowerCeluRecipe.js";
 import { LowerSeluRecipe } from "./recipes/LowerSeluRecipe.js";
+import { LowerOrRecipe } from "./recipes/LowerOrRecipe.js";
+import { LowerDivRecipe } from "./recipes/LowerDivRecipe.js";
+import { LowerModRecipe } from "./recipes/LowerModRecipe.js";
+import { LowerPowRecipe } from "./recipes/LowerPowRecipe.js";
+import { LowerNotRecipe } from "./recipes/LowerNotRecipe.js";
+import { LowerSigmoidRecipe } from "./recipes/LowerSigmoidRecipe.js";
+import { LowerSoftsignRecipe } from "./recipes/LowerSoftsignRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -64,6 +71,13 @@ export class CanonicalizationPass implements GraphPass {
         ["Elu", new LowerEluRecipe()],
         ["Celu", new LowerCeluRecipe()],
         ["Selu", new LowerSeluRecipe()],
+        ["Or", new LowerOrRecipe()],
+        ["Div", new LowerDivRecipe()],
+        ["Mod", new LowerModRecipe()],
+        ["Pow", new LowerPowRecipe()],
+        ["Not", new LowerNotRecipe()],
+        ["Sigmoid", new LowerSigmoidRecipe()],
+        ["Softsign", new LowerSoftsignRecipe()],
     ]);
 
     public run(graph: OnnxGraph.Class): boolean {

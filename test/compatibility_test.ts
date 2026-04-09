@@ -1260,17 +1260,7 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
-];
 
-const CORE_OP_TESTS: Array<{
-    label: string;
-    originalPath: string;
-    tol?: number;
-    exact?: boolean;
-    cliArgs: string | ((p: string) => string);
-    specs: FeedSpec[];
-}> = [
-    /* Comeco dos testes 
     {
         label:"sub",
         originalPath: "examples/onnx/sub.onnx",
@@ -1357,7 +1347,7 @@ const CORE_OP_TESTS: Array<{
         specs: [
             { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
         ],
-    }, Testes Feitos (FIM) */
+    },
 
     {
         label: "HardSigmoid",
@@ -1419,71 +1409,88 @@ const CORE_OP_TESTS: Array<{
         ],
     },
 
-    /*
-  {
-    label: 'quantizelinear',
-    originalPath: 'examples/onnx/quantizelinear.onnx',
-    tol: 0, // Exact match expected for integer output
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'X', dtype: 'float32', shape: [1, 3, 4, 4] },
-    ],
-  },
-  */
+];
 
-    /*
+const CORE_OP_TESTS: Array<{
+    label: string;
+    originalPath: string;
+    tol?: number;
+    exact?: boolean;
+    cliArgs: string | ((p: string) => string);
+    specs: FeedSpec[];
+}> = [
     {
-        label: "ad01_int8_standard",
-        originalPath: "examples/onnx/ad01_int8.onnx",
-        tol: 1e-4,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "input_1", dtype: "int8", shape: [1, 640] }],
-    },
-
-    {
-        label: "kws_ref_model_int8_standard",
-        originalPath: "examples/onnx/kws_ref_model.onnx",
-        exact: true, // uint8 pipeline → expect bit-exact
+        label: "or",
+        originalPath: "examples/onnx/or.onnx",
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "input_1", dtype: "int8", shape: [1, 49, 10, 1] }, // in
-            // out: Identity [1,12] uint8 (auto)
+            { name: "A", dtype: "bool", shape: [2] },
+            { name: "B", dtype: "bool", shape: [2] },
         ],
     },
-    */
 
-    /*
-  // ----- LSTM (TBD) -----
-  {
-    label: 'SC7',
-    originalPath: 'examples/onnx/SC7.onnx',
-    tol: 1e-4,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'input',  dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.3', dtype: 'float32', shape: [1, 10, 10] },
-      { name: '_obs.5', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.7', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.9', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.11', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs',   dtype: 'float32', shape: [1] },
-    ],
-  },
-  */
+    {
+        label: "Div",
+        originalPath: "examples/onnx/Div.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
 
-    /*
-  // ----- LSTM (TBD) -----
-  {
-    label: 'lstm_standard',
-    originalPath: 'examples/onnx/lstm_standard.onnx',
-    tol: 1e-5,
-    cliArgs: jsonFullArgs,               // keep JSON for the standard model
-    specs: [
-      // X:[T,N,I] = [4,2,3]
-      { name: 'X', dtype: 'float32', shape: [4, 2, 3] },
-    ],
-  },
-  */
+    {
+        label: "Mod",
+        originalPath: "examples/onnx/mod.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Pow",
+        originalPath: "examples/onnx/pow.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Not",
+        originalPath: "examples/onnx/not.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "bool", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Sigmoid",
+        originalPath: "examples/onnx/sigmoid.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+         ],
+    },
+
+    {
+        label: "Softsign",
+        originalPath: "examples/onnx/softsign.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
 ];
 
 // Run ONLY the focused subset above.
