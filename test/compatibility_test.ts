@@ -302,7 +302,7 @@ export function makeArray(
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256) - 128);
-        case "uint8":
+        case "uint8": // <-- add this
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256));
@@ -1270,11 +1270,31 @@ const CORE_OP_TESTS: Array<{
     cliArgs: string | ((p: string) => string);
     specs: FeedSpec[];
 }> = [
-    /*
+    /* Comeco dos testes 
     {
-        label: "sub",
+        label:"sub",
         originalPath: "examples/onnx/sub.onnx",
         tol: 1e-5,
+        cliArgs:jsonFullArgs,
+        specs:[
+            {name: "A",dtype: "float32",shape: [2] },
+            {name: "B",dtype: "float32",shape: [2] },
+        ],
+    },
+
+    {
+        label: "GreaterOrEqual",
+        originalPath: "examples/onnx/greater_or_equal.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+    
+    {
+        label: "Less",
+        originalPath: "examples/onnx/less.onnx",
         cliArgs: jsonFullArgs,
         specs: [
             { name: "A", dtype: "float32", shape: [2] },
@@ -1283,13 +1303,135 @@ const CORE_OP_TESTS: Array<{
     },
 
     {
-        label: "quantizelinear",
-        originalPath: "examples/onnx/quantizelinear.onnx",
-        tol: 1e-5,
+        label: "LessOrEqual",
+        originalPath: "examples/onnx/less_or_equal.onnx",
         cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [1, 3, 4, 4] }],
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
     },
 
+    {
+        label: "Min",
+        originalPath: "examples/onnx/min.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+     {
+        label: "Max",
+        originalPath: "examples/onnx/max.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+     {
+        label: "Abs",
+        originalPath: "examples/onnx/abs.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Sign",
+        originalPath: "examples/onnx/sign.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "LeakyRelu",
+        originalPath: "examples/onnx/leaky_relu.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    }, Testes Feitos (FIM) */
+
+    {
+        label: "HardSigmoid",
+        originalPath: "examples/onnx/hard_sigmoid.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [ 
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix"},
+        ],
+    },
+
+    {
+        label: "Softplus",
+        originalPath: "examples/onnx/softplus.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Mish",
+        originalPath: "examples/onnx/mish.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Elu",
+        originalPath: "examples/onnx/elu.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Celu",
+        originalPath: "examples/onnx/celu.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Selu",
+        originalPath: "examples/onnx/selu.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    /*
+  {
+    label: 'quantizelinear',
+    originalPath: 'examples/onnx/quantizelinear.onnx',
+    tol: 0, // Exact match expected for integer output
+    cliArgs: jsonFullArgs,
+    specs: [
+      { name: 'X', dtype: 'float32', shape: [1, 3, 4, 4] },
+    ],
+  },
+  */
+
+    /*
     {
         label: "ad01_int8_standard",
         originalPath: "examples/onnx/ad01_int8.onnx",
@@ -1297,42 +1439,7 @@ const CORE_OP_TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "input_1", dtype: "int8", shape: [1, 640] }],
     },
-    */
 
-    /*
-    {
-        label: "averagepool_standard",
-        originalPath: "examples/onnx/avgpool_standard.onnx",
-        tol: 1e-6,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
-    },
-    */
-
-    /*
-    {
-        label: "exp_standard_taylor",
-        originalPath: "examples/onnx/exp_standard.onnx",
-        tol: 1e-2,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [6] }],
-    },
-    */
-
-    /*
-    {
-        label: "lstm_standard",
-        originalPath: "examples/onnx/lstm_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs, // keep JSON for the standard model
-        specs: [
-            // X:[T,N,I] = [4,2,3]
-            { name: "X", dtype: "float32", shape: [4, 2, 3] },
-        ],
-    },
-    */
-
-    /*
     {
         label: "kws_ref_model_int8_standard",
         originalPath: "examples/onnx/kws_ref_model.onnx",
@@ -1414,7 +1521,7 @@ export async function runAllUnified(): Promise<void> {
     }
 }
 
-const mode = process.env["COMPAT_MODE"] ?? "all";
+const mode = process.env["COMPAT_MODE"] ?? "core";
 
 // Only auto-run when this file is the main script (test runner).
 const isMain =

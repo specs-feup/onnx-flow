@@ -1,7 +1,7 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, AttributeValue, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, AttributeValue } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     getIntAttr,
@@ -9,7 +9,6 @@ import {
     getStringAttr,
     makeTensorProto,
     toStaticShape,
-    UNKNOWN_SHAPE,
 } from "../../../Utils.js";
 
 export class LowerAveragePoolRecipe implements DecompositionRecipe {
@@ -112,11 +111,8 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         if (autoPad !== "NOTSET") convAttrs["auto_pad"] = autoPad;
         else convAttrs["pads"] = pads;
 
-        const expectedX = [{ type: dtype, shape: (X.shape ?? UNKNOWN_SHAPE) as KnownShape }];
-        const expectedY = [{ type: dtype, shape: (Y.shape ?? UNKNOWN_SHAPE) as KnownShape }];
-
         // 2. Compute Sum = Conv(X, Wones)
-        const sumOut = builder.createOp("Conv", [X, wOnes], convAttrs, expectedY)[0];
+        const sumOut = builder.createOp("Conv", [X, wOnes], convAttrs)[0];
 
         // 3. Compute Divisor
         let divisor: ConcreteValueNode;
@@ -128,33 +124,20 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
             );
         } else {
             // Complex case: Convolve a mask of 1s to count valid pixels
-            const xShapeStatic = toStaticShape(X.shape);
-            let shapeX: ConcreteValueNode;
-
-            // Generate a static shape constant if possible to preserve shape inference downstream
-            if (xShapeStatic.length > 0 && xShapeStatic.every((d) => d > 0)) {
-                shapeX = builder.createConstant(
-                    `AvgPool_shapeX_${op.id}`,
-                    makeTensorProto(DataType.INT64, [xShapeStatic.length], xShapeStatic),
-                );
-            } else {
-                shapeX = builder.createOp("Shape", [X])[0];
-            }
+            const shapeX = builder.createOp("Shape", [X])[0];
 
             const oneSc = builder.createConstant(
                 `AvgPool_One_${op.id}`,
                 makeTensorProto(dtype, [], [1]),
             );
 
-            // Force mask to inherit the exact shape of X
-            const mask = builder.createOp("Expand", [oneSc, shapeX], {}, expectedX)[0];
+            const mask = builder.createOp("Expand", [oneSc, shapeX])[0];
 
-            // Force divisor to inherit the exact shape of Y
-            divisor = builder.createOp("Conv", [mask, wOnes], convAttrs, expectedY)[0];
+            divisor = builder.createOp("Conv", [mask, wOnes], convAttrs)[0];
         }
 
-        // 4. Final Divide (Y shape)
-        const finalY = builder.createOp("Div", [sumOut, divisor], {}, expectedY)[0];
+        // 4. Final Divide
+        const finalY = builder.createOp("Div", [sumOut, divisor])[0];
 
         builder.replaceAllUsesWith(Y, finalY);
         op.remove();

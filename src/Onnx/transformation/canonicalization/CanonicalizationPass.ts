@@ -16,7 +16,20 @@ import { GraphBuilder } from "../../GraphBuilder.js";
 import { topologicalSortOperationNodes } from "../../Utils.js";
 import { LowerReluRecipe } from "./recipes/LowerReluRecipe.js";
 import { LowerSubRecipe } from "./recipes/LowerSubRecipe.js";
-import { LowerExpRecipe } from "./recipes/LowerExpRecipe.js";
+import { LowerGreaterOrEqualRecipe } from "./recipes/LowerGreaterOrEqualRecipe.js";
+import { LowerLessRecipe } from "./recipes/LowerLessRecipe.js";
+import { LowerLessOrEqualRecipe } from "./recipes/LowerLessOrEqualRecipe.js";
+import { LowerMinRecipe } from "./recipes/LowerMinRecipe.js";
+import { LowerMaxRecipe } from "./recipes/LowerMaxRecipe.js";
+import { LowerAbsRecipe } from "./recipes/LowerAbsRecipe.js";
+import { LowerSignRecipe } from "./recipes/LowerSignRecipe.js";
+import { LowerLeakyReluRecipe } from "./recipes/LowerLeakyReluRecipe.js";
+import { LowerHardSigmoidRecipe } from "./recipes/LowerHardSigmoidRecipe.js";
+import { LowerSoftplusRecipe } from "./recipes/LowerSoftplusRecipe.js";
+import { LowerMishRecipe } from "./recipes/LowerMishRecipe.js";
+import { LowerEluRecipe } from "./recipes/LowerEluRecipe.js";
+import { LowerCeluRecipe } from "./recipes/LowerCeluRecipe.js";
+import { LowerSeluRecipe } from "./recipes/LowerSeluRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -37,8 +50,20 @@ export class CanonicalizationPass implements GraphPass {
         // ElementWise Operations
         ["Relu", new LowerReluRecipe()],
         ["Sub", new LowerSubRecipe()],
-
-        //["Exp", new LowerExpRecipe()],
+        ["GreaterOrEqual", new LowerGreaterOrEqualRecipe()],
+        ["Less", new LowerLessRecipe()],
+        ["LessOrEqual", new LowerLessOrEqualRecipe()],
+        ["Min", new LowerMinRecipe()],
+        ["Max", new LowerMaxRecipe()],
+        ["Abs", new LowerAbsRecipe()],
+        ["Sign", new LowerSignRecipe()],
+        ["LeakyRelu", new LowerLeakyReluRecipe()],
+        ["HardSigmoid", new LowerHardSigmoidRecipe()],
+        ["Softplus", new LowerSoftplusRecipe()],
+        ["Mish", new LowerMishRecipe()],
+        ["Elu", new LowerEluRecipe()],
+        ["Celu", new LowerCeluRecipe()],
+        ["Selu", new LowerSeluRecipe()],
     ]);
 
     public run(graph: OnnxGraph.Class): boolean {
