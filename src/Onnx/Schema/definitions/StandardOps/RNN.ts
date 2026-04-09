@@ -1,7 +1,6 @@
 import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
-import { BatchNormalization } from "./Normalization.js";
 
 export const LSTM: OpSchema = {
     opType: "LSTM",
@@ -50,9 +49,9 @@ export const LSTM: OpSchema = {
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
 
         const hidden_size = attrs["hidden_size"] as number;
-        const direction = (attrs["direction"] as string) ?? "forward";
+        const direction = "direction" in attrs ? (attrs["direction"] as string) : "forward";
         const num_directions = direction === "bidirectional" ? 2 : 1;
-        const layout = (attrs["layout"] as number) ?? 0;
+        const layout = "layout" in attrs ? (attrs["layout"] as number) : 0;
 
         let seq_length: number | string = -1;
         let batch_size: number | string = -1;

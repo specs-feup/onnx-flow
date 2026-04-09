@@ -248,7 +248,7 @@ export function convertFlowGraphToOnnxJson(
                 continue;
             }
 
-            const attrDef = schema?.attributes?.[name];
+            const attrDef = schema?.attributes === undefined ? undefined : schema.attributes[name];
             const expectedType = attrDef?.type;
 
             const attr: RawOnnxAttribute = { name };

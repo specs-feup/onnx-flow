@@ -117,7 +117,7 @@ export const SoftmaxCrossEntropyLoss: OpSchema = {
         ignore_index: { name: "ignore_index", type: AttributeType.INT, required: false },
     },
     inferShape: (inputs, attrs) => {
-        const reduction = (attrs["reduction"] as string) ?? "mean";
+        const reduction = "reduction" in attrs ? (attrs["reduction"] as string) : "mean";
         const scoresShape = inputs[0]?.shape ?? [];
         const labelsShape = inputs[1]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
@@ -153,7 +153,7 @@ export const NegativeLogLikelihoodLoss: OpSchema = {
         ignore_index: { name: "ignore_index", type: AttributeType.INT, required: false },
     },
     inferShape: (inputs, attrs) => {
-        const reduction = (attrs["reduction"] as string) ?? "mean";
+        const reduction = "reduction" in attrs ? (attrs["reduction"] as string) : "mean";
         const targetShape = inputs[1]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
 

@@ -172,7 +172,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
 
     if (schema && schema.inferShape) {
         const results = schema.inferShape(infos, node.getAttributes());
-        if (results && results.length > 0) {
+        if (results.length > 0) {
             outShape = results[0].shape;
             outDtype = results[0].dtype;
         }

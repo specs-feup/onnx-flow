@@ -1,10 +1,15 @@
+import type { AttributeValue } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { toStaticShape, inferPoolDim } from "@specs-feup/onnx-flow/Onnx/Utils";
-import type { OpSchema } from "../../OpSchema.js";
+import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";
 
 // --- Helper for Shared Pooling Inference ---
-function inferPoolingShape(inputs: any[], attrs: Record<string, any>, isMaxPool: boolean) {
+function inferPoolingShape(
+    inputs: TensorInfo[],
+    attrs: Record<string, AttributeValue>,
+    isMaxPool: boolean,
+) {
     const xShape = toStaticShape(inputs[0]?.shape);
     const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
 
@@ -15,15 +20,24 @@ function inferPoolingShape(inputs: any[], attrs: Record<string, any>, isMaxPool:
     const spatialRank = rank - 2;
     const [N, C] = xShape;
 
-    const kernel = ((attrs["kernel_shape"] as number[]) ?? Array(spatialRank).fill(1)).map(Number);
-    const strides = ((attrs["strides"] as number[]) ?? Array(spatialRank).fill(1)).map(Number);
+    const kernel = (
+        "kernel_shape" in attrs ? (attrs["kernel_shape"] as number[]) : Array(spatialRank).fill(1)
+    ).map(Number);
+    const strides = (
+        "strides" in attrs ? (attrs["strides"] as number[]) : Array(spatialRank).fill(1)
+    ).map(Number);
     const ceilMode = Number(attrs["ceil_mode"] ?? 0);
-    const autoPad = (attrs["auto_pad"] as string) ?? "NOTSET";
-    let pads = ((attrs["pads"] as number[]) ?? Array(spatialRank * 2).fill(0)).map(Number);
+    const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
+    let pads = ("pads" in attrs ? (attrs["pads"] as number[]) : Array(spatialRank * 2).fill(0)).map(
+        Number,
+    );
 
     // MaxPool supports dilations natively. AveragePool does not (until Opset 19).
     const dilations = isMaxPool
-        ? ((attrs["dilations"] as number[]) ?? Array(spatialRank).fill(1)).map(Number)
+        ? ("dilations" in attrs
+              ? (attrs["dilations"] as number[])
+              : Array(spatialRank).fill(1)
+          ).map(Number)
         : Array(spatialRank).fill(1);
 
     // Calculate effective padding if auto_pad is used
@@ -121,10 +135,12 @@ export const Conv: OpSchema = {
         const N = xShape[0];
         const M = wShape[0]; // Output channels
 
-        const strides = (attrs["strides"] as number[]) ?? Array(spatialRank).fill(1);
-        const dilations = (attrs["dilations"] as number[]) ?? Array(spatialRank).fill(1);
-        let pads = (attrs["pads"] as number[]) ?? Array(spatialRank * 2).fill(0);
-        const autoPad = (attrs["auto_pad"] as string) ?? "NOTSET";
+        const strides =
+            "strides" in attrs ? (attrs["strides"] as number[]) : Array(spatialRank).fill(1);
+        const dilations =
+            "dilations" in attrs ? (attrs["dilations"] as number[]) : Array(spatialRank).fill(1);
+        let pads = "pads" in attrs ? (attrs["pads"] as number[]) : Array(spatialRank * 2).fill(0);
+        const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
 
         if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
             pads = Array(spatialRank * 2).fill(0);
@@ -346,7 +362,7 @@ export const ConvTranspose: OpSchema = {
 
         const [N, , H, W] = xShape;
         const [, M_over_group, kH, kW] = wShape; // W is [C, M/group, kH, kW]
-        const group = (attrs["group"] as number) ?? 1;
+        const group = "group" in attrs ? (attrs["group"] as number) : 1;
         const M = M_over_group * group;
 
         // If output_shape is explicitly provided, use it directly
@@ -355,10 +371,10 @@ export const ConvTranspose: OpSchema = {
             return [{ shape: [N, M, outShapeAttr[0], outShapeAttr[1]], dtype }];
         }
 
-        const strides = (attrs["strides"] as number[]) ?? [1, 1];
-        const dilations = (attrs["dilations"] as number[]) ?? [1, 1];
-        const pads = (attrs["pads"] as number[]) ?? [0, 0, 0, 0];
-        const outPads = (attrs["output_padding"] as number[]) ?? [0, 0];
+        const strides = "strides" in attrs ? (attrs["strides"] as number[]) : [1, 1];
+        const dilations = "dilations" in attrs ? (attrs["dilations"] as number[]) : [1, 1];
+        const pads = "pads" in attrs ? (attrs["pads"] as number[]) : [0, 0, 0, 0];
+        const outPads = "output_padding" in attrs ? (attrs["output_padding"] as number[]) : [0, 0];
 
         // Formula: H_out = (H_in - 1) * stride - pad_top - pad_bottom + effective_kernel + out_padding
         const kEffH = dilations[0] * (kH - 1) + 1;
@@ -392,7 +408,7 @@ export const LpPool: OpSchema = {
         strides: { name: "strides", type: AttributeType.INTS, required: false },
         p: { name: "p", type: AttributeType.INT, required: false, defaultValue: 2 },
     },
-    inferShape: (inputs, attrs) => {
+    inferShape: (inputs) => {
         // Similar to average pool (You can implement inferPoolDim logic here)
         return [{ shape: [], dtype: inputs[0]?.dtype ?? DataType.UNDEFINED }];
     },

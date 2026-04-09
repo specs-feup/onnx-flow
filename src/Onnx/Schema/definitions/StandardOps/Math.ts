@@ -270,8 +270,8 @@ export const Gemm: OpSchema = {
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
 
         // Handle transA / transB for shape inference
-        const transA = (attrs["transA"] as number) ?? 0;
-        const transB = (attrs["transB"] as number) ?? 0;
+        const transA = "transA" in attrs ? (attrs["transA"] as number) : 0;
+        const transB = "transB" in attrs ? (attrs["transB"] as number) : 0;
         if (transA) a = [...a].reverse();
         if (transB) b = [...b].reverse();
 
@@ -303,7 +303,7 @@ export const Where: OpSchema = {
         const sc = toStaticShape(inputs[0]?.shape);
         const sx = toStaticShape(inputs[1]?.shape);
         const sy = toStaticShape(inputs[2]?.shape);
-        const dtype = inputs[1]?.dtype ?? inputs[2]?.dtype ?? DataType.UNDEFINED;
+        const dtype = inputs[1]?.dtype !== DataType.UNDEFINED ? inputs[1]?.dtype : inputs[2]?.dtype;
         return [{ shape: broadcastShapes(sc, sx, sy), dtype }];
     },
 };

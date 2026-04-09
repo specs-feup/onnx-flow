@@ -1,7 +1,7 @@
 import type OperationNode from "../../../OperationNode.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { getIntAttr, getStringAttr, makeTensorProto, toStaticShape } from "../../../Utils.js";
 import OnnxGraph from "../../../OnnxGraph.js";
@@ -49,8 +49,8 @@ export class LowerLSTMRecipe implements DecompositionRecipe {
         let initial_c: ConcreteValueNode | undefined;
 
         for (let i = 3; i < ins.length; i++) {
+            if (!(i in ins)) continue;
             const input = ins[i];
-            if (!input) continue;
             const rank = input.shape.length;
 
             if (rank === 2 && !B) B = input;
@@ -256,9 +256,9 @@ export class LowerLSTMRecipe implements DecompositionRecipe {
             { type: dtype, shape: [1, -1, hidden_size] },
         ])[0];
 
-        if (outs[0]) builder.replaceAllUsesWith(outs[0], Y_final);
-        if (outs.length > 1 && outs[1]) builder.replaceAllUsesWith(outs[1], Y_h_final);
-        if (outs.length > 2 && outs[2]) builder.replaceAllUsesWith(outs[2], Y_c_final);
+        if (0 in outs) builder.replaceAllUsesWith(outs[0], Y_final);
+        if (outs.length > 1) builder.replaceAllUsesWith(outs[1], Y_h_final);
+        if (outs.length > 2) builder.replaceAllUsesWith(outs[2], Y_c_final);
 
         op.remove();
     }

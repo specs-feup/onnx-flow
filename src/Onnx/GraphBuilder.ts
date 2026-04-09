@@ -57,7 +57,7 @@ export class GraphBuilder {
         // Override output count for variadic ops like Split
         if (expectedOutputs !== undefined && expectedOutputs.length > numOutputs) {
             numOutputs = expectedOutputs.length;
-        } else if (attributes !== undefined && attributes["num_outputs"] !== undefined) {
+        } else if ("num_outputs" in attributes) {
             numOutputs = attributes["num_outputs"] as number;
         }
 
@@ -113,11 +113,7 @@ export class GraphBuilder {
         // 5. Explicitly specified expectedOutputs take ultimate precedence
         if (expectedOutputs) {
             for (let i = 0; i < expectedOutputs.length; i++) {
-                if (
-                    i in outputs &&
-                    expectedOutputs[i].shape &&
-                    expectedOutputs[i].shape.length > 0
-                ) {
+                if (i in outputs && expectedOutputs[i].shape.length > 0) {
                     outputs[i].setShape(expectedOutputs[i].shape);
                 }
                 if (i in outputs && expectedOutputs[i].type !== DataType.UNDEFINED) {

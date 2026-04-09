@@ -1,7 +1,7 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, AttributeValue, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, AttributeValue } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
     getIntAttr,
@@ -9,7 +9,6 @@ import {
     getStringAttr,
     makeTensorProto,
     toStaticShape,
-    UNKNOWN_SHAPE,
 } from "../../../Utils.js";
 
 export class LowerAveragePoolRecipe implements DecompositionRecipe {
@@ -45,7 +44,7 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
             kH === strides[0] &&
             kW === strides[1]
         ) {
-            return false; // Skip rewriting, Orchestrator will leave it for TransformChain
+            return false;
         }
 
         return true;
@@ -112,8 +111,11 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         if (autoPad !== "NOTSET") convAttrs["auto_pad"] = autoPad;
         else convAttrs["pads"] = pads;
 
-        const expectedX = [{ type: dtype, shape: (X.shape ?? UNKNOWN_SHAPE) as KnownShape }];
-        const expectedY = [{ type: dtype, shape: (Y.shape ?? UNKNOWN_SHAPE) as KnownShape }];
+        const XShapeStatic = toStaticShape(X.shape);
+        const YShapeStatic = toStaticShape(Y.shape);
+
+        const expectedX = [{ type: dtype, shape: XShapeStatic }];
+        const expectedY = [{ type: dtype, shape: YShapeStatic }];
 
         // 2. Compute Sum = Conv(X, Wones)
         const sumOut = builder.createOp("Conv", [X, wOnes], convAttrs, expectedY)[0];

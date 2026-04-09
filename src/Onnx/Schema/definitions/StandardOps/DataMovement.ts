@@ -22,7 +22,7 @@ export const Reshape: OpSchema = {
         const inputShape = inputs[0]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
         const target = inputs[1]?.constantValue ?? [];
-        const allowZero = (attrs["allowzero"] as number) ?? 0; // Grab the attribute
+        const allowZero = "allowzero" in attrs ? (attrs["allowzero"] as number) : 0;
 
         if (target.length > 0) {
             if (inputShape.length > 0) {
@@ -77,7 +77,8 @@ export const Transpose: OpSchema = {
     inferShape: (inputs, attrs) => {
         const inputShape = inputs[0]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
-        const perm = (attrs["perm"] as number[]) ?? inputShape.map((_, i) => i).reverse();
+        const perm =
+            "perm" in attrs ? (attrs["perm"] as number[]) : inputShape.map((_, i) => i).reverse();
         const outShape = perm.map((p) => inputShape[p] ?? 1);
         return [{ shape: outShape, dtype }];
     },
@@ -199,7 +200,7 @@ export const Concat: OpSchema = {
     },
 
     inferShape: (inputs, attrs) => {
-        const axisRaw = (attrs["axis"] as number) ?? 0;
+        const axisRaw = "axis" in attrs ? (attrs["axis"] as number) : 0;
         const inputShapes = inputs.map((i) => i.shape);
         const ref = inputShapes.find((s) => s.length > 0) ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
@@ -248,7 +249,7 @@ export const Split: OpSchema = {
         const inputShape = inputs[0]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
         const rank = inputShape.length;
-        const axisRaw = (attrs["axis"] as number) ?? 0;
+        const axisRaw = "axis" in attrs ? (attrs["axis"] as number) : 0;
         const axis = rank > 0 ? ((axisRaw % rank) + rank) % rank : 0;
 
         const split = inputs[1]?.constantValue ?? [];
@@ -291,7 +292,7 @@ export const Cast: OpSchema = {
         return [
             {
                 shape: inputs[0]?.shape ?? [],
-                dtype: (attrs["to"] as number) ?? DataType.UNDEFINED,
+                dtype: "to" in attrs ? (attrs["to"] as number) : DataType.UNDEFINED,
             },
         ];
     },
@@ -316,7 +317,7 @@ export const Gather: OpSchema = {
         const dataShape = inputs[0]?.shape ?? [];
         const indicesShape = inputs[1]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
-        const axisRaw = (attrs["axis"] as number) ?? 0;
+        const axisRaw = "axis" in attrs ? (attrs["axis"] as number) : 0;
         const rank = dataShape.length;
         const axis = rank > 0 ? ((axisRaw % rank) + rank) % rank : 0;
 
@@ -378,7 +379,7 @@ export const GatherND: OpSchema = {
         const dataShape = inputs[0]?.shape ?? [];
         const indicesShape = inputs[1]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
-        const batchDims = (attrs["batch_dims"] as number) ?? 0;
+        const batchDims = "batch_dims" in attrs ? (attrs["batch_dims"] as number) : 0;
 
         if (dataShape.length === 0 || indicesShape.length === 0) {
             return [{ shape: [], dtype }];
@@ -578,7 +579,7 @@ export const Flatten: OpSchema = {
     inferShape: (inputs, attrs) => {
         const inputShape = inputs[0]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
-        const axis = (attrs["axis"] as number) ?? 1;
+        const axis = "axis" in attrs ? (attrs["axis"] as number) : 1;
         const d0 = inputShape
             .slice(0, axis)
             .reduce((a, b) => (a as number) * (b as number), 1) as number;

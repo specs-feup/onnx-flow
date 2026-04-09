@@ -57,10 +57,10 @@ export const ConstantOfShape: OpSchema = {
         }
 
         // If the 'value' tensor attribute is provided, use its dtype. Otherwise FLOAT.
-        const valAttr = attrs["value"];
         let dtype = DataType.FLOAT;
-        if (valAttr && typeof valAttr === "object" && "dataType" in valAttr) {
-            dtype = valAttr.dataType as DataType;
+        if ("value" in attrs) {
+            const attrsValue = attrs["value"] as TensorProto;
+            dtype = attrsValue.dataType as DataType;
         }
 
         return [{ shape, dtype }];
@@ -86,7 +86,7 @@ export const Constant: OpSchema = {
     },
     inferShape: (_, attrs) => {
         // 1. Check if it's a tensor attribute
-        if (attrs["value"]) {
+        if ("value" in attrs) {
             const tensor = attrs["value"] as TensorProto;
             return [{ shape: tensor.dims ?? [], dtype: tensor.dataType ?? DataType.UNDEFINED }];
         }
@@ -122,7 +122,7 @@ export const EyeLike: OpSchema = {
     },
     inferShape: (inputs, attrs) => {
         const inputShape = inputs[0]?.shape?.slice() ?? [];
-        const dtype = (attrs["dtype"] as number) ?? inputs[0]?.dtype ?? DataType.UNDEFINED;
+        const dtype = "dtype" in attrs ? (attrs["dtype"] as number) : inputs[0]?.dtype;
         return [{ shape: inputShape, dtype }];
     },
 };
@@ -148,8 +148,8 @@ export const RandomNormal: OpSchema = {
         shape: { name: "shape", type: AttributeType.INTS, required: true },
     },
     inferShape: (_, attrs) => {
-        const shape = (attrs["shape"] as number[]) ?? [];
-        const dtype = (attrs["dtype"] as number) ?? DataType.FLOAT;
+        const shape = "shape" in attrs ? (attrs["shape"] as number[]) : [];
+        const dtype = "dtype" in attrs ? (attrs["dtype"] as number) : DataType.FLOAT;
         return [{ shape, dtype }];
     },
 };
@@ -170,7 +170,12 @@ export const RandomNormalLike: OpSchema = {
     },
     inferShape: (inputs, attrs) => {
         const shape = inputs[0]?.shape?.slice() ?? [];
-        const dtype = (attrs["dtype"] as number) ?? inputs[0]?.dtype ?? DataType.FLOAT;
+        const dtype =
+            "dtype" in attrs
+                ? (attrs["dtype"] as number)
+                : inputs[0]?.dtype !== DataType.UNDEFINED
+                  ? inputs[0].dtype
+                  : DataType.FLOAT;
         return [{ shape, dtype }];
     },
 };
@@ -196,8 +201,8 @@ export const RandomUniform: OpSchema = {
         shape: { name: "shape", type: AttributeType.INTS, required: true },
     },
     inferShape: (_, attrs) => {
-        const shape = (attrs["shape"] as number[]) ?? [];
-        const dtype = (attrs["dtype"] as number) ?? DataType.FLOAT;
+        const shape = "shape" in attrs ? (attrs["shape"] as number[]) : [];
+        const dtype = "dtype" in attrs ? (attrs["dtype"] as number) : DataType.FLOAT;
         return [{ shape, dtype }];
     },
 };
@@ -218,7 +223,12 @@ export const RandomUniformLike: OpSchema = {
     },
     inferShape: (inputs, attrs) => {
         const shape = inputs[0]?.shape?.slice() ?? [];
-        const dtype = (attrs["dtype"] as number) ?? inputs[0]?.dtype ?? DataType.FLOAT;
+        const dtype =
+            "dtype" in attrs
+                ? (attrs["dtype"] as number)
+                : inputs[0]?.dtype !== DataType.UNDEFINED
+                  ? inputs[0].dtype
+                  : DataType.FLOAT;
         return [{ shape, dtype }];
     },
 };
@@ -248,8 +258,8 @@ export const Multinomial: OpSchema = {
     },
     inferShape: (inputs, attrs) => {
         const inputShape = inputs[0]?.shape ?? [];
-        const sampleSize = (attrs["sample_size"] as number) ?? 1;
-        const dtype = (attrs["dtype"] as number) ?? DataType.INT32;
+        const sampleSize = "sample_size" in attrs ? (attrs["sample_size"] as number) : 1;
+        const dtype = "dtype" in attrs ? (attrs["dtype"] as number) : DataType.INT32;
         // Output shape is [batch_size, sample_size]
         const batchSize = inputShape.length > 0 ? inputShape[0] : -1;
         return [{ shape: [batchSize, sampleSize], dtype }];

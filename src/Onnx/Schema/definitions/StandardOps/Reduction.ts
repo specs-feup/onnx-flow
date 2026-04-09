@@ -40,7 +40,7 @@ export const ReduceOps: OpSchema[] = [
     inferShape: (inputs, attrs) => {
         const inShape = inputs[0]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
-        const keepdims = ((attrs["keepdims"] as number) ?? 1) !== 0;
+        const keepdims = "keepdims" in attrs ? (attrs["keepdims"] as number) !== 0 : true;
 
         let axes: number[] | undefined;
         const axesAttr = attrs["axes"];
@@ -84,9 +84,9 @@ export const ArgOps: OpSchema[] = ["ArgMax", "ArgMin"].map((opType) => ({
 
     inferShape: (inputs, attrs) => {
         const inShape = inputs[0]?.shape ?? [];
-        const keepdims = ((attrs["keepdims"] as number) ?? 1) !== 0;
+        const keepdims = "keepdims" in attrs ? (attrs["keepdims"] as number) !== 0 : true;
         const rank = inShape.length;
-        const axisRaw = (attrs["axis"] as number) ?? 0;
+        const axisRaw = "axis" in attrs ? (attrs["axis"] as number) : 0;
         const axis = rank > 0 ? ((axisRaw % rank) + rank) % rank : 0;
 
         const outShape = [...inShape];
@@ -127,7 +127,7 @@ export const TopK: OpSchema = {
         const kVal = inputs[1]?.constantValue?.[0]; // Usually K is a 1-element 1D tensor
 
         const rank = xShape.length;
-        const axisRaw = (attrs["axis"] as number) ?? -1;
+        const axisRaw = "axis" in attrs ? (attrs["axis"] as number) : -1;
         const axis = rank > 0 ? ((axisRaw % rank) + rank) % rank : 0;
 
         const outShape = [...xShape];

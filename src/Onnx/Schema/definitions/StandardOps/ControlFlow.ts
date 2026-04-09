@@ -21,11 +21,14 @@ export const Loop: OpSchema = {
     inferShape: (inputs) => {
         // Base schema fallback. Actual shape inference for Loop is intercepted
         // by InferShapes.ts because it requires recursive subgraph traversal.
+        if (inputs.length < 3) {
+            return [{ shape: [], dtype: DataType.UNDEFINED }];
+        }
         const initState = inputs[2];
         return [
             {
-                shape: initState?.shape?.slice() ?? [],
-                dtype: initState?.dtype ?? DataType.UNDEFINED,
+                shape: initState.shape.slice(),
+                dtype: initState.dtype,
             },
         ];
     },

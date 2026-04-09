@@ -99,10 +99,10 @@ export const QLinearConv: OpSchema = {
         const [N, , H, W] = xShape;
         const [M, , kH, kW] = wShape;
 
-        const strides = (attrs["strides"] as number[]) ?? [1, 1];
-        const dilations = (attrs["dilations"] as number[]) ?? [1, 1];
-        const pads = (attrs["pads"] as number[]) ?? [0, 0, 0, 0];
-        const autoPad = (attrs["auto_pad"] as string) ?? "NOTSET";
+        const strides = "strides" in attrs ? (attrs["strides"] as number[]) : [1, 1];
+        const dilations = "dilations" in attrs ? (attrs["dilations"] as number[]) : [1, 1];
+        const pads = "pads" in attrs ? (attrs["pads"] as number[]) : [0, 0, 0, 0];
+        const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
 
         let padTop = pads[0] ?? 0,
             padLeft = pads[1] ?? 0,
