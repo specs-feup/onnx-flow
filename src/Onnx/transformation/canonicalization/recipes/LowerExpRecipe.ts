@@ -16,7 +16,7 @@ export class LowerExpRecipe implements DecompositionRecipe {
     public readonly producedOps = ["Add", "Mul", "Div"];
 
     // The constant defining the number of approximation iterations
-    private readonly ITERATIONS = 20;
+    private readonly ITERATIONS = 50;
 
     canApply(op: OperationNode.Class): boolean {
         // Only apply this to Exp nodes

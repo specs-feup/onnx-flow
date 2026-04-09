@@ -1,44 +1,44 @@
+from math import fmod
+
 import onnx
 from onnx import helper
 from onnx import TensorProto
 
-#Define the input and outputs
-A = helper.make_tensor_value_info('A', TensorProto.FLOAT, [2])
-B = helper.make_tensor_value_info('B', TensorProto.FLOAT, [2])
-C = helper.make_tensor_value_info('C', TensorProto.FLOAT, [2])
+def create_mod_model(fmod_value):
+    A = helper.make_tensor_value_info('A', TensorProto.INT64 if fmod_value == 0 else TensorProto.FLOAT, [6])
+    B = helper.make_tensor_value_info('B', TensorProto.INT64 if fmod_value == 0 else TensorProto.FLOAT, [6])
+    C = helper.make_tensor_value_info('C', TensorProto.INT64 if fmod_value == 0 else TensorProto.FLOAT, [6])
 
-# Create the Mod node
-mod_node = helper.make_node(
-    'Mod',              #node
-    inputs=['A', 'B'],  #inputs
-    outputs=['C'],      #outputs
-    name='ModNode',     #name
-    fmod=1
-)
+    mod_node = helper.make_node(
+        'Mod',              
+        inputs=['A', 'B'],  
+        outputs=['C'],      
+        name=f'ModNode_fmod{fmod_value}', 
+        fmod=fmod_value     
+    )
 
-# Create the graph
-mod_graph = helper.make_graph(
-    [mod_node],         #nodes
-    'ModGraph',         #graph name
-    [A, B],             #inputs
-    [C]                 #outputs
-)
+    mod_graph = helper.make_graph(
+        [mod_node],         
+        f'ModGraph_fmod{fmod_value}',
+        [A, B],             
+        [C]                 
+    )
 
-# Define the proper Opset Import
-opset = onnx.OperatorSetIdProto()
-opset.domain = ""
-opset.version = 19
+    opset = onnx.OperatorSetIdProto()
+    opset.domain = ""
+    opset.version = 19
 
-# Create the model
-model = helper.make_model(
-    mod_graph,
-    producer_name='onnx-mod-example',
-    opset_imports=[opset]
-)
+    model = helper.make_model(
+        mod_graph,
+        producer_name=f'onnx-mod-fmod{fmod_value}',
+        opset_imports=[opset]
+    )
+    
+    model.ir_version = 9
 
-# Set the IR version to a supported value
-model.ir_version = 9
+    onnx.save(model, f'../examples/onnx/mod_fmod{fmod_value}.onnx')
+    print("Saved")
 
-# Save the onnx model
-onnx.save(model, '../examples/onnx/mod.onnx')
-print("Saved")
+if __name__ == "__main__":
+    create_mod_model(0)
+    create_mod_model(1)

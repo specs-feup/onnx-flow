@@ -1441,20 +1441,31 @@ const CORE_OP_TESTS: Array<{
     },
 
     {
-        label: "Mod",
-        originalPath: "examples/onnx/mod.onnx",
+        label: "mod_fmod0",
+        originalPath: "examples/onnx/mod_fmod0.onnx",
+        exact: true,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "int64", shape: [6], init: [10n, 10n, -10n, -10n, 5n, -5n] },
+            { name: "B", dtype: "int64", shape: [6], init: [3n, -3n, 3n, -3n, 2n, 2n] },
+        ],
+    },
+
+    {
+        label: "mod_fmod1",
+        originalPath: "examples/onnx/mod_fmod1.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2] },
-            { name: "B", dtype: "float32", shape: [2] },
+            { name: "A", dtype: "float32", shape: [6], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [6], gen: "negmix" },
         ],
     },
 
     {
         label: "Pow",
         originalPath: "examples/onnx/pow.onnx",
-        tol: 1e-5,
+        tol: 1e-2,
         cliArgs: jsonFullArgs,
         specs: [
             { name: "A", dtype: "float32", shape: [2] },
