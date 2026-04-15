@@ -35,6 +35,16 @@ export class DeadCodeEliminationPass implements GraphPass {
                 }
             }
         }
+
+        const ops = graph.getOperationNodes();
+        for (const op of ops) {
+            for (const region of op.regions) {
+                if (this.run(region)) {
+                    changed = true;
+                }
+            }
+        }
+        
         return changed;
     }
 }

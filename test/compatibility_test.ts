@@ -1270,35 +1270,26 @@ const CORE_OP_TESTS: Array<{
     cliArgs: string | ((p: string) => string);
     specs: FeedSpec[];
 }> = [
-    /*
     {
-        label: "sub",
-        originalPath: "examples/onnx/sub.onnx",
+        label: "mod_fmod0_standard",
+        originalPath: "examples/onnx/mod_fmod0_standard.onnx",
+        exact: true,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "int64", shape: [6], init: [10n, 10n, -10n, -10n, 5n, -5n] },
+            { name: "B", dtype: "int64", shape: [6], init: [3n, -3n, 3n, -3n, 2n, 2n] },
+        ],
+    },
+    {
+        label: "mod_fmod1_standard",
+        originalPath: "examples/onnx/mod_fmod1_standard.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2] },
-            { name: "B", dtype: "float32", shape: [2] },
+            { name: "A", dtype: "float32", shape: [6], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [6], gen: "negmix" },
         ],
     },
-
-    {
-        label: "quantizelinear",
-        originalPath: "examples/onnx/quantizelinear.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [1, 3, 4, 4] }],
-    },
-
-    {
-        label: "ad01_int8_standard",
-        originalPath: "examples/onnx/ad01_int8.onnx",
-        tol: 1e-4,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "input_1", dtype: "int8", shape: [1, 640] }],
-    },
-    */
-
     /*
     {
         label: "averagepool_standard",
@@ -1308,7 +1299,6 @@ const CORE_OP_TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
     },
     */
-
     /*
     {
         label: "exp_standard_taylor",
@@ -1318,7 +1308,6 @@ const CORE_OP_TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [6] }],
     },
     */
-
     /*
     {
         label: "lstm_standard",
@@ -1331,7 +1320,6 @@ const CORE_OP_TESTS: Array<{
         ],
     },
     */
-
     /*
     {
         label: "kws_ref_model_int8_standard",
@@ -1344,7 +1332,6 @@ const CORE_OP_TESTS: Array<{
         ],
     },
     */
-
     /*
   // ----- LSTM (TBD) -----
   {
@@ -1363,7 +1350,6 @@ const CORE_OP_TESTS: Array<{
     ],
   },
   */
-
     /*
   // ----- LSTM (TBD) -----
   {
