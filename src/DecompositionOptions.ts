@@ -1,4 +1,7 @@
 export interface DecompositionOptions {
+    /** Break down complex operations into simpler primitives before lowering */
+    canonicalize: boolean;
+
     /** Fuse supported ops into a single Loop when possible */
     fuse: boolean;
 
@@ -11,17 +14,21 @@ export interface DecompositionOptions {
     /** Apply loop lowering at all (create Loop nodes) */
     loopLowering: boolean;
 
+    /** Apply example CGRA decomposition of MatMuls/Relus */
     decomposeForCgra: boolean;
 }
 
 /**
- * Defaults chosen to match the current behavior:
+ * Defaults chosen to match the current (best?) behavior:
+ *  - canonicalize: true
  *  - fuse: true
  *  - recurse: false
  *  - coalesce: true
  *  - loopLowering: true
+ *  - decomposeForCgra: false
  */
 export const defaultDecompositionOptions: DecompositionOptions = {
+    canonicalize: true,
     fuse: true,
     recurse: false,
     coalesce: true,

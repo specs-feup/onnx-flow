@@ -6,7 +6,6 @@ import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Node from "@specs-feup/flow/graph/Node";
 import TensorNode from "../TensorNode.js";
-import VariableNode from "../VariableNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
 import OnnxEdge from "../OnnxEdge.js";
@@ -40,14 +39,9 @@ export default class OnnxDotFormatter<
                     attrs["color"] = "magenta";
                 }
             }),
-            Node.Case(VariableNode, (node) => {
-                attrs["label"] = node.name;
-                attrs["shape"] = "ellipse";
-                attrs["color"] = node.type === "input" ? "lime" : "red";
-            }),
             Node.Case(ConstantNode, (node) => {
                 const val = readTensorData(node);
-                attrs["label"] = val!.slice(0, 5).toString();
+                attrs["label"] = val ? val.slice(0, 5).toString() : "empty";
                 attrs["shape"] = "box";
                 attrs["color"] = "maroon";
             }),

@@ -16,7 +16,7 @@ import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
-import { unsqueezeIdx } from "./transformation/loop-lowering/BuildLoop.js";
+import type { GraphBuilder } from "./GraphBuilder.js";
 
 // =====================================================================================
 // SECTION 1: CONSTANTS
@@ -49,7 +49,7 @@ export const TYPE_SIZE_MAP: Record<number, number> = {
 };
 
 export const SCALAR_SHAPE: number[] = [];
-export const UNKOWN_SHAPE = [-1];
+export const UNKNOWN_SHAPE = [-1];
 
 export const BASE_TEN = 10;
 
@@ -470,6 +470,7 @@ export function decodeIntegerVectorFromTensorProto(tv: TensorProto): number[] | 
     const out: number[] = [];
     for (let i = 0; i < n; i++) {
         const off = i * elemBytes;
+        if (off + elemBytes > dv.byteLength) break;
         out.push(i64 ? Number(dv.getBigInt64(off, true)) : dv.getInt32(off, true));
     }
     return out;
@@ -685,9 +686,6 @@ export function readTensorData(node?: BaseNode.Class): number[] | undefined {
                 break;
             case 16: // BFLOAT16 (Rough approximation: high 16 bits of F32)
                 // JS doesn't have native BFloat16, usually we treat as Float32 truncated
-                // Shift left 16 to simulate F32, then read.
-                // Simple hack: Just cast to UInt16 for now if you don't need math precision
-                // or implement full decoder if critical.
                 out.push(dv.getUint16(i * 2, true));
                 break;
 
@@ -747,7 +745,8 @@ export function toNumShape(s?: Array<Dim>): Array<number | undefined> | undefine
     return s.map(toNum);
 }
 
-export function asStaticDims(shape: Shape): StaticShape {
+export function asStaticDims(shape?: Shape): StaticShape {
+    if (!shape || !Array.isArray(shape)) return [];
     return shape.map((d) => {
         const n = toNum(d);
         return n !== undefined && n > 0 ? n : 1;
@@ -758,10 +757,11 @@ export function isKnownDim(d: number | undefined): boolean {
     return typeof d === "number" && Number.isFinite(d) && d > 0;
 }
 
-export function toStaticShape(shape: Shape): StaticShape {
+export function toStaticShape(shape?: Shape): StaticShape {
+    if (!shape || !Array.isArray(shape)) return [];
     return shape.map((d) => {
         const n = toNum(d);
-        return n !== undefined ? n : UNKOWN_SHAPE[0];
+        return n !== undefined ? n : UNKNOWN_SHAPE[0];
     });
 }
 
@@ -875,6 +875,9 @@ export function broadcastShapes(...shapes: number[][]): number[] {
     return shapes.reduce((acc, s) => broadcastTwoShapes(acc, s), []);
 }
 
+/**
+ * Infers the output dimension for a single spatial axis in a pooling operation.
+ */
 export function inferPoolDim(
     inDim: number,
     k: number,
@@ -882,9 +885,21 @@ export function inferPoolDim(
     padHead: number,
     padTail: number,
     dil: number,
+    ceilMode: number = 0, // New parameter
 ): number {
     const effectiveK = dil * (k - 1) + 1;
-    return Math.floor((inDim + padHead + padTail - effectiveK) / stride + 1);
+    const value = (inDim + padHead + padTail - effectiveK) / stride + 1;
+
+    // Ensure the output dimension is at least 1 if the input exists
+    const outDim = ceilMode === 1 ? Math.ceil(value) : Math.floor(value);
+
+    // Safety check: if ceil_mode is 1, the last pooling window
+    // must start within the input + padding range.
+    if (ceilMode === 1 && (outDim - 1) * stride >= inDim + padHead) {
+        return outDim - 1;
+    }
+
+    return Math.max(0, outDim);
 }
 
 export function inferConvDim(
@@ -950,6 +965,24 @@ export function getLargestRankShape(tensors: ValueNode[]): Shape {
     return largest;
 }
 
+export function unsqueezeIdx(
+    g: OnnxGraph.Class,
+    idx: ConcreteValueNode,
+    axes: ConcreteValueNode,
+    tag: string,
+): TensorNode.Class {
+    const unsq = g
+        .addNode(uniq(g, tag))
+        .init(new OperationNode.Builder("Unsqueeze", [idx, axes]))
+        .as(OperationNode);
+    const out = g
+        .addNode(uniq(g, `${tag}_out`))
+        .init(new TensorNode.Builder(idx.literalType, [1], "intermediate"))
+        .as(TensorNode);
+    g.addEdge(unsq, out).init(new OnnxEdge.Builder(out.literalType, out.shape)).as(OnnxEdge);
+    return out;
+}
+
 export function as1D(
     g: OnnxGraph.Class,
     name: string,
@@ -963,14 +996,48 @@ export function as1D(
 // SECTION 8: GRAPH ALGORITHMS
 // =====================================================================================
 
+/**
+ * Slices a tensor along a specific axis into 1D chunks using ONNX Gather.
+ * Example: A [M, K] tensor chunked on axis 0 returns M tensors of shape [K].
+ */
+export function chunkTensor(
+    builder: GraphBuilder,
+    tensor: ConcreteValueNode,
+    axis: number,
+): ConcreteValueNode[] {
+    const shape = toStaticShape(tensor.shape);
+    const dim = shape[axis];
+    const chunks: ConcreteValueNode[] = [];
+
+    for (let i = 0; i < dim; i++) {
+        // Create a scalar index for Gather
+        const idxConst = builder.createConstant(
+            `${tensor.id}_idx_${i}`,
+            makeTensorProto(DataType.INT64, [1], [i]),
+        );
+
+        // Gather(tensor, index) returns the slice
+        const gatherOut = builder.createOp("Gather", [tensor, idxConst], { axis })[0];
+        chunks.push(gatherOut);
+    }
+
+    return chunks;
+}
+
 export function topologicalSortOperationNodes(graph: OnnxGraph.Class): OperationNode.Class[] {
+    const opNodes = graph.getOperationNodes().toArray();
+    return topologicalSortOperationNodesSubset(graph, opNodes);
+}
+
+export function topologicalSortOperationNodesSubset(
+    graph: OnnxGraph.Class,
+    opNodes: OperationNode.Class[],
+): OperationNode.Class[] {
     const sorted: OperationNode.Class[] = [];
     const visited = new Set<string>();
     const temp = new Set<string>();
 
-    const opNodes = graph.getOperationNodes().toArray();
-
-    // Map tensor id -> producing op
+    // Map tensor id -> producing op in the CURRENT graph
     const tensorProducers = new Map<string, OperationNode.Class>();
     for (const op of opNodes) {
         const outTensors = op.getOutgoers.targets.filter((n) => n.is(TensorNode)).toArray();
@@ -979,34 +1046,39 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
     }
 
-    // Extra deps from implicit subgraph captures (Phase 4: Explicit RegionArgumentNode)
+    // Extra deps from implicit subgraph captures
     const extraDeps = new Map<string, Set<OperationNode.Class>>();
 
-    for (const op of opNodes) {
-        // Iterate over strict regions
-        const regions = op.regions;
+    // Helper to recursively find dependencies from inner regions
+    const findImplicitDeps = (opId: string, sg: OnnxGraph.Class) => {
+        const innerOps = sg.getOperationNodes().toArray();
+        for (const innerOp of innerOps) {
+            const inputs = innerOp.getInputs() ?? [];
+            for (const input of inputs) {
+                // Check if this input comes from the outer graph
+                const parentProd = tensorProducers.get(input.id);
 
-        for (const sg of regions) {
-            // Find explicit captures via RegionArgumentNode
-            const nodes = sg.getNodes().toArray();
-            for (const node of nodes) {
-                if (node.is(RegionArgumentNode)) {
-                    const arg = node.as(RegionArgumentNode);
-                    const parentName = arg.originalName;
-
-                    const parentProd = tensorProducers.get(parentName);
-
-                    // If the parent node is produced by an op in the current graph, we depend on it.
-                    if (parentProd && parentProd.id !== op.id) {
-                        let deps = extraDeps.get(op.id);
-                        if (!deps) {
-                            deps = new Set<OperationNode.Class>();
-                            extraDeps.set(op.id, deps);
-                        }
-                        deps.add(parentProd);
+                if (parentProd && parentProd.id !== opId) {
+                    let deps = extraDeps.get(opId);
+                    if (!deps) {
+                        deps = new Set<OperationNode.Class>();
+                        extraDeps.set(opId, deps);
                     }
+                    deps.add(parentProd);
                 }
             }
+
+            // Recurse into nested regions (e.g., loops inside loops)
+            for (const nestedSg of innerOp.regions) {
+                findImplicitDeps(opId, nestedSg);
+            }
+        }
+    };
+
+    // Find all implicit dependencies across boundaries
+    for (const op of opNodes) {
+        for (const sg of op.regions) {
+            findImplicitDeps(op.id, sg);
         }
     }
 
@@ -1018,7 +1090,7 @@ export function topologicalSortOperationNodes(graph: OnnxGraph.Class): Operation
         }
         temp.add(node.id);
 
-        // 1. Explicit Captures dependencies
+        // 1. Implicit Closure dependencies
         const implicitPreds = extraDeps.get(node.id);
         if (implicitPreds) implicitPreds.forEach(visit);
 
@@ -1097,7 +1169,15 @@ export function safeWriteJson(filePath: string, obj: unknown): void {
             return;
         }
         const t = typeof value;
-        if (t === "number" || t === "boolean") {
+        if (t === "number") {
+            write(Number.isFinite(value as number) ? String(value) : "null");
+            return;
+        }
+        if (t === "bigint") {
+            write(String(value));
+            return;
+        }
+        if (t === "boolean") {
             write(String(value));
             return;
         }

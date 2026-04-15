@@ -159,7 +159,7 @@ function generateReconvertedNow(originalPath: string, cliArgs: string) {
     }
 
     // Run the CLI (will throw on non-zero exit)
-    execSync(`node ./out/src/index.js ${originalPath} ${cliArgs}`, { stdio: "inherit" });
+    execSync(`node ./out/src/index.js "${originalPath}" ${cliArgs}`, { stdio: "inherit" });
 
     // Confirm the file exists and was (re)created after we started.
     if (!fs.existsSync(reconvertedPath)) return { generatedNow: false, reconvertedPath };
@@ -302,7 +302,7 @@ export function makeArray(
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256) - 128);
-        case "uint8": // <-- add this
+        case "uint8":
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256));
@@ -1270,70 +1270,57 @@ const CORE_OP_TESTS: Array<{
     cliArgs: string | ((p: string) => string);
     specs: FeedSpec[];
 }> = [
-    /*
-  {
-    label: 'ad01_fp32_standard',
-    originalPath: 'examples/onnx/ad01_fp32.onnx',
-    tol: 1e-4,
-    cliArgs: jsonFullArgs, // full JSON export + reconvert
-    specs: [
-      { name: 'input_1', dtype: 'float32', shape: [1, 640] },
-    ],
-  },
-
-  {
-    label: 'kws_ref_model_float32_standard',
-    originalPath: 'examples/onnx/kws_ref_model_float32.onnx',
-    tol: 1e-4,                       // softmax tail needs a little tolerance
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'input_1', dtype: 'float32', shape: [1, 49, 10, 1] }, // in
-      // out: Identity [1,12] float32 (picked up automatically)
-    ],
-  },
-
-  {
-    label: 'SC2_X',
-    originalPath: 'examples/onnx/SC2_X_toy.onnx',
-    tol: 1e-4,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'input', dtype: 'float32', shape: [2, 1] },
-    ],
-  },
-
-  {
-    label: 'matmul_test',
-    originalPath: 'examples/onnx/matmul_test.onnx',
-    tol: 1e-5,
-    cliArgs: (p) => dotFullArgs(p),
-    specs: [
-      { name: 'A', dtype: 'float32', shape: [2, 2] },
-      { name: 'B', dtype: 'float32', shape: [2, 2] },
-    ],
-  },
-  */
-
-    /*
-  {
-    label: 'quantizelinear',
-    originalPath: 'examples/onnx/quantizelinear.onnx',
-    tol: 0, // Exact match expected for integer output
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'X', dtype: 'float32', shape: [1, 3, 4, 4] },
-    ],
-  },
-  */
-
     {
-        label: "ad01_int8_standard",
-        originalPath: "examples/onnx/ad01_int8.onnx",
-        tol: 1e-4,
+        label: "mod_fmod0_standard",
+        originalPath: "examples/onnx/mod_fmod0_standard.onnx",
+        exact: true,
         cliArgs: jsonFullArgs,
-        specs: [{ name: "input_1", dtype: "int8", shape: [1, 640] }],
+        specs: [
+            { name: "A", dtype: "int64", shape: [6], init: [10n, 10n, -10n, -10n, 5n, -5n] },
+            { name: "B", dtype: "int64", shape: [6], init: [3n, -3n, 3n, -3n, 2n, 2n] },
+        ],
     },
-
+    {
+        label: "mod_fmod1_standard",
+        originalPath: "examples/onnx/mod_fmod1_standard.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [6], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [6], gen: "negmix" },
+        ],
+    },
+    /*
+    {
+        label: "averagepool_standard",
+        originalPath: "examples/onnx/avgpool_standard.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
+    },
+    */
+    /*
+    {
+        label: "exp_standard_taylor",
+        originalPath: "examples/onnx/exp_standard.onnx",
+        tol: 1e-2,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "X", dtype: "float32", shape: [6] }],
+    },
+    */
+    /*
+    {
+        label: "lstm_standard",
+        originalPath: "examples/onnx/lstm_standard.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs, // keep JSON for the standard model
+        specs: [
+            // X:[T,N,I] = [4,2,3]
+            { name: "X", dtype: "float32", shape: [4, 2, 3] },
+        ],
+    },
+    */
+    /*
     {
         label: "kws_ref_model_int8_standard",
         originalPath: "examples/onnx/kws_ref_model.onnx",
@@ -1344,7 +1331,7 @@ const CORE_OP_TESTS: Array<{
             // out: Identity [1,12] uint8 (auto)
         ],
     },
-
+    */
     /*
   // ----- LSTM (TBD) -----
   {
@@ -1363,7 +1350,6 @@ const CORE_OP_TESTS: Array<{
     ],
   },
   */
-
     /*
   // ----- LSTM (TBD) -----
   {

@@ -9,11 +9,9 @@ import type { Request, Response } from "express";
 import express from "express";
 import { graphviz } from "node-graphviz";
 import { createGraph } from "./initGraph.js";
-import OnnxGraphTransformer from "./Onnx/transformation/loop-lowering/index.js";
-import OnnxGraphOptimizer from "./Onnx/transformation/shape-optimization/index.js";
 import OnnxDotFormatter from "./Onnx/dot/OnnxDotFormatter.js";
 import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
-import { generateCode } from "./codeGeneration.js";
+//import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson } from "./flow2json.js";
@@ -25,6 +23,7 @@ import { partitionGraph } from "./Onnx/partitioning/Partition.js";
 import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import validateGraph from "./Onnx/validation/ValidateGraph.js";
 import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
+import OnnxGraphTransformer from "./Onnx/transformation/index.js";
 
 export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
@@ -39,6 +38,7 @@ export function loadGraph(
     enableLowLevel: boolean = true,
     enableOptimize: boolean = true,
     dotOutput: boolean = true,
+    canonicalize: boolean = defaultDecompositionOptions.canonicalize,
     fuse: boolean = defaultDecompositionOptions.fuse,
     recurse: boolean = defaultDecompositionOptions.recurse,
     coalesce: boolean = defaultDecompositionOptions.coalesce,
@@ -55,6 +55,7 @@ export function loadGraph(
 
     if (enableLowLevel) {
         const decompOptions: DecompositionOptions = {
+            canonicalize,
             fuse,
             recurse,
             coalesce,
@@ -68,7 +69,7 @@ export function loadGraph(
     }
 
     if (enableLowLevel && enableOptimize) {
-        graph = graph.apply(new OnnxGraphOptimizer());
+        //graph = graph.apply(new OnnxGraphOptimizer());
 
         // Validation after Optimizer
         if (validate) validateGraph(graph);
@@ -89,8 +90,9 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
     return baseUrl + encodeURIComponent(dotGraph);
 }
 
-export function generateGraphCode(graph: OnnxGraph.Class): string {
-    return generateCode(graph);
+export function generateGraphCode(_graph: OnnxGraph.Class): string {
+    //return generateCode(graph);
+    return "TODO";
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -202,6 +204,13 @@ const argv = await yargs(hideBin(process.argv))
         type: "boolean",
         default: defaultDecompositionOptions.recurse,
     })
+    .option("canonicalize", {
+        alias: "can",
+        describe:
+            "Canonicalize complex operations into simpler primitives (use --no-canonicalize to disable)",
+        type: "boolean",
+        default: defaultDecompositionOptions.canonicalize,
+    })
     .option("loopLowering", {
         alias: "ll",
         describe: "Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable",
@@ -270,7 +279,7 @@ const validate = argv.validate;
 // to ensure the split point remains stable and recognizable.
 const isPartitioning = argv.partition && argv.partition.length > 0;
 
-if (isPartitioning !== undefined) {
+if (isPartitioning === true) {
     argv.noLowLevel = true;
     argv.noOptimize = true;
     argv.noCodegen = true;
@@ -307,6 +316,7 @@ if (isPartitioning !== undefined) {
 
         if (!argv.noLowLevel) {
             const decompOptions: DecompositionOptions = {
+                canonicalize: argv.canonicalize,
                 fuse: argv.fuse,
                 recurse: argv.recurse,
                 coalesce: argv.coalesce,
@@ -350,7 +360,7 @@ if (isPartitioning !== undefined) {
         }
 
         if (!argv.noLowLevel && !argv.noOptimize) {
-            graph.apply(new OnnxGraphOptimizer());
+            //graph.apply(new OnnxGraphOptimizer());
         }
 
         // --- Partitioning Logic ---
@@ -430,7 +440,7 @@ if (isPartitioning !== undefined) {
         }
 
         // Convert the ONNX JSON format to ONNX binary format if not disabled
-        if (!argv.noReconversion && isPartitioning === undefined) {
+        if (!argv.noReconversion && (isPartitioning === undefined || isPartitioning === false)) {
             const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } =
                 getReconvertedPaths(inputFilePath);
             const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
@@ -441,14 +451,14 @@ if (isPartitioning !== undefined) {
 
             await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
             console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
-        } else if (verbosity > 0 && isPartitioning === undefined) {
+        } else if (verbosity > 0 && (isPartitioning === undefined || isPartitioning === false)) {
             console.log("Skipping ONNX reconversion.");
         }
 
         // Print the output graph to stdout
         if (verbosity > 0) {
             if (outputFormat === "json") {
-                if (isPartitioning !== undefined && partitions) {
+                if (isPartitioning === true && partitions) {
                     console.log(
                         "Output Head Graph in JSON Format:",
                         JSON.stringify(partitions.head.toCy().json(), null, 2),
@@ -464,7 +474,7 @@ if (isPartitioning !== undefined) {
                     );
                 }
             } else if (outputFormat === "dot") {
-                if (isPartitioning !== undefined && partitions) {
+                if (isPartitioning === true && partitions) {
                     console.log(
                         "Output Head Graph in DOT Format:",
                         partitions.head.toString(dotFormatter),
@@ -479,10 +489,12 @@ if (isPartitioning !== undefined) {
             }
         }
 
-        // Step 4: Code generation
+        // Step 4: Code generation [TODO]
         if (!argv.noLowLevel && !argv.noCodegen) {
-            const generatedCode = generateGraphCode(graph);
-            if (verbosity > 0) console.log("Generated Code:", generatedCode);
+            //const generatedCode = generateGraphCode(graph);
+            //if (verbosity > 0) console.log("Generated Code:", generatedCode);
+            //console.log("Code Generation: TODO");
+            console.log("");
         }
 
         // Optional: run ORT equivalence check

@@ -22,7 +22,7 @@ import inferShapes from "./Onnx/InferShapes.js";
 import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
-import { tryAsValueNode, uniq, UNKOWN_SHAPE } from "./Onnx/Utils.js";
+import { tryAsValueNode, uniq, UNKNOWN_SHAPE } from "./Onnx/Utils.js";
 
 // Helper function to convert shape to number[]
 function parseShape(shape: RawOnnxTensorType["shape"]): KnownShape {
@@ -39,7 +39,7 @@ function parseShape(shape: RawOnnxTensorType["shape"]): KnownShape {
         if (dimValue !== undefined) {
             return Number(dimValue); // explicitly cast to number
         } else {
-            return UNKOWN_SHAPE[0]; // unknown shape
+            return UNKNOWN_SHAPE[0]; // unknown shape
         }
     });
 }
@@ -153,7 +153,6 @@ function addNodes(
             // However, since we parse recursively, the parent *is* built up to the point of this Loop node.
 
             // Note: OnnxGraph.hasNode is purely local.
-            // We need a way to ask the parent: "Do you have 'name'?"
             if (parentGraph.hasNode(name)) {
                 const parentNode = parentGraph.getNodeById(name);
 

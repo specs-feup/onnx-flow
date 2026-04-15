@@ -1,4 +1,29 @@
-import type { AttributeType, AttributeValue } from "../OnnxTypes.js";
+import type { AttributeType, AttributeValue, DataType, Shape } from "../OnnxTypes.js";
+
+// Helper interfaces for inference
+export interface TensorInfo {
+    shape: Shape;
+    dtype: DataType;
+    constantValue?: number[] | undefined;
+}
+
+// --- Helper for common types ---
+export const T_FLOAT = "tensor(float)";
+export const T_INT = "tensor(int64)";
+export const T_BOOL = "tensor(bool)";
+export const T_ANY = "T"; // Generic type constraint
+
+export enum OpCategory {
+    ElementWise = "ElementWise",
+    Reduction = "Reduction",
+    Generator = "Generator",
+    Spatial = "Spatial",
+    DataMovement = "DataMovement",
+    ControlFlow = "ControlFlow",
+    Normalization = "Normalization",
+    Math = "Math",
+    Other = "Other",
+}
 
 /**
  * Defines a single attribute for an operator (e.g., 'kernel_shape' for Conv).
@@ -30,19 +55,18 @@ export interface OpSchema {
     domain?: string; // Default is 'ai.onnx' (empty string)
     sinceVersion: number; // The opset version where this definition became valid
 
+    category: OpCategory;
+    broadcastable: boolean;
+    hasState: boolean;
+
     inputs: IOInterface[];
     outputs: IOInterface[];
-
     attributes: Record<string, AttributeDefinition>;
-
-    typeConstraints?: Record<string, string[]>; // e.g. { "T": ["tensor(float)", "tensor(int64)"] }
+    typeConstraints?: Record<string, string[]>;
 
     /**
      * Optional: Logic to infer output shapes based on inputs and attributes.
      * Can move the logic from `InferShapes.ts` here eventually.
      */
-    inferShape?: (
-        inputShapes: number[][],
-        attributes: Record<string, AttributeValue>,
-    ) => number[][];
+    inferShape?: (inputs: TensorInfo[], attributes: Record<string, AttributeValue>) => TensorInfo[];
 }
