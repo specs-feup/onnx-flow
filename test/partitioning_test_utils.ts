@@ -29,7 +29,7 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     let data;
 
     if (spec.data !== undefined) {
-        if (spec.data.length !== size && size !== 0) {
+        if (spec.data.length !== size) {
             throw new Error(`Provided data length does not match shape size for '${spec.name}'.`);
         }
         if (spec.dtype === "float32") data = new Float32Array(spec.data as number[]);
