@@ -38,7 +38,8 @@ function deepCloneRegion(region: OnnxGraph.Class): OnnxGraph.Class {
  */
 function cloneOp(op: OperationNode.Class, targetGraph: OnnxGraph.Class): OperationNode.Class {
     // Deeply clone all inner regions (subgraphs)
-    const clonedRegions = op.regions ? op.regions.map((region) => deepCloneRegion(region)) : [];
+    const clonedRegions =
+        op.regions.length > 0 ? op.regions.map((region) => deepCloneRegion(region)) : [];
 
     return targetGraph
         .addNode(op.id)
@@ -188,7 +189,14 @@ export function partitionGraph(
                                 const ra = origNode.as(RegionArgumentNode);
                                 const ghostRa = tailGraph
                                     .addNode(ra.id)
-                                    .init(new RegionArgumentNode.Builder(ra.index, ra.originalName, ra.literalType, ra.shape))
+                                    .init(
+                                        new RegionArgumentNode.Builder(
+                                            ra.index,
+                                            ra.originalName,
+                                            ra.literalType,
+                                            ra.shape,
+                                        ),
+                                    )
                                     .as(RegionArgumentNode);
                                 tailMap.set(ra.id, ghostRa);
                             } else {

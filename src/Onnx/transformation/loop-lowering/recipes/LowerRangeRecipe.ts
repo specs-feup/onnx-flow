@@ -36,7 +36,9 @@ export class LowerRangeRecipe implements LoopLoweringRecipe {
             const delta = readScalarFromTensorNode(inputs[2]) ?? 1;
 
             if (delta === 0) {
-                throw new Error(`[LowerRangeRecipe] Range operation '${op.id}' has a delta of 0, which is mathematically invalid and causes infinite bounds.`);
+                throw new Error(
+                    `[LowerRangeRecipe] Range operation '${op.id}' has a delta of 0, which is mathematically invalid and causes infinite bounds.`,
+                );
             }
 
             const tripCount = Math.max(0, Math.ceil((limit - start) / delta));
