@@ -31,9 +31,11 @@ export function splitByAncestor(graph: OnnxGraph.Class, splitNodeId: string): Pa
             const op = curr.as(OperationNode);
             const inputs = op.getInputs() ?? [];
             for (const input of inputs) {
-                // Add all inputs to stack to ensure they are visited,
-                // even if no explicit 'incomer' edge exists.
-                stack.push(input);
+                // Add only inputs that belong to this graph to avoid
+                // traversing external ValueNodes from other graph instances.
+                if (graph.hasNode(input.id)) {
+                    stack.push(input);
+                }
             }
         }
 
