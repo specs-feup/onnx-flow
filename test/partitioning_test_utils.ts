@@ -51,7 +51,7 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
         } else if (spec.dtype === "uint8") {
             data = new Uint8Array(size).map(() => Math.floor(Math.random() * 255));
         } else if (spec.dtype === "int8") {
-            data = new Int8Array(size).map(() => Math.floor(Math.random() * 255 - 128));
+            data = new Int8Array(size).map(() => Math.floor(Math.random() * 256) - 128);
         } else {
             throw new Error(`Unsupported dtype: ${spec.dtype}`);
         }
