@@ -27,6 +27,18 @@ export function splitByAncestor(graph: OnnxGraph.Class, splitNodeId: string): Pa
             }
         }
 
+        if (curr.is(OperationNode)) {
+            const op = curr.as(OperationNode);
+            const inputs = op.getInputs() ?? [];
+            for (const input of inputs) {
+                // Add only inputs that belong to this graph to avoid
+                // traversing external ValueNodes from other graph instances.
+                if (graph.hasNode(input.id)) {
+                    stack.push(input);
+                }
+            }
+        }
+
         curr.incomers.forEach((edge) => {
             stack.push(edge.source);
         });

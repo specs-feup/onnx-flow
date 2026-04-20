@@ -44,7 +44,7 @@ export class DeadCodeEliminationPass implements GraphPass {
                 }
             }
         }
-        
+
         return changed;
     }
 }

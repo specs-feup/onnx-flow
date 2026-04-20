@@ -13,6 +13,7 @@ export interface InputSpec {
     name: string;
     dtype: string;
     shape: number[];
+    data?: number[] | bigint[];
 }
 
 export interface PartitionTestCase {
@@ -27,16 +28,35 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     const size = spec.shape.reduce((a, b) => a * b, 1);
     let data;
 
-    if (spec.dtype === "float32") {
-        data = new Float32Array(size).map(() => Math.random());
-    } else if (spec.dtype === "int64") {
-        data = new BigInt64Array(size).map(() => BigInt(Math.floor(Math.random() * 100)));
-    } else if (spec.dtype === "int32") {
-        data = new Int32Array(size).map(() => Math.floor(Math.random() * 100));
-    } else if (spec.dtype === "bool") {
-        data = new Uint8Array(size).map(() => (Math.random() > 0.5 ? 1 : 0));
+    if (spec.data !== undefined) {
+        if (spec.data.length !== size) {
+            throw new Error(`Provided data length does not match shape size for '${spec.name}'.`);
+        }
+        if (spec.dtype === "float32") data = new Float32Array(spec.data as number[]);
+        else if (spec.dtype === "int64") {
+            const bigIntData = (spec.data as (number | bigint)[]).map((v) => BigInt(v));
+            data = new BigInt64Array(bigIntData);
+        } else if (spec.dtype === "int32") data = new Int32Array(spec.data as number[]);
+        else if (spec.dtype === "bool") data = new Uint8Array(spec.data as number[]);
+        else if (spec.dtype === "uint8") data = new Uint8Array(spec.data as number[]);
+        else if (spec.dtype === "int8") data = new Int8Array(spec.data as number[]);
+        else throw new Error(`Unsupported dtype: ${spec.dtype}`);
     } else {
-        throw new Error(`Unsupported dtype: ${spec.dtype}`);
+        if (spec.dtype === "float32") {
+            data = new Float32Array(size).map(() => Math.random());
+        } else if (spec.dtype === "int64") {
+            data = new BigInt64Array(size).map(() => BigInt(Math.floor(Math.random() * 100)));
+        } else if (spec.dtype === "int32") {
+            data = new Int32Array(size).map(() => Math.floor(Math.random() * 100));
+        } else if (spec.dtype === "bool") {
+            data = new Uint8Array(size).map(() => (Math.random() > 0.5 ? 1 : 0));
+        } else if (spec.dtype === "uint8") {
+            data = new Uint8Array(size).map(() => Math.floor(Math.random() * 255));
+        } else if (spec.dtype === "int8") {
+            data = new Int8Array(size).map(() => Math.floor(Math.random() * 256) - 128);
+        } else {
+            throw new Error(`Unsupported dtype: ${spec.dtype}`);
+        }
     }
 
     return new ort.Tensor(spec.dtype, data, spec.shape);
