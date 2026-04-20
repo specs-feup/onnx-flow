@@ -8,6 +8,7 @@ import type { PartitionSets } from "./Strategies.js";
 import ConstantNode from "../ConstantNode.js";
 import type { ValueNode } from "../OnnxTypes.js";
 import { asValueNode } from "../Utils.js";
+import RegionArgumentNode from "../RegionArgumentNode.js";
 
 /**
  * Clones a TensorNode into the target graph.
@@ -20,9 +21,25 @@ function cloneTensor(t: TensorNode.Class, targetGraph: OnnxGraph.Class): TensorN
 }
 
 /**
- * Clones an OperationNode into the target graph (WITHOUT inputs initially).
+ * Clones a Graph recursively to safely copy internal regions (Loops/Ifs).
+ */
+function deepCloneRegion(region: OnnxGraph.Class): OnnxGraph.Class {
+    // Put all top-level nodes of this region into the 'head' set
+    const allIds = new Set<string>();
+    region.nodes.forEach((n) => allIds.add(n.id));
+
+    // Recursively call partitionGraph. Everything goes to 'head', 'tail' is empty.
+    const { head } = partitionGraph(region, { head: allIds, tail: new Set() });
+    return head;
+}
+
+/**
+ * Clones an OperationNode into the target graph (without inputs initially).
  */
 function cloneOp(op: OperationNode.Class, targetGraph: OnnxGraph.Class): OperationNode.Class {
+    // Deeply clone all inner regions (subgraphs)
+    const clonedRegions = op.regions ? op.regions.map((region) => deepCloneRegion(region)) : [];
+
     return targetGraph
         .addNode(op.id)
         .init(
@@ -30,7 +47,7 @@ function cloneOp(op: OperationNode.Class, targetGraph: OnnxGraph.Class): Operati
                 op.type,
                 [], // Inputs populated later to preserve order
                 op.attributes,
-                op.regions,
+                clonedRegions,
             ),
         )
         .as(OperationNode);
@@ -167,6 +184,13 @@ export function partitionGraph(
                                     input.id,
                                     cloneConstant(origNode.as(ConstantNode), tailGraph),
                                 );
+                            } else if (origNode !== undefined && origNode.is(RegionArgumentNode)) {
+                                const ra = origNode.as(RegionArgumentNode);
+                                const ghostRa = tailGraph
+                                    .addNode(ra.id)
+                                    .init(new RegionArgumentNode.Builder(ra.index, ra.originalName, ra.literalType, ra.shape))
+                                    .as(RegionArgumentNode);
+                                tailMap.set(ra.id, ghostRa);
                             } else {
                                 tailMap.set(
                                     input.id,
@@ -177,11 +201,13 @@ export function partitionGraph(
                         const clonedInput = tailMap.get(input.id)!;
                         newInputs.push(asValueNode(clonedInput));
 
-                        const t = clonedInput.as(TensorNode);
-                        tailGraph
-                            .addEdge(t, clonedOp)
-                            .init(new OnnxEdge.Builder(t.literalType, t.shape))
-                            .as(OnnxEdge);
+                        if (clonedInput.is(TensorNode)) {
+                            const t = clonedInput.as(TensorNode);
+                            tailGraph
+                                .addEdge(t, clonedOp)
+                                .init(new OnnxEdge.Builder(t.literalType, t.shape))
+                                .as(OnnxEdge);
+                        }
                         continue;
                     }
 

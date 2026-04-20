@@ -94,10 +94,9 @@ const tests: PartitionTestCase[] = [
         originalPath: "examples/onnx/range_add_standard.onnx",
         tol: 1e-5,
         specs: [
-            { name: "start", dtype: "float32", shape: [] },
-            { name: "limit", dtype: "float32", shape: [] },
-            { name: "delta", dtype: "float32", shape: [] },
-            // L = ceil((6-1)/1.5) = 4
+           { name: "start", dtype: "float32", shape: [], data: [0] },
+            { name: "limit", dtype: "float32", shape: [], data: [6] },
+            { name: "delta", dtype: "float32", shape: [], data: [1.5] },
             { name: "V", dtype: "float32", shape: [4] },
         ],
     },
