@@ -33,8 +33,10 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
             throw new Error(`Provided data length does not match shape size for '${spec.name}'.`);
         }
         if (spec.dtype === "float32") data = new Float32Array(spec.data as number[]);
-        else if (spec.dtype === "int64") data = new BigInt64Array(spec.data as bigint[]);
-        else if (spec.dtype === "int32") data = new Int32Array(spec.data as number[]);
+        else if (spec.dtype === "int64") {
+            const bigIntData = (spec.data as (number | bigint)[]).map((v) => BigInt(v));
+            data = new BigInt64Array(bigIntData);
+        } else if (spec.dtype === "int32") data = new Int32Array(spec.data as number[]);
         else if (spec.dtype === "bool") data = new Uint8Array(spec.data as number[]);
         else if (spec.dtype === "uint8") data = new Uint8Array(spec.data as number[]);
         else if (spec.dtype === "int8") data = new Int8Array(spec.data as number[]);
