@@ -7,17 +7,17 @@ A = helper.make_tensor_value_info('A', TensorProto.FLOAT, [2])
 B = helper.make_tensor_value_info('B', TensorProto.FLOAT, [2])
 
 #Create the node
-softsign_node = helper.make_node(
-    'Softsign',         #node
+tanh_node = helper.make_node(
+    'Tanh',             #node
     inputs=['A'],       #inputs
     outputs=['B'],      #outputs
-    name='SoftsignNode' #name
+    name='TanhDivNode'  #name
 )
 
 # Create the graph
-softsign_graph = helper.make_graph(
-    [softsign_node],         #nodes
-    'SoftsignGraph',    #graph name
+tanh_graph = helper.make_graph(
+    [tanh_node],         #nodes
+    'TanhDivGraph',     #graph name
     [A],                #inputs
     [B]                 #outputs
 )
@@ -29,8 +29,8 @@ opset.version = 19
 
 # Create the model
 model = helper.make_model(
-    softsign_graph,
-    producer_name='onnx-softsign-example',
+    tanh_graph,
+    producer_name='onnx-tanh-div-example',
     opset_imports=[opset]
 )
 
@@ -38,5 +38,5 @@ model = helper.make_model(
 model.ir_version = 9
 
 # Save the onnx model
-onnx.save(model, '../examples/onnx/softsign.onnx')
+onnx.save(model, '../examples/onnx/tanh_div.onnx')
 print("Saved")

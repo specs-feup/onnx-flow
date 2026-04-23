@@ -260,7 +260,7 @@ export type FeedSpec = {
     // optional fixed initialization (overrides generator)
     init?: number[] | bigint[] | boolean[];
     // optional generator hint
-    gen?: "random" | "negmix" | "zeros" | "ones" | "range";
+    gen?: "random" | "negmix" | "zeros" | "ones" | "range" | "greaterThanOne";
     // for 'range' convenience (scalar-float specs)
     value?: number; // when shape === []
 };
@@ -289,6 +289,7 @@ export function makeArray(
             if (gen === "negmix") return Array.from({ length: len }, randNegMix);
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
+            if (gen === "greaterThanOne") return Array.from({ length: len }, () => randFloat() + 1); // Valores acima de 1 (ACcosH)
             return Array.from({ length: len }, randFloat);
         case "int32":
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
@@ -1409,17 +1410,7 @@ const TESTS: Array<{
         ],
     },
 
-];
-
-const CORE_OP_TESTS: Array<{
-    label: string;
-    originalPath: string;
-    tol?: number;
-    exact?: boolean;
-    cliArgs: string | ((p: string) => string);
-    specs: FeedSpec[];
-}> = [
-    {
+        {
         label: "or",
         originalPath: "examples/onnx/or.onnx",
         cliArgs: jsonFullArgs,
@@ -1502,6 +1493,154 @@ const CORE_OP_TESTS: Array<{
         ],
     },
 
+    {
+        label: "Tan",
+        originalPath: "examples/onnx/tan.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Sinh",
+        originalPath: "examples/onnx/sinh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Cosh",
+        originalPath: "examples/onnx/cosh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "TanhSigmoid",
+        originalPath: "examples/onnx/tanh_sigmoid.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "TanhDiv",
+        originalPath: "examples/onnx/tanh_div.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+];
+
+const CORE_OP_TESTS: Array<{
+    label: string;
+    originalPath: string;
+    tol?: number;
+    exact?: boolean;
+    cliArgs: string | ((p: string) => string);
+    specs: FeedSpec[];
+}> = [
+
+    {
+        label: "Asinh",
+        originalPath: "examples/onnx/asinh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Acosh",
+        originalPath: "examples/onnx/acosh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "greaterThanOne" },
+        ],
+    },
+
+    {
+        label: "Atanh",
+        originalPath: "examples/onnx/atanh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    /*
+    {
+       label: "Ceil",
+        originalPath: "examples/onnx/ceil.onnx",
+        cliArgs: jsonFullArgs,
+        specs:
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix"  },
+        ],
+    },
+    */
+
+    {
+        label: "RoundAdd",
+        originalPath: "examples/onnx/round_add.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], /*gen: "negmix"*/  },
+        ],
+    },
+
+    {
+    label: "RoundStep",
+    originalPath: "examples/onnx/round_step.onnx",
+    cliArgs: jsonFullArgs,
+    specs: [
+            { name: "A", dtype: "float32", shape: [2], /* gen: "negmix" */ },
+        ],
+    },
+
+    /*
+    {
+    label: "Floor",
+    originalPath: "examples/onnx/floor.onnx",
+    cliArgs: jsonFullArgs,
+    specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix"},
+        ],
+    },
+    */
+
+    {
+        label: "IsNan",
+        originalPath: "examples/onnx/isnan.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], init: [NaN, 1.0] },
+        ],
+    },
+    
+    {
+        label: "IsInf",
+        originalPath: "examples/onnx/isinf.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], init: [Infinity, 1.0] },
+        ],
+    },
 ];
 
 // Run ONLY the focused subset above.

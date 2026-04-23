@@ -1,23 +1,23 @@
-import onnx
+import onnx 
 from onnx import helper
 from onnx import TensorProto
 
 #Define the input and outputs
 A = helper.make_tensor_value_info('A', TensorProto.FLOAT, [2])
-B = helper.make_tensor_value_info('B', TensorProto.FLOAT, [2])
+B = helper.make_tensor_value_info('B', TensorProto.BOOL, [2])
 
 #Create the node
-softsign_node = helper.make_node(
-    'Softsign',         #node
+isinf_node = helper.make_node(
+    'IsInf',            #node
     inputs=['A'],       #inputs
     outputs=['B'],      #outputs
-    name='SoftsignNode' #name
+    name='IsInfNode'    #name
 )
 
 # Create the graph
-softsign_graph = helper.make_graph(
-    [softsign_node],         #nodes
-    'SoftsignGraph',    #graph name
+isinf_graph = helper.make_graph(
+    [isinf_node],       #nodes
+    'IsInfGraph',       #graph name
     [A],                #inputs
     [B]                 #outputs
 )
@@ -29,8 +29,8 @@ opset.version = 19
 
 # Create the model
 model = helper.make_model(
-    softsign_graph,
-    producer_name='onnx-softsign-example',
+    isinf_graph,
+    producer_name='onnx-isinf-example',
     opset_imports=[opset]
 )
 
@@ -38,5 +38,5 @@ model = helper.make_model(
 model.ir_version = 9
 
 # Save the onnx model
-onnx.save(model, '../examples/onnx/softsign.onnx')
+onnx.save(model, '../examples/onnx/isinf.onnx')
 print("Saved")

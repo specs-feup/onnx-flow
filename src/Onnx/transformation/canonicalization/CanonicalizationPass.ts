@@ -37,6 +37,20 @@ import { LowerPowRecipe } from "./recipes/LowerPowRecipe.js";
 import { LowerNotRecipe } from "./recipes/LowerNotRecipe.js";
 import { LowerSigmoidRecipe } from "./recipes/LowerSigmoidRecipe.js";
 import { LowerSoftsignRecipe } from "./recipes/LowerSoftsignRecipe.js";
+import { LowerTanRecipe } from "./recipes/LowerTanRecipe.js";
+import { LowerSinhRecipe } from "./recipes/LowerSinhRecipe.js";
+import { LowerCoshRecipe } from "./recipes/LowerCoshRecipe.js";
+import { LowerTanhSigmoidRecipe } from "./recipes/LowerTanhSigmoidRecipe.js";
+import { LowerTanhDivRecipe } from "./recipes/LowerTanhDivRecipe.js";
+import { LowerAsinhRecipe } from "./recipes/LowerAsinhRecipe.js";
+import { LowerAcoshRecipe } from "./recipes/LowerAcoshRecipe.js";
+import { LowerAtanhRecipe } from "./recipes/LowerAtanhRecipe.js";
+import { LowerCeilRecipe } from "./recipes/LowerCeilRecipe.js";
+import { LowerRoundAddRecipe } from "./recipes/LowerRoundAddRecipe.js";
+import { LowerRoundStepRecipe } from "./recipes/LowerRoundStepRecipe.js";
+import { LowerFloorRecipe } from "./recipes/LowerFloorRecipe.js";
+import { LowerIsNanRecipe } from "./recipes/LowerIsNanRecipe.js";
+import { LowerIsInfRecipe } from "./recipes/LowerIsInfRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -78,6 +92,21 @@ export class CanonicalizationPass implements GraphPass {
         ["Not", new LowerNotRecipe()],
         ["Sigmoid", new LowerSigmoidRecipe()],
         ["Softsign", new LowerSoftsignRecipe()],
+        ["Tan", new LowerTanRecipe()],
+        ["Sinh", new LowerSinhRecipe()],
+        ["Cosh", new LowerCoshRecipe()],
+        ["TanhSigmoid", new LowerTanhSigmoidRecipe()],
+        ["TanhDiv", new LowerTanhDivRecipe()],
+        ["Asinh", new LowerAsinhRecipe()],
+        ["Acosh", new LowerAcoshRecipe()],
+        ["Atanh", new LowerAtanhRecipe()],
+        ["Ceil", new LowerCeilRecipe()],
+        ["RoundAdd", new LowerRoundAddRecipe()],
+        ["RoundStep", new LowerRoundStepRecipe()],
+        ["Floor", new LowerFloorRecipe()],
+        ["IsNaN", new LowerIsNanRecipe()],
+        ["IsInf", new LowerIsInfRecipe()],
+
     ]);
 
     public run(graph: OnnxGraph.Class): boolean {
