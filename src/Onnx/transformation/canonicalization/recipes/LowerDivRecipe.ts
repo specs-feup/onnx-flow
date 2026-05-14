@@ -21,12 +21,27 @@ export class LowerDivRecipe implements DecompositionRecipe {
         const B = ins[1];
         const Y = op.getOutputs()[0];
 
-        // Output is a float tensor of the same shape as input
-        const Output = [{ type: (A.literalType as DataType | undefined) ?? DataType.FLOAT, shape: A.shape as KnownShape }];
+        const dtype =
+            (Y.literalType as DataType | undefined) ??
+            (A.literalType as DataType | undefined) ??
+            (B.literalType as DataType | undefined) ??
+            DataType.FLOAT;
 
-        // Mul (A , Reciprocal (B) )
-        const reciprocalB = builder.createOp("Reciprocal", [B], {}, Output)[0];
-        const mulOut = builder.createOp("Mul",[A, reciprocalB], {}, Output)[0];
+        const reciprocalOutput = [{
+            type: dtype,
+            shape: B.shape as KnownShape,
+        }];
+
+        const finalOutput = [{
+            type: dtype,
+            shape: (Y.shape as KnownShape) ?? (A.shape as KnownShape),
+        }];
+
+        // Reciprocal(B)
+        const reciprocalB = builder.createOp("Reciprocal", [B], {}, reciprocalOutput)[0];
+
+        // A * Reciprocal(B)
+        const mulOut = builder.createOp("Mul", [A, reciprocalB], {}, finalOutput)[0];
 
         builder.replaceAllUsesWith(Y, mulOut);
         op.remove();

@@ -5,25 +5,25 @@ import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { makeTensorProto } from "../../../Utils.js";
 
-export class LowerFloorRecipe implements DecompositionRecipe {
-    public readonly name = "LowerFloor";
-    public readonly targetOp = "Floor";
+export class LowerAcosRecipe implements DecompositionRecipe {
+    public readonly name = "LowerAcos";
+    public readonly targetOp = "Acos";
     public readonly exposesControlFlow = false;
-    public readonly exposesDataAccess = false
-    public readonly producedOps = ["Sub", "Mod"];
+    public readonly exposesDataAccess = false;
+    public readonly producedOps = ["Asin", "Sub"];
 
     canApply(op: OperationNode.Class): boolean {
-        return op.type === "Floor";
+        return op.type === "Acos";
     }
 
-    apply(op: OperationNode.Class, builder: GraphBuilder): void {   
+    apply(op: OperationNode.Class, builder: GraphBuilder): void {
         const ins = op.getInputs() as ConcreteValueNode[];
         const A = ins[0];
         const Y = op.getOutputs()[0];
 
         const dtype =
-            (Y.literalType as DataType | undefined) ??
             (A.literalType as DataType | undefined) ??
+            (Y.literalType as DataType | undefined) ??
             DataType.FLOAT;
 
         const outShape =
@@ -32,17 +32,18 @@ export class LowerFloorRecipe implements DecompositionRecipe {
 
         const output = [{ type: dtype, shape: outShape }];
 
-        const oneConst = builder.createConstant(
-            `floor_one_${op.id}_one`,
-            makeTensorProto(dtype, [], [1]),
+        const piOverTwoConst = builder.createConstant(
+            `acos_pi_over_two_${op.id}`,
+            makeTensorProto(dtype, [], [Math.PI / 2]),
         );
 
-        //Sub (A, Mod(A, 1))
-        const ModOut = builder.createOp("Mod", [A, oneConst], {}, output)[0];
-        const SubOut = builder.createOp("Sub", [A, ModOut], {}, output)[0];
+        // asin(A)
+        const asinOut: ConcreteValueNode = builder.createOp("Asin", [A], {}, output)[0];
 
-        builder.replaceAllUsesWith(Y, SubOut);
+        // pi/2 - asin(A)
+        const acosOut: ConcreteValueNode = builder.createOp("Sub", [piOverTwoConst, asinOut], {}, output)[0];
+
+        builder.replaceAllUsesWith(Y, acosOut);
         op.remove();
     }
-}        
-    
+}

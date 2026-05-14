@@ -48,9 +48,16 @@ import { LowerAtanhRecipe } from "./recipes/LowerAtanhRecipe.js";
 import { LowerCeilRecipe } from "./recipes/LowerCeilRecipe.js";
 import { LowerRoundAddRecipe } from "./recipes/LowerRoundAddRecipe.js";
 import { LowerRoundStepRecipe } from "./recipes/LowerRoundStepRecipe.js";
-import { LowerFloorRecipe } from "./recipes/LowerFloorRecipe.js";
 import { LowerIsNanRecipe } from "./recipes/LowerIsNanRecipe.js";
 import { LowerIsInfRecipe } from "./recipes/LowerIsInfRecipe.js";
+import { LowerSqrtRecipe } from "./recipes/LowerSqrtRecipe.js";
+import { LowerLogRecipe } from "./recipes/LowerLogRecipe.js";
+import { LowerSinRecipe } from "./recipes/LowerSinRecipe.js";
+import { LowerCosRecipe } from "./recipes/LowerCosRecipe.js";
+import { LowerAsinRecipe } from "./recipes/LowerAsinRecipe.js";
+import { LowerAcosRecipe } from "./recipes/LowerAcosRecipe.js";
+import { LowerAtanRecipe } from "./recipes/LowerAtanRecipe.js";
+//import { LowerReciprocalRecipe } from "./recipes/LowerReciprocalRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -103,10 +110,16 @@ export class CanonicalizationPass implements GraphPass {
         ["Ceil", new LowerCeilRecipe()],
         ["RoundAdd", new LowerRoundAddRecipe()],
         ["RoundStep", new LowerRoundStepRecipe()],
-        ["Floor", new LowerFloorRecipe()],
         ["IsNaN", new LowerIsNanRecipe()],
         ["IsInf", new LowerIsInfRecipe()],
-
+        ["Sqrt", new LowerSqrtRecipe()],
+        ["Log", new LowerLogRecipe()],
+        ["Sin", new LowerSinRecipe()],
+        ["Cos", new LowerCosRecipe()],
+        ["Asin", new LowerAsinRecipe()],
+        ["Acos", new LowerAcosRecipe()],
+        ["Atan", new LowerAtanRecipe()],
+        //["Reciprocal", new LowerReciprocalRecipe()],
     ]);
 
     public run(graph: OnnxGraph.Class): boolean {

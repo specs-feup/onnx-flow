@@ -1543,17 +1543,6 @@ const TESTS: Array<{
         ],
     },
 
-];
-
-const CORE_OP_TESTS: Array<{
-    label: string;
-    originalPath: string;
-    tol?: number;
-    exact?: boolean;
-    cliArgs: string | ((p: string) => string);
-    specs: FeedSpec[];
-}> = [
-
     {
         label: "Asinh",
         originalPath: "examples/onnx/asinh.onnx",
@@ -1584,61 +1573,74 @@ const CORE_OP_TESTS: Array<{
         ],
     },
 
-    /*
-    {
-       label: "Ceil",
-        originalPath: "examples/onnx/ceil.onnx",
-        cliArgs: jsonFullArgs,
-        specs:
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix"  },
-        ],
-    },
-    */
 
-    {
-        label: "RoundAdd",
-        originalPath: "examples/onnx/round_add.onnx",
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], /*gen: "negmix"*/  },
-        ],
-    },
+];
 
-    {
-    label: "RoundStep",
-    originalPath: "examples/onnx/round_step.onnx",
-    cliArgs: jsonFullArgs,
-    specs: [
-            { name: "A", dtype: "float32", shape: [2], /* gen: "negmix" */ },
-        ],
-    },
+const CORE_OP_TESTS: Array<{
+    label: string;
+    originalPath: string;
+    tol?: number;
+    exact?: boolean;
+    cliArgs: string | ((p: string) => string);
+    specs: FeedSpec[];
+}> = [
 
-    /*
-    {
-    label: "Floor",
-    originalPath: "examples/onnx/floor.onnx",
-    cliArgs: jsonFullArgs,
-    specs: [
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix"},
-        ],
-    },
-    */
-
-    {
-        label: "IsNan",
-        originalPath: "examples/onnx/isnan.onnx",
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], init: [NaN, 1.0] },
-        ],
-    },
-    
-    {
+    /*{
         label: "IsInf",
         originalPath: "examples/onnx/isinf.onnx",
         cliArgs: jsonFullArgs,
         specs: [
             { name: "A", dtype: "float32", shape: [2], init: [Infinity, 1.0] },
+        ],
+    },*/
+
+    {
+        label: "Sin",
+        originalPath: "examples/onnx/sin.onnx",
+        cliArgs: jsonFullArgs,
+        tol: 1e-6,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {        label: "Cos",
+        originalPath: "examples/onnx/cos.onnx",
+        cliArgs: jsonFullArgs,
+        tol: 1e-6,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Asin",
+        originalPath: "examples/onnx/asin.onnx",
+        cliArgs: jsonFullArgs,
+        tol: 1e-6,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Acos",
+        originalPath: "examples/onnx/acos.onnx",
+        cliArgs: jsonFullArgs,
+        tol: 1e-6,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
+        ],
+    },
+    
+
+    {
+        label: "Atan",
+        originalPath: "examples/onnx/atan.onnx",
+        cliArgs: jsonFullArgs,
+        tol: 1e-6,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
         ],
     },
 ];
