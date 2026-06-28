@@ -1,4 +1,6 @@
+import type OnnxGraph from "../OnnxGraph.js";
 import type { AttributeType, AttributeValue, DataType, Shape } from "../OnnxTypes.js";
+import type OperationNode from "../OperationNode.js";
 
 // Helper interfaces for inference
 export interface TensorInfo {
@@ -68,5 +70,11 @@ export interface OpSchema {
      * Optional: Logic to infer output shapes based on inputs and attributes.
      * Can move the logic from `InferShapes.ts` here eventually.
      */
-    inferShape?: (inputs: TensorInfo[], attributes: Record<string, AttributeValue>) => TensorInfo[];
+    inferShape?: (
+        inputs: TensorInfo[],
+        attributes: Record<string, AttributeValue>,
+        node?: OperationNode.Class,
+        graph?: OnnxGraph.Class,
+        inferSubgraphs?: (g: OnnxGraph.Class) => void,
+    ) => TensorInfo[];
 }
