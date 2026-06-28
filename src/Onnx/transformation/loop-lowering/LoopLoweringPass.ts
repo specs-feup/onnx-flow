@@ -3,6 +3,7 @@ import OperationNode from "../../OperationNode.js";
 import TensorNode from "../../TensorNode.js";
 import { GraphBuilder } from "../../GraphBuilder.js";
 import { DataType } from "../../OnnxTypes.js";
+import { buildForLoopRegion } from "./LoopBuilder.js";
 import type { ConcreteValueNode, ValueNode, KnownShape, StaticShape } from "../../OnnxTypes.js";
 import {
     int64Vec,
@@ -150,14 +151,14 @@ export class LoopLoweringPass implements GraphPass {
         // 1. Initialize Loop Region via GraphBuilder helper
         // This handles creating the inner graph, standard inputs (iter, cond, carry),
         // the outer constants, and the Loop node itself with the region attached.
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } =
-            outerBuilder.createForLoopRegion(
-                outerBuilder,
-                totalIters,
-                elemTy,
-                carryShape,
-                `Loop_${rootOp.id}`,
-            );
+        const { innerBuilder, trip, vInitial, loopOutput, finalize } = buildForLoopRegion(
+            outerBuilder,
+            totalIters,
+            elemTy,
+            carryShape,
+            `Loop_${rootOp.id}`,
+            `lowering_${rootOp.id}`,
+        );
 
         const body = innerBuilder.graph;
         const axes = innerBuilder.createConstant("axes", int64Vec([0]));

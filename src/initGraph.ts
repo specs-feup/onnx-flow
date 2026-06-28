@@ -1,7 +1,5 @@
 import OnnxGraph from "./Onnx/OnnxGraph.js";
 import TensorNode from "./Onnx/TensorNode.js";
-import OperationNode from "./Onnx/OperationNode.js";
-import OnnxEdge from "./Onnx/OnnxEdge.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import type {
     AttributeMap,
@@ -23,6 +21,7 @@ import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import { tryAsValueNode, uniq, UNKNOWN_SHAPE } from "./Onnx/Utils.js";
+import { GraphBuilder } from "./Onnx/GraphBuilder.js";
 
 // Helper function to convert shape to number[]
 function parseShape(shape: RawOnnxTensorType["shape"]): KnownShape {
@@ -127,10 +126,9 @@ function addOutputNodes(data: RawOnnxModel, graph: OnnxGraph.Class) {
  * Returns the list of external variables 'captured' by this graph scope.
  */
 function addNodes(
+    builder: GraphBuilder,
     data: RawOnnxModel,
     graph: OnnxGraph.Class,
-    mapNodeAndOutput: { nodeId: string; output: string }[],
-    mapNodeAndInputs: { nodeId: string; inputs: string[] }[],
     parentGraph?: OnnxGraph.Class,
 ): string[] {
     const captures: string[] = [];
@@ -355,35 +353,18 @@ function addNodes(
                 if (orderedRegions.length > 0) regions.splice(0, regions.length, ...orderedRegions);
             }
 
-            // Build Operation Node
-            const opBuilder = new OperationNode.Builder(
+            const opId = nodeIndex.toString();
+            const validOutputs = (node.output ?? []).filter((o: string) => o !== "");
+
+            builder.createOpWithExact(
+                opId,
                 node.opType!,
-                inputs,
+                inputs, // Resolved ValueNodes
+                validOutputs, // Exact ONNX tensor names
                 attributes as AttributeMap,
+                undefined, // Shapes will be inferred automatically by the builder
                 regions,
             );
-            const opId = nodeIndex.toString();
-            graph.addNode(opId).init(opBuilder).as(OperationNode);
-
-            // D. Create Outputs
-            node.output?.forEach((output: string) => {
-                if (!output) return; // ignore empty outputs
-
-                if (!graph.hasNode(output)) {
-                    // Type Inference Hint
-                    const inferredShape = inputs[0]?.tryAs(TensorNode)?.shape ?? [];
-                    const inferredType = inputs[0]?.tryAs(TensorNode)?.literalType ?? 0;
-
-                    graph
-                        .addNode(output)
-                        .init(new TensorNode.Builder(inferredType, inferredShape, "intermediate"))
-                        .as(TensorNode);
-                }
-                mapNodeAndOutput.push({ nodeId: opId, output });
-                // Note: We don't add to definedVars here anymore, graph.hasNode is the source of truth
-            });
-
-            mapNodeAndInputs.push({ nodeId: opId, inputs: node.input! });
 
             nodesToAdd.delete(nodeIndex);
             madeProgress = true;
@@ -398,79 +379,20 @@ function addNodes(
     return captures;
 }
 
-function addEdges(
-    graph: OnnxGraph.Class,
-    mapNodeAndOutput: { nodeId: string; output: string }[],
-    mapNodeAndInputs: { nodeId: string; inputs: string[] }[],
-) {
-    mapNodeAndInputs.forEach((node) => {
-        const opNode = graph.getNodeById(node.nodeId);
-        if (opNode && opNode.is(OperationNode)) {
-            // Use the EXPLICIT inputs list on the node, which now includes captures and Resolved inputs
-            const inputs = opNode.as(OperationNode).getInputs() ?? [];
-
-            inputs.forEach((inputNode) => {
-                let type = DataType.UNDEFINED;
-                let shape: Shape = [];
-
-                if (inputNode.is(TensorNode)) {
-                    const t = inputNode.as(TensorNode);
-                    type = t.literalType;
-                    shape = t.shape;
-                } else if (inputNode.is(ConstantNode)) {
-                    const c = inputNode.as(ConstantNode);
-                    type = c.literalType;
-                    shape = c.shape;
-                } else if (inputNode.is(RegionArgumentNode)) {
-                    const r = inputNode.as(RegionArgumentNode);
-                    type = r.literalType;
-                    shape = r.shape;
-                }
-
-                // Check if edge already exists
-                const exists = inputNode.outgoers.toArray().some((e) => e.target === opNode);
-                if (!exists) {
-                    graph
-                        .addEdge(inputNode, opNode)
-                        .init(new OnnxEdge.Builder(type, shape))
-                        .as(OnnxEdge);
-                }
-            });
-
-            // Outputs (Op -> Tensor)
-            mapNodeAndOutput.forEach((nodeAndOutput) => {
-                if (nodeAndOutput.nodeId === opNode.id) {
-                    const outputNode = graph.getNodeById(nodeAndOutput.output);
-                    if (outputNode && outputNode.is(TensorNode)) {
-                        const t = outputNode.as(TensorNode);
-                        graph
-                            .addEdge(opNode, t)
-                            .init(new OnnxEdge.Builder(t.literalType, t.shape))
-                            .as(OnnxEdge);
-                    }
-                }
-            });
-        }
-    });
-}
-
 function createGraphWithCaptures(
     data: RawOnnxModel,
     parentGraph?: OnnxGraph.Class,
 ): { graph: OnnxGraph.Class; captures: string[] } {
     const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const builder = new GraphBuilder(graph);
 
     addInitializers(data, graph);
     addInputNodes(data, graph);
     addOutputNodes(data, graph);
     addValueInfoNodes(data, graph);
 
-    const mapNodeAndOutput: { nodeId: string; output: string }[] = [];
-    const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];
+    const captures = addNodes(builder, data, graph, parentGraph);
 
-    const captures = addNodes(data, graph, mapNodeAndOutput, mapNodeAndInputs, parentGraph);
-
-    addEdges(graph, mapNodeAndOutput, mapNodeAndInputs);
     inferShapes(graph);
 
     return { graph, captures };

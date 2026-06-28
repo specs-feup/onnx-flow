@@ -1,7 +1,6 @@
-import OnnxGraph from "./OnnxGraph.js";
+import type OnnxGraph from "./OnnxGraph.js";
 import type {
     AttributeMap,
-    StaticShape,
     ValueNode,
     ConcreteValueNode,
     TensorProto,
@@ -12,9 +11,8 @@ import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import OnnxEdge from "./OnnxEdge.js";
-import { bool, int64Vec, scalarInt64, uniq, UNKNOWN_SHAPE, zeroTensor } from "./Utils.js";
+import { uniq } from "./Utils.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
-import Graph from "@specs-feup/flow/graph/Graph";
 import { inferNodeShape } from "./InferShapes.js";
 
 export class GraphBuilder {
@@ -137,6 +135,95 @@ export class GraphBuilder {
     }
 
     /**
+     * Creates an OperationNode and its outputs using exactly specified IDs.
+     * Crucial for frontend parsing (initGraph) and deterministic pass generation.
+     */
+    public createOpWithExact(
+        opId: string,
+        type: string,
+        inputs: ValueNode[],
+        outputIds: string[],
+        attributes: AttributeMap = {},
+        expectedOutputs?: { type: DataType; shape: KnownShape }[],
+        regions?: OnnxGraph.Class[],
+    ): ConcreteValueNode[] {
+        // 1. Build Operation Node with exact ID
+        const op = this.graph
+            .addNode(opId)
+            .init(new OperationNode.Builder(type, inputs, attributes, regions))
+            .as(OperationNode);
+
+        // 2. Wire incoming edges
+        for (const input of inputs) {
+            if (this.graph.hasNode(input.id)) {
+                this.graph
+                    .addEdge(input, op)
+                    .init(new OnnxEdge.Builder(input.literalType, input.shape))
+                    .as(OnnxEdge);
+            }
+        }
+
+        // 3. Provision Output Tensors using exact IDs
+        const outputs: ConcreteValueNode[] = [];
+        for (let i = 0; i < outputIds.length; i++) {
+            let inferredType = DataType.UNDEFINED;
+            let inferredShape: KnownShape = [];
+
+            if (expectedOutputs !== undefined && i in expectedOutputs) {
+                inferredType = expectedOutputs[i].type;
+                inferredShape = expectedOutputs[i].shape;
+            } else if (inputs.length > 0) {
+                inferredType = inputs[0].literalType;
+
+                // Inherit bool for logical ops
+                if (
+                    [
+                        "Equal",
+                        "Greater",
+                        "Less",
+                        "And",
+                        "Or",
+                        "Not",
+                        "GreaterOrEqual",
+                        "LessOrEqual",
+                    ].includes(type)
+                ) {
+                    inferredType = DataType.BOOL;
+                } else if (["Shape", "Size"].includes(type)) {
+                    inferredType = DataType.INT64;
+                    inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
+                } else if (type === "Cast" && "to" in attributes) {
+                    inferredType = attributes["to"] as DataType;
+                }
+            }
+
+            let outTensor: TensorNode.Class;
+            if (this.graph.hasNode(outputIds[i])) {
+                outTensor = this.graph.getNodeById(outputIds[i])!.as(TensorNode);
+                if (inferredType !== DataType.UNDEFINED) outTensor.setLiteralType(inferredType);
+                if (inferredShape.length > 0) outTensor.setShape(inferredShape);
+            } else {
+                // Create new node
+                outTensor = this.graph
+                    .addNode(outputIds[i])
+                    .init(new TensorNode.Builder(inferredType, inferredShape, "intermediate"))
+                    .as(TensorNode);
+            }
+
+            this.graph
+                .addEdge(op, outTensor)
+                .init(new OnnxEdge.Builder(outTensor.literalType, outTensor.shape))
+                .as(OnnxEdge);
+            outputs.push(outTensor);
+        }
+
+        // 4. Run shape inference
+        inferNodeShape(op, this.graph);
+
+        return outputs;
+    }
+
+    /**
      * Creates a ConstantNode safely, ensuring unique IDs.
      */
     public createConstant(id: string, proto: TensorProto): ConstantNode.Class {
@@ -236,156 +323,5 @@ export class GraphBuilder {
                 }
             }
         }
-    }
-
-    /**
-     * Creates a fully wired ONNX Loop node and its internal subgraph.
-     * Supports both static and dynamic trip counts and carry shapes.
-     * * @param tripCount The maximum number of iterations (number or ValueNode).
-     * @param elemTy The data type of the loop-carried state.
-     * @param carryLen The shape/length of the carried state (StaticShape or ValueNode).
-     */
-    public createForLoopRegion(
-        outerBuilder: GraphBuilder,
-        totalIters: number | ValueNode,
-        elemTy: DataType,
-        carryLen: StaticShape | ValueNode,
-        tag: string = "loop",
-    ): {
-        loopOp: OperationNode.Class;
-        innerBuilder: GraphBuilder;
-        trip: TensorNode.Class;
-        condIn: TensorNode.Class;
-        vInitial: TensorNode.Class;
-        loopOutput: TensorNode.Class;
-        finalize: (nextStates: ConcreteValueNode[]) => void;
-    } {
-        // 1. Resolve Outer Inputs
-        // Trip Count (Input 0)
-        const tripInp =
-            typeof totalIters === "number"
-                ? outerBuilder.createConstant(`trip_count_${tag}`, scalarInt64(totalIters))
-                : totalIters;
-
-        // Condition (Input 1) - Usually hardcoded to true for lowering standard ops
-        const condInInp = outerBuilder.createConstant(`cond_${tag}`, bool(true));
-
-        // Initial Carry (Input 2)
-        let vInitialInp: ValueNode;
-        let internalCarryShape: KnownShape;
-
-        if (Array.isArray(carryLen)) {
-            // Static path - ALWAYS flatten the carry state for loop lowering
-            const flatLen = carryLen.reduce((a, b) => a * b, 1);
-            vInitialInp = outerBuilder.createConstant(
-                `init_carry_${tag}`,
-                zeroTensor(elemTy, [flatLen]), // Create a 1D flattened zero tensor
-            );
-            internalCarryShape = [flatLen]; // The loop internally carries a 1D tensor
-        } else {
-            const zeroScalar = outerBuilder.createConstant(`zero_${tag}`, zeroTensor(elemTy, []));
-
-            // ALWAYS flatten dynamic carry state to 1D to match loop semantics
-            // 1. Calculate flat trip count = ReduceProd(carryLen)
-            const axes0 = outerBuilder.createConstant(`ax0_fl_${tag}`, int64Vec([0]));
-            const flatTrip = outerBuilder.createOp("ReduceProd", [carryLen, axes0], {
-                keepdims: 0,
-            })[0];
-            const flatTrip1D = outerBuilder.createOp("Unsqueeze", [flatTrip, axes0])[0];
-
-            // 2. Expand to 1D shape and enforce [-1] to prevent InferShapes propagation bugs
-            [vInitialInp] = outerBuilder.createOp("Expand", [zeroScalar, flatTrip1D], {}, [
-                { type: elemTy, shape: UNKNOWN_SHAPE },
-            ]);
-
-            internalCarryShape = UNKNOWN_SHAPE; // The loop internally carries a 1D tensor
-        }
-
-        // 2. The Loop Body (region/inner graph)
-        const innerGraph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
-        const innerBuilder = new GraphBuilder(innerGraph, tag);
-
-        const trip = innerGraph
-            .addNode(uniq(innerGraph, "iter"))
-            .init(new TensorNode.Builder(DataType.INT64, [], "input"))
-            .as(TensorNode);
-        const condIn = innerGraph
-            .addNode(uniq(innerGraph, "cond_in"))
-            .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
-            .as(TensorNode);
-        const vInitial = innerGraph
-            .addNode(uniq(innerGraph, "carry"))
-            .init(new TensorNode.Builder(elemTy, internalCarryShape, "input"))
-            .as(TensorNode);
-
-        const loopInputs = [tripInp, condInInp, vInitialInp];
-
-        // 3. Cond Passthrough
-        const idCond = innerGraph
-            .addNode(uniq(innerGraph, `id_cond_${tag}`))
-            .init(new OperationNode.Builder("Identity", [condIn]))
-            .as(OperationNode);
-        const condOut = innerGraph
-            .addNode(uniq(innerGraph, `cond_out_${tag}`))
-            .init(new TensorNode.Builder(DataType.BOOL, [], "output"))
-            .as(TensorNode);
-        innerGraph
-            .addEdge(condIn, idCond)
-            .init(new OnnxEdge.Builder(condIn.literalType, condIn.shape));
-        innerGraph
-            .addEdge(idCond, condOut)
-            .init(new OnnxEdge.Builder(condOut.literalType, condOut.shape));
-
-        // 4. The Finalizer (Wires the inner results to the loop boundary)
-        const finalize = (nextStates: ConcreteValueNode[]) => {
-            nextStates.forEach((state, idx) => {
-                const expectedType = idx === 0 ? vInitial.literalType : state.literalType;
-                const expectedShape = idx === 0 ? vInitial.shape : state.shape;
-
-                const stateOut = innerGraph
-                    .addNode(uniq(innerGraph, `${this.scopeTag}_${idx}_state_out_${tag}`))
-                    .init(new TensorNode.Builder(expectedType, expectedShape, "output"))
-                    .as(TensorNode);
-
-                const idOp = innerGraph
-                    .addNode(uniq(innerGraph, `${this.scopeTag}_id_state_out_${tag}_${idx}`))
-                    .init(new OperationNode.Builder("Identity", [state]))
-                    .as(OperationNode);
-
-                innerGraph
-                    .addEdge(state, idOp)
-                    .init(new OnnxEdge.Builder(state.literalType, state.shape));
-                innerGraph
-                    .addEdge(idOp, stateOut)
-                    .init(new OnnxEdge.Builder(expectedType, expectedShape));
-            });
-        };
-
-        // 5. The Loop Node
-        const loopOp = this.graph
-            .addNode(uniq(this.graph, tag))
-            .init(new OperationNode.Builder("Loop", loopInputs, {}, [innerGraph]))
-            .as(OperationNode);
-
-        // 6. Wire Outer Graph Edges
-        loopInputs.forEach((input) => {
-            if (this.graph.hasNode(input.id))
-                this.graph
-                    .addEdge(input, loopOp)
-                    .init(new OnnxEdge.Builder(input.literalType, input.shape))
-                    .as(OnnxEdge);
-        });
-
-        // 7. Generate Outputs for the Outer Graph
-        const loopOutput = this.graph
-            .addNode(uniq(this.graph, `${this.scopeTag}_carry_out`))
-            .init(new TensorNode.Builder(vInitial.literalType, vInitial.shape, "intermediate"))
-            .as(TensorNode);
-        this.graph
-            .addEdge(loopOp, loopOutput)
-            .init(new OnnxEdge.Builder(vInitial.literalType, vInitial.shape))
-            .as(OnnxEdge);
-
-        return { loopOp, innerBuilder, trip, condIn, vInitial, loopOutput, finalize };
     }
 }
