@@ -6,7 +6,6 @@ digraph {
   Y [label=Y shape=ellipse color=red];
   lowering_0_Reshape [label=Reshape shape=box color=blue];
   lowering_1_Reshape [label=Reshape shape=box color=blue];
-  lowering_1_final_shape [label="3,3" shape=box color=maroon];
   lowering_0_trip_count_Loop_0 [label=27 shape=box color=maroon];
   lowering_0_cond_Loop_0 [label=1 shape=box color=maroon];
   lowering_0_init_carry_Loop_0 [label="0,0,0,0,0" shape=box color=maroon];
@@ -166,6 +165,7 @@ digraph {
   }
 
   loopLoop_0_Loop_0 -> lowering_0_Reshape [label="{9}" ltail=cluster_loop_Loop_0];
+  lowering_1_final_shape [label="3,3" shape=box color=maroon];
   lowering_0_final_shape [label="3,3" shape=box color=maroon];
   lowering_1_trip_count_Loop_1 [label=9 shape=box color=maroon];
   lowering_1_cond_Loop_1 [label=1 shape=box color=maroon];

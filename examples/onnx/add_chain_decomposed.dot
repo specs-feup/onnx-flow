@@ -45,8 +45,8 @@ digraph {
     loop0_iter -> loop0_1 [label=sc];
     loop0_axes -> loop0_1 [label="{1}"];
     loop0_capture_A -> loop0_2 [label="{4}"];
-    loop0_9 -> loop0_carry_out [label="{4}"];
     loop0_capture_B -> loop0_3 [label="{4}"];
+    loop0_9 -> loop0_carry_out [label="{4}"];
     loop0_capture_C -> loop0_4 [label="{4}"];
     loop0_capture_D -> loop0_5 [label="{4}"];
     loop0_carry -> loop0_9 [label="{4}"];
