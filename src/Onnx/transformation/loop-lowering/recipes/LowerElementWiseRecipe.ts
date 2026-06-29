@@ -14,6 +14,12 @@ import { GraphBuilder } from "../../../GraphBuilder.js";
 import { asStaticDims, int64Vec, UNKNOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 export class LowerElementWiseRecipe implements LoopLoweringRecipe {
+    public readonly name = "LowerElementWise";
+    public readonly targetOp = OpCategory.ElementWise;
+    public readonly exposesControlFlow = true;
+    public readonly exposesDataAccess = true;
+    public readonly producedOps = ["Loop", "Shape", "Size", "Gather", "Unsqueeze", "Squeeze", "Add", "Sub", "Mul", "Div", "Mod"];
+
     canApply(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);
         if (schema?.category !== OpCategory.ElementWise) return false;

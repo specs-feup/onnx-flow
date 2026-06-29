@@ -54,12 +54,19 @@ export class CanonicalizationPass implements GraphPass {
 
                 const recipe = this.registry.get(op.type);
 
-                if (recipe && recipe.canApply(op)) {
-                    const builder = new GraphBuilder(graph, `lowering_${op.id}`);
-                    recipe.apply(op, builder);
+                if (recipe) {
+                    // Ask the recipe for an opportunity
+                    const opportunity = recipe.match(op); 
+                    
+                    if (opportunity) {
+                        const builder = new GraphBuilder(graph, `lowering_${op.id}`);
+                        
+                        // Execute the opportunity
+                        opportunity.apply(builder);
 
-                    localChanged = true;
-                    globalChanged = true;
+                        localChanged = true;
+                        globalChanged = true;
+                    }
                 }
             }
         }

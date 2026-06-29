@@ -4,6 +4,7 @@ import type { DecompositionRecipe } from "../Recipe.js";
 import type { ConcreteValueNode } from "../../OnnxTypes.js";
 import { DataType } from "../../OnnxTypes.js";
 import { chunkTensor, makeTensorProto, toStaticShape } from "../../Utils.js";
+import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
 export class MatMulGridDecompositionRecipe implements DecompositionRecipe {
     public readonly name = "MatMulGridDecomposition";
@@ -13,11 +14,14 @@ export class MatMulGridDecompositionRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Gather", "Mul", "ReduceSum", "Concat", "Unsqueeze"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): TransformationOpportunity | null {
         const inputs = op.getInputs();
-        if (!inputs || inputs.length !== 2) return false;
+        if (!inputs || inputs.length !== 2) return null;
         // Only apply if inputs are 2D (basic matrix multiplication)
-        return inputs[0].shape.length === 2 && inputs[1].shape.length === 2;
+        if (inputs[0].shape.length === 2 && inputs[1].shape.length === 2) {
+            return new TransformationOpportunity(this.name, op.id, "Decompose MatMul into grid of independent matmuls", (builder: GraphBuilder) => this.apply(op, builder));
+        }
+        return null;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

@@ -4,6 +4,7 @@ import type { DecompositionRecipe } from "../Recipe.js";
 import type { ConcreteValueNode } from "../../OnnxTypes.js";
 import { DataType } from "../../OnnxTypes.js";
 import { chunkTensor, makeTensorProto, shapesEqual, toStaticShape } from "../../Utils.js";
+import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
 export class AddGridDecompositionRecipe implements DecompositionRecipe {
     public readonly name = "AddGridDecomposition";
@@ -13,13 +14,16 @@ export class AddGridDecompositionRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Gather", "Add", "Unsqueeze", "Concat"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): TransformationOpportunity | null {
         const inputs = op.getInputs();
-        if (!inputs || inputs.length !== 2) return false;
+        if (!inputs || inputs.length !== 2) return null;
 
         const [in1, in2] = inputs as ConcreteValueNode[];
         // Only apply if inputs are 2D and exactly match
-        return shapesEqual(in1, in2) && in1.shape.length === 2;
+        if (shapesEqual(in1, in2) && in1.shape.length === 2) {
+            return new TransformationOpportunity(this.name, op.id, "Decompose Add into grid of independent adds", (builder: GraphBuilder) => this.apply(op, builder));
+        }
+        return null;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

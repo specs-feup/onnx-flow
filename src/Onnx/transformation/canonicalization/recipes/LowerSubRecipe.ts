@@ -3,6 +3,7 @@ import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
+import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerSubRecipe implements DecompositionRecipe {
     public readonly name = "LowerSub";
@@ -11,11 +12,11 @@ export class LowerSubRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Neg", "Add"];
 
-    canApply(op: OperationNode.Class): boolean {
-        if (op.type !== "Sub") return false;
+    match(op: OperationNode.Class): TransformationOpportunity | null {
+        if (op.type !== "Sub") return null;
 
         const ins = op.getInputs();
-        if (!ins || ins.length < 2) return false;
+        if (!ins || ins.length < 2) return null;
 
         const A = ins[0];
         const dtype = A.literalType as DataType | undefined;
@@ -28,10 +29,15 @@ export class LowerSubRecipe implements DecompositionRecipe {
             dtype === DataType.UINT32 ||
             dtype === DataType.UINT64
         ) {
-            return false;
+            return null;
         }
 
-        return true;
+        return new TransformationOpportunity(
+            this.name,
+            op.id,
+            "Lower Sub",
+            (builder: GraphBuilder) => this.apply(op, builder),
+        );
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

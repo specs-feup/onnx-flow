@@ -2,10 +2,21 @@ import type OperationNode from "../../OperationNode.js";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type { ConcreteValueNode, ValueNode, KnownShape } from "../../OnnxTypes.js";
 import type { GraphBuilder } from "../../GraphBuilder.js";
+import { OpCategory } from "../../Schema/OpSchema.js";
 
 export type RecipeApplyResult = ValueNode | { resultNode: ValueNode; nextCarry: ValueNode };
 
 export interface LoopLoweringRecipe {
+    readonly name: string;
+
+    /** The specific OpType (e.g., "MatMul") or a broader OpCategory (e.g., OpCategory.ElementWise) */
+    readonly targetOp: string | OpCategory;
+
+    /** Metadata for the Orchestrator to make optimization decisions */
+    readonly exposesControlFlow: boolean;
+    readonly exposesDataAccess: boolean;
+    readonly producedOps: string[];
+    
     /**
      * Checks if this recipe can safely lower the given operation into scalar math.
      */

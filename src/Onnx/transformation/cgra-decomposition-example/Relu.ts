@@ -4,6 +4,7 @@ import type { DecompositionRecipe } from "../Recipe.js";
 import type { ConcreteValueNode } from "../../OnnxTypes.js";
 import { DataType } from "../../OnnxTypes.js";
 import { chunkTensor, makeTensorProto, toStaticShape } from "../../Utils.js";
+import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
 export class ReluGridDecompositionRecipe implements DecompositionRecipe {
     public readonly name = "ReluDecomposition";
@@ -13,11 +14,14 @@ export class ReluGridDecompositionRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Gather", "Greater", "Where", "Unsqueeze", "Concat"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): TransformationOpportunity | null {
         const inputs = op.getInputs();
-        if (!inputs || inputs.length !== 1) return false;
+        if (!inputs || inputs.length !== 1) return null;
         // Restrict to 2D for this specific grid decomposition
-        return inputs[0].shape.length === 2;
+        if (inputs[0].shape.length === 2) {
+            return new TransformationOpportunity(this.name, op.id, "Decompose Relu into grid of independent relus", (builder: GraphBuilder) => this.apply(op, builder));
+        }
+        return null;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

@@ -4,6 +4,7 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { getIntAttr, makeTensorProto } from "../../../Utils.js";
+import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerSoftmaxRecipe implements DecompositionRecipe {
     public readonly name = "LowerSoftmax";
@@ -12,8 +13,14 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "Softmax";
+    match(op: OperationNode.Class): TransformationOpportunity | null {
+        if (op.type !== "Softmax") return null;
+        return new TransformationOpportunity(
+            this.name,
+            op.id,
+            "Lower Softmax",
+            (builder: GraphBuilder) => this.apply(op, builder),
+        );
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

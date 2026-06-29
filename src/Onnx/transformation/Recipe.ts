@@ -1,6 +1,7 @@
 import type OperationNode from "../OperationNode.js";
 import type { GraphBuilder } from "../GraphBuilder.js";
 import type { OpCategory } from "../Schema/OpSchema.js";
+import type { TransformationOpportunity } from "./TransformationOpportunity.js";
 
 export interface DecompositionRecipe {
     readonly name: string;
@@ -14,7 +15,7 @@ export interface DecompositionRecipe {
     readonly producedOps: string[];
 
     /** Check if this specific node can/should be decomposed by this recipe right now */
-    canApply(node: OperationNode.Class): boolean;
+    match(node: OperationNode.Class): TransformationOpportunity | null;
 
     /** Perform the actual decomposition using the GraphBuilder */
     apply(node: OperationNode.Class, builder: GraphBuilder): void;

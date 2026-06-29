@@ -10,6 +10,7 @@ import {
     makeTensorProto,
     toStaticShape,
 } from "../../../Utils.js";
+import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerAveragePoolRecipe implements DecompositionRecipe {
     public readonly name = "LowerAveragePool";
@@ -18,16 +19,16 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Conv", "Div", "Shape", "Expand"];
 
-    canApply(op: OperationNode.Class): boolean {
-        if (op.type !== "AveragePool") return false;
-        if (op.getInputs() === undefined) return false;
+    match(op: OperationNode.Class): TransformationOpportunity | null {
+        if (op.type !== "AveragePool") return null;
+        if (op.getInputs() === undefined) return null;
         const X = op.getInputs()![0] as ConcreteValueNode;
         const xShape = toStaticShape(X.shape);
 
         const kernelShape = getIntsAttr(op, "kernel_shape", []);
-        if (kernelShape.length !== 2) return false;
+        if (kernelShape.length !== 2) return null;
 
-        if (xShape.length !== 4 || xShape[1] <= 0) return false;
+        if (xShape.length !== 4 || xShape[1] <= 0) return null;
 
         // Hoist the optimization check here!
         const [kH, kW] = kernelShape;
@@ -44,10 +45,15 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
             kH === strides[0] &&
             kW === strides[1]
         ) {
-            return false;
+            return null;
         }
 
-        return true;
+        return new TransformationOpportunity(
+            this.name,
+            op.id,
+            "Lower AveragePool to Conv",
+            (builder: GraphBuilder) => this.apply(op, builder),
+        );
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

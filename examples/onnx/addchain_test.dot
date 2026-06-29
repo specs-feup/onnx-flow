@@ -8,7 +8,7 @@ digraph {
   lowering_2_Reshape [label=Reshape shape=box color=blue];
   Loop_2 -> lowering_2_Reshape [label="{4}"];
   lowering_2_cond_Loop_2 [label=1 shape=box color=maroon];
-  lowering_2_final_shape [label=4 shape=box color=maroon];
+  lowering_2_final_shape_2 [label=4 shape=box color=maroon];
   lowering_2_init_carry_Loop_2 [label="0,0,0,0" shape=box color=maroon];
   subgraph cluster_loop_Loop_2 {
     graph [compound=true rankdir=LR];
@@ -96,7 +96,7 @@ digraph {
   }
 
   lowering_2_trip_count_Loop_2 [label=4 shape=box color=maroon];
-  lowering_2_final_shape -> lowering_2_Reshape [label="{1}"];
+  lowering_2_final_shape_2 -> lowering_2_Reshape [label="{1}"];
   lowering_2_init_carry_Loop_2 -> loopLoop_2_Loop_2 [label="{4}" lhead=cluster_loop_Loop_2];
   lowering_2_trip_count_Loop_2 -> loopLoop_2_Loop_2 [label=sc lhead=cluster_loop_Loop_2];
   lowering_2_cond_Loop_2 -> loopLoop_2_Loop_2 [label=sc lhead=cluster_loop_Loop_2];

@@ -33,20 +33,23 @@ export class OrchestratorPass implements GraphPass {
                 const schema = registry.get(op.type, 19);
                 const category = schema?.category;
 
+                // Find the first recipe that matches
                 const recipe = this.recipes.find(
-                    (r) =>
-                        (r.targetOp === op.type ||
-                            (category !== undefined && r.targetOp === category)) &&
-                        r.canApply(op),
+                    r => (r.targetOp === op.type || r.targetOp === category) 
                 );
 
                 if (recipe) {
-                    console.log(
-                        `[${this.name}] Applying recipe '${recipe.name}' to ${op.id} (${op.type})`,
-                    );
-                    recipe.apply(op, builder);
-                    localChanged = true;
-                    globalChanged = true;
+                    // Get the opportunity
+                    const opp = recipe.match(op);
+                    if (opp) {
+                        console.log(`[${this.name}] Applying opportunity '${opp.id}'`);
+                        
+                        // Apply the opportunity
+                        opp.apply(builder); 
+                        
+                        localChanged = true;
+                        globalChanged = true;
+                    }
                 }
             }
         }

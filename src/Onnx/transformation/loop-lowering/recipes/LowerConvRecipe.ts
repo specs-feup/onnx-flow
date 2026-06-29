@@ -16,6 +16,12 @@ import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 
 export class LowerConvRecipe implements LoopLoweringRecipe {
+    public readonly name = "LowerConv";
+    public readonly targetOp = "Conv";
+    public readonly exposesControlFlow = true;
+    public readonly exposesDataAccess = true;
+    public readonly producedOps = ["Loop", "Shape", "Size", "Gather", "Unsqueeze", "Squeeze", "Mul", "Div", "Mod", "Add", "Sub"];
+
     canApply(op: OperationNode.Class): boolean {
         return op.type === "Conv";
     }

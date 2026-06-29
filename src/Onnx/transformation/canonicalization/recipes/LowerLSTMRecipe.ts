@@ -7,6 +7,7 @@ import { getIntAttr, getStringAttr, makeTensorProto, toStaticShape } from "../..
 import OnnxGraph from "../../../OnnxGraph.js";
 import TensorNode from "../../../TensorNode.js";
 import Graph from "@specs-feup/flow/graph/Graph";
+import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerLSTMRecipe implements DecompositionRecipe {
     public readonly name = "LowerLSTM";
@@ -30,9 +31,15 @@ export class LowerLSTMRecipe implements DecompositionRecipe {
         "Gather",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
-        if (op.type !== "LSTM") return false;
-        return getStringAttr(op, "direction", "forward") === "forward";
+    match(op: OperationNode.Class): TransformationOpportunity | null {
+        if (op.type !== "LSTM") return null;
+        if (getStringAttr(op, "direction", "forward") !== "forward") return null;
+        return new TransformationOpportunity(
+            this.name,
+            op.id,
+            "Lower LSTM",
+            (builder: GraphBuilder) => this.apply(op, builder),
+        );
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
