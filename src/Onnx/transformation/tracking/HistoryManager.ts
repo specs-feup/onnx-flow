@@ -1,3 +1,4 @@
+import fs from "fs";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type { MutationPatch } from "./GraphActions.js";
 
@@ -83,5 +84,10 @@ export class HistoryManager {
             );
         });
         console.log("========================================\n");
+    }
+
+    public exportHistoryToJson(filePath: string): void {
+        const data = JSON.stringify(this.getHistory(), null, 2);
+        fs.writeFileSync(filePath, data);
     }
 }
