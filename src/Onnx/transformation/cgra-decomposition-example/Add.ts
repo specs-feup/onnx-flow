@@ -21,7 +21,12 @@ export class AddGridDecompositionRecipe implements DecompositionRecipe {
         const [in1, in2] = inputs as ConcreteValueNode[];
         // Only apply if inputs are 2D and exactly match
         if (shapesEqual(in1, in2) && in1.shape.length === 2) {
-            return new TransformationOpportunity(this.name, op.id, "Decompose Add into grid of independent adds", (builder: GraphBuilder) => this.apply(op, builder));
+            return new TransformationOpportunity(
+                this.name,
+                op.id,
+                "Decompose Add into grid of independent adds",
+                (builder: GraphBuilder) => this.apply(op, builder),
+            );
         }
         return null;
     }

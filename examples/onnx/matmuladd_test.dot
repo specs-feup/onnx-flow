@@ -4,11 +4,11 @@ digraph {
   A [label=A shape=ellipse color=lime];
   B [label=B shape=ellipse color=lime];
   Y [label=Y shape=ellipse color=red];
-  lowering_0_Reshape [label=Reshape shape=box color=blue];
-  lowering_1_Reshape [label=Reshape shape=box color=blue];
-  lowering_0_trip_count_Loop_0 [label=27 shape=box color=maroon];
-  lowering_0_cond_Loop_0 [label=1 shape=box color=maroon];
-  lowering_0_init_carry_Loop_0 [label="0,0,0,0,0" shape=box color=maroon];
+  loop_lowering_Reshape [label=Reshape shape=box color=blue];
+  loop_lowering_Reshape_1 [label=Reshape shape=box color=blue];
+  loop_lowering_trip_count_Loop_0 [label=27 shape=box color=maroon];
+  loop_lowering_cond_Loop_0 [label=1 shape=box color=maroon];
+  loop_lowering_init_carry_Loop_0 [label="0,0,0,0,0" shape=box color=maroon];
   subgraph cluster_loop_Loop_0 {
     graph [compound=true rankdir=LR];
     loopLoop_0_iter [label=iter shape=ellipse color=lime];
@@ -164,12 +164,12 @@ digraph {
     graph [color=gray];
   }
 
-  loopLoop_0_Loop_0 -> lowering_0_Reshape [label="{9}" ltail=cluster_loop_Loop_0];
-  lowering_1_final_shape_1 [label="3,3" shape=box color=maroon];
-  lowering_0_final_shape_0 [label="3,3" shape=box color=maroon];
-  lowering_1_trip_count_Loop_1 [label=9 shape=box color=maroon];
-  lowering_1_cond_Loop_1 [label=1 shape=box color=maroon];
-  lowering_1_init_carry_Loop_1 [label="0,0,0,0,0" shape=box color=maroon];
+  loopLoop_0_Loop_0 -> loop_lowering_Reshape [label="{9}" ltail=cluster_loop_Loop_0];
+  loop_lowering_final_shape_1 [label="3,3" shape=box color=maroon];
+  loop_lowering_final_shape [label="3,3" shape=box color=maroon];
+  loop_lowering_trip_count_Loop_1 [label=9 shape=box color=maroon];
+  loop_lowering_cond_Loop_1 [label=1 shape=box color=maroon];
+  loop_lowering_init_carry_Loop_1 [label="0,0,0,0,0" shape=box color=maroon];
   subgraph cluster_loop_Loop_1 {
     graph [compound=true rankdir=LR];
     loopLoop_1_iter [label=iter shape=ellipse color=lime];
@@ -210,8 +210,8 @@ digraph {
     loopLoop_1_ew_1_Gather -> loopLoop_1_ew_1_Squeeze [label="{1}"];
     loopLoop_1_ew_1_Squeeze [label=Squeeze shape=box color=blue];
     loopLoop_1_ew_1_Squeeze -> loopLoop_1_ew_1_Add_2 [label=sc];
-    loopLoop_1_lowering_0_Reshape_out0 [label=lowering_0_Reshape_out0 shape=box];
-    loopLoop_1_ew_1_flat_shape_lowering_0_Reshape_out0 [label=-1 shape=box color=maroon];
+    loopLoop_1_loop_lowering_Reshape_out0 [label=loop_lowering_Reshape_out0 shape=box];
+    loopLoop_1_ew_1_flat_shape_loop_lowering_Reshape_out0 [label=-1 shape=box color=maroon];
     loopLoop_1_ew_1_Reshape_1 [label=Reshape shape=box color=blue];
     loopLoop_1_ew_1_Reshape_1 -> loopLoop_1_ew_1_Gather_1 [label="{9}"];
     loopLoop_1_ew_1_Gather_1 [label=Gather shape=box color=blue];
@@ -244,8 +244,8 @@ digraph {
     loopLoop_1_B -> loopLoop_1_ew_1_Reshape [label="{3,3}"];
     loopLoop_1_ew_1_flat_shape_B -> loopLoop_1_ew_1_Reshape [label="{1}"];
     loopLoop_1_Loop_1_axes -> loopLoop_1_ew_1_Squeeze [label="{1}"];
-    loopLoop_1_lowering_0_Reshape_out0 -> loopLoop_1_ew_1_Reshape_1 [label="{3,3}"];
-    loopLoop_1_ew_1_flat_shape_lowering_0_Reshape_out0 -> loopLoop_1_ew_1_Reshape_1 [label="{1}"];
+    loopLoop_1_loop_lowering_Reshape_out0 -> loopLoop_1_ew_1_Reshape_1 [label="{3,3}"];
+    loopLoop_1_ew_1_flat_shape_loop_lowering_Reshape_out0 -> loopLoop_1_ew_1_Reshape_1 [label="{1}"];
     loopLoop_1_Loop_1_axes -> loopLoop_1_ew_1_Squeeze_1 [label="{1}"];
     loopLoop_1_iter -> loopLoop_1_Loop_1_Reshape [label=sc];
     loopLoop_1_Loop_1_one_shape -> loopLoop_1_Loop_1_Reshape [label="{1}"];
@@ -257,14 +257,14 @@ digraph {
     graph [color=gray];
   }
 
-  loopLoop_1_Loop_1 -> lowering_1_Reshape [label="{9}" ltail=cluster_loop_Loop_1];
-  lowering_0_final_shape_0 -> lowering_0_Reshape [label="{2}"];
-  lowering_1_final_shape_1 -> lowering_1_Reshape [label="{2}"];
-  lowering_0_trip_count_Loop_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
-  lowering_0_cond_Loop_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
-  lowering_0_init_carry_Loop_0 -> loopLoop_0_Loop_0 [label="{9}" lhead=cluster_loop_Loop_0];
-  lowering_1_trip_count_Loop_1 -> loopLoop_1_Loop_1 [label=sc lhead=cluster_loop_Loop_1];
-  lowering_1_cond_Loop_1 -> loopLoop_1_Loop_1 [label=sc lhead=cluster_loop_Loop_1];
-  lowering_1_init_carry_Loop_1 -> loopLoop_1_Loop_1 [label="{9}" lhead=cluster_loop_Loop_1];
-  lowering_1_Reshape -> Y [label="{3,3}"];
+  loopLoop_1_Loop_1 -> loop_lowering_Reshape_1 [label="{9}" ltail=cluster_loop_Loop_1];
+  loop_lowering_final_shape -> loop_lowering_Reshape [label="{2}"];
+  loop_lowering_final_shape_1 -> loop_lowering_Reshape_1 [label="{2}"];
+  loop_lowering_trip_count_Loop_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
+  loop_lowering_cond_Loop_0 -> loopLoop_0_Loop_0 [label=sc lhead=cluster_loop_Loop_0];
+  loop_lowering_init_carry_Loop_0 -> loopLoop_0_Loop_0 [label="{9}" lhead=cluster_loop_Loop_0];
+  loop_lowering_trip_count_Loop_1 -> loopLoop_1_Loop_1 [label=sc lhead=cluster_loop_Loop_1];
+  loop_lowering_cond_Loop_1 -> loopLoop_1_Loop_1 [label=sc lhead=cluster_loop_Loop_1];
+  loop_lowering_init_carry_Loop_1 -> loopLoop_1_Loop_1 [label="{9}" lhead=cluster_loop_Loop_1];
+  loop_lowering_Reshape_1 -> Y [label="{3,3}"];
 }

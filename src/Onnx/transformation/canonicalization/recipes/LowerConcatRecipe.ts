@@ -39,12 +39,14 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;
         if (axis < 0 || axis >= rank) return null;
 
-        return isNumeric(dtype) ? new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Concat to ScatterElements",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        ) : null;
+        return isNumeric(dtype)
+            ? new TransformationOpportunity(
+                  this.name,
+                  op.id,
+                  "Lower Concat to ScatterElements",
+                  (builder: GraphBuilder) => this.apply(op, builder),
+              )
+            : null;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

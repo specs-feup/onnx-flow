@@ -19,7 +19,12 @@ export class ReluGridDecompositionRecipe implements DecompositionRecipe {
         if (!inputs || inputs.length !== 1) return null;
         // Restrict to 2D for this specific grid decomposition
         if (inputs[0].shape.length === 2) {
-            return new TransformationOpportunity(this.name, op.id, "Decompose Relu into grid of independent relus", (builder: GraphBuilder) => this.apply(op, builder));
+            return new TransformationOpportunity(
+                this.name,
+                op.id,
+                "Decompose Relu into grid of independent relus",
+                (builder: GraphBuilder) => this.apply(op, builder),
+            );
         }
         return null;
     }

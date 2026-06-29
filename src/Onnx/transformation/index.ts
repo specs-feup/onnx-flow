@@ -8,6 +8,7 @@ import { CanonicalizationPass } from "./canonicalization/CanonicalizationPass.js
 import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
+import { HistoryManager } from "./tracking/HistoryManager.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -59,9 +60,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         }
     }
 
-    apply(graph: OnnxGraph.Class): OnnxGraph.Class {
+    apply(graph: OnnxGraph.Class, printSummary: boolean = true): OnnxGraph.Class {
         initializeSchemaRegistry();
         const pm = new PassManager();
+        const historyManager = new HistoryManager(graph);
 
         if (this.decomposeForCgra) {
             // =========================================================================
@@ -75,7 +77,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     return false; // Return false so the PassManager doesn't loop it infinitely
                 },
             });
-            pm.run(graph);
+            pm.run(graph, historyManager);
             return graph;
         }
 
@@ -115,7 +117,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         pm.addPass(new InferShapesPass());
 
         // Execute the pipeline!
-        pm.run(graph);
+        pm.run(graph, historyManager);
+        if (printSummary) {
+            historyManager.printSummary();
+        }
         return graph;
     }
 }

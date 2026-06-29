@@ -35,7 +35,7 @@ export class OrchestratorPass implements GraphPass {
 
                 // Find the first recipe that matches
                 const recipe = this.recipes.find(
-                    r => (r.targetOp === op.type || r.targetOp === category) 
+                    (r) => r.targetOp === op.type || r.targetOp === category,
                 );
 
                 if (recipe) {
@@ -43,10 +43,10 @@ export class OrchestratorPass implements GraphPass {
                     const opp = recipe.match(op);
                     if (opp) {
                         console.log(`[${this.name}] Applying opportunity '${opp.id}'`);
-                        
+
                         // Apply the opportunity
-                        opp.apply(builder); 
-                        
+                        opp.apply(builder);
+
                         localChanged = true;
                         globalChanged = true;
                     }

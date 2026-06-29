@@ -19,7 +19,12 @@ export class MatMulGridDecompositionRecipe implements DecompositionRecipe {
         if (!inputs || inputs.length !== 2) return null;
         // Only apply if inputs are 2D (basic matrix multiplication)
         if (inputs[0].shape.length === 2 && inputs[1].shape.length === 2) {
-            return new TransformationOpportunity(this.name, op.id, "Decompose MatMul into grid of independent matmuls", (builder: GraphBuilder) => this.apply(op, builder));
+            return new TransformationOpportunity(
+                this.name,
+                op.id,
+                "Decompose MatMul into grid of independent matmuls",
+                (builder: GraphBuilder) => this.apply(op, builder),
+            );
         }
         return null;
     }

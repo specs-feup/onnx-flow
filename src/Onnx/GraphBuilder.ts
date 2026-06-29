@@ -1,10 +1,12 @@
 import type OnnxGraph from "./OnnxGraph.js";
+import type Node from "@specs-feup/flow/graph/Node";
 import type {
     AttributeMap,
     ValueNode,
     ConcreteValueNode,
     TensorProto,
     KnownShape,
+    Shape,
 } from "./OnnxTypes.js";
 import { DataType } from "./OnnxTypes.js";
 import OperationNode from "./OperationNode.js";
@@ -14,12 +16,57 @@ import OnnxEdge from "./OnnxEdge.js";
 import { uniq } from "./Utils.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
 import { inferNodeShape } from "./InferShapes.js";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 
 export class GraphBuilder {
     constructor(
         public graph: OnnxGraph.Class,
         private scopeTag: string = "",
     ) {}
+
+    /**
+     * Centralized method to add a node to the graph.
+     * Overridden by TrackedGraphBuilder to log the creation.
+     */
+    public addNode<
+        T extends BaseNode.Class,
+        D extends BaseNode.Data,
+        S extends BaseNode.ScratchData,
+    >(nodeId: string, builder: Node.Builder<D, S>): T {
+        return this.graph.addNode(nodeId).init(builder) as unknown as T;
+    }
+
+    /**
+     * Centralized method to add an edge.
+     * Overridden by TrackedGraphBuilder to log the addition.
+     */
+    public addEdge(
+        source: BaseNode.Class,
+        target: BaseNode.Class,
+        literalType: DataType,
+        shape: KnownShape | Shape,
+    ): OnnxEdge.Class {
+        return this.graph
+            .addEdge(source, target)
+            .init(new OnnxEdge.Builder(literalType, shape))
+            .as(OnnxEdge);
+    }
+
+    /**
+     * Centralized method to remove a node.
+     * Overridden by TrackedGraphBuilder to snapshot the node before destruction.
+     */
+    public removeNode(node: BaseNode.Class): void {
+        node.remove();
+    }
+
+    /**
+     * Centralized method to remove an edge.
+     */
+    public removeEdge(edge: OnnxEdge.Class | BaseEdge.Class): void {
+        edge.remove();
+    }
 
     /**
      * Creates an OperationNode, wires its inputs, and provisions its output tensors.
@@ -32,18 +79,15 @@ export class GraphBuilder {
         regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
         // 1. Build Operation Node
-        const op = this.graph
-            .addNode(uniq(this.graph, `${this.scopeTag}_${type}`))
-            .init(new OperationNode.Builder(type, inputs, attributes, regions))
-            .as(OperationNode);
+        const op = this.addNode(
+            uniq(this.graph, `${this.scopeTag}_${type}`),
+            new OperationNode.Builder(type, inputs, attributes, regions),
+        ).as(OperationNode);
 
         // 2. Wire incoming edges using the resolved proxy nodes
         for (const input of inputs) {
             if (this.graph.hasNode(input.id)) {
-                this.graph
-                    .addEdge(input, op)
-                    .init(new OnnxEdge.Builder(input.literalType, input.shape))
-                    .as(OnnxEdge);
+                this.addEdge(input, op, input.literalType, input.shape);
             }
         }
 
@@ -93,15 +137,12 @@ export class GraphBuilder {
                 }
             }
 
-            const outTensor = this.graph
-                .addNode(uniq(this.graph, `${this.scopeTag}_${type}_out${i}`))
-                .init(new TensorNode.Builder(inferredType, inferredShape, "intermediate"))
-                .as(TensorNode);
+            const outTensor = this.addNode(
+                uniq(this.graph, `${this.scopeTag}_${type}_out${i}`),
+                new TensorNode.Builder(inferredType, inferredShape, "intermediate"),
+            ).as(TensorNode);
 
-            this.graph
-                .addEdge(op, outTensor)
-                .init(new OnnxEdge.Builder(outTensor.literalType, outTensor.shape))
-                .as(OnnxEdge);
+            this.addEdge(op, outTensor, outTensor.literalType, outTensor.shape);
             outputs.push(outTensor);
         }
 
@@ -121,11 +162,8 @@ export class GraphBuilder {
                 if (i in outputs) {
                     const edge = this.graph.getEdge(op.id, outputs[i].id);
                     if (edge) {
-                        edge.remove();
-                        this.graph
-                            .addEdge(op, outputs[i])
-                            .init(new OnnxEdge.Builder(outputs[i].literalType, outputs[i].shape))
-                            .as(OnnxEdge);
+                        this.removeEdge(edge);
+                        this.addEdge(op, outputs[i], outputs[i].literalType, outputs[i].shape);
                     }
                 }
             }
@@ -148,18 +186,15 @@ export class GraphBuilder {
         regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
         // 1. Build Operation Node with exact ID
-        const op = this.graph
-            .addNode(opId)
-            .init(new OperationNode.Builder(type, inputs, attributes, regions))
-            .as(OperationNode);
+        const op = this.addNode(
+            opId,
+            new OperationNode.Builder(type, inputs, attributes, regions),
+        ).as(OperationNode);
 
         // 2. Wire incoming edges
         for (const input of inputs) {
             if (this.graph.hasNode(input.id)) {
-                this.graph
-                    .addEdge(input, op)
-                    .init(new OnnxEdge.Builder(input.literalType, input.shape))
-                    .as(OnnxEdge);
+                this.addEdge(input, op, input.literalType, input.shape);
             }
         }
 
@@ -204,16 +239,13 @@ export class GraphBuilder {
                 if (inferredShape.length > 0) outTensor.setShape(inferredShape);
             } else {
                 // Create new node
-                outTensor = this.graph
-                    .addNode(outputIds[i])
-                    .init(new TensorNode.Builder(inferredType, inferredShape, "intermediate"))
-                    .as(TensorNode);
+                outTensor = this.addNode(
+                    outputIds[i],
+                    new TensorNode.Builder(inferredType, inferredShape, "intermediate"),
+                ).as(TensorNode);
             }
 
-            this.graph
-                .addEdge(op, outTensor)
-                .init(new OnnxEdge.Builder(outTensor.literalType, outTensor.shape))
-                .as(OnnxEdge);
+            this.addEdge(op, outTensor, outTensor.literalType, outTensor.shape);
             outputs.push(outTensor);
         }
 
@@ -227,10 +259,10 @@ export class GraphBuilder {
      * Creates a ConstantNode safely, ensuring unique IDs.
      */
     public createConstant(id: string, proto: TensorProto): ConstantNode.Class {
-        return this.graph
-            .addNode(uniq(this.graph, `${this.scopeTag}_${id}`))
-            .init(new ConstantNode.Builder(proto))
-            .as(ConstantNode);
+        return this.addNode(
+            uniq(this.graph, `${this.scopeTag}_${id}`),
+            new ConstantNode.Builder(proto),
+        ).as(ConstantNode);
     }
 
     /**
@@ -261,13 +293,11 @@ export class GraphBuilder {
 
                     // Disconnect old edge if it exists at this graph level
                     const existingEdge = g.getEdge(oldNode.id, op.id);
-                    if (existingEdge) existingEdge.remove();
+                    if (existingEdge) this.removeEdge(existingEdge);
 
                     // Connect new edge (only if newNode is visible/accessible in this scope)
                     if (g.hasNode(newNode.id) || g === this.graph) {
-                        g.addEdge(newNode, op)
-                            .init(new OnnxEdge.Builder(newNode.literalType, newNode.shape))
-                            .as(OnnxEdge);
+                        this.addEdge(newNode, op, newNode.literalType, newNode.shape);
                     }
                 }
 
@@ -283,7 +313,7 @@ export class GraphBuilder {
         updateUsesInGraph(this.graph);
 
         // Disconnect any remaining outgoers manually
-        oldNode.outgoers.toArray().forEach((edge) => edge.remove());
+        oldNode.outgoers.toArray().forEach((edge) => this.removeEdge(edge));
 
         // 2. Clean up or redirect
         if (isGraphOutput) {
@@ -291,35 +321,26 @@ export class GraphBuilder {
             const producers = newNode.incomers.sources.filterIs(OperationNode).toArray();
             if (producers.length === 1 && newNode.outgoers.length === 0) {
                 const producer = producers[0];
-                newNode.incomers.forEach((e) => e.remove());
-                this.graph
-                    .addEdge(producer, oldNode)
-                    .init(new OnnxEdge.Builder(oldNode.literalType, oldNode.shape))
-                    .as(OnnxEdge);
-                newNode.remove();
+                newNode.incomers.forEach((e) => this.removeEdge(e));
+                this.addEdge(producer, oldNode, oldNode.literalType, oldNode.shape);
+                this.removeNode(newNode);
             } else {
                 // Fallback to Identity
-                const idOp = this.graph
-                    .addNode(uniq(this.graph, `${this.scopeTag}_Identity_to_output_${oldNode.id}`))
-                    .init(new OperationNode.Builder("Identity", [newNode]))
-                    .as(OperationNode);
+                const idOp = this.addNode(
+                    uniq(this.graph, `${this.scopeTag}_Identity_to_output_${oldNode.id}`),
+                    new OperationNode.Builder("Identity", [newNode]),
+                ).as(OperationNode);
 
-                this.graph
-                    .addEdge(newNode, idOp)
-                    .init(new OnnxEdge.Builder(newNode.literalType, newNode.shape))
-                    .as(OnnxEdge);
-                this.graph
-                    .addEdge(idOp, oldNode)
-                    .init(new OnnxEdge.Builder(oldNode.literalType, oldNode.shape))
-                    .as(OnnxEdge);
+                this.addEdge(newNode, idOp, newNode.literalType, newNode.shape);
+                this.addEdge(idOp, oldNode, oldNode.literalType, oldNode.shape);
             }
         } else {
             // Clean up orphaned intermediate node
             if (oldNode.outgoers.length === 0) {
                 if (oldNode.is(TensorNode) && oldNode.as(TensorNode).type === "intermediate") {
-                    oldNode.remove();
+                    this.removeNode(oldNode);
                 } else if (oldNode.is(ConstantNode)) {
-                    oldNode.remove();
+                    this.removeNode(oldNode);
                 }
             }
         }

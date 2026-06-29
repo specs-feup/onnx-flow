@@ -1,4 +1,5 @@
 import type OnnxGraph from "./OnnxGraph.js";
+import type { HistoryManager } from "./transformation/tracking/HistoryManager.js";
 
 export interface GraphPass {
     readonly name: string;
@@ -6,7 +7,7 @@ export interface GraphPass {
      * Executes the pass on the given graph.
      * @returns {boolean} True if the graph was mutated, false otherwise.
      */
-    run(graph: OnnxGraph.Class): boolean;
+    run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean;
 }
 
 export class PassManager {
@@ -16,13 +17,17 @@ export class PassManager {
         this.passes.push(pass);
     }
 
-    public run(graph: OnnxGraph.Class, maxIterations: number = 1): void {
+    public run(
+        graph: OnnxGraph.Class,
+        historyManager: HistoryManager,
+        maxIterations: number = 1,
+    ): void {
         for (let i = 0; i < maxIterations; i++) {
             let changed = false;
 
             for (const pass of this.passes) {
                 console.log(`[PassManager] Running ${pass.name}...`);
-                if (pass.run(graph)) {
+                if (pass.run(graph, historyManager)) {
                     changed = true;
                 }
             }

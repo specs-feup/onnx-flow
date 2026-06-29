@@ -18,7 +18,19 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     public readonly targetOp = OpCategory.ElementWise;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
-    public readonly producedOps = ["Loop", "Shape", "Size", "Gather", "Unsqueeze", "Squeeze", "Add", "Sub", "Mul", "Div", "Mod"];
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "Mod",
+    ];
 
     canApply(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);

@@ -1,15 +1,21 @@
 import type OnnxGraph from "../../OnnxGraph.js";
 import OperationNode from "../../OperationNode.js";
 import TensorNode from "../../TensorNode.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
-import { DataType, ValueNode, KnownShape, StaticShape, ConcreteValueNode } from "../../OnnxTypes.js";
-import { asStaticDims, UNKNOWN_SHAPE, topologicalSortOperationNodes, int64Vec } from "../../Utils.js";
+import type { GraphBuilder } from "../../GraphBuilder.js";
+import type { ValueNode, KnownShape, StaticShape, ConcreteValueNode } from "../../OnnxTypes.js";
+import { DataType } from "../../OnnxTypes.js";
+import {
+    asStaticDims,
+    UNKNOWN_SHAPE,
+    topologicalSortOperationNodes,
+    int64Vec,
+} from "../../Utils.js";
 import { buildForLoopRegion } from "./LoopBuilder.js";
 import { OpCategory } from "../../Schema/OpSchema.js";
 import { OpRegistry } from "../../Schema/OpRegistry.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
-// Strategy Recipes
+// Your Strategy Recipes
 import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
 import { LowerTransposeRecipe } from "./recipes/LowerTransposeRecipe.js";
 import { LowerElementWiseRecipe } from "./recipes/LowerElementWiseRecipe.js";
@@ -20,7 +26,10 @@ import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
 import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
 
 export class LoopFusionMatcher {
-    private boundsCache = new Map<string, { totalIters: number | ValueNode; carryShape: KnownShape | ValueNode; targetShape?: KnownShape | ValueNode }>();
+    private boundsCache = new Map<
+        string,
+        { totalIters: number | ValueNode; carryShape: KnownShape | ValueNode }
+    >();
     private recipes: LoopLoweringRecipe[];
 
     constructor(private options: { coalesce: boolean; fuse: boolean }) {
@@ -38,27 +47,36 @@ export class LoopFusionMatcher {
         this.boundsCache.clear();
         const opportunities: TransformationOpportunity[] = [];
 
+        // 1. Find the chains
         const chains = this.options.fuse
             ? this.findFuseableChains(graph)
             : this.findSingleOpChains(graph);
 
+        // 2. Wrap each chain in a TransformationOpportunity
         for (const chain of chains) {
             const rootOp = chain[chain.length - 1];
-            
-            opportunities.push(new TransformationOpportunity(
-                "LoopLowering",
-                chain.map(o => o.id).join(","), // Target is the whole chain
-                `Fuse ${chain.length} operations into an ONNX Loop (Root: ${rootOp.type})`,
-                (builder: GraphBuilder) => {
-                    this.lowerFlatLoopChain(graph, chain, builder);
-                }
-            ));
+
+            opportunities.push(
+                new TransformationOpportunity(
+                    "LoopLowering",
+                    chain.map((o) => o.id).join(","), // The target is the whole chain!
+                    `Fuse ${chain.length} ${chain.length == 1 ? "operation" : "operations"} into an ONNX Loop (Root: ${rootOp.type})`,
+                    (builder: GraphBuilder) => {
+                        // This closure executes the lowering when the opportunity is applied
+                        this.lowerFlatLoopChain(graph, chain, builder);
+                    },
+                ),
+            );
         }
 
         return opportunities;
     }
 
-    private lowerFlatLoopChain(graph: OnnxGraph.Class, chain: OperationNode.Class[], outerBuilder: GraphBuilder): void {
+    private lowerFlatLoopChain(
+        graph: OnnxGraph.Class,
+        chain: OperationNode.Class[],
+        outerBuilder: GraphBuilder,
+    ): void {
         const rootOp = chain[chain.length - 1];
         const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;
         const originalOutShape: KnownShape = [...(rootOutNodeRaw.shape as KnownShape)];
@@ -68,9 +86,14 @@ export class LoopFusionMatcher {
         const totalIters = bounds.totalIters;
         const carryShape = bounds.carryShape as StaticShape;
 
-        // 1. Initialize Loop Region
+        // 1. Initialize Loop Region via GraphBuilder helper
         const { innerBuilder, trip, vInitial, loopOutput, finalize } = buildForLoopRegion(
-            outerBuilder, totalIters, elemTy, carryShape, `Loop_${rootOp.id}`, `lowering_${rootOp.id}`
+            outerBuilder,
+            totalIters,
+            elemTy,
+            carryShape,
+            `Loop_${rootOp.id}`,
+            `lowering_${rootOp.id}`,
         );
 
         const body = innerBuilder.graph;
@@ -81,24 +104,21 @@ export class LoopFusionMatcher {
         // 2. Execute the strategies (Recipes) inside the loop body
         for (const op of chain) {
             const recipe = this.getRecipeFor(op)!;
-            
-            // Safeguard: Ensure target shape isn't a naked array
-            let safeTargetShapeNode: ValueNode | undefined;
-            if (bounds.targetShape && !Array.isArray(bounds.targetShape)) {
-                safeTargetShapeNode = bounds.targetShape as ValueNode;
-            }
-
             const applyRes = recipe.apply(
-                op, body, valueMap, trip, axes, originalOutShape, vInitial, safeTargetShapeNode
+                op,
+                body,
+                valueMap,
+                trip,
+                axes,
+                originalOutShape,
+                vInitial,
+                bounds.targetShape as ValueNode | undefined,
             );
 
             let scalarOut: ValueNode;
-            // Robust runtime check to prevent array leaks
-            if (Array.isArray(applyRes)) {
-                scalarOut = applyRes[0] as ValueNode;
-            } else if (typeof applyRes === "object" && applyRes !== null && "nextCarry" in applyRes) {
-                scalarOut = (applyRes as any).resultNode;
-                if (op.id === rootOp.id) finalNextCarry = (applyRes as any).nextCarry;
+            if (typeof applyRes === "object" && "nextCarry" in applyRes) {
+                scalarOut = applyRes.resultNode;
+                if (op.id === rootOp.id) finalNextCarry = applyRes.nextCarry;
             } else {
                 scalarOut = applyRes as ValueNode;
             }
@@ -110,57 +130,55 @@ export class LoopFusionMatcher {
         }
 
         // 3. Finalize Loop Body result
-        let carryOutNode: ConcreteValueNode;
+        let carryOutNode;
         if (finalNextCarry) {
-            carryOutNode = finalNextCarry as ConcreteValueNode;
+            carryOutNode = finalNextCarry;
         } else {
             const finalScalar = valueMap.get(rootOutNodeRaw.id)!;
             const oneShape = innerBuilder.createConstant("one_shape", int64Vec([1]));
             const [iterUnsq] = innerBuilder.createOp("Reshape", [trip, oneShape]);
             const [finalUnsq] = innerBuilder.createOp("Reshape", [finalScalar, oneShape]);
-            [carryOutNode] = innerBuilder.createOp("ScatterElements", [vInitial, iterUnsq, finalUnsq], { axis: 0 });
+            [carryOutNode] = innerBuilder.createOp(
+                "ScatterElements",
+                [vInitial, iterUnsq, finalUnsq],
+                { axis: 0 },
+            );
         }
-        finalize([carryOutNode]);
+        finalize([carryOutNode as ConcreteValueNode]);
 
         // 4. Post-processing (Outer Graph)
         let processedOut: ValueNode = loopOutput;
         const rootRecipe = this.getRecipeFor(rootOp)!;
         if (rootRecipe.postProcess) {
-            const ppRes = rootRecipe.postProcess(rootOp, outerBuilder, loopOutput);
-            processedOut = Array.isArray(ppRes) ? ppRes[0] : ppRes; // Safeguard
+            processedOut = rootRecipe.postProcess(rootOp, outerBuilder, loopOutput);
         }
 
         // 5. Final Reshape to target shape
         const originalIsDynamic = originalOutShape.includes(-1) || originalOutShape.length === 0;
         let targetShapeNode: ValueNode;
 
-        // Guaranteed to be a ValueNode
-        if (bounds.targetShape && !Array.isArray(bounds.targetShape)) {
+        if (bounds.targetShape) {
             targetShapeNode = bounds.targetShape as ValueNode;
+        } else if (Array.isArray(carryShape)) {
+            const staticCarryShape = carryShape as number[];
+            targetShapeNode = outerBuilder.createConstant(
+                `final_shape`,
+                int64Vec(originalIsDynamic ? staticCarryShape : (originalOutShape as number[])),
+            );
         } else {
-            let shapeArr: number[];
-            if (Array.isArray(bounds.targetShape)) {
-                shapeArr = bounds.targetShape as number[];
-            } else if (Array.isArray(carryShape)) {
-                shapeArr = originalIsDynamic ? (carryShape as number[]) : (originalOutShape as number[]);
-            } else {
-                targetShapeNode = carryShape as ValueNode; 
-                shapeArr = []; // won't be used
-            }
-
-            if (!targetShapeNode!) {
-                targetShapeNode = outerBuilder.createConstant(`final_shape_${rootOp.id}`, int64Vec(shapeArr));
-            }
+            targetShapeNode = carryShape as ValueNode;
         }
 
-        const [reshaped] = outerBuilder.createOp("Reshape", [processedOut, targetShapeNode!], {}, [{ type: elemTy, shape: originalOutShape }]);
+        const [reshaped] = outerBuilder.createOp("Reshape", [processedOut, targetShapeNode], {}, [
+            { type: elemTy, shape: originalOutShape },
+        ]);
 
         // 6. Integrate results back into the main graph
         outerBuilder.replaceAllUsesWith(rootOutNodeRaw, reshaped);
         chain.forEach((op) => op.remove());
     }
 
-    // --- Core Matcher Helpers ---
+    // --- Helper methods (copied exactly from your old Pass) ---
     private getRecipeFor(op: OperationNode.Class): LoopLoweringRecipe | undefined {
         return this.recipes.find((recipe) => recipe.canApply(op));
     }
@@ -169,18 +187,30 @@ export class LoopFusionMatcher {
         return this.getRecipeFor(op) !== undefined;
     }
 
-    private getBoundsFor(op: OperationNode.Class): { totalIters: number | ValueNode; carryShape: KnownShape | ValueNode; targetShape?: KnownShape | ValueNode } {
+    private getBoundsFor(op: OperationNode.Class): {
+        totalIters: number | ValueNode;
+        carryShape: KnownShape | ValueNode;
+        targetShape?: KnownShape | ValueNode;
+    } {
         if (this.boundsCache.has(op.id)) return this.boundsCache.get(op.id)!;
 
         const recipe = this.getRecipeFor(op)!;
         const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
-        const originalOutShape: KnownShape = outTensors.length > 0 ? [...(outTensors[0].shape as KnownShape)] : UNKNOWN_SHAPE;
+        const originalOutShape: KnownShape =
+            outTensors.length > 0 ? [...(outTensors[0].shape as KnownShape)] : UNKNOWN_SHAPE;
         const safeOut = asStaticDims(originalOutShape);
 
         if (recipe.getLoopBounds) {
             const result = recipe.getLoopBounds(op, originalOutShape);
             this.boundsCache.set(op.id, result);
             return result;
+        }
+
+        if (
+            (originalOutShape.includes(-1) || originalOutShape.length === 0) &&
+            outTensors.length > 0
+        ) {
+            throw new Error(`Dynamic output shape missing bounds in recipe for ${op.type}`);
         }
 
         const totalIters = safeOut.length === 0 ? 1 : safeOut.reduce((a, b) => a * b, 1);
@@ -196,14 +226,18 @@ export class LoopFusionMatcher {
     }
 
     private compareCarryShapes(a: KnownShape | ValueNode, b: KnownShape | ValueNode): boolean {
-        const isArrayA = Array.isArray(a), isArrayB = Array.isArray(b);
-        if (isArrayA && isArrayB) return (a as KnownShape).join(",") === (b as KnownShape).join(",");
+        const isArrayA = Array.isArray(a),
+            isArrayB = Array.isArray(b);
+        if (isArrayA && isArrayB)
+            return (a as KnownShape).join(",") === (b as KnownShape).join(",");
         if (!isArrayA && !isArrayB) return (a as ValueNode).id === (b as ValueNode).id;
         return false;
     }
 
     private findSingleOpChains(graph: OnnxGraph.Class): OperationNode.Class[][] {
-        return topologicalSortOperationNodes(graph).filter((op) => this.isSupported(op)).map((op) => [op]);
+        return topologicalSortOperationNodes(graph)
+            .filter((op) => this.isSupported(op))
+            .map((op) => [op]);
     }
 
     private findFuseableChains(graph: OnnxGraph.Class): OperationNode.Class[][] {
@@ -232,8 +266,10 @@ export class LoopFusionMatcher {
 
             const prodBounds = this.getBoundsFor(op);
             const consBounds = this.getBoundsFor(consumer);
-            if (!this.compareIters(prodBounds.totalIters, consBounds.totalIters) ||
-                !this.compareCarryShapes(prodBounds.carryShape, consBounds.carryShape)) {
+            if (
+                !this.compareIters(prodBounds.totalIters, consBounds.totalIters) ||
+                !this.compareCarryShapes(prodBounds.carryShape, consBounds.carryShape)
+            ) {
                 return true;
             }
 
@@ -254,7 +290,12 @@ export class LoopFusionMatcher {
                 visited.add(current.id);
                 cluster.push(current);
 
-                const inTensors = current.getInputs()?.filter((n) => n.is(TensorNode) && n.as(TensorNode).type === "intermediate") || [];
+                const inTensors =
+                    current
+                        .getInputs()
+                        ?.filter(
+                            (n) => n.is(TensorNode) && n.as(TensorNode).type === "intermediate",
+                        ) || [];
 
                 for (const t of inTensors) {
                     const producers = t.incomers.sources.filterIs(OperationNode).toArray();
@@ -262,8 +303,16 @@ export class LoopFusionMatcher {
                         if (this.isSupported(prod) && !visited.has(prod.id)) {
                             if (!roots.includes(prod)) {
                                 const prodBounds = this.getBoundsFor(prod);
-                                if (this.compareIters(prodBounds.totalIters, rootBounds.totalIters) &&
-                                    this.compareCarryShapes(prodBounds.carryShape, rootBounds.carryShape)) {
+                                if (
+                                    this.compareIters(
+                                        prodBounds.totalIters,
+                                        rootBounds.totalIters,
+                                    ) &&
+                                    this.compareCarryShapes(
+                                        prodBounds.carryShape,
+                                        rootBounds.carryShape,
+                                    )
+                                ) {
                                     queue.push(prod);
                                 }
                             }

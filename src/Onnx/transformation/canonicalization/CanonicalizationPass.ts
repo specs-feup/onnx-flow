@@ -12,10 +12,11 @@ import { LowerConcatRecipe } from "./recipes/LowerConcatRecipe.js";
 import { LowerClipRecipe } from "./recipes/LowerClipRecipe.js";
 import { LowerAveragePoolRecipe } from "./recipes/LowerAveragePoolRecipe.js";
 import type { DecompositionRecipe } from "../Recipe.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
 import { topologicalSortOperationNodes } from "../../Utils.js";
 import { LowerReluRecipe } from "./recipes/LowerReluRecipe.js";
 import { LowerSubRecipe } from "./recipes/LowerSubRecipe.js";
+import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
+import type { HistoryManager } from "../tracking/HistoryManager.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -40,7 +41,7 @@ export class CanonicalizationPass implements GraphPass {
         //["Exp", new LowerExpRecipe()],
     ]);
 
-    public run(graph: OnnxGraph.Class): boolean {
+    public run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean {
         let globalChanged = false;
         let localChanged = true;
 
@@ -56,16 +57,25 @@ export class CanonicalizationPass implements GraphPass {
 
                 if (recipe) {
                     // Ask the recipe for an opportunity
-                    const opportunity = recipe.match(op); 
-                    
+                    const opportunity = recipe.match(op);
+
                     if (opportunity) {
-                        const builder = new GraphBuilder(graph, `lowering_${op.id}`);
-                        
+                        //const builder = new GraphBuilder(graph, `lowering_${op.id}`);
+                        const builder = new TrackedGraphBuilder(
+                            graph,
+                            opportunity.id,
+                            opportunity.description,
+                            "canonicalization",
+                        );
+
                         // Execute the opportunity
                         opportunity.apply(builder);
 
                         localChanged = true;
                         globalChanged = true;
+
+                        const patch = builder.commitPatch();
+                        historyManager.pushPatch(patch);
                     }
                 }
             }

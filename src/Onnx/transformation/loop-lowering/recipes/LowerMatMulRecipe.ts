@@ -28,7 +28,17 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "MatMul";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
-    public readonly producedOps = ["Loop", "Shape", "Size", "Gather", "Unsqueeze", "Squeeze", "Mul", "Div", "Mod"];
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Mul",
+        "Div",
+        "Mod",
+    ];
 
     canApply(op: OperationNode.Class): boolean {
         if (op.type !== "MatMul") return false;

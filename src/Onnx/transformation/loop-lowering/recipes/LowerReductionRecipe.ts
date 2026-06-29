@@ -29,7 +29,23 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     public readonly targetOp = OpCategory.Reduction;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
-    public readonly producedOps = ["Loop", "Shape", "Size", "Gather", "Unsqueeze", "Squeeze", "Add", "Sub", "Mul", "Div", "Mod", "Max", "Min", "Abs", "Exp"];
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "Mod",
+        "Max",
+        "Min",
+        "Abs",
+        "Exp",
+    ];
 
     canApply(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);

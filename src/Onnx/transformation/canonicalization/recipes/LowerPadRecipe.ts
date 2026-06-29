@@ -26,7 +26,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
 
         // We can only safely canonicalize static pad dimensions
         const inShape = toStaticShape(ins[0].shape);
-        
+
         if (inShape.length === 0 || !inShape.every((d) => d > 0)) return null;
         return new TransformationOpportunity(
             this.name,

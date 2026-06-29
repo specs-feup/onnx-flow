@@ -20,7 +20,19 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "Conv";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
-    public readonly producedOps = ["Loop", "Shape", "Size", "Gather", "Unsqueeze", "Squeeze", "Mul", "Div", "Mod", "Add", "Sub"];
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Mul",
+        "Div",
+        "Mod",
+        "Add",
+        "Sub",
+    ];
 
     canApply(op: OperationNode.Class): boolean {
         return op.type === "Conv";
