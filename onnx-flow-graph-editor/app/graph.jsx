@@ -1,53 +1,68 @@
 'use client';
+import React, { useEffect, useRef } from 'react';
+import cytoscape from 'cytoscape';
+import myData from '../../add.json';
 
-import React from 'react';
-import CytoscapeComponent from 'react-cytoscapejs';
+const PureCytoscapeGraph = () => {
+  // 1. Create a reference to anchor the graph container DOM element
+  const containerRef = useRef(null);
+  
+  // 2. Keep a reference to the core cytoscape instance if you need to mutate it later
+  const cyRef = useRef(null);
 
-export default function MyGraphApp() {
+  useEffect(() => {
+    // 3. Initialize Cytoscape when the component mounts
+    if (containerRef.current) {
+      cyRef.current = cytoscape({
+        container: containerRef.current, // Target DOM node
+        
+        elements: myData.elements,
 
-    const elements = [
-    { data: { id: 'one', label: 'Node 1' } },
-    { data: { id: 'two', label: 'Node 2' } },
-    { data: { id: 'edge1', source: 'one', target: 'two' } }
-    ];
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'background-color': '#ff0080',
+              'label': 'data(label)',
+              'color': '#fff',
+              'text-valign': 'center',
+              'text-halign': 'center',
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 3,
+              'line-color': '#999',
+              'target-arrow-color': '#999',
+              'target-arrow-shape': 'triangle',
+              'curve-style': 'bezier'
+            }
+          }
+        ],
 
-    // Visual styling rules for your graph
-    const stylesheet = [
-    {
-        selector: 'node',
-        style: {
-        'background-color': '#0074D9',
-        'label': 'data(label)', // Pulls the label text dynamically from the node data
-        'color': '#333',
-        'font-size': '12px'
+        layout: {
+          name: 'grid',
+          rows: 200
         }
-    },
-    {
-        selector: 'edge',
-        style: {
-        'width': 3,
-        'line-color': '#999',
-        'target-arrow-color': '#999',
-        'target-arrow-shape': 'triangle',
-        'curve-style': 'bezier' // Essential for arrows and curves to render properly
-        }
+      });
     }
-    ];
 
-// Layout dictates how nodes are positioned on the initial render
-    const layout = { name: 'grid', rows: 1 };
+    // 4. Clean up the instance when the component unmounts
+    return () => {
+      if (cyRef.current) {
+        cyRef.current.destroy();
+      }
+    };
+  }, []); // Empty dependency array runs this strictly on mount
+
+  // 5. Render a styled div container (Width and Height are REQUIRED)
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>My Cytoscape Network</h1>
-      
-      <div style={{ border: '1px solid #ccc', width: '500px', height: '500px' }}>
-        <CytoscapeComponent
-          elements={elements}
-          stylesheet={stylesheet}
-          layout={layout}
-          style={{ width: '100%', height: '100%' }}
-        />
-      </div>
-    </div>
+    <div 
+      ref={containerRef} 
+      style={{ width: '100%', height: '500px', border: '1px solid #ccc' }} 
+    />
   );
-}
+};
+
+export default PureCytoscapeGraph;

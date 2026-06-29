@@ -1,0 +1,496 @@
+{
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "X",
+          "__specs-onnx__tensor_node": {
+            "version": "4",
+            "literalType": 6,
+            "shape": [
+              2,
+              2
+            ],
+            "type": "input",
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "A",
+          "__specs-onnx__tensor_node": {
+            "version": "4",
+            "literalType": 6,
+            "shape": [
+              2,
+              2
+            ],
+            "type": "input",
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "Y",
+          "__specs-onnx__tensor_node": {
+            "version": "4",
+            "literalType": 6,
+            "shape": [
+              2,
+              2
+            ],
+            "type": "output",
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "loop_lowering_Reshape",
+          "__specs-onnx__operation_node": {
+            "version": "4",
+            "type": "Reshape",
+            "inputs": [
+              {},
+              {}
+            ],
+            "attributes": {},
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "loop_lowering_trip_count_Loop_0",
+          "__specs-onnx__constant_node": {
+            "version": "4",
+            "value": {
+              "dataType": 7,
+              "dims": [],
+              "int64Data": [
+                4
+              ]
+            },
+            "isInput": false,
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "loop_lowering_cond_Loop_0",
+          "__specs-onnx__constant_node": {
+            "version": "4",
+            "value": {
+              "dataType": 9,
+              "dims": [],
+              "int32Data": [
+                1
+              ]
+            },
+            "isInput": false,
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "loop_lowering_init_carry_Loop_0",
+          "__specs-onnx__constant_node": {
+            "version": "4",
+            "value": {
+              "dataType": 6,
+              "dims": [
+                4
+              ],
+              "int32Data": [
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "isInput": false,
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "Loop_0",
+          "__specs-onnx__operation_node": {
+            "version": "4",
+            "type": "Loop",
+            "inputs": [
+              {},
+              {},
+              {}
+            ],
+            "attributes": {},
+            "regions": [
+              {}
+            ],
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "lowering_0_carry_out",
+          "__specs-onnx__tensor_node": {
+            "version": "4",
+            "literalType": 6,
+            "shape": [
+              4
+            ],
+            "type": "intermediate",
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "loop_lowering_final_shape",
+          "__specs-onnx__constant_node": {
+            "version": "4",
+            "value": {
+              "dataType": 7,
+              "dims": [
+                2
+              ],
+              "int64Data": [
+                2,
+                2
+              ]
+            },
+            "isInput": false,
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "id": "1ff6cad1-1700-4526-a74a-39fd710361be",
+          "source": "lowering_0_carry_out",
+          "target": "loop_lowering_Reshape",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 6,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "a2817dfc-082a-4441-909e-642c7edb17fa",
+          "source": "loop_lowering_final_shape",
+          "target": "loop_lowering_Reshape",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 7,
+            "shape": [
+              2
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "cb153355-8ddf-42d1-a730-35a98feb67a0",
+          "source": "Loop_0",
+          "target": "lowering_0_carry_out",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 6,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "2ff5e735-c8c0-40ee-9a85-00a26bc8720f",
+          "source": "loop_lowering_trip_count_Loop_0",
+          "target": "Loop_0",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 7,
+            "shape": []
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "b8fabfe2-a727-4152-8896-eeb7e5b8ad78",
+          "source": "loop_lowering_cond_Loop_0",
+          "target": "Loop_0",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 9,
+            "shape": []
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "7bced7cd-5952-4bf8-ae2b-dd9b1d8b5160",
+          "source": "loop_lowering_init_carry_Loop_0",
+          "target": "Loop_0",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 6,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "5d081f50-d2d2-486d-88d1-8601c6ad5c97",
+          "source": "loop_lowering_Reshape",
+          "target": "Y",
+          "__specs-onnx__onnx_edge": {
+            "version": "1",
+            "type": 6,
+            "shape": [
+              2,
+              2
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      }
+    ]
+  },
+  "data": {
+    "__specs-onnx__onnx_graph": {
+      "version": "1"
+    }
+  },
+  "zoomingEnabled": true,
+  "userZoomingEnabled": true,
+  "zoom": 1,
+  "minZoom": 1e-50,
+  "maxZoom": 1e+50,
+  "panningEnabled": true,
+  "userPanningEnabled": true,
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "boxSelectionEnabled": true,
+  "renderer": {
+    "name": "null"
+  }
+}
