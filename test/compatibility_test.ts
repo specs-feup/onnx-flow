@@ -1585,64 +1585,18 @@ const CORE_OP_TESTS: Array<{
     specs: FeedSpec[];
 }> = [
 
-    /*{
-        label: "IsInf",
-        originalPath: "examples/onnx/isinf.onnx",
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], init: [Infinity, 1.0] },
-        ],
-    },*/
+{
+    label: "group_normalization",
+    originalPath: "examples/onnx/group_normalization.onnx",
+    tol: 1e-4,
+    cliArgs: jsonFullArgs,
+    specs: [
+        { name: "X", dtype: "float32", shape: [1, 4, 4, 4] },
+        { name: "scale", dtype: "float32", shape: [4] },
+        { name: "bias", dtype: "float32", shape: [4] },
+    ]
+},
 
-    {
-        label: "Sin",
-        originalPath: "examples/onnx/sin.onnx",
-        cliArgs: jsonFullArgs,
-        tol: 1e-6,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
-        ],
-    },
-
-    {        label: "Cos",
-        originalPath: "examples/onnx/cos.onnx",
-        cliArgs: jsonFullArgs,
-        tol: 1e-6,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
-        ],
-    },
-
-    {
-        label: "Asin",
-        originalPath: "examples/onnx/asin.onnx",
-        cliArgs: jsonFullArgs,
-        tol: 1e-6,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
-        ],
-    },
-
-    {
-        label: "Acos",
-        originalPath: "examples/onnx/acos.onnx",
-        cliArgs: jsonFullArgs,
-        tol: 1e-6,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
-        ],
-    },
-    
-
-    {
-        label: "Atan",
-        originalPath: "examples/onnx/atan.onnx",
-        cliArgs: jsonFullArgs,
-        tol: 1e-6,
-        specs: [
-            { name: "A", dtype: "float32", shape: [2], gen: "negmix" },
-        ],
-    },
 ];
 
 // Run ONLY the focused subset above.

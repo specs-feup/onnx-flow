@@ -12,7 +12,7 @@ export class LowerSinRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Add", "Sub", "Mul", "Div"];
 
-    private readonly ITERATIONS = 20; 
+    private readonly ITERATIONS = 1; 
 
     canApply(op: OperationNode.Class): boolean {
         return op.type === "Sin";

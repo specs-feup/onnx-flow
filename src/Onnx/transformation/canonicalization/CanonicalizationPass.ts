@@ -57,7 +57,12 @@ import { LowerCosRecipe } from "./recipes/LowerCosRecipe.js";
 import { LowerAsinRecipe } from "./recipes/LowerAsinRecipe.js";
 import { LowerAcosRecipe } from "./recipes/LowerAcosRecipe.js";
 import { LowerAtanRecipe } from "./recipes/LowerAtanRecipe.js";
+import { LowerErfRecipe } from "./recipes/LowerErfRecipe.js";
+import { LowerBatchNormalizationRecipe } from "./recipes/LowerBatchNormalizationRecipe.js";
 //import { LowerReciprocalRecipe } from "./recipes/LowerReciprocalRecipe.js";
+import { LowerLayerNormalizationRecipe } from "./recipes/LowerLayerNormalizationRecipe.js";
+import { LowerInstanceNormalizationRecipe } from "./recipes/LowerInstanceNormalizationRecipe.js";
+import { LowerGroupNormalizationRecipe } from "./recipes/LowerGroupNormalizationRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -116,10 +121,18 @@ export class CanonicalizationPass implements GraphPass {
         ["Log", new LowerLogRecipe()],
         ["Sin", new LowerSinRecipe()],
         ["Cos", new LowerCosRecipe()],
-        ["Asin", new LowerAsinRecipe()],
+        ["Asin", new LowerAsinRecipe()],    
         ["Acos", new LowerAcosRecipe()],
         ["Atan", new LowerAtanRecipe()],
+        ["Erf", new LowerErfRecipe()],
         //["Reciprocal", new LowerReciprocalRecipe()],
+        
+        //Normalization Operations
+        ["BatchNormalization", new LowerBatchNormalizationRecipe()],
+        ["LayerNormalization", new LowerLayerNormalizationRecipe()],
+        ["InstanceNormalization", new LowerInstanceNormalizationRecipe()],
+        ["GroupNormalization", new LowerGroupNormalizationRecipe()],
+
     ]);
 
     public run(graph: OnnxGraph.Class): boolean {

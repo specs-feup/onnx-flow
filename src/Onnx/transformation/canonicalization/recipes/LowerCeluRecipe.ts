@@ -26,7 +26,6 @@ export class LowerCeluRecipe implements DecompositionRecipe {
         const Output = [{ type: OutputType, shape: X.shape as KnownShape }];
         
         // Create constants
-
         const alpha = getFloatAttr(op, "alpha", 1.0);
 
         const alphaConst = builder.createConstant(

@@ -25,13 +25,10 @@ export class LowerAbsRecipe implements DecompositionRecipe {
         const ins = op.getInputs() as ConcreteValueNode[];
         const A = ins[0];
         const Y = op.getOutputs()[0];
-
-        //Expected output type is same as input type and shape is same as input shape
         const OutType = A.literalType as DataType | undefined ?? DataType.FLOAT;
         const OutShape = (Y.shape as KnownShape) ?? (A.shape as KnownShape);
         const Output = [{ type: OutType, shape: OutShape }];
 
-         // 1. Create a scalar '0' constant of the same type
         const zeroConst = builder.createConstant(
             `abs_zero_${op.id}`,
             makeTensorProto(OutType, [], [0]),
