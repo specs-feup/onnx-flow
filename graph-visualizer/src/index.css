@@ -37,11 +37,32 @@ button:hover {
   border: 2px solid rgb(91, 79, 119)
 }
 
+#upload-button:hover {
+  background-color:#201d30;
+  border: 2px solid rgb(91, 79, 119)
+}
+
 p {
   margin: 0;
 }
 
 h3{
   padding-bottom: 10px;
+}
+
+.dropdown-item {
+  color:#fff;
+  text-decoration: none;
+  display: none;
+
+  min-width: 120px;
+  padding: 13px 16px;
+  
+}
+.dropdown-menu {
+  background-color: #242227;
+  border-radius: 5px;
+  margin-top: 5px;
+  margin-left: 2px;
 }
 

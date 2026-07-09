@@ -38,8 +38,8 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
         (
           <CytoscapeComponent 
             elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)} 
-            style={{width: '100%', height: '100%' }} 
-            layout={{name: 'breadthfirst'}} 
+            style={{width: '100%', height: '100%'}} 
+            layout={{name: 'breadthfirst'}}
             cy={(cy) => { cyRef.current = cy; }}
             />
         )

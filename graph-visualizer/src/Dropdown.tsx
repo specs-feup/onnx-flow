@@ -1,28 +1,14 @@
-import React, { useState } from 'react';
+import Dropdown from 'react-bootstrap/Dropdown';
 
-const Dropdown = () => {
-    const [isOpen, setIsOpen] = useState(false);
-
-    const toggleDropdown = () => {
-        setIsOpen(!isOpen);
-    };
-    return (
-        <div className="">
-                <button
-                    onClick={toggleDropdown}
-                    className="">
-                    Graph Layout
-                </button>
-            {isOpen && (
-                
-
-                <select>
-                    <option value="dfs">DFS</option>
-                    <option value="bfs">BFS</option>
-                </select>
-            )}
-        </div>
-    );
-};
-
-export default Dropdown;
+function BasicExample() {
+  return (
+    <Dropdown>
+      <Dropdown.Toggle id="dropdown-basic">Graph Layout </Dropdown.Toggle>
+      <Dropdown.Menu>
+        <Dropdown.Item href="">BFS</Dropdown.Item>
+        <Dropdown.Item href="">DFS</Dropdown.Item>
+      </Dropdown.Menu>
+    </Dropdown>
+  );
+}
+export default BasicExample;

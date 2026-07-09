@@ -47,7 +47,7 @@ function App() {
             )}
 
             <CytoscapeGraph
-              style={{ gridArea: "cytoscape" }}
+              style={{ gridArea: "cytoscape", border: "3px solid rgb(74, 70, 82)", margin: "30px",marginTop: "10px", borderRadius: "5px", backgroundColor: "#1d1b20"}}
               cytoscapeData={cytoscapeData}
             />
 
