@@ -14,7 +14,7 @@ import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 //import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
-import { convertFlowGraphToOnnxJson } from "./flow2json.js";
+import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "./flow2json.js";
 import { BASE_TEN, safeWriteJson } from "./Onnx/Utils.js";
 import type { DecompositionOptions } from "./DecompositionOptions.js";
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
@@ -420,7 +420,8 @@ if (isPartitioning === true) {
 
         if (outputFilePath !== undefined) {
             if (outputFormat === "json") {
-                fs.writeFileSync(outputFilePath, JSON.stringify(graph.toCy().json(), null, 2));
+                const unifiedJson = generateUnifiedExplorerJson(graph);
+                fs.writeFileSync(outputFilePath, JSON.stringify(unifiedJson, null, 2));
             } else if (outputFormat === "dot") {
                 fs.writeFileSync(outputFilePath, graph.toString(dotFormatter));
             }

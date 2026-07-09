@@ -2,10 +2,12 @@ import OnnxEdge from "./Onnx/OnnxEdge.js";
 import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import type {
     ConcreteValueNode,
+    KnownShape,
     RawOnnxAttribute,
     RawOnnxModel,
     RawOnnxNode,
     RawOnnxValueInfo,
+    Shape,
     TensorProto,
 } from "./Onnx/OnnxTypes.js";
 import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
@@ -14,6 +16,43 @@ import ConstantNode from "./Onnx/ConstantNode.js";
 import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
+import type BaseNode from "@specs-feup/flow/graph/BaseNode";
+import OperationNode from "./Onnx/OperationNode.js";
+import type { NodeSnapshot } from "./Onnx/transformation/tracking/GraphActions.js";
+
+export interface UnifiedEdgeData {
+    literalType: DataType;
+    shape: Shape;
+}
+
+export interface UnifiedNode {
+    data: {
+        id: string;
+        onnxData?: NodeSnapshot;
+        [key: string]: unknown; // Allows Cytoscape's visual properties (label, color, etc.)
+    };
+    position?: { x: number; y: number };
+    classes?: string;
+}
+
+export interface UnifiedEdge {
+    data: {
+        id: string;
+        source: string;
+        target: string;
+        onnxData?: UnifiedEdgeData;
+        [key: string]: unknown;
+    };
+    classes?: string;
+}
+
+export interface UnifiedExplorerJson {
+    elements: {
+        nodes: UnifiedNode[];
+        edges: UnifiedEdge[];
+    };
+    [key: string]: unknown; // Allows other Cytoscape top-level properties like zooming
+}
 
 const IR_VERSION = 9;
 const OPSET_IMPORT = 19;
@@ -347,4 +386,78 @@ export function convertFlowGraphToOnnxJson(
             output: modelOutputs,
         },
     };
+}
+
+/**
+ * Generates a unified JSON payload that Cytoscape can render visually,
+ * but contains the exact ONNX-Flow data needed to reconstruct the graph.
+ */
+export function generateUnifiedExplorerJson(graph: OnnxGraph.Class): UnifiedExplorerJson {
+    // 1. Cast the generic Cytoscape output to our strict interface
+    const cyJson = graph.toCy().json() as unknown as UnifiedExplorerJson;
+
+    // 2. Enrich Nodes
+    if (cyJson.elements.nodes.length > 0) {
+        cyJson.elements.nodes.forEach((cyNode: UnifiedNode) => {
+            const actualNode = graph.getNodeById(cyNode.data.id);
+            if (actualNode) {
+                cyNode.data.onnxData = extractCompilerNodeState(actualNode);
+            }
+        });
+    }
+
+    // 3. Enrich Edges
+    if (cyJson.elements.edges.length > 0) {
+        cyJson.elements.edges.forEach((cyEdge: UnifiedEdge) => {
+            const actualEdge = graph.getOnnxEdgeById(cyEdge.data.id);
+            if (actualEdge != undefined) {
+                cyEdge.data.onnxData = {
+                    literalType: actualEdge.literalType,
+                    shape: actualEdge.shape,
+                };
+            }
+        });
+    }
+
+    return cyJson;
+}
+
+/**
+ * Extracts the exact properties ONNX-Flow needs to rebuild a node.
+ * Notice this returns NodeSnapshot, exactly matching our tracking engine!
+ */
+function extractCompilerNodeState(node: BaseNode.Class): NodeSnapshot {
+    if (node.is(OperationNode)) {
+        const op = node.as(OperationNode);
+        return {
+            kind: "OperationNode",
+            id: op.id,
+            opType: op.type,
+            attributes: { ...op.attributes },
+            inputs: (op.getInputs() ?? []).map((n) => n.id),
+            regions: [...op.regions],
+            metadata: { ...op.metadata },
+        };
+    } else if (node.is(TensorNode)) {
+        const tn = node.as(TensorNode);
+        return {
+            kind: "TensorNode",
+            id: tn.id,
+            tensorType: tn.type,
+            literalType: tn.literalType,
+            shape: tn.shape as KnownShape,
+            metadata: { ...tn.metadata },
+        };
+    } else if (node.is(ConstantNode)) {
+        const cn = node.as(ConstantNode);
+        return {
+            kind: "ConstantNode",
+            id: cn.id,
+            isInput: cn.isInput,
+            proto: cn.constantValue,
+            metadata: { ...cn.metadata },
+        };
+    }
+
+    throw new Error(`Cannot extract state for unknown node kind: ${node.id}`);
 }
