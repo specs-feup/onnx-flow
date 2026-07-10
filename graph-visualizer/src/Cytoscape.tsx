@@ -5,6 +5,38 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 
 cytoscape.use(fcose);
 
+//Stylesheet
+const stylesheet=[
+  {
+    selector: "node",
+    style: {
+      label: "data(id)", "text-valign": "center",
+      color: "#ffffff",
+      "font-size": "12px",
+      "background-color": "#854d99",
+      /*
+      "background-fill": "linear-gradient",
+      "background-gradient-stop-colors": "#ff0044 #e5ff00  #00d9ff",
+      */
+      "shape": "star",
+      width: "40px",
+      height: "40px",
+    },
+  },
+  {
+    selector: "edge",
+    style: {
+      width: 2,
+      "line-color": "#999",
+      "target-arrow-color": "#999",
+      "curve-style": "straight",
+      "target-arrow-shape": "triangle",
+    },
+  },
+]
+//node shape: "star" "ellipse" "circle" "triangle" "pentagon" "tag" "octagon" "vee" "rhomboid" "rectangle"
+//line style: "straight" "taxi" "segments"
+
 export type CytoscapeData = {
   elements: {
     nodes: Array<Record<string, unknown>>;
@@ -38,7 +70,8 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
         (
           <CytoscapeComponent 
             elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)} 
-            style={{width: '100%', height: '100%'}} 
+            style={{ width: "100%", height: "100%" }}
+            stylesheet={stylesheet}
             layout={{name: 'breadthfirst'}}
             cy={(cy) => { cyRef.current = cy; }}
             />
