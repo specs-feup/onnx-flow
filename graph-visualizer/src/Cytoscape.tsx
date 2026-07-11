@@ -10,7 +10,12 @@ const stylesheet=[
   {
     selector: "node",
     style: {
-      label: "data(id)", "text-valign": "center",
+      "label": (ele:any) => {
+        return (
+          ele.data("__specs-onnx__tensor_node")?.type || ele.data("__specs-onnx__operation_node")?.type || "Constant"
+        );
+      },
+      "text-valign": "center",
       color: "#ffffff",
       "font-size": "12px",
       "background-color": "#854d99",
