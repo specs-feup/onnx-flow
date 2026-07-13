@@ -5,6 +5,7 @@ export default function MenuBar(props: {
     style: CSSProperties;
     setCytoscapeData: (cytoscapeData: CytoscapeData | null) => void;
     panelVisibility: { isVisible: boolean; setVisibility: (visible: boolean) => void };
+    setLayout: (layout: string) => void;
 }) {
     return (
         <header style={props.style}>
@@ -31,7 +32,7 @@ export default function MenuBar(props: {
                         Display Side Panel
                     </button>
                 )}
-                <Dropdown />
+                <Dropdown setLayout={props.setLayout} />
             </div>
         </header>
     );

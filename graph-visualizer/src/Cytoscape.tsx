@@ -18,7 +18,7 @@ const stylesheet=[
       "text-valign": "center",
       color: "#ffffff",
       "font-size": "12px",
-      "background-color": "#854d99",
+      "background-color": "#533b6e",
       /*
       "background-fill": "linear-gradient",
       "background-gradient-stop-colors": "#ff0044 #e5ff00  #00d9ff",
@@ -60,7 +60,7 @@ export type CytoscapeData = {
   };
 };
 
-export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null}) {
+export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: string}) {
     const cyRef = useRef<cytoscape.Core | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -78,7 +78,12 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
 
         return () => {resizeObserver.disconnect();};
         }, []);
+        
+    useEffect(() => {
+      if (!cyRef.current) return;
 
+      cyRef.current.layout({ name: props.layout }).run();
+    }, [props.layout]);
 
     return ( 
       <div style={props.style} ref={containerRef}>
@@ -88,7 +93,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
             elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)} 
             style={{ width: "100%", height: "100%" }}
             stylesheet={stylesheet}
-            layout={{name: 'breadthfirst'}}
+            layout={{name: props.layout}}
             cy={(cy) => { cyRef.current = cy; }}
             />
         )
