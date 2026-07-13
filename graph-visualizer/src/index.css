@@ -68,6 +68,8 @@ h3{
 }
 
 .DropdownMenuItem {
+  z-index: 1000;
+  position: relative;
   cursor: pointer;
   font-size: 14px;
   color: #fff;

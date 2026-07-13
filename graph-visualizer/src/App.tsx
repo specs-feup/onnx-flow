@@ -9,7 +9,7 @@ import "./App.css";
 function App() {
     const [isSidePanelVisible, setSidePanelVisibility] = useState(false);
     const [cytoscapeData, setCytoscapeData] = useState<cytoscape.ElementDefinition[] | null>(null);
-    const [cytoscapeLayout, setCytoscapeLayout] = useState<string>("fcose");
+    const [cytoscapeLayout, setCytoscapeLayout] = useState<cytoscapeData.LayoutOptions>({name: "fcose"});
 
     return (
         <main
