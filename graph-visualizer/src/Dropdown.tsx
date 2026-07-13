@@ -1,14 +1,30 @@
-import Dropdown from 'react-bootstrap/Dropdown';
+import React from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
-function BasicExample() {
+export default function CustomDropdown() {
   return (
-    <Dropdown>
-      <Dropdown.Toggle id="dropdown-basic">Graph Layout </Dropdown.Toggle>
-      <Dropdown.Menu>
-        <Dropdown.Item href="">BFS</Dropdown.Item>
-        <Dropdown.Item href="">DFS</Dropdown.Item>
-      </Dropdown.Menu>
-    </Dropdown>
+    <DropdownMenu.Root>
+
+      <DropdownMenu.Trigger asChild>
+        <button >
+          Graph Layout
+        </button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="DropdownMenuContent" sideOffset={5}>
+          <DropdownMenu.Item className="DropdownMenuItem">
+            BFS
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Separator className="DropdownMenuSeparator" />
+
+          <DropdownMenu.Item className="DropdownMenuItem">
+            DFS
+          </DropdownMenu.Item>
+          <DropdownMenu.Arrow className="DropdownMenuArrow" />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
-export default BasicExample;
