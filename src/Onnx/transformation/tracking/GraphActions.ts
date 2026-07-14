@@ -113,6 +113,12 @@ export type NodeSnapshot =
           metadata?: AttributeMap;
       };
 
+export type EdgeSnapshot = {
+    literalType: DataType;
+    shape: KnownShape | Shape;
+    order?: number; // Optional: in case there is a need to snapshot OnnxInnerEdge too
+};
+
 export function restoreSnapshot(graph: OnnxGraph.Class, snap: NodeSnapshot): BaseNode.Class {
     if (snap.kind === "TensorNode") {
         return graph

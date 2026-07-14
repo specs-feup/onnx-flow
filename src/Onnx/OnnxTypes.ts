@@ -1,5 +1,6 @@
 import type ConstantNode from "./ConstantNode.js";
 import type OnnxGraph from "./OnnxGraph.js";
+import type OperationNode from "./OperationNode.js";
 import type RegionArgumentNode from "./RegionArgumentNode.js";
 import type TensorNode from "./TensorNode.js";
 
@@ -211,3 +212,8 @@ export type StaticShape = number[];
 
 export type ValueNode = TensorNode.Class | ConstantNode.Class | RegionArgumentNode.Class;
 export type ConcreteValueNode = TensorNode.Class | ConstantNode.Class;
+export type OnnxNode =
+    | OperationNode.Class
+    | TensorNode.Class
+    | ConstantNode.Class
+    | RegionArgumentNode.Class;

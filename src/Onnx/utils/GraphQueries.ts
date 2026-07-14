@@ -3,7 +3,7 @@ import ConstantNode from "../ConstantNode.js";
 import type { GraphBuilder } from "../GraphBuilder.js";
 import OnnxEdge from "../OnnxEdge.js";
 import type OnnxGraph from "../OnnxGraph.js";
-import type { ValueNode, Dim, ConcreteValueNode } from "../OnnxTypes.js";
+import type { ValueNode, Dim, ConcreteValueNode, OnnxNode } from "../OnnxTypes.js";
 import { DataType } from "../OnnxTypes.js";
 import OperationNode from "../OperationNode.js";
 import RegionArgumentNode from "../RegionArgumentNode.js";
@@ -114,6 +114,15 @@ export function isConcreteValueNode(node: BaseNode.Class): node is ConcreteValue
     return node.is(TensorNode) || node.is(ConstantNode);
 }
 
+export function isOnnxNode(node: BaseNode.Class): node is OnnxNode {
+    return (
+        node.is(TensorNode) ||
+        node.is(ConstantNode) ||
+        node.is(OperationNode) ||
+        node.is(RegionArgumentNode)
+    );
+}
+
 export function asConcreteValueNode(node: BaseNode.Class): ConcreteValueNode {
     if (node.is(TensorNode)) return node.as(TensorNode);
     if (node.is(ConstantNode)) return node.as(ConstantNode);
@@ -121,6 +130,15 @@ export function asConcreteValueNode(node: BaseNode.Class): ConcreteValueNode {
     throw new Error(
         `Expected a ConcreteValueNode, but got a different node type for ID: ${node.id}`,
     );
+}
+
+export function asOnnxNode(node: BaseNode.Class): OnnxNode {
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+    if (node.is(OperationNode)) return node.as(OperationNode);
+    if (node.is(RegionArgumentNode)) return node.as(RegionArgumentNode);
+
+    throw new Error(`Expected an OnnxNode, but got a different node type for ID: ${node.id}`);
 }
 
 /**
@@ -133,6 +151,19 @@ export function tryAsConcreteValueNode(
     if (!node) return undefined;
     if (node.is(TensorNode)) return node.as(TensorNode);
     if (node.is(ConstantNode)) return node.as(ConstantNode);
+    return undefined;
+}
+
+/**
+ * Safely attempts to cast a node to a OnnxValueNode.
+ * Returns undefined if the node is missing or is not an Onnx node.
+ */
+export function tryAsOnnxNode(node: BaseNode.Class | undefined): OnnxNode | undefined {
+    if (!node) return undefined;
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+    if (node.is(OperationNode)) return node.as(OperationNode);
+    if (node.is(RegionArgumentNode)) return node.as(RegionArgumentNode);
     return undefined;
 }
 

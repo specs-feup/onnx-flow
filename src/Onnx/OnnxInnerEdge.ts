@@ -1,5 +1,7 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
+import { DataType } from "./OnnxTypes.js";
+import type { EdgeSnapshot } from "./transformation/tracking/GraphActions.js";
 
 namespace OnnxInnerEdge {
     export const TAG = "__specs-onnx__onnx_inner_edge";
@@ -11,6 +13,14 @@ namespace OnnxInnerEdge {
     > extends BaseEdge.Class<D, S> {
         get order(): number {
             return this.data[TAG].order;
+        }
+
+        public toSnapshot(): EdgeSnapshot {
+            return {
+                literalType: DataType.UNDEFINED,
+                shape: [],
+                order: this.order,
+            };
         }
     }
 
