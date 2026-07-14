@@ -15,7 +15,7 @@ export type CytoscapeData = {
   };
 };
 
-export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions;}) {
+export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions, nodeColor?: string;}) {
     const cyRef = useRef<cytoscape.Core | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -39,6 +39,15 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
 
       cyRef.current.layout(props.layout ).run();
     }, [props.layout]);
+
+    useEffect(() => {
+      if (!cyRef.current) return;
+      if (!props.nodeColor) return;
+      cyRef.current.nodes().style('background-color', props.nodeColor);
+      cyRef.current.resize();
+      cyRef.current.fit();
+
+    }, [props.nodeColor, props.cytoscapeData]);
 
     return ( 
       <div style={props.style} ref={containerRef}>

@@ -12,10 +12,13 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@mantine/core": "^9.4.1",
     "@mui/material": "^9.1.2",
     "@radix-ui/react-dropdown-menu": "^2.1.20",
+    "@syncfusion/ej2-react-inputs": "^34.1.30",
     "bootstrap": "^5.3.8",
     "cytoscape": "^3.34.0",
+    "cytoscape-dagre": "^4.0.0",
     "cytoscape-fcose": "^2.2.0",
     "react": "^19.2.7",
     "react-bootstrap": "^2.10.10",
