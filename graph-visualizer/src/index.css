@@ -81,3 +81,16 @@ h3{
   border-radius: 7px;
 }
 
+.popupBTN {
+  cursor: pointer;
+  color: #fff;
+  background-color: #2c2a30;
+  border-radius: 10px;
+  border: 2px solid rgb(95, 92, 102);
+  padding: 3px;
+  font-size: 12px;
+  width: 27px;
+}
+.nodee {
+  font-weight: bold;
+}

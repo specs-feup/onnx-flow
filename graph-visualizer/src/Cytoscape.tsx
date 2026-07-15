@@ -1,7 +1,7 @@
 import CytoscapeComponent from 'react-cytoscapejs';
 import fcose from 'cytoscape-fcose';
 import cytoscape from 'cytoscape';
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import dagre from 'cytoscape-dagre';
 import stylesheet from './styleSheet.ts';
 
@@ -15,9 +15,10 @@ export type CytoscapeData = {
   };
 };
 
-export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions, nodeColor?: string;}) {
-    const cyRef = useRef<cytoscape.Core | null>(null);
-    const containerRef = useRef<HTMLDivElement | null>(null);
+export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions, nodeColor?: string, onNodeSelected?: (node:any, pos:{x:number,y:number})=>void}) {
+  const cyRef = useRef<cytoscape.Core | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [cyReady, setCyReady] = useState(false);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -49,6 +50,25 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
 
     }, [props.nodeColor, props.cytoscapeData]);
 
+    useEffect(() => {
+      if (!cyReady || !cyRef.current || !props.onNodeSelected) return;
+
+      const handler = (event: any) => {
+      if (!event.target?.isNode?.()) return;
+      
+      const pos = event.renderedPosition;
+      const rect = containerRef.current?.getBoundingClientRect();
+      const screenPos = rect 
+        ? { x: rect.left + pos.x, y: rect.top + pos.y }
+        : { x: 10, y: 10 };
+      
+      props.onNodeSelected(event.target.data(), screenPos);
+      };
+
+      cyRef.current.on('tap', 'node', handler);
+      return () => cyRef.current?.off('tap', 'node', handler);
+    }, [cyReady, props.onNodeSelected]);
+
     return ( 
       <div style={props.style} ref={containerRef}>
         {props.cytoscapeData && 
@@ -58,7 +78,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
             style={{ width: "100%", height: "100%" }}
             stylesheet={stylesheet}
             layout={props.layout}
-            cy={(cy) => { cyRef.current = cy; }}
+            cy={(cy) => { cyRef.current = cy; setCyReady(true); }}
             />
         )
         }

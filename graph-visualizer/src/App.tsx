@@ -3,6 +3,7 @@ import MenuBar from "./MenuBar.tsx";
 import SidePanel from "./SidePanel.tsx";
 
 import CytoscapeGraph,{ type CytoscapeData } from "./Cytoscape.tsx";
+import NodePopup from "./nodeWindow";
 
 import "./App.css";
 import ColorPicker from "./colorPicker.tsx";
@@ -13,6 +14,8 @@ function App() {
     const [cytoscapeData, setCytoscapeData] = useState<cytoscape.ElementDefinition[] | null>(null);
     const [cytoscapeLayout, setCytoscapeLayout] = useState<cytoscapeData.LayoutOptions>({name: "fcose"});
     const [nodeColor, setNodeColor] = useState<string>('#533b6e');
+    const [selectedNode, setSelectedNode] = useState<any | null>(null);
+    const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
 
     return (
         <main
@@ -51,13 +54,24 @@ function App() {
                   }}
               />
             )}
+            <NodePopup
+              selectedNode={selectedNode}
+              popupPos={popupPos}
+              onClose={() => {
+                setSelectedNode(null);
+                setPopupPos(null);
+              }}
+            />
             <CytoscapeGraph
               style={{ gridArea: "cytoscape", border: "3px solid rgb(74, 70, 82)", margin: "30px",marginTop: "20px",marginLeft: "25px", borderRadius: "5px", backgroundColor: "#1d1b20"}}
               cytoscapeData={cytoscapeData}
               layout={cytoscapeLayout}
               nodeColor={nodeColor}
+              onNodeSelected={(node: any, pos: {x:number; y:number}) => {
+                setSelectedNode(node);
+                setPopupPos(pos);
+              }}
             />
-
         </main>
     );
 }
