@@ -1,4 +1,4 @@
-import { useRef, useState , ComponentPropsWithRef } from "react";
+import { useRef, useState , type ComponentPropsWithRef } from "react";
 import MenuBar from "./MenuBar.tsx";
 import SidePanel from "./SidePanel.tsx";
 

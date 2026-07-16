@@ -13,7 +13,7 @@ export default function NodePopup({selectedNode, popupPos, onClose }) {
         borderRadius: "5px",
         zIndex:9999,
       }}>
-      <div className="nodee">Node</div>
+      <div className="nodee">Operation Node</div>
       <div>ID: {selectedNode.id}</div>
       <div>Type: {selectedNode["__specs-onnx__tensor_node"]?.type || selectedNode["__specs-onnx__operation_node"]?.type || "Constant"}</div>
       {selectedNode.label && (<div>Label: {selectedNode.label}</div>)}

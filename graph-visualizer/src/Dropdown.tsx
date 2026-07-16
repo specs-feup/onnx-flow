@@ -16,9 +16,6 @@ export default function CustomDropdown({ setLayout }) {
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({name: "breadthfirst"})}>
           BFS
         </DropdownMenu.Item>
-        <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout( "")}>
-          DFS (NOT DONE YET)
-        </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({name: "dagre", rankDir: "LR"})}>
           Left to Right
         </DropdownMenu.Item>
