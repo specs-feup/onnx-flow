@@ -5,7 +5,7 @@ const stylesheet=[
     style: {
       "label": (ele:any) => {
         return (
-          ele.data("__specs-onnx__tensor_node")?.type || ele.data("__specs-onnx__operation_node")?.type || ele.data("__specs-onnx__constant_node")?.value.dataType
+          ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType || ele.data("onnxData")?.proto.dataType
         );
       },
       "text-valign": "center",
@@ -18,9 +18,9 @@ const stylesheet=[
       */
       //"shape": "star",
       "shape": (ele:any) => {
-        if(((ele.data("__specs-onnx__tensor_node")?.type || ele.data("__specs-onnx__operation_node")?.type)=="Loop") || ((ele.data("__specs-onnx__tensor_node")?.type || ele.data("__specs-onnx__operation_node")?.type)=="Reshape")){
+        if(((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="Loop") || ((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="Reshape")){
           return ("circle")
-        }else if(((ele.data("__specs-onnx__tensor_node")?.type || ele.data("__specs-onnx__operation_node")?.type)=="input") || (ele.data("__specs-onnx__tensor_node")?.type || (ele.data("__specs-onnx__operation_node")?.type)=="output") || ((ele.data("__specs-onnx__tensor_node")?.type || ele.data("__specs-onnx__operation_node")?.type)=="intermediate")){
+        }else if (((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="input") || ((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="output") || ((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="intermediate")){
           return ("pentagon")
         }else{
           return ("diamond")

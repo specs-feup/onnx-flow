@@ -15,7 +15,7 @@ export default function NodePopup({selectedNode, popupPos, onClose }) {
       }}>
       <div className="nodee">Operation Node</div>
       <div>ID: {selectedNode.id}</div>
-      <div>Type: {selectedNode["__specs-onnx__tensor_node"]?.type || selectedNode["__specs-onnx__operation_node"]?.type || "Constant"}</div>
+      <div>Type: {selectedNode["onnxData"].tensorType || selectedNode["onnxData"].opType || "Constant"}</div>
       {selectedNode.label && (<div>Label: {selectedNode.label}</div>)}
       <button className="popupBTN" onClick={onClose}>X</button>
     </div>
