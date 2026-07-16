@@ -16,10 +16,22 @@ import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
 import type { EdgeSnapshot, NodeSnapshot } from "./Onnx/transformation/tracking/GraphActions.js";
 
+export type UnifiedNodeData =
+    | Exclude<NodeSnapshot, { kind: "OperationNode" }> // Keeps Tensor, Constant, RegionArgument as-is
+    | {
+          kind: "OperationNode";
+          id: string;
+          opType: string;
+          attributes: Record<string, unknown>;
+          inputs: string[];
+          regions: UnifiedExplorerJson[];
+          metadata?: Record<string, unknown>;
+      };
+
 export interface UnifiedNode {
     data: {
         id: string;
-        onnxData?: NodeSnapshot;
+        onnxData?: UnifiedNodeData;
         [key: string]: unknown; // Allows Cytoscape's visual properties (label, color, etc.)
     };
     position?: { x: number; y: number };
@@ -392,7 +404,19 @@ export function generateUnifiedExplorerJson(graph: OnnxGraph.Class): UnifiedExpl
         cyJson.elements.nodes.forEach((cyNode: UnifiedNode) => {
             const actualNode = graph.getNodeById(cyNode.data.id);
             if (actualNode && isOnnxNode(actualNode)) {
-                cyNode.data.onnxData = asOnnxNode(actualNode).toSnapshot();
+                const snap = asOnnxNode(actualNode).toSnapshot();
+                // If it's an OperationNode, we must recursively serialize its subgraphs!
+                if (snap.kind === "OperationNode") {
+                    cyNode.data.onnxData = {
+                        ...snap,
+                        // Recursively convert OnnxGraph.Class[] -> UnifiedExplorerJson[]
+                        regions: snap.regions.map((regionGraph) =>
+                            generateUnifiedExplorerJson(regionGraph),
+                        ),
+                    };
+                } else {
+                    cyNode.data.onnxData = snap;
+                }
             }
 
             for (const key of Object.keys(cyNode.data)) {
