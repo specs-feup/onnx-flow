@@ -75,6 +75,6 @@ export class LowerGemmRecipe implements DecompositionRecipe {
 
         // Safely replace Y and clean up
         builder.replaceAllUsesWith(Y, left);
-        op.remove();
+        builder.removeNode(op);
     }
 }

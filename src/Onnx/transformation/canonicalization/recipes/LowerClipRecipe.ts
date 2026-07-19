@@ -47,6 +47,6 @@ export class LowerClipRecipe implements DecompositionRecipe {
 
         // Safely replace Y and clean up
         builder.replaceAllUsesWith(Y, cur);
-        op.remove();
+        builder.removeNode(op);
     }
 }

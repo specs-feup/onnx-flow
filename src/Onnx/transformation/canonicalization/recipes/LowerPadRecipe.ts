@@ -197,7 +197,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
                 { type: Xin.literalType, shape: Xin.shape as KnownShape },
             ])[0];
         builder.replaceAllUsesWith(Y, cur);
-        op.remove();
+        builder.removeNode(op);
     }
 
     private ensurePadSlabConst(

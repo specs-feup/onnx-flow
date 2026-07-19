@@ -165,6 +165,6 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const finalY = builder.createOp("Div", [sumOut, divisor], {}, expectedY)[0];
 
         builder.replaceAllUsesWith(Y, finalY);
-        op.remove();
+        builder.removeNode(op);
     }
 }

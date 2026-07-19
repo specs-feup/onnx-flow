@@ -19,7 +19,7 @@ import RegionArgumentNode from "../../RegionArgumentNode.js";
  * Can be serialized to JSON for history exports.
  */
 export interface GraphAction {
-    readonly type: "ADD_NODE" | "REMOVE_NODE" | "ADD_EDGE" | "REMOVE_EDGE";
+    readonly type: "ADD_NODE" | "REMOVE_NODE" | "ADD_EDGE" | "REMOVE_EDGE" | "UPDATE_NODE_INPUTS";
     apply(graph: OnnxGraph.Class): void;
     revert(graph: OnnxGraph.Class): void;
 }
@@ -190,6 +190,47 @@ export class RemoveNodeAction implements GraphAction {
 
     revert(graph: OnnxGraph.Class): void {
         restoreSnapshot(graph, this.snapshot);
+    }
+}
+
+export function findNodeRecursively(g: OnnxGraph.Class, id: string): BaseNode.Class | undefined {
+    let n = g.getNodeById(id);
+    if (n) return n;
+    for (const op of g.getOperationNodes().toArray()) {
+        for (const sub of op.regions) {
+            n = findNodeRecursively(sub as OnnxGraph.Class, id);
+            if (n) return n;
+        }
+    }
+    return undefined;
+}
+
+export class UpdateNodeInputsAction implements GraphAction {
+    public readonly type = "UPDATE_NODE_INPUTS";
+    constructor(
+        public readonly nodeId: string,
+        public readonly oldInputs: string[],
+        public readonly newInputs: string[],
+    ) {}
+
+    apply(graph: OnnxGraph.Class): void {
+        const node = findNodeRecursively(graph, this.nodeId)?.tryAs(OperationNode);
+        if (node) {
+            const resolved = this.newInputs
+                .map((id) => findNodeRecursively(graph, id) as ValueNode)
+                .filter(Boolean);
+            node.setInputs(resolved);
+        }
+    }
+
+    revert(graph: OnnxGraph.Class): void {
+        const node = findNodeRecursively(graph, this.nodeId)?.tryAs(OperationNode);
+        if (node) {
+            const resolved = this.oldInputs
+                .map((id) => findNodeRecursively(graph, id) as ValueNode)
+                .filter(Boolean);
+            node.setInputs(resolved);
+        }
     }
 }
 

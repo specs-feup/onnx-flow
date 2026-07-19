@@ -75,6 +75,6 @@ export class LowerExpRecipe implements DecompositionRecipe {
         builder.replaceAllUsesWith(Y, currentSum);
 
         // 4. Remove the original Exp operation from the graph
-        op.remove();
+        builder.removeNode(op);
     }
 }

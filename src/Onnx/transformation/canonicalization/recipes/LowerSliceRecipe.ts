@@ -120,6 +120,6 @@ export class LowerSliceRecipe implements DecompositionRecipe {
             builder.replaceAllUsesWith(Y, curT);
         }
 
-        op.remove();
+        builder.removeNode(op);
     }
 }

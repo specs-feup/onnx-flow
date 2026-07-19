@@ -54,6 +54,6 @@ export class LowerReluRecipe implements DecompositionRecipe {
 
         // 4. Safely replace the original Y with the new Where output
         builder.replaceAllUsesWith(Y, whereOut);
-        op.remove();
+        builder.removeNode(op);
     }
 }

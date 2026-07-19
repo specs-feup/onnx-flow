@@ -64,6 +64,6 @@ export class LowerSubRecipe implements DecompositionRecipe {
 
         // 3. Safely replace original output with the new Add output
         builder.replaceAllUsesWith(Y, AddOut);
-        op.remove();
+        builder.removeNode(op);
     }
 }

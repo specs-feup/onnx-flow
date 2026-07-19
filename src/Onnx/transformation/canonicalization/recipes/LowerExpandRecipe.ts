@@ -49,6 +49,6 @@ export class LowerExpandRecipe implements DecompositionRecipe {
         const addOp = builder.createOp("Add", [X, zeros], {}, expectedAdd)[0];
 
         builder.replaceAllUsesWith(Y, addOp);
-        op.remove();
+        builder.removeNode(op);
     }
 }

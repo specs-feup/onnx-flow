@@ -117,6 +117,6 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
         const mul = builder.createOp("Mul", [sub, Sx], {}, expectedBroadcast)[0];
 
         builder.replaceAllUsesWith(Y, mul);
-        op.remove();
+        builder.removeNode(op);
     }
 }

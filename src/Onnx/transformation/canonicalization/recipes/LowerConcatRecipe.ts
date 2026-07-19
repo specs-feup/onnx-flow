@@ -194,6 +194,6 @@ export class LowerConcatRecipe implements DecompositionRecipe {
             { type: dtype, shape: Yshape },
         ])[0];
         builder.replaceAllUsesWith(Y, finalId);
-        op.remove();
+        builder.removeNode(op);
     }
 }

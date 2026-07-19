@@ -2,8 +2,8 @@ import { GraphBuilder } from "../../GraphBuilder.js";
 import type Node from "@specs-feup/flow/graph/Node";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import type OnnxEdge from "../../OnnxEdge.js";
-import type { DataType, KnownShape } from "../../OnnxTypes.js";
+import OnnxEdge from "../../OnnxEdge.js";
+import type { DataType, KnownShape, ValueNode } from "../../OnnxTypes.js";
 import type { GraphAction, NodeSnapshot } from "./GraphActions.js";
 import {
     AddNodeAction,
@@ -11,8 +11,10 @@ import {
     AddEdgeAction,
     RemoveEdgeAction,
     MutationPatch,
+    UpdateNodeInputsAction,
 } from "./GraphActions.js";
 import { isOnnxNode, asOnnxNode } from "../../Utils.js";
+import type OperationNode from "../../OperationNode.js";
 
 export class TrackedGraphBuilder extends GraphBuilder {
     private actions: GraphAction[] = [];
@@ -40,9 +42,45 @@ export class TrackedGraphBuilder extends GraphBuilder {
     }
 
     override removeNode(node: BaseNode.Class): void {
+        const connectedEdges = [...node.incomers.toArray(), ...node.outgoers.toArray()];
+
+        for (const edge of connectedEdges) {
+            if (edge.is(OnnxEdge)) {
+                this.removeEdge(edge.as(OnnxEdge));
+            }
+        }
+
         const snapshot = this.cloneNodeState(node);
         super.removeNode(node);
         this.actions.push(new RemoveNodeAction(snapshot));
+    }
+
+    override replaceAllUsesWith(oldNode: ValueNode, newNode: ValueNode): void {
+        const affectedOps: { op: OperationNode.Class; oldInputs: string[] }[] = [];
+
+        // Find all operations that are about to be mutated
+        const findAffected = (g: OnnxGraph.Class) => {
+            for (const op of g.getOperationNodes().toArray()) {
+                const currentInputs = op.getInputs() ?? [];
+                if (currentInputs.some((input) => input.id === oldNode.id)) {
+                    affectedOps.push({
+                        op,
+                        oldInputs: currentInputs.map((n) => n.id),
+                    });
+                }
+                for (const sub of op.regions) {
+                    findAffected(sub);
+                }
+            }
+        };
+        findAffected(this.graph);
+
+        for (const { op, oldInputs } of affectedOps) {
+            const newInputs = oldInputs.map((id) => (id === oldNode.id ? newNode.id : id));
+            this.actions.push(new UpdateNodeInputsAction(op.id, oldInputs, newInputs));
+        }
+
+        super.replaceAllUsesWith(oldNode, newNode);
     }
 
     // --- EDGE INTERCEPTORS ---

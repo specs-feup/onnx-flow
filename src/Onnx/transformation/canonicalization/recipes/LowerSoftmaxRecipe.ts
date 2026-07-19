@@ -57,6 +57,6 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
 
         // Safely replace Y and clean up
         builder.replaceAllUsesWith(Y, finalY);
-        op.remove();
+        builder.removeNode(op);
     }
 }

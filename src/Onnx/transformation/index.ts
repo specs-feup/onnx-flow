@@ -1,3 +1,4 @@
+import fs from "fs";
 import type Graph from "@specs-feup/flow/graph/Graph";
 import type { DecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import { defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
@@ -9,6 +10,7 @@ import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
+import OnnxDotFormatter from "../dot/OnnxDotFormatter.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -121,6 +123,43 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         if (printSummary) {
             historyManager.printSummary();
         }
+
+        // =========================================================
+        // TEMPORARY DEBUG HACK: Test Undo/Redo tracking
+        // =========================================================
+        /*
+        const debugFormatter = new OnnxDotFormatter();
+
+        console.log("\n--- RUNNING HISTORY DEBUG TEST ---");
+
+        // 1. Save the fully compiled state
+        fs.writeFileSync("debug_0_fully_compiled.dot", graph.toString(debugFormatter));
+        console.log("Saved: debug_0_fully_compiled.dot");
+
+        // 2. Undo the last transformation
+        const undone1 = historyManager.undo();
+        if (undone1) {
+            fs.writeFileSync("debug_1_undo_1.dot", graph.toString(debugFormatter));
+            console.log(`Undid: ${undone1.description}. Saved: debug_1_undo_1.dot`);
+        }
+
+        // 3. Undo one more time
+        const undone2 = historyManager.undo();
+        if (undone2) {
+            fs.writeFileSync("debug_2_undo_2.dot", graph.toString(debugFormatter));
+            console.log(`Undid: ${undone2.description}. Saved: debug_2_undo_2.dot`);
+        }
+
+        // 4. Redo the last undone transformation
+        const redone1 = historyManager.redo();
+        if (redone1) {
+            fs.writeFileSync("debug_3_redo_1.dot", graph.toString(debugFormatter));
+            console.log(`Redid: ${redone1.description}. Saved: debug_3_redo_1.dot`);
+        }
+        console.log("----------------------------------\n");
+        // =========================================================
+        */
+
         return graph;
     }
 }

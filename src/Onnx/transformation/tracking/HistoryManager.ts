@@ -1,6 +1,7 @@
 import fs from "fs";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type { MutationPatch } from "./GraphActions.js";
+import inferShapes from "../../InferShapes.js";
 
 export class HistoryManager {
     private undoStack: MutationPatch[] = [];
@@ -27,6 +28,8 @@ export class HistoryManager {
 
         patch.revert(this.graph);
         this.redoStack.push(patch);
+
+        inferShapes(this.graph);
         return patch;
     }
 
@@ -40,6 +43,8 @@ export class HistoryManager {
 
         patch.apply(this.graph);
         this.undoStack.push(patch);
+
+        inferShapes(this.graph);
         return patch;
     }
 

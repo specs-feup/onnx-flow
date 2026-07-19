@@ -175,7 +175,7 @@ export class LoopFusionMatcher {
 
         // 6. Integrate results back into the main graph
         outerBuilder.replaceAllUsesWith(rootOutNodeRaw, reshaped);
-        chain.forEach((op) => op.remove());
+        chain.forEach((op) => outerBuilder.removeNode(op));
     }
 
     // --- Helper methods (copied exactly from your old Pass) ---
