@@ -52,6 +52,7 @@ function App() {
                     backgroundColor: "#2c2a30",
                     padding: "10px",
                   }}
+                  selectedNode={selectedNode}
               />
             )}
             <NodePopup

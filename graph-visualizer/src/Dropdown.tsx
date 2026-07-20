@@ -8,10 +8,9 @@ export default function CustomDropdown({ setLayout }) {
       <DropdownMenu.Trigger asChild>
         <button>Graph Layout</button>
       </DropdownMenu.Trigger>
-
       <DropdownMenu.Content className="DropdownMenuContent">
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout( {name:"fcose"})}>
-          Default
+          Default (fcose)
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({name: "breadthfirst"})}>
           BFS

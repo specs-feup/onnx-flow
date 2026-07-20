@@ -80,7 +80,9 @@ h3{
   background-color: #201d30;
   border-radius: 7px;
 }
-
+.nodepopup {
+  position: relative;
+}
 .popupBTN {
   cursor: pointer;
   color: #fff;
