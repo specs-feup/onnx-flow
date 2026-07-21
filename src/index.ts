@@ -24,6 +24,8 @@ import type OnnxGraph from "./Onnx/OnnxGraph.js";
 import validateGraph from "./Onnx/validation/ValidateGraph.js";
 import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
 import OnnxGraphTransformer from "./Onnx/transformation/index.js";
+import { startExplorerServer } from "./ExplorerAPI/ExplorerServer.js";
+import { ExplorerSession } from "./ExplorerAPI/ExplorerSession.js";
 
 export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
@@ -132,7 +134,10 @@ const argv = await yargs(hideBin(process.argv))
         ],
         "Transformation Options:",
     )
-    .group(["output", "format", "visualization", "formatter"], "Output & Visualization Options:")
+    .group(
+        ["output", "format", "visualization", "formatter", "interactive"],
+        "Output & Visualization Options:",
+    )
     .group(
         ["checkEquivalence", "verbosity", "noCodegen", "noReconversion"],
         "Development & Testing Options:",
@@ -185,6 +190,12 @@ const argv = await yargs(hideBin(process.argv))
             "Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)",
         type: "number",
         default: 2,
+    })
+    .option("interactive", {
+        alias: "i",
+        describe: "Start the ONNX-Flow Explorer interactive REST API server",
+        type: "boolean",
+        default: false,
     })
     .option("fuse", {
         alias: "f",
@@ -313,6 +324,27 @@ if (isPartitioning === true) {
                 console.log("Initial Graph in DOT Format:", graph.toString(dotFormatter));
             }
         }
+
+        // =================================================================
+        // HACK: INTERACTIVE MODE ESCAPE HATCH
+        // =================================================================
+        if (argv.interactive) {
+            // Reconstruct the options passed via CLI flags
+            const decompOptions: DecompositionOptions = {
+                canonicalize: argv.canonicalize,
+                fuse: argv.fuse,
+                recurse: argv.recurse,
+                coalesce: argv.coalesce,
+                decomposeForCgra: argv.decomposeForCgra,
+                loopLowering: argv.loopLowering,
+            };
+
+            console.log("\nStarting Interactive Mode. Automatic passes bypassed.");
+            const session = new ExplorerSession(graph, decompOptions);
+            startExplorerServer(session, 3000);
+            return; // Terminate normal CLI flow and keep the server alive!
+        }
+        // =================================================================
 
         if (!argv.noLowLevel) {
             const decompOptions: DecompositionOptions = {
