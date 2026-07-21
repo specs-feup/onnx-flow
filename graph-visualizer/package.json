@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev:frontend": "vite",
+    "dev:backend": "tsx src/api/api.ts",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -24,7 +26,8 @@
     "react-bootstrap": "^2.10.10",
     "react-cytoscapejs": "^2.0.0",
     "react-dom": "^19.2.7",
-    "react-select": "^5.10.2"
+    "react-select": "^5.10.2",
+    "tsx": "^4.23.1"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
@@ -38,9 +41,12 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "babel-plugin-react-compiler": "^1.0.0",
+    "child_process": "^1.0.2",
+    "concurrently": "^10.0.3",
     "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
+    "express": "^5.2.1",
     "globals": "^17.7.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.62.0",

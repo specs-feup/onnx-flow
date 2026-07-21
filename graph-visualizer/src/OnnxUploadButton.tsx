@@ -4,8 +4,7 @@ import type { CytoscapeData } from './Cytoscape.tsx';
 
 
 
-export default function OnnxUploadButton(props: {style: CSSProperties, setCytoscapeData: (data: CytoscapeData | null) => void}) {
-  const [parsedData, setParsedData] = useState<CytoscapeData | null>(null);
+export default function OnnxUploadButton(props: {style: CSSProperties, setCytoscapeData: (data: CytoscapeData | null) => void, setFilename: (filename: string | null) => void}) {
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -27,13 +26,14 @@ export default function OnnxUploadButton(props: {style: CSSProperties, setCytosc
         if (!jsonObject.elements || !jsonObject.elements.nodes || !jsonObject.elements.edges) {
           throw new Error('Invalid Cytoscape JSON');
         }
-        setParsedData(jsonObject as CytoscapeData);
         props.setCytoscapeData(jsonObject as CytoscapeData);
+        props.setFilename(file.name);
       } catch (error: any) {
         // TODO: Validate Cytoscape JSON structure
         if (error.message === 'Invalid Cytoscape JSON') setErrorMessage('Invalid Cytoscape JSON structure. Ensure it has "elements.nodes" and "elements.edges".');
         else setErrorMessage('Failed to parse file. Ensure it is valid JSON syntax.');
-        setParsedData(null);
+        props.setCytoscapeData(null);
+        props.setFilename(null);
       }
 
     };

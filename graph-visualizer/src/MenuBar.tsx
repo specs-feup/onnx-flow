@@ -1,8 +1,8 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import OnnxUploadButton from "./OnnxUploadButton";
-import Dropdown from './Dropdown';
-import ColorPicker from './colorPicker';
-import type { CytoscapeData } from './Cytoscape.tsx';
+import Dropdown from "./Dropdown";
+import ColorPicker from "./colorPicker";
+import type { CytoscapeData } from "./Cytoscape.tsx";
 
 export default function MenuBar(props: {
     style: CSSProperties;
@@ -12,11 +12,11 @@ export default function MenuBar(props: {
     nodeColor?: string;
     setNodeColor?: (c: string) => void;
 }) {
+    const [filename, setFilename] = useState<string | null>(null);
     return (
         <header style={props.style}>
             <h1>ONNX Graph Visualizer</h1>
             <div className="button-group">
-                
                 <OnnxUploadButton
                     style={{
                         display: "flex",
@@ -26,6 +26,7 @@ export default function MenuBar(props: {
                         border: "2px solid white",
                     }}
                     setCytoscapeData={props.setCytoscapeData}
+                    setFilename={setFilename}
                 />
                 <button onClick={() => props.setCytoscapeData(null)}>Clear Graph</button>
                 {props.panelVisibility.isVisible ? (
@@ -38,9 +39,13 @@ export default function MenuBar(props: {
                     </button>
                 )}
                 <Dropdown setLayout={props.setLayout} />
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <ColorPicker value={props.nodeColor} onChange={(c) => props.setNodeColor?.(c)} />
+                <div style={{ display: "flex", alignItems: "center" }}>
+                    <ColorPicker
+                        value={props.nodeColor}
+                        onChange={(c) => props.setNodeColor?.(c)}
+                    />
                 </div>
+                {filename && <button onClick={async () => await fetch(`http://localhost:4000/server/start/${filename}`, { method: "POST" })}>&#9654;</button>}
             </div>
         </header>
     );

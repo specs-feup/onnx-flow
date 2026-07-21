@@ -90,7 +90,8 @@ h3{
   border-radius: 10px;
   border: 2px solid rgb(95, 92, 102);
   padding: 3px;
-  font-size: 12px;
+  padding-top: 0px;
+  font-size: 17px;
   width: 27px;
 }
 .nodee {
