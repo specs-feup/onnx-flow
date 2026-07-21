@@ -57,6 +57,14 @@ export interface UnifiedExplorerJson {
     [key: string]: unknown; // Allows other Cytoscape top-level properties like zooming
 }
 
+interface RawCytoscapeExport {
+    elements?: {
+        nodes?: UnifiedNode[];
+        edges?: UnifiedEdge[];
+    };
+    [key: string]: unknown;
+}
+
 const IR_VERSION = 9;
 const OPSET_IMPORT = 19;
 
@@ -395,9 +403,26 @@ export function convertFlowGraphToOnnxJson(
  * Generates a unified JSON payload that Cytoscape can render visually,
  * but contains the exact ONNX-Flow data needed to reconstruct the graph.
  */
-export function generateUnifiedExplorerJson(graph: OnnxGraph.Class, includeCrossGraphEdges: boolean = true, parentScopeNodeIds: Set<string> = new Set()): UnifiedExplorerJson {
-    // 1. Cast the generic Cytoscape output to our strict interface
-    const cyJson = graph.toCy().json() as unknown as UnifiedExplorerJson;
+export function generateUnifiedExplorerJson(
+    graph: OnnxGraph.Class,
+    includeCrossGraphEdges: boolean = true,
+    parentScopeNodeIds: Set<string> = new Set(),
+): UnifiedExplorerJson {
+    // 1. Get the raw Cytoscape JSON
+    const rawCy = graph.toCy().json() as unknown as RawCytoscapeExport;
+
+    if (rawCy.elements === undefined) {
+        rawCy.elements = { nodes: [], edges: [] };
+    } else {
+        if (rawCy.elements.nodes === undefined) {
+            rawCy.elements.nodes = [];
+        }
+        if (rawCy.elements.edges === undefined) {
+            rawCy.elements.edges = [];
+        }
+    }
+
+    const cyJson = rawCy as UnifiedExplorerJson;
 
     // 2. Accumulate all node IDs from the current graph to pass to its children
     const currentScopeNodeIds = new Set(parentScopeNodeIds);
@@ -415,7 +440,11 @@ export function generateUnifiedExplorerJson(graph: OnnxGraph.Class, includeCross
                         ...snap,
                         // Recursively convert OnnxGraph.Class[] -> UnifiedExplorerJson[]
                         regions: snap.regions.map((regionGraph) =>
-                            generateUnifiedExplorerJson(regionGraph, includeCrossGraphEdges, currentScopeNodeIds),
+                            generateUnifiedExplorerJson(
+                                regionGraph,
+                                includeCrossGraphEdges,
+                                currentScopeNodeIds,
+                            ),
                         ),
                     };
                 } else {
@@ -449,29 +478,32 @@ export function generateUnifiedExplorerJson(graph: OnnxGraph.Class, includeCross
 
     // 5. Inject Cross-Graph Edges (Visualization Only)
     if (includeCrossGraphEdges) {
-        if (!cyJson.elements.edges) cyJson.elements.edges = [];
-
         graph.getOperationNodes().forEach((opNode) => {
             const inputs = opNode.getInputs() ?? [];
-            
+
             inputs.forEach((input) => {
-                // Determine if this input is a formal graph boundary input 
+                // Determine if this input is a formal graph boundary input
                 // (e.g., iter, cond_in, carry)
-                const isFormalLocalInput = input.is(TensorNode) && input.as(TensorNode).type === "input";
-                
+                const isFormalLocalInput =
+                    input.is(TensorNode) && input.as(TensorNode).type === "input";
+
                 // If it exists in the parent graph, isn't generated locally, and isn't a formal input,
                 // it is an implicit proxy capture.
-                if (parentScopeNodeIds.has(input.id) && input.incomers.length === 0 && !isFormalLocalInput) {
+                if (
+                    parentScopeNodeIds.has(input.id) &&
+                    input.incomers.length === 0 &&
+                    !isFormalLocalInput
+                ) {
                     const syntheticEdge: UnifiedEdge = {
                         data: {
                             id: `cross_edge_${input.id}_to_${opNode.id}`,
-                            source: input.id,      // The outer tensor ID
-                            target: opNode.id,     // The inner operation
+                            source: input.id, // The outer tensor ID
+                            target: opNode.id, // The inner operation
                             isCrossGraph: true,
                         },
-                        classes: "cross-graph-capture"
+                        classes: "cross-graph-capture",
                     };
-                    
+
                     cyJson.elements.edges.push(syntheticEdge);
                 }
             });
