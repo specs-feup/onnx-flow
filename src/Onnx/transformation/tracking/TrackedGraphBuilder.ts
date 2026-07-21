@@ -2,13 +2,8 @@ import { GraphBuilder } from "../../GraphBuilder.js";
 import type Node from "@specs-feup/flow/graph/Node";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import type OnnxEdge from "../../OnnxEdge.js";
-import type { DataType, KnownShape } from "../../OnnxTypes.js";
-import TensorNode from "../../TensorNode.js";
-import ConstantNode from "../../ConstantNode.js";
-import OperationNode from "../../OperationNode.js";
-import RegionArgumentNode from "../../RegionArgumentNode.js";
-
+import OnnxEdge from "../../OnnxEdge.js";
+import type { DataType, KnownShape, ValueNode } from "../../OnnxTypes.js";
 import type { GraphAction, NodeSnapshot } from "./GraphActions.js";
 import {
     AddNodeAction,
@@ -16,7 +11,10 @@ import {
     AddEdgeAction,
     RemoveEdgeAction,
     MutationPatch,
+    UpdateNodeInputsAction,
 } from "./GraphActions.js";
+import { isOnnxNode, asOnnxNode } from "../../Utils.js";
+import type OperationNode from "../../OperationNode.js";
 
 export class TrackedGraphBuilder extends GraphBuilder {
     private actions: GraphAction[] = [];
@@ -44,9 +42,45 @@ export class TrackedGraphBuilder extends GraphBuilder {
     }
 
     override removeNode(node: BaseNode.Class): void {
+        const connectedEdges = [...node.incomers.toArray(), ...node.outgoers.toArray()];
+
+        for (const edge of connectedEdges) {
+            if (edge.is(OnnxEdge)) {
+                this.removeEdge(edge.as(OnnxEdge));
+            }
+        }
+
         const snapshot = this.cloneNodeState(node);
         super.removeNode(node);
         this.actions.push(new RemoveNodeAction(snapshot));
+    }
+
+    override replaceAllUsesWith(oldNode: ValueNode, newNode: ValueNode): void {
+        const affectedOps: { op: OperationNode.Class; oldInputs: string[] }[] = [];
+
+        // Find all operations that are about to be mutated
+        const findAffected = (g: OnnxGraph.Class) => {
+            for (const op of g.getOperationNodes().toArray()) {
+                const currentInputs = op.getInputs() ?? [];
+                if (currentInputs.some((input) => input.id === oldNode.id)) {
+                    affectedOps.push({
+                        op,
+                        oldInputs: currentInputs.map((n) => n.id),
+                    });
+                }
+                for (const sub of op.regions) {
+                    findAffected(sub);
+                }
+            }
+        };
+        findAffected(this.graph);
+
+        for (const { op, oldInputs } of affectedOps) {
+            const newInputs = oldInputs.map((id) => (id === oldNode.id ? newNode.id : id));
+            this.actions.push(new UpdateNodeInputsAction(op.id, oldInputs, newInputs));
+        }
+
+        super.replaceAllUsesWith(oldNode, newNode);
     }
 
     // --- EDGE INTERCEPTORS ---
@@ -83,50 +117,8 @@ export class TrackedGraphBuilder extends GraphBuilder {
      * Extracts all raw data necessary to completely rebuild a node from scratch.
      */
     private cloneNodeState(node: BaseNode.Class): NodeSnapshot {
-        if (node.is(TensorNode)) {
-            const tn = node.as(TensorNode);
-            return {
-                kind: "TensorNode",
-                id: tn.id,
-                literalType: tn.literalType,
-                shape: tn.shape,
-                tensorType: tn.type,
-                extraAttrs: tn.extraAttrs,
-                metadata: { ...tn.metadata },
-            };
-        } else if (node.is(ConstantNode)) {
-            const cn = node.as(ConstantNode);
-            // Deep copy the TensorProto if necessary, but shallow might be enough if immutable
-            return {
-                kind: "ConstantNode",
-                id: cn.id,
-                proto: cn.constantValue,
-                isInput: cn.isInput,
-                metadata: { ...cn.metadata },
-            };
-        } else if (node.is(OperationNode)) {
-            const op = node.as(OperationNode);
-            return {
-                kind: "OperationNode",
-                id: op.id,
-                opType: op.type,
-                // We only store the STRING IDs of inputs, because storing references
-                // breaks if the target nodes are removed and restored!
-                inputs: (op.getInputs() ?? []).map((n) => n.id),
-                attributes: { ...op.attributes },
-                regions: [...op.regions],
-                metadata: { ...op.metadata },
-            };
-        } else if (node.is(RegionArgumentNode)) {
-            const rn = node.as(RegionArgumentNode);
-            return {
-                kind: "RegionArgumentNode",
-                id: rn.id,
-                index: rn.index,
-                originalName: rn.originalName,
-                literalType: rn.literalType,
-                shape: rn.shape as KnownShape,
-            };
+        if (isOnnxNode(node)) {
+            return asOnnxNode(node).toSnapshot();
         }
         throw new Error(`Unsupported node type for snapshotting: ${node.id}`);
     }

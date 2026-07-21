@@ -27,7 +27,7 @@ export class LowerRangeRecipe implements LoopLoweringRecipe {
         "Mod",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Range";
     }
 

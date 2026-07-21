@@ -4,7 +4,6 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { makeTensorProto } from "../../../Utils.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerReluRecipe implements DecompositionRecipe {
     public readonly name = "LowerRelu";
@@ -13,14 +12,9 @@ export class LowerReluRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Greater", "Where"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Relu") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Relu",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Relu") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -54,6 +48,6 @@ export class LowerReluRecipe implements DecompositionRecipe {
 
         // 4. Safely replace the original Y with the new Where output
         builder.replaceAllUsesWith(Y, whereOut);
-        op.remove();
+        builder.removeNode(op);
     }
 }

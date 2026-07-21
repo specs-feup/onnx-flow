@@ -5,6 +5,7 @@ import OnnxEdge from "./OnnxEdge.js";
 import type OnnxGraph from "./OnnxGraph.js";
 import type { AttributeMap, AttributeValue, ValueNode } from "./OnnxTypes.js";
 import { isValueNode } from "./Utils.js";
+import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";
@@ -78,6 +79,18 @@ namespace OperationNode {
 
         setMetadata(key: string, value: AttributeValue): void {
             this.data[TAG].metadata[key] = value;
+        }
+
+        public toSnapshot(): NodeSnapshot {
+            return {
+                kind: "OperationNode",
+                id: this.id,
+                opType: this.type,
+                attributes: { ...this.attributes },
+                inputs: (this.getInputs() ?? []).map((n) => n.id),
+                regions: [...this.regions],
+                metadata: { ...this.metadata },
+            };
         }
     }
 

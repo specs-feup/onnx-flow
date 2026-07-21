@@ -175,12 +175,12 @@ export class LoopFusionMatcher {
 
         // 6. Integrate results back into the main graph
         outerBuilder.replaceAllUsesWith(rootOutNodeRaw, reshaped);
-        chain.forEach((op) => op.remove());
+        chain.forEach((op) => outerBuilder.removeNode(op));
     }
 
     // --- Helper methods (copied exactly from your old Pass) ---
     private getRecipeFor(op: OperationNode.Class): LoopLoweringRecipe | undefined {
-        return this.recipes.find((recipe) => recipe.canApply(op));
+        return this.recipes.find((recipe) => recipe.match(op));
     }
 
     private isSupported(op: OperationNode.Class): boolean {

@@ -47,7 +47,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         "Exp",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);
         return schema?.category === OpCategory.Reduction;
     }

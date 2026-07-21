@@ -3,6 +3,7 @@ import Node from "@specs-feup/flow/graph/Node";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 import type { AttributeMap, AttributeProto, AttributeValue, DataType, Shape } from "./OnnxTypes.js";
+import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
 
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
@@ -69,6 +70,17 @@ namespace TensorNode {
 
         setAddress(addr: number): void {
             this.setMetadata("address", addr);
+        }
+
+        public toSnapshot(): NodeSnapshot {
+            return {
+                kind: "TensorNode",
+                id: this.id,
+                tensorType: this.type,
+                literalType: this.literalType,
+                shape: this.shape,
+                metadata: { ...this.metadata },
+            };
         }
     }
 

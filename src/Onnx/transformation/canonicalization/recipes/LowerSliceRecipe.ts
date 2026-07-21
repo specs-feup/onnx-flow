@@ -6,7 +6,6 @@ import { DataType } from "../../../OnnxTypes.js";
 import { readConstIntegerVectorFromTensorNode, makeTensorProto } from "../../../Utils.js";
 import ConstantNode from "../../../ConstantNode.js";
 import TensorNode from "../../../TensorNode.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerSliceRecipe implements DecompositionRecipe {
     public readonly name = "LowerSlice";
@@ -15,10 +14,10 @@ export class LowerSliceRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = true;
     public readonly producedOps = ["Range", "Gather", "Identity"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Slice") return null;
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Slice") return false;
         const ins = op.getInputs() ?? [];
-        if (ins.length < 3) return null;
+        if (ins.length < 3) return false;
 
         // We only lower if starts and ends are statically known constants
         const readVec = (t: ValueNode) => {
@@ -28,13 +27,8 @@ export class LowerSliceRecipe implements DecompositionRecipe {
         };
         const starts = readVec(ins[1]);
         const ends = readVec(ins[2]);
-        if (starts === undefined || ends === undefined) return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Slice",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+        if (starts === undefined || ends === undefined) return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -120,6 +114,6 @@ export class LowerSliceRecipe implements DecompositionRecipe {
             builder.replaceAllUsesWith(Y, curT);
         }
 
-        op.remove();
+        builder.removeNode(op);
     }
 }

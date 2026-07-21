@@ -1,0 +1,112 @@
+import express from "express";
+import type { Request, Response } from "express";
+import type { ExplorerSession } from "./ExplorerSession.js";
+import { generateUnifiedExplorerJson } from "../flow2json.js";
+
+export function startExplorerServer(session: ExplorerSession, port: number = 3000): void {
+    const app = express();
+    app.use(express.json());
+
+    // 1. CORS Middleware (Essential for local frontend development)
+    app.use((req, res, next) => {
+        res.header("Access-Control-Allow-Origin", "*");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+        res.header("Access-Control-Allow-Headers", "Content-Type");
+        next();
+    });
+
+    // 2. Fetch the current state of the graph (UI uses this to render Cytoscape)
+    app.get("/api/graph", (req: Request, res: Response) => {
+        try {
+            const payload = generateUnifiedExplorerJson(session.graph);
+            res.json(payload);
+        } catch (error) {
+            res.status(500).json({ error: String(error) });
+        }
+    });
+
+    // 3. Fetch the list of available optimizations
+    app.get("/api/opportunities", (req: Request, res: Response) => {
+        try {
+            const opps = session.getOpportunities().map((opp) => ({
+                id: opp.id,
+                description: opp.description,
+                recipeName: opp.recipeName,
+                targetNodeId: opp.targetNodeId,
+            }));
+            res.json(opps);
+        } catch (error) {
+            res.status(500).json({
+                error: String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
+        }
+    });
+
+    // 4. Trigger an optimization
+    app.post("/api/apply/:id", (req: Request, res: Response) => {
+        try {
+            const success = session.applyOpportunity(req.params["id"]);
+            if (success) {
+                // Instantly return the updated graph so the UI can re-render
+                res.json({ success: true, graph: generateUnifiedExplorerJson(session.graph) });
+            } else {
+                res.status(404).json({ success: false, error: "Opportunity no longer valid." });
+            }
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
+        }
+    });
+
+    // 5. Time-Travel: Undo
+    app.post("/api/undo", (req: Request, res: Response) => {
+        try {
+            const undone = session.undo();
+            res.json({
+                success: !!undone,
+                patch: undone,
+                graph: generateUnifiedExplorerJson(session.graph),
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
+        }
+    });
+
+    // 6. Time-Travel: Redo
+    app.post("/api/redo", (req: Request, res: Response) => {
+        try {
+            const redone = session.redo();
+            res.json({
+                success: !!redone,
+                patch: redone,
+                graph: generateUnifiedExplorerJson(session.graph),
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
+        }
+    });
+
+    // 7. Update Compiler Settings dynamically
+    app.put("/api/config", (req: Request, res: Response) => {
+        try {
+            // Merges new options (e.g., { fuse: false }) into the session
+            session.options = { ...session.options, ...req.body };
+            res.json({ success: true, options: session.options });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
+        }
+    });
+
+    // 8. Start the API
+    app.listen(port, () => {
+        console.log(`\n======================================================`);
+        console.log(`🚀 ONNX-Flow Explorer Server running on port ${port}`);
+        console.log(`📡 API Endpoints available:`);
+        console.log(`   GET  http://localhost:${port}/api/graph`);
+        console.log(`   GET  http://localhost:${port}/api/opportunities`);
+        console.log(`   POST http://localhost:${port}/api/apply/:id`);
+        console.log(`   POST http://localhost:${port}/api/undo`);
+        console.log(`   POST http://localhost:${port}/api/redo`);
+        console.log(`======================================================\n`);
+    });
+}

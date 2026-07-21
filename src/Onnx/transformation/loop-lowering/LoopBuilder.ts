@@ -120,29 +120,27 @@ export function buildForLoopRegion(
     };
 
     // 5. The Loop Node
-    const loopOp = outerGraph
-        .addNode(uniq(outerGraph, tag))
-        .init(new OperationNode.Builder("Loop", loopInputs, {}, [innerGraph]))
+    const loopOp = outerBuilder
+        .addNode(
+            uniq(outerGraph, tag),
+            new OperationNode.Builder("Loop", loopInputs, {}, [innerGraph]),
+        )
         .as(OperationNode);
 
     // 6. Wire Outer Graph Edges
     loopInputs.forEach((input) => {
         if (outerGraph.hasNode(input.id))
-            outerGraph
-                .addEdge(input, loopOp)
-                .init(new OnnxEdge.Builder(input.literalType, input.shape))
-                .as(OnnxEdge);
+            outerBuilder.addEdge(input, loopOp, input.literalType, input.shape);
     });
 
     // 7. Generate Outputs for the Outer Graph
-    const loopOutput = outerGraph
-        .addNode(uniq(outerGraph, `${scopeTag}_carry_out`))
-        .init(new TensorNode.Builder(vInitial.literalType, vInitial.shape, "intermediate"))
+    const loopOutput = outerBuilder
+        .addNode(
+            uniq(outerGraph, `${scopeTag}_carry_out`),
+            new TensorNode.Builder(vInitial.literalType, vInitial.shape, "intermediate"),
+        )
         .as(TensorNode);
-    outerGraph
-        .addEdge(loopOp, loopOutput)
-        .init(new OnnxEdge.Builder(vInitial.literalType, vInitial.shape))
-        .as(OnnxEdge);
+    outerBuilder.addEdge(loopOp, loopOutput, vInitial.literalType, vInitial.shape);
 
     return { loopOp, innerBuilder, trip, condIn, vInitial, loopOutput, finalize };
 }

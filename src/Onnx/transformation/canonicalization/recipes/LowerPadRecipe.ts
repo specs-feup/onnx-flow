@@ -10,7 +10,6 @@ import {
     toStaticShape,
 } from "../../../Utils.js";
 import ConstantNode from "../../../ConstantNode.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerPadRecipe implements DecompositionRecipe {
     public readonly name = "LowerPad";
@@ -19,21 +18,16 @@ export class LowerPadRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = true;
     public readonly producedOps = ["Slice", "Concat", "Gather", "Expand", "Range"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Pad") return null;
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Pad") return false;
         const ins = op.getInputs() ?? [];
-        if (ins.length < 2 || !ins[1]?.is(ConstantNode)) return null;
+        if (ins.length < 2 || !ins[1]?.is(ConstantNode)) return false;
 
         // We can only safely canonicalize static pad dimensions
         const inShape = toStaticShape(ins[0].shape);
 
-        if (inShape.length === 0 || !inShape.every((d) => d > 0)) return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Pad",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+        if (inShape.length === 0 || !inShape.every((d) => d > 0)) return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -197,7 +191,7 @@ export class LowerPadRecipe implements DecompositionRecipe {
                 { type: Xin.literalType, shape: Xin.shape as KnownShape },
             ])[0];
         builder.replaceAllUsesWith(Y, cur);
-        op.remove();
+        builder.removeNode(op);
     }
 
     private ensurePadSlabConst(
