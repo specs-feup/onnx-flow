@@ -9,7 +9,6 @@ import {
     toStaticShape,
     tryAsConcreteValueNode,
 } from "../../../Utils.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
     public readonly name = "LowerDequantizeLinear";
@@ -18,14 +17,9 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Cast", "Shape", "Unsqueeze", "Expand", "Sub", "Mul"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "DequantizeLinear") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower DequantizeLinear",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "DequantizeLinear") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

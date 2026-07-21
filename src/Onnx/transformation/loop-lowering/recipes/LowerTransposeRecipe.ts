@@ -31,7 +31,7 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         "Mod",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Transpose") return false;
         const inputs = op.getInputs();
         return !!inputs && inputs.length > 0;

@@ -32,12 +32,15 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         "Mod",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         const schema = OpRegistry.getInstance().get(op.type, 19);
         if (schema?.category !== OpCategory.ElementWise) return false;
 
         const inputs = op.getInputs() ?? [];
-        if (inputs.length > 0 && inputs.every((inp) => inp.shape.length === 0)) {
+        if (
+            inputs.length > 0 &&
+            inputs.every((inp) => (inp.shape as unknown[] | undefined)?.length === 0)
+        ) {
             return false;
         }
 

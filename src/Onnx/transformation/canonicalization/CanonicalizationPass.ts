@@ -17,6 +17,7 @@ import { LowerReluRecipe } from "./recipes/LowerReluRecipe.js";
 import { LowerSubRecipe } from "./recipes/LowerSubRecipe.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
+import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -57,7 +58,14 @@ export class CanonicalizationPass implements GraphPass {
 
                 if (recipe) {
                     // Ask the recipe for an opportunity
-                    const opportunity = recipe.match(op);
+                    const opportunity = recipe.match(op)
+                        ? new TransformationOpportunity(
+                              recipe.name,
+                              op.id,
+                              `Apply ${recipe.name} to ${op.type}`,
+                              (builder) => recipe.apply(op, builder),
+                          )
+                        : null;
 
                     if (opportunity) {
                         //const builder = new GraphBuilder(graph, `lowering_${op.id}`);

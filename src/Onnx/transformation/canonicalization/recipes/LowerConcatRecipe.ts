@@ -4,7 +4,6 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { getIntAttr, isNumeric, makeTensorProto, toStaticShape } from "../../../Utils.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerConcatRecipe implements DecompositionRecipe {
     public readonly name = "LowerConcat";
@@ -24,29 +23,22 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         "Cast",
     ];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Concat") return null;
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Concat") return false;
         const inputs = op.getInputs() as ConcreteValueNode[];
-        if (inputs.length < 2) return null;
+        if (inputs.length < 2) return false;
 
         const rank = inputs[0].shape.length;
-        if (!inputs.every((t) => t.shape.length === rank)) return null;
+        if (!inputs.every((t) => t.shape.length === rank)) return false;
 
         const dtype = inputs[0].literalType as DataType;
-        if (!inputs.every((t) => t.literalType === dtype)) return null;
+        if (!inputs.every((t) => t.literalType === dtype)) return false;
 
         const axisAttr = getIntAttr(op, "axis", 0);
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;
-        if (axis < 0 || axis >= rank) return null;
+        if (axis < 0 || axis >= rank) return false;
 
-        return isNumeric(dtype)
-            ? new TransformationOpportunity(
-                  this.name,
-                  op.id,
-                  "Lower Concat to ScatterElements",
-                  (builder: GraphBuilder) => this.apply(op, builder),
-              )
-            : null;
+        return isNumeric(dtype);
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

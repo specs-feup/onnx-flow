@@ -180,7 +180,7 @@ export class LoopFusionMatcher {
 
     // --- Helper methods (copied exactly from your old Pass) ---
     private getRecipeFor(op: OperationNode.Class): LoopLoweringRecipe | undefined {
-        return this.recipes.find((recipe) => recipe.canApply(op));
+        return this.recipes.find((recipe) => recipe.match(op));
     }
 
     private isSupported(op: OperationNode.Class): boolean {

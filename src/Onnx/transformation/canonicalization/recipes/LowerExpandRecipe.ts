@@ -3,7 +3,6 @@ import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerExpandRecipe implements DecompositionRecipe {
     public readonly name = "LowerExpand";
@@ -12,14 +11,9 @@ export class LowerExpandRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["ConstantOfShape", "Cast", "Add"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Expand") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Expand",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Expand") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

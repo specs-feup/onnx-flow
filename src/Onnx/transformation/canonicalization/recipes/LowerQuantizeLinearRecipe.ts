@@ -4,7 +4,6 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { getIntAttr, makeTensorProto, toStaticShape } from "../../../Utils.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
     public readonly name = "LowerQuantizeLinear";
@@ -22,14 +21,9 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
         "Clip",
     ];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "QuantizeLinear") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower QuantizeLinear",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "QuantizeLinear") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

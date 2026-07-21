@@ -1,8 +1,8 @@
 import type OnnxGraph from "../OnnxGraph.js";
 import type { DecompositionRecipe } from "./Recipe.js";
-import type { TransformationOpportunity } from "./TransformationOpportunity.js";
 import { topologicalSortOperationNodes } from "../Utils.js";
 import { OpRegistry } from "../Schema/OpRegistry.js";
+import { TransformationOpportunity } from "./TransformationOpportunity.js";
 
 export class TransformationRegistry {
     constructor(private recipes: DecompositionRecipe[]) {}
@@ -23,9 +23,16 @@ export class TransformationRegistry {
 
             for (const recipe of this.recipes) {
                 if (recipe.targetOp === op.type || recipe.targetOp === category) {
-                    const opp = recipe.match(op);
-                    if (opp) {
-                        opportunities.push(opp);
+                    if (recipe.match(op)) {
+                        // The Registry creates the executable opportunity!
+                        opportunities.push(
+                            new TransformationOpportunity(
+                                recipe.name,
+                                op.id,
+                                `Apply ${recipe.name} to ${op.type}`,
+                                (builder) => recipe.apply(op, builder),
+                            ),
+                        );
                     }
                 }
             }

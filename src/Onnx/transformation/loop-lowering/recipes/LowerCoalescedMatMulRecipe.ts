@@ -40,7 +40,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         "Mod",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "MatMul") return false;
         const inputs = op.getInputs();
         return (

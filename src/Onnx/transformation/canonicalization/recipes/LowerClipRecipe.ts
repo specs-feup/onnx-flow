@@ -2,7 +2,6 @@ import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode } from "../../../OnnxTypes.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerClipRecipe implements DecompositionRecipe {
     public readonly name = "LowerClip";
@@ -11,14 +10,9 @@ export class LowerClipRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Max", "Min", "Identity"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Clip") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Clip to Max/Min",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Clip") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

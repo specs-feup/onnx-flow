@@ -4,7 +4,6 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { getFloatAttr, getIntAttr, makeTensorProto } from "../../../Utils.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerGemmRecipe implements DecompositionRecipe {
     public readonly name = "LowerGemm";
@@ -13,14 +12,9 @@ export class LowerGemmRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Transpose", "MatMul", "Mul", "Add"];
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Gemm") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Gemm to Transpose and MatMul",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Gemm") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

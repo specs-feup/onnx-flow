@@ -4,7 +4,6 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { makeTensorProto } from "../../../Utils.js";
-import { TransformationOpportunity } from "../../TransformationOpportunity.js";
 
 export class LowerExpRecipe implements DecompositionRecipe {
     public readonly name = "LowerExpTaylor";
@@ -19,14 +18,9 @@ export class LowerExpRecipe implements DecompositionRecipe {
     // The constant defining the number of approximation iterations
     private readonly ITERATIONS = 20;
 
-    match(op: OperationNode.Class): TransformationOpportunity | null {
-        if (op.type !== "Exp") return null;
-        return new TransformationOpportunity(
-            this.name,
-            op.id,
-            "Lower Exp to Taylor Series",
-            (builder: GraphBuilder) => this.apply(op, builder),
-        );
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Exp") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

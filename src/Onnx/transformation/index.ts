@@ -1,4 +1,3 @@
-import fs from "fs";
 import type Graph from "@specs-feup/flow/graph/Graph";
 import type { DecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
 import { defaultDecompositionOptions } from "@specs-feup/onnx-flow/DecompositionOptions";
@@ -10,7 +9,6 @@ import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
-import OnnxDotFormatter from "../dot/OnnxDotFormatter.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
