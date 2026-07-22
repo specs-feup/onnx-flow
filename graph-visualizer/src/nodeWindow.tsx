@@ -9,20 +9,28 @@ export default function NodePopup({ selectedNode, popupPos, onClose }) {
     typeNode = "Constant";
   }
   return (
-    <div
-      className="nodepopup"
-      style={{
-        position: "absolute",
-        left: popupPos.x + 20,
-        top: popupPos.y + 20,
-        background: "rgba(22, 23, 29)",
-        color: "#fff",
-        padding: "8px",
-        border: "2px solid #747474",
-        borderRadius: "5px",
-        zIndex: 9999,
-      }}
-    >
+    <div>
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9998,
+        }}
+        onClick={onClose}/>
+      <div
+        className="nodepopup"
+        style={{
+          position: "absolute",
+          left: popupPos.x + 20,
+          top: popupPos.y + 20,
+          background: "rgba(22, 23, 29)",
+          color: "#fff",
+          padding: "8px",
+          border: "2px solid #747474",
+          borderRadius: "5px",
+          zIndex: 9999,
+        }}
+        onClick={(e) => e.stopPropagation()}>
       <div className="nodee">{typeNode} Node</div>
       <div>ID: {selectedNode.id}</div>
       <div>Type: {selectedNode["onnxData"].tensorType || selectedNode["onnxData"].opType || "Constant"}</div>
@@ -36,7 +44,7 @@ export default function NodePopup({ selectedNode, popupPos, onClose }) {
       {selectedNode.onnxData.opType && selectedNode.onnxData.inputs.metadata && JSON.stringify(selectedNode.onnxData.inputs.metadata)!='{}' &&(<div>Metadata: {selectedNode.onnxData.inputs.metadata}</div>)}
 
       {!selectedNode.onnxData.tensorType && !selectedNode.onnxData.opType && (<div>Data Type: {selectedNode.onnxData.proto.dataType}</div>)} 
-      <button className="popupBTN" onClick={onClose}>x</button>
+      </div>
     </div>
   );
 }
