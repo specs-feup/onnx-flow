@@ -20,6 +20,7 @@
     "@syncfusion/ej2-react-inputs": "^34.1.30",
     "bootstrap": "^5.3.8",
     "cytoscape": "^3.34.0",
+    "cytoscape-cxtmenu": "^3.5.0",
     "cytoscape-dagre": "^4.0.0",
     "cytoscape-fcose": "^2.2.0",
     "react": "^19.2.7",
