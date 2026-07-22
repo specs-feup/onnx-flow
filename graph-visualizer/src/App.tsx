@@ -42,6 +42,7 @@ function App() {
               }}
               setLayout={setCytoscapeLayout}
               nodeColor={nodeColor}
+              selectedNodeId={selectedNode?.id ?? null}
               setNodeColor={setNodeColor}
             />
 
