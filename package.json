@@ -44,7 +44,9 @@
         "prepare": "npm run build && husky install",
         "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
         "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
-        "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js"
+        "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js",
+        "webapp:frontend": "vite graph-visualizer",
+        "webapp:backend": "tsx graph-visualizer/src/api/server.ts"
     },
     "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
     "repository": {
@@ -59,10 +61,14 @@
         "cytoscape-cxtmenu": "^3.5.0",
         "cytoscape-dagre": "^4.0.0",
         "express": "^4.21.1",
+        "link": "^2.1.2",
         "node-graphviz": "^0.1.1",
         "onnxruntime-web": "^1.20.1",
         "protobufjs": "^7.4.0",
+        "react": "^19.2.8",
         "react-cytoscapejs": "^2.0.0",
+        "tsx": "^4.23.1",
+        "vite": "^8.1.5",
         "yargs": "^17.7.2"
     },
     "type": "module",
@@ -71,6 +77,7 @@
         "@types/yargs": "^17.0.33",
         "@typescript-eslint/eslint-plugin": "^8.54.0",
         "@typescript-eslint/parser": "^8.54.0",
+        "babel-plugin-react-compiler": "^1.0.0",
         "cpx2": "^8.0.0",
         "eslint": "^9.39.2",
         "eslint-config-prettier": "^10.1.8",

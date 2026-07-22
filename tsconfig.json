@@ -34,5 +34,5 @@
             "@specs-feup/onnx-flow/*": ["./src/*.ts", "./test/*.ts"]
         }
     },
-    "exclude": ["node_modules", "out"]
+    "exclude": ["node_modules", "out", "graph-visualizer"]
 }
