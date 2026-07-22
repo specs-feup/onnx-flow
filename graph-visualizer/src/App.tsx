@@ -68,6 +68,7 @@ function App() {
               cytoscapeData={cytoscapeData}
               layout={cytoscapeLayout}
               nodeColor={nodeColor}
+              selectedNodeId={selectedNode?.id ?? null}
               onNodeSelected={(node: any, pos: {x:number; y:number}) => {
                 setSelectedNode(node);
                 setPopupPos(pos);

@@ -18,7 +18,7 @@ export type CytoscapeData = {
   };
 };
 
-export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions, nodeColor?: string, onNodeSelected?: (node:any, pos:{x:number,y:number})=>void}) {
+export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions, nodeColor?: string, selectedNodeId?: string | null, onNodeSelected?: (node:any, pos:{x:number,y:number})=>void}) {
   const cyRef = useRef<cytoscape.Core | null>(null);
   const menuRef = useRef(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -47,12 +47,16 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
 
     useEffect(() => {
       if (!cyRef.current) return;
-      if (!props.nodeColor) return;
-      cyRef.current.nodes().style('background-color', props.nodeColor);
+      const defaultColor = props.nodeColor || '#533b6e';
+      cyRef.current.nodes().style('background-color', defaultColor);
+      if (props.selectedNodeId) {
+        const selected = cyRef.current.getElementById(props.selectedNodeId);
+        if (selected && selected.nonempty()) {
+          selected.style('background-color', '#000000');
+        }
+      }
       cyRef.current.resize();
-      cyRef.current.fit();
-
-    }, [props.nodeColor, props.cytoscapeData]);
+    }, [props.nodeColor, props.selectedNodeId, props.cytoscapeData]);
 
     useEffect(() => {
       if (!cyReady || !cyRef.current || !props.onNodeSelected) return;
