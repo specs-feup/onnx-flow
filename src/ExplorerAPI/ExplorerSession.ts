@@ -1,4 +1,6 @@
+import fs from "fs";
 import type { DecompositionOptions } from "../DecompositionOptions.js";
+import { createGraph } from "../initGraph.js";
 import type OnnxGraph from "../Onnx/OnnxGraph.js";
 import { LowerAveragePoolRecipe } from "../Onnx/transformation/canonicalization/recipes/LowerAveragePoolRecipe.js";
 import { LowerClipRecipe } from "../Onnx/transformation/canonicalization/recipes/LowerClipRecipe.js";
@@ -18,10 +20,35 @@ import { HistoryManager } from "../Onnx/transformation/tracking/HistoryManager.j
 import { TrackedGraphBuilder } from "../Onnx/transformation/tracking/TrackedGraphBuilder.js";
 import type { TransformationOpportunity } from "../Onnx/transformation/TransformationOpportunity.js";
 import { TransformationRegistry } from "../Onnx/transformation/TransformationRegistry.js";
+import { parseOnnxFile } from "../index.js";
+import type { UnifiedExplorerJson } from "../flow2json.js";
+import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "../flow2json.js";
+import type { RawOnnxModel } from "../Onnx/OnnxTypes.js";
 
 export class ExplorerSession {
     public history: HistoryManager;
     public registry: TransformationRegistry;
+
+    public static async fromFile(
+        filePath: string,
+        options: DecompositionOptions,
+    ): Promise<ExplorerSession> {
+        console.log(`[ExplorerSession] Loading graph from ${filePath}...`);
+        let onnxObject;
+
+        // 1. Read the file (Replace this with the exact logic from your index.ts!)
+        if (filePath.endsWith(".json")) {
+            onnxObject = JSON.parse(fs.readFileSync(filePath, "utf8"));
+        } else {
+            onnxObject = await parseOnnxFile(filePath);
+        }
+
+        // 2. Create the graph
+        const graph = createGraph(onnxObject);
+
+        // 3. Return a fully initialized session
+        return new ExplorerSession(graph, options);
+    }
 
     constructor(
         public graph: OnnxGraph.Class,
@@ -120,5 +147,21 @@ export class ExplorerSession {
 
     public redo(): MutationPatch | null {
         return this.history.redo();
+    }
+
+    /**
+     * Converts the current state of the output graph back into
+     * a standard ONNX JSON representation.
+     */
+    public getOutputOnnxJson(): RawOnnxModel {
+        return convertFlowGraphToOnnxJson(this.graph);
+    }
+
+    /**
+     * Generates a unified JSON payload of the output graph that Cytoscape can render visually,
+     * but contains the exact ONNX-Flow data needed to reconstruct the graph.
+     */
+    public getOutputUnifiedJson(): UnifiedExplorerJson {
+        return generateUnifiedExplorerJson(this.graph);
     }
 }

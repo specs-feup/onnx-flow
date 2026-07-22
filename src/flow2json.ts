@@ -43,6 +43,14 @@ export interface UnifiedEdge {
         id: string;
         source: string;
         target: string;
+
+        // Explicit boolean so the frontend never has to check for undefined
+        isCrossGraph: boolean;
+
+        // The ID of the parent/boundary node (e.g., the Loop node itself)
+        // Optional, because it only exists if isCrossGraph is true
+        outsideTarget?: string;
+
         onnxData?: EdgeSnapshot;
         [key: string]: unknown;
     };
@@ -407,6 +415,7 @@ export function generateUnifiedExplorerJson(
     graph: OnnxGraph.Class,
     includeCrossGraphEdges: boolean = true,
     parentScopeNodeIds: Set<string> = new Set(),
+    parentOperationId?: string,
 ): UnifiedExplorerJson {
     // 1. Get the raw Cytoscape JSON
     const rawCy = graph.toCy().json() as unknown as RawCytoscapeExport;
@@ -444,6 +453,7 @@ export function generateUnifiedExplorerJson(
                                 regionGraph,
                                 includeCrossGraphEdges,
                                 currentScopeNodeIds,
+                                cyNode.data.id,
                             ),
                         ),
                     };
@@ -463,6 +473,7 @@ export function generateUnifiedExplorerJson(
     // 4. Enrich Edges
     if (cyJson.elements.edges.length > 0) {
         cyJson.elements.edges.forEach((cyEdge: UnifiedEdge) => {
+            cyEdge.data.isCrossGraph = false;
             const actualEdge = graph.getOnnxEdgeById(cyEdge.data.id);
             if (actualEdge != undefined) {
                 cyEdge.data.onnxData = actualEdge.toSnapshot();
@@ -500,6 +511,7 @@ export function generateUnifiedExplorerJson(
                             source: input.id, // The outer tensor ID
                             target: opNode.id, // The inner operation
                             isCrossGraph: true,
+                            outsideTarget: parentOperationId!,
                         },
                         classes: "cross-graph-capture",
                     };

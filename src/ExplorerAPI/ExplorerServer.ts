@@ -107,6 +107,45 @@ export function startExplorerServer(session: ExplorerSession, port: number = 300
         console.log(`   POST http://localhost:${port}/api/apply/:id`);
         console.log(`   POST http://localhost:${port}/api/undo`);
         console.log(`   POST http://localhost:${port}/api/redo`);
+        console.log(`   GET http://localhost:${port}/api/export/onnx-json`);
+        console.log(`   GET http://localhost:${port}/api/export/unified-json`);
         console.log(`======================================================\n`);
+    });
+
+    // 9. Download standard ONNX JSON (.json)
+    app.get("/api/export/onnx-json", (req: Request, res: Response) => {
+        try {
+            // Get the raw JSON object from the session
+            const jsonProto = session.getOutputOnnxJson();
+
+            // Tell the browser to open a "Save File" dialog
+            res.setHeader("Content-Disposition", "attachment; filename=onnxflow_output.json");
+            res.setHeader("Content-Type", "application/json");
+
+            // Send the data over the network
+            res.send(JSON.stringify(jsonProto, null, 2));
+        } catch (error) {
+            console.error("\n💥 Error exporting ONNX JSON:", error);
+            res.status(500).json({ success: false, error: String(error) });
+        }
+    });
+
+    // 10. Download Cytoscape Unified JSON (.json)
+    app.get("/api/export/unified-json", (req: Request, res: Response) => {
+        try {
+            // Get the Cytoscape-ready object
+            const cyJson = session.getOutputUnifiedJson();
+
+            res.setHeader(
+                "Content-Disposition",
+                "attachment; filename=onnxflow_output_unified.json",
+            );
+            res.setHeader("Content-Type", "application/json");
+
+            res.send(JSON.stringify(cyJson, null, 2));
+        } catch (error) {
+            console.error("\n💥 Error exporting Unified JSON:", error);
+            res.status(500).json({ success: false, error: String(error) });
+        }
     });
 }
