@@ -11,7 +11,7 @@ const stylesheet=[
       "text-valign": "center",
       color: "#ffffff",
       "font-size": "12px",
-      "background-color": "#8d2c19",
+      "background-color": "#533b6e",
       /*
       "background-fill": "linear-gradient",
       "background-gradient-stop-colors": "#ff0044 #e5ff00  #00d9ff",

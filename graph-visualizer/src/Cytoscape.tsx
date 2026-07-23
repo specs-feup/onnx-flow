@@ -4,7 +4,7 @@ import cytoscape from 'cytoscape';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import dagre from 'cytoscape-dagre';
 import cxtmenu from 'cytoscape-cxtmenu';
-import stylesheet from './styleSheet.ts';
+import stylesheet from './styleSheets/styleSheet.ts';
 import chroma from 'chroma-js';
 
 cytoscape.use(dagre);
