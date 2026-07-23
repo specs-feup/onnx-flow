@@ -84,7 +84,7 @@ export default function NodePopup({ selectedNode, popupPos, onClose, ...props }:
             <div style={{width:'100%', height:'100%' }} ref={containerRef}>
               {props.cytoscapeData && (
                 <CytoscapeComponent
-                  elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)}
+                  elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.loopElements)}
                   style={{ width: '100%', height: '100%' }}
                   stylesheet={stylesheet as any}
                   layout={props.layout}

@@ -42,6 +42,6 @@ const stylesheet=[
   },
 ]
 //node shape: "star" "ellipse" "circle" "triangle" "pentagon" "tag" "octagon" "vee" "rhomboid" "rectangle" "diamond"
-//line style: "straight" "taxi" "segments"
-
+//line style: "straight" "taxi" "segments" "bezier" "unbundled-bezier" "haystack" "loop"
+//pointer style: "triangle" "circle-triangle" "circle" "chevron" "diamond" "tee" "vee" "triangle-tee" "triangle-cross" "triangle-backcurve" "circle" "none"
 export default stylesheet;
