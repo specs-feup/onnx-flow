@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import dagre from 'cytoscape-dagre';
 import cxtmenu from 'cytoscape-cxtmenu';
 import stylesheet from './styleSheet.ts';
+import chroma from 'chroma-js';
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
@@ -52,7 +53,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
       if (props.selectedNodeId) {
         const selected = cyRef.current.getElementById(props.selectedNodeId);
         if (selected && selected.nonempty()) {
-          selected.style('background-color', '#000000');
+          selected.style('background-color', chroma(defaultColor).brighten(2).hex() ); 
         }
       }
       cyRef.current.resize();
