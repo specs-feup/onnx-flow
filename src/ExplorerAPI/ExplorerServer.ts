@@ -1,12 +1,14 @@
 import express from "express";
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 import { ExplorerSession } from "./ExplorerSession.js";
 import { generateUnifiedExplorerJson } from "../flow2json.js";
 
 let activeSession: ExplorerSession | null = null;
 
-export function startExplorerServer(initialSession: ExplorerSession | null, port: number = 3000): void {
-    
+export function startExplorerServer(
+    initialSession: ExplorerSession | null,
+    port: number = 3000,
+): void {
     if (initialSession) {
         activeSession = initialSession;
     }
@@ -22,27 +24,16 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
         next();
     });
 
-    // Guard Middleware: Ensures a session exists before hitting graph endpoints
-    const requireActiveSession = (req: Request, res: Response, next: NextFunction) => {
-        if (!activeSession) {
-            return res.status(400).json({ 
-                error: "No active session loaded. Call POST /api/session/start first." 
-            });
-        }
-        next();
-    };
-
     // 2. DYNAMICALLY LOAD / RESET SESSION
     app.post("/api/session/start", (req: Request, res: Response) => {
         try {
             const { graphData, options } = req.body;
             // Instantiates a brand new session dynamically
             activeSession = new ExplorerSession(graphData, options);
-            
-            res.json({ 
-                success: true, 
+            res.json({
+                success: true,
                 message: "New session started successfully.",
-                graph: generateUnifiedExplorerJson(activeSession.graph)
+                graph: generateUnifiedExplorerJson(activeSession.graph),
             });
         } catch (error) {
             res.status(500).json({ success: false, error: String(error) });
@@ -51,8 +42,9 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 3. Graph Endpoint
     app.get("/api/graph", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 const payload = generateUnifiedExplorerJson(activeSession.graph);
                 res.json(payload);
@@ -64,8 +56,9 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 4. Opportunities Endpoint
     app.get("/api/opportunities", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 const opps = activeSession.getOpportunities().map((opp) => ({
                     id: opp.id,
@@ -85,26 +78,31 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 5. Trigger an optimization
     app.post("/api/apply/:id", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 const success = activeSession.applyOpportunity(req.params["id"]);
                 if (success) {
                     // Instantly return the updated graph so the UI can re-render
-                    res.json({ success: true, graph: generateUnifiedExplorerJson(activeSession.graph) });
+                    res.json({
+                        success: true,
+                        graph: generateUnifiedExplorerJson(activeSession.graph),
+                    });
                 } else {
                     res.status(404).json({ success: false, error: "Opportunity no longer valid." });
                 }
             } catch (error) {
                 res.status(500).json({ success: false, error: String(error) });
             }
-        }   
+        }
     });
 
     // 6. Time-Travel: Undo
     app.post("/api/undo", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 const undone = activeSession.undo();
                 res.json({
@@ -120,8 +118,9 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 7. Time-Travel: Redo
     app.post("/api/redo", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 const redone = activeSession.redo();
                 res.json({
@@ -137,8 +136,9 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 8. Update Compiler Settings dynamically
     app.put("/api/config", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 // Merges new options (e.g., { fuse: false }) into the session
                 activeSession.options = { ...activeSession.options, ...req.body };
@@ -151,8 +151,9 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 9. Download standard ONNX JSON (.json)
     app.get("/api/export/onnx-json", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 // Get the raw JSON object from the session
                 const jsonProto = activeSession.getOutputOnnxJson();
@@ -172,8 +173,9 @@ export function startExplorerServer(initialSession: ExplorerSession | null, port
 
     // 10. Download Cytoscape Unified JSON (.json)
     app.get("/api/export/unified-json", (req: Request, res: Response) => {
-        if (!activeSession) {res.status(500).json({ error: "There is no active session!" });}
-        else {
+        if (!activeSession) {
+            res.status(500).json({ error: "There is no active session!" });
+        } else {
             try {
                 // Get the Cytoscape-ready object
                 const cyJson = activeSession.getOutputUnifiedJson();

@@ -46,7 +46,8 @@
         "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
         "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js",
         "webapp:frontend": "vite graph-visualizer",
-        "webapp:backend": "tsx graph-visualizer/src/api/server.ts"
+        "webapp:backend": "tsx graph-visualizer/src/api/server.ts",
+        "webapp:dev": "concurrently \"npm run webapp:frontend\" \"npm run webapp:backend\""
     },
     "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
     "repository": {
@@ -57,6 +58,7 @@
     "license": "Apache-2.0",
     "dependencies": {
         "@specs-feup/flow": "^1.0.3",
+        "concurrently": "^10.0.3",
         "cytoscape": "^3.34.0",
         "cytoscape-cxtmenu": "^3.5.0",
         "cytoscape-dagre": "^4.0.0",
