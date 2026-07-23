@@ -1,13 +1,9 @@
 import { useRef, useState , type ComponentPropsWithRef } from "react";
 import MenuBar from "./MenuBar.tsx";
 import SidePanel from "./SidePanel.tsx";
-
 import CytoscapeGraph,{ type CytoscapeData } from "./Cytoscape.tsx";
 import NodePopup from "./nodeWindow";
-
 import "./App.css";
-import ColorPicker from "./colorPicker.tsx";
-import { useEffect } from "react";
 
 function App() {
     const [isSidePanelVisible, setSidePanelVisibility] = useState(false);

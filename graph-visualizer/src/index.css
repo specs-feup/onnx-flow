@@ -34,13 +34,13 @@ button  {
   width: 130px;
 }
 button:hover {
-  background-color:#201d30;
-  border: 2px solid rgb(91, 79, 119)
+  background-color:#3e3c46;
+  border: 2px solid rgb(132, 124, 150)
 }
 
 #upload-button:hover {
-  background-color:#201d30;
-  border: 2px solid rgb(91, 79, 119)
+  background-color:#3e3c46;
+  border: 2px solid rgb(132, 124, 150)
 }
 
 p {

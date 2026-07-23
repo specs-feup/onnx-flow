@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
-import stylesheet from './styleSheet.ts';
+import stylesheet from './styleSheets/styleSheet.ts';
 
 export default function NodePopup({ selectedNode, popupPos, onClose, ...props }: any) {
   const cyRef = useRef<any>(null);
