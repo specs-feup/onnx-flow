@@ -4,6 +4,7 @@ import SidePanel from "./SidePanel.tsx";
 
 import CytoscapeGraph,{ type CytoscapeData } from "./Cytoscape.tsx";
 import NodePopup from "./nodeWindow";
+import { type TransformationOpportunity } from "./api/api.ts"
 
 import "./App.css";
 import ColorPicker from "./colorPicker.tsx";
@@ -15,6 +16,7 @@ function App() {
     const [cytoscapeLayout, setCytoscapeLayout] = useState<cytoscapeData.LayoutOptions>({name: "fcose"});
     const [nodeColor, setNodeColor] = useState<string>('#533b6e');
     const [selectedNode, setSelectedNode] = useState<any | null>(null);
+    const [transformationOps, setTransformationOps] = useState<TransformationOpportunity[] | null>(null);
     const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
 
     return (

@@ -3,6 +3,7 @@ import OnnxUploadButton from "./OnnxUploadButton";
 import Dropdown from "./Dropdown";
 import ColorPicker from "./colorPicker";
 import type { CytoscapeData } from "./Cytoscape.tsx";
+import { fetchGraph } from "./api/api.ts";
 
 export default function MenuBar(props: {
     style: CSSProperties;
@@ -46,6 +47,8 @@ export default function MenuBar(props: {
                     />
                 </div>
                 {filename && <button onClick={async () => await fetch(`http://localhost:4000/server/start/${filename}`, { method: "POST" })}>&#9654;</button>}
+                <button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>
+                <button onClick={async () => {}}></button>
             </div>
         </header>
     );

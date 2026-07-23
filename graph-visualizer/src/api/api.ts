@@ -1,9 +1,17 @@
 // api.ts (Frontend API Helper)
+import type { CytoscapeData } from "../Cytoscape.tsx";
 
 interface StartSessionResponse {
   success: boolean;
   message: string;
   graph: any; // Cytoscape-ready JSON payload returned by flow2json
+}
+
+export interface TransformationOpportunity {
+  id: string;
+  description: string;
+  recipeName: string;
+  targetNodeId: string;
 }
 
 export async function startNewSession(
@@ -26,5 +34,61 @@ export async function startNewSession(
     throw new Error(errorData.error || "Failed to initialize session");
   }
 
+  return response.json();
+}
+
+export async function fetchGraph(port: number): Promise<CytoscapeData> {
+  const response = await fetch(`http://localhost:${port}/api/graph`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchTransformationOpportunities(port: number): Promise<TransformationOpportunity[]> {
+  const response = await fetch(`http://localhost:${port}/api/opportunities`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function applyTransformation(port: number, opportunityId: string): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/apply/${opportunityId}`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function undoTransformation(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/undo`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function redoTransformation(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/redo`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function exportOnnxJson(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/export/onnx-json`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function exportUnifiedJson(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/export/unified-json`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
   return response.json();
 }
