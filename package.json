@@ -58,6 +58,7 @@
     "license": "Apache-2.0",
     "dependencies": {
         "@specs-feup/flow": "^1.0.3",
+        "chroma-js": "^3.2.0",
         "concurrently": "^10.0.3",
         "cytoscape": "^3.34.0",
         "cytoscape-cxtmenu": "^3.5.0",
