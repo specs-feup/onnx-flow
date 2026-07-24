@@ -10,7 +10,7 @@ export function startExplorerServer(
     port: number = 3000,
 ): void {
     if (initialSession) {
-        activeSession = initialSession;
+        // activeSession = initialSession;
     }
 
     const app = express();
