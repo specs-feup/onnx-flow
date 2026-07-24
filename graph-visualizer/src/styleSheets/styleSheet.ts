@@ -11,7 +11,7 @@ const stylesheet=[
       "text-valign": "center",
       color: "#ffffff",
       "font-size": "12px",
-      "background-color": "#8d2c19",
+      "background-color": "#533b6e",
       /*
       "background-fill": "linear-gradient",
       "background-gradient-stop-colors": "#ff0044 #e5ff00  #00d9ff",
@@ -42,6 +42,6 @@ const stylesheet=[
   },
 ]
 //node shape: "star" "ellipse" "circle" "triangle" "pentagon" "tag" "octagon" "vee" "rhomboid" "rectangle" "diamond"
-//line style: "straight" "taxi" "segments"
-
+//line style: "straight" "taxi" "segments" "bezier" "unbundled-bezier" "haystack" "loop"
+//pointer style: "triangle" "circle-triangle" "circle" "chevron" "diamond" "tee" "vee" "triangle-tee" "triangle-cross" "triangle-backcurve" "circle" "none"
 export default stylesheet;

@@ -4,7 +4,8 @@ import cytoscape from 'cytoscape';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import dagre from 'cytoscape-dagre';
 import cxtmenu from 'cytoscape-cxtmenu';
-import stylesheet from './styleSheet.ts';
+import stylesheet from './styleSheets/styleSheet.ts';
+import chroma from 'chroma-js';
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
@@ -52,7 +53,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
       if (props.selectedNodeId) {
         const selected = cyRef.current.getElementById(props.selectedNodeId);
         if (selected && selected.nonempty()) {
-          selected.style('background-color', '#000000');
+          selected.style('background-color', chroma(defaultColor).brighten(2).hex() ); 
         }
       }
       cyRef.current.resize();
@@ -87,7 +88,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
       
       menuRef.current = cy.cxtmenu({
       selector: 'node', // Options: 'node', 'edge', or 'core' (for background)
-      activeFillColor: '#533b6e8e',
+      activeFillColor: '#2d293300',
       commands: [
         {
           fillColor:  'rgba(64, 67, 75, 0.9)',
@@ -124,7 +125,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
     // Set up the context menu for the background canvas ('core')
     menuRef.current = cy.cxtmenu({
       selector: 'core', // Targets the empty background space
-      activeFillColor: '#533b6e8e',
+      activeFillColor: '#533b6e00',
       commands: [
         {
           fillColor: 'rgba(32, 70, 92, 0.79)', // Green background for creation
@@ -164,7 +165,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
         {props.cytoscapeData && 
         (
           <CytoscapeComponent 
-            elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)} 
+            elements={CytoscapeComponent.normalizeElements(selectedNode.onnxData.regions[0].elements)} 
             style={{ width: "100%", height: "100%" }}
             stylesheet={stylesheet}
             layout={props.layout}

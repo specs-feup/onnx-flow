@@ -1,4 +1,13 @@
-export default function NodePopup({ selectedNode, popupPos, onClose }) {
+import { useRef, useState } from 'react';
+import CytoscapeComponent from 'react-cytoscapejs';
+import stylesheet from './styleSheets/styleSheet.ts';
+
+export default function NodePopup({ selectedNode, popupPos, onClose, ...props }: any) {
+  const cyRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [, setCyReady] = useState(false);
+  const [showLoopWindow, setShowLoopWindow] = useState(false);
+
   if (!selectedNode || !popupPos) return null;
   var typeNode;
   if (selectedNode.onnxData.tensorType) {
@@ -44,6 +53,48 @@ export default function NodePopup({ selectedNode, popupPos, onClose }) {
       {selectedNode.onnxData.opType && selectedNode.onnxData.inputs.metadata && JSON.stringify(selectedNode.onnxData.inputs.metadata)!='{}' &&(<div>Metadata: {selectedNode.onnxData.inputs.metadata}</div>)}
 
       {!selectedNode.onnxData.tensorType && !selectedNode.onnxData.opType && (<div>Data Type: {selectedNode.onnxData.proto.dataType}</div>)} 
+      <br></br>
+      <button className="loop-btn" onClick={() => setShowLoopWindow(true)}><b>Open Loop</b></button>
+      {showLoopWindow && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0, 0, 0, 0.48)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onClick={() => setShowLoopWindow(false)}>
+          <div
+            style={{
+              width: '1100px',
+              height: '600px',
+              background: '#1d1b20',
+              border: '2px solid #747474',
+              borderRadius: '8px',
+              padding: '12px',
+            }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <p><b>Loop Content</b></p>
+              <button className="close-btn" onClick={() => setShowLoopWindow(false)}>Exit</button>
+            </div>
+            <div style={{width:'100%', height:'100%' }} ref={containerRef}>
+              {props.cytoscapeData && (
+                <CytoscapeComponent
+                  elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.loopElements)}
+                  style={{ width: '100%', height: '100%' }}
+                  stylesheet={stylesheet as any}
+                  layout={props.layout}
+                  cy={(cy) => { cyRef.current = cy; setCyReady(true); }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

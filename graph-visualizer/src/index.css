@@ -34,13 +34,13 @@ button  {
   width: 130px;
 }
 button:hover {
-  background-color:#201d30;
-  border: 2px solid rgb(91, 79, 119)
+  background-color:#3e3c46;
+  border: 2px solid rgb(132, 124, 150)
 }
 
 #upload-button:hover {
-  background-color:#201d30;
-  border: 2px solid rgb(91, 79, 119)
+  background-color:#3e3c46;
+  border: 2px solid rgb(132, 124, 150)
 }
 
 p {
@@ -77,7 +77,7 @@ h3{
 }
 
 .DropdownMenuItem:hover {
-  background-color: #201d30;
+  background-color:#3e3c46;
   border-radius: 7px;
 }
 .nodepopup {
@@ -96,4 +96,13 @@ h3{
 }
 .nodee {
   font-weight: bold;
+}
+.loop-btn, .close-btn {
+  cursor: pointer;
+  font-size: 15px;
+  color: #fff;
+  background-color: #2c2a30;
+  border-radius: 10px;
+  border: 2px solid rgb(95, 92, 102);
+  padding: 5px;
 }

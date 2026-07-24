@@ -27,9 +27,7 @@ export default function CustomDropdown({ setLayout }) {
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout( {name:"concentric"})}>
           Circle
         </DropdownMenu.Item>
-
       </DropdownMenu.Content>
-
     </DropdownMenu.Root>
   );
 }
