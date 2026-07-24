@@ -49,7 +49,7 @@ export interface UnifiedEdge {
 
         // The ID of the parent/boundary node (e.g., the Loop node itself)
         // Optional, because it only exists if isCrossGraph is true
-        outsideTarget?: string;
+        innerTarget?: string;
 
         onnxData?: EdgeSnapshot;
         [key: string]: unknown;
@@ -416,6 +416,7 @@ export function generateUnifiedExplorerJson(
     includeCrossGraphEdges: boolean = true,
     parentScopeNodeIds: Set<string> = new Set(),
     parentOperationId?: string,
+    parentJson?: UnifiedExplorerJson,
 ): UnifiedExplorerJson {
     // 1. Get the raw Cytoscape JSON
     const rawCy = graph.toCy().json() as unknown as RawCytoscapeExport;
@@ -454,6 +455,7 @@ export function generateUnifiedExplorerJson(
                                 includeCrossGraphEdges,
                                 currentScopeNodeIds,
                                 cyNode.data.id,
+                                cyJson,
                             ),
                         ),
                     };
@@ -509,14 +511,14 @@ export function generateUnifiedExplorerJson(
                         data: {
                             id: `cross_edge_${input.id}_to_${opNode.id}`,
                             source: input.id, // The outer tensor ID
-                            target: opNode.id, // The inner operation
+                            target: parentOperationId!,
                             isCrossGraph: true,
-                            outsideTarget: parentOperationId!,
+                            innerTarget: opNode.id, // The inner operation
                         },
                         classes: "cross-graph-capture",
                     };
 
-                    cyJson.elements.edges.push(syntheticEdge);
+                    parentJson?.elements.edges.push(syntheticEdge);
                 }
             });
         });
