@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
-import stylesheet from './styleSheets/styleSheet.ts';
+import stylesheet from './styleSheets/default.ts';
 
 export default function NodePopup({ selectedNode, popupPos, onClose, ...props }: any) {
   const cyRef = useRef<any>(null);
@@ -84,7 +84,7 @@ export default function NodePopup({ selectedNode, popupPos, onClose, ...props }:
             <div style={{width:'100%', height:'100%' }} ref={containerRef}>
               {props.cytoscapeData && (
                 <CytoscapeComponent
-                  elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.loopElements)}
+                  elements={CytoscapeComponent.normalizeElements(selectedNode.onnxData.regions[0].elements)}
                   style={{ width: '100%', height: '100%' }}
                   stylesheet={stylesheet as any}
                   layout={props.layout}

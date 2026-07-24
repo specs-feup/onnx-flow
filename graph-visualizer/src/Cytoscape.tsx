@@ -4,8 +4,9 @@ import cytoscape from 'cytoscape';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import dagre from 'cytoscape-dagre';
 import cxtmenu from 'cytoscape-cxtmenu';
-import stylesheet from './styleSheets/styleSheet.ts';
+import stylesheet from './styleSheets/default.ts';
 import chroma from 'chroma-js';
+import defaultStylesheet from './styleSheets/default.ts';
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
@@ -19,7 +20,7 @@ export type CytoscapeData = {
   };
 };
 
-export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions, nodeColor?: string, selectedNodeId?: string | null, onNodeSelected?: (node:any, pos:{x:number,y:number})=>void}) {
+export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions,stylesheet?: any, nodeColor?: string, selectedNodeId?: string | null, onNodeSelected?: (node:any, pos:{x:number,y:number})=>void}) {
   const cyRef = useRef<cytoscape.Core | null>(null);
   const menuRef = useRef(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -49,15 +50,20 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
     useEffect(() => {
       if (!cyRef.current) return;
       const defaultColor = props.nodeColor || '#533b6e';
-      cyRef.current.nodes().style('background-color', defaultColor);
+      cyRef.current.nodes().removeStyle('background-color');
+      const isDefaultTheme = !props.stylesheet || props.stylesheet === defaultStylesheet;
+      if (isDefaultTheme && props.nodeColor) {
+        cyRef.current.nodes().style('background-color', props.nodeColor);
+      }
       if (props.selectedNodeId) {
         const selected = cyRef.current.getElementById(props.selectedNodeId);
         if (selected && selected.nonempty()) {
+          const activeColor = selected.style('background-color');
           selected.style('background-color', chroma(defaultColor).brighten(2).hex() ); 
         }
       }
       cyRef.current.resize();
-    }, [props.nodeColor, props.selectedNodeId, props.cytoscapeData]);
+    }, [props.nodeColor, props.selectedNodeId, props.cytoscapeData, props.stylesheet]);
 
     useEffect(() => {
       if (!cyReady || !cyRef.current || !props.onNodeSelected) return;
@@ -165,9 +171,9 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
         {props.cytoscapeData && 
         (
           <CytoscapeComponent 
-            elements={CytoscapeComponent.normalizeElements(selectedNode.onnxData.regions[0].elements)} 
+            elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)} 
             style={{ width: "100%", height: "100%" }}
-            stylesheet={stylesheet}
+            stylesheet={props.stylesheet || stylesheet}
             layout={props.layout}
             cy={(cy) => { cyRef.current = cy; setCyReady(true); }}
             />
