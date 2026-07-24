@@ -12,12 +12,14 @@ import { useEffect } from "react";
 
 function App() {
     const [isSidePanelVisible, setSidePanelVisibility] = useState(false);
-    const [cytoscapeData, setCytoscapeData] = useState<cytoscape.ElementDefinition[] | null>(null);
-    const [cytoscapeLayout, setCytoscapeLayout] = useState<cytoscapeData.LayoutOptions>({name: "fcose"});
+    const [cytoscapeData, setCytoscapeData] = useState<CytoscapeData | null>(null);
+    const [cytoscapeLayout, setCytoscapeLayout] = useState<cytoscape.LayoutOptions>({name: "fcose"});
     const [nodeColor, setNodeColor] = useState<string>('#533b6e');
     const [selectedNode, setSelectedNode] = useState<any | null>(null);
-    const [transformationOps, setTransformationOps] = useState<TransformationOpportunity[] | null>(null);
+    const [transformationOps, setTransformationOps] = useState<TransformationOpportunity[]>([]);
     const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
+    const [undoStack, setUndoStack] = useState<string[]>([]);
+    const [redoStack, setRedoStack] = useState<string[]>([]);
 
     return (
         <main
@@ -46,6 +48,11 @@ function App() {
               nodeColor={nodeColor}
               selectedNodeId={selectedNode?.id ?? null}
               setNodeColor={setNodeColor}
+              setTransformationOps={setTransformationOps}
+              transformationsHistory={{
+                undo: {stack: undoStack, setStack: setUndoStack},
+                redo: {stack: redoStack, setStack: setRedoStack},
+              }}
             />
 
             {isSidePanelVisible && (
@@ -55,7 +62,15 @@ function App() {
                     backgroundColor: "#2c2a30",
                     padding: "10px",
                   }}
-                  selectedNode={selectedNode}
+                  transformationOps={{
+                    ops: transformationOps,
+                    setOps: setTransformationOps,
+                  }}
+                  setCytoscapeData={setCytoscapeData}
+                  transformationsHistory={{
+                    undo: {stack: undoStack, setStack: setUndoStack},
+                    redo: {stack: redoStack, setStack: setRedoStack},
+                  }}
               />
             )}
             <NodePopup

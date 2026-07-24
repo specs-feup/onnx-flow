@@ -42,6 +42,7 @@ export async function fetchGraph(port: number): Promise<CytoscapeData> {
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
+
   return response.json();
 }
 
@@ -50,6 +51,7 @@ export async function fetchTransformationOpportunities(port: number): Promise<Tr
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
+
   return response.json();
 }
 
@@ -78,11 +80,7 @@ export async function redoTransformation(port: number): Promise<any> {
 }
 
 export async function exportOnnxJson(port: number): Promise<any> {
-  const response = await fetch(`http://localhost:${port}/api/export/onnx-json`, { method: "GET" });
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-  return response.json();
+  return await fetch(`http://localhost:${port}/api/export/onnx-json`, { method: "GET" });
 }
 
 export async function exportUnifiedJson(port: number): Promise<any> {

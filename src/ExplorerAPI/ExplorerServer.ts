@@ -10,7 +10,7 @@ export function startExplorerServer(
     port: number = 3000,
 ): void {
     if (initialSession) {
-        // activeSession = initialSession;
+        activeSession = initialSession;
     }
 
     const app = express();
@@ -205,8 +205,8 @@ export function startExplorerServer(
         console.log(`   POST http://localhost:${port}/api/apply/:id`);
         console.log(`   POST http://localhost:${port}/api/undo`);
         console.log(`   POST http://localhost:${port}/api/redo`);
-        console.log(`   GET http://localhost:${port}/api/export/onnx-json`);
-        console.log(`   GET http://localhost:${port}/api/export/unified-json`);
+        console.log(`   GET  http://localhost:${port}/api/export/onnx-json`);
+        console.log(`   GET  http://localhost:${port}/api/export/unified-json`);
         console.log(`======================================================\n`);
     });
 
