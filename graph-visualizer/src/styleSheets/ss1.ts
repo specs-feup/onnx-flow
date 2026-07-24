@@ -21,9 +21,9 @@ const ss1=[
       */
       //"shape": "star",
       "shape": (ele:any) => {
-        if(((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="Loop") || ((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="Reshape")){
+        if((ele.data("onnxData")?.kind == "OperationNode")){
           return ("circle")
-        }else if (((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="input") || ((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="output") || ((ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType)=="intermediate")){
+        }else if ((ele.data("onnxData")?.kind == "TensorNode")){
           return ("pentagon")
         }else{
           return ("diamond")
