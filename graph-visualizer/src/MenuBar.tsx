@@ -3,12 +3,14 @@ import OnnxUploadButton from "./OnnxUploadButton";
 import Dropdown from "./Dropdown";
 import ColorPicker from "./colorPicker";
 import type { CytoscapeData } from "./Cytoscape.tsx";
+import  Themess from "./themes.tsx";
 
 export default function MenuBar(props: {
     style: CSSProperties;
     setCytoscapeData: (cytoscapeData: CytoscapeData | null) => void;
     panelVisibility: { isVisible: boolean; setVisibility: (visible: boolean) => void };
     setLayout: (layout: string) => void;
+    setStylesheet: (stylesheet: string) => void;
     nodeColor?: string;
     setNodeColor?: (c: string) => void;
 }) {
@@ -39,6 +41,7 @@ export default function MenuBar(props: {
                     </button>
                 )}
                 <Dropdown setLayout={props.setLayout} />
+                <Themess setStylesheet={props.setStylesheet} />
                 <div style={{ display: "flex", alignItems: "center" }}>
                     <ColorPicker
                         value={props.nodeColor}
