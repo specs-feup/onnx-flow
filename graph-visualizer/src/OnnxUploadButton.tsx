@@ -47,7 +47,7 @@ export default function OnnxUploadButton(props: {style: CSSProperties, setCytosc
       <label htmlFor="upload" id="upload-button">Upload your file
         <input id="upload"
           type="file" 
-          accept=".json" 
+          accept=".json,.onnx" 
           onChange={handleFileUpload}
           hidden 
         />

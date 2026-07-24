@@ -1,37 +1,92 @@
-import express, { type Request, type Response } from "express";
-import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
+// api.ts (Frontend API Helper)
+import type { CytoscapeData } from "../Cytoscape.tsx";
 
-const app = express();
-app.use(express.json());
-const PORT = 4000;
+interface StartSessionResponse {
+  success: boolean;
+  message: string;
+  graph: any; // Cytoscape-ready JSON payload returned by flow2json
+}
 
-let childProcess: ChildProcessWithoutNullStreams | null = null;
+export interface TransformationOpportunity {
+  id: string;
+  description: string;
+  recipeName: string;
+  targetNodeId: string;
+}
 
-app.post('/server/start/:filename', (req: Request, res: Response) => {
-    if (childProcess) {
-        res.status(400).send('Server is already running. Stop the existing server before starting a new one.');
-    }
-    else {
-        childProcess = spawn('onnx-flow', [req.params["filename"], '--i']);
-        console.log('Request received to start server with filename:', req.params["filename"]);
-        console.log('Child process started with PID:', childProcess.pid);
-        res.status(200).send('Server initialized.');
-    }
-})
+export async function startNewSession(
+  graphData: object,
+  options: Record<string, any> = {}
+): Promise<StartSessionResponse> {
+  const response = await fetch("http://localhost:3000/api/session/start", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      graphData,
+      options,
+    }),
+  });
 
-app.post('/server/stop', (req: Request, res: Response) => {
-    if (childProcess) {
-        childProcess.kill();
-        childProcess = null;
-        console.log('Request received to stop server.');
-        res.status(200).send('Server stopped.');
-    } else {
-        console.log('No server process to stop.');
-        res.status(400).send('No server process to stop.');
-    }
-});
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to initialize session");
+  }
 
-app.listen(PORT, () => {
-    console.log(`Backend Server is running on port ${PORT}`);
-    console.log(`Use POST http://localhost:${PORT}/server/start/:filename to start the server and POST http://localhost:${PORT}/server/stop to stop it.`);
-});
+  return response.json();
+}
+
+export async function fetchGraph(port: number): Promise<CytoscapeData> {
+  const response = await fetch(`http://localhost:${port}/api/graph`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchTransformationOpportunities(port: number): Promise<TransformationOpportunity[]> {
+  const response = await fetch(`http://localhost:${port}/api/opportunities`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function applyTransformation(port: number, opportunityId: string): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/apply/${opportunityId}`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function undoTransformation(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/undo`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function redoTransformation(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/redo`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function exportOnnxJson(port: number): Promise<any> {
+  return await fetch(`http://localhost:${port}/api/export/onnx-json`, { method: "GET" });
+}
+
+export async function exportUnifiedJson(port: number): Promise<any> {
+  const response = await fetch(`http://localhost:${port}/api/export/unified-json`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
