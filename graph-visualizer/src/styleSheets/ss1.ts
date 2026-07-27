@@ -43,6 +43,17 @@ const ss1=[
       "target-arrow-shape": "triangle",
     },
   },
+  {
+    selector: ".cross-graph-capture",
+    style: {
+      width: 2,
+      'line-style': 'dashed',
+      "line-color": "#b4bfca",
+      "target-arrow-color": "#b4bfca",
+      "curve-style": "straight",
+      "target-arrow-shape": "triangle",
+    },
+  },
 ]
 //node shape: "star" "ellipse" "circle" "triangle" "pentagon" "tag" "octagon" "vee" "rhomboid" "rectangle" "diamond"
 //line style: "straight" "taxi" "segments" "bezier" "unbundled-bezier" "haystack" "loop"
