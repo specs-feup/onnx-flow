@@ -48,6 +48,7 @@
         "webapp:frontend": "vite graph-visualizer",
         "webapp:backend": "onnx-flow ./examples/onnx/matmul_test.onnx --i",
         "webapp:dev": "concurrently \"npm run webapp:frontend\" \"npm run webapp:backend\""
+        ,"tsx":"tsx src/ExplorerAPI/ExplorerServerManager.ts"
     },
     "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
     "repository": {
@@ -66,6 +67,7 @@
         "express": "^4.21.1",
         "link": "^2.1.2",
         "node-graphviz": "^0.1.1",
+        "npm": "^12.0.1",
         "onnxruntime-web": "^1.20.1",
         "protobufjs": "^7.4.0",
         "react": "^19.2.8",
@@ -116,5 +118,9 @@
             "types": "./out/src/*.d.ts",
             "default": "./out/src/*.js"
         }
+    },
+    "allowScripts": {
+        "esbuild@0.28.1": true,
+        "protobufjs": true
     }
 }

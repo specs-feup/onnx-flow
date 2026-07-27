@@ -28,7 +28,8 @@ export default function MenuBar(props: {
         <header style={props.style}>
             <h1>ONNX Graph Visualizer</h1>
             <div className="button-group">
-                <OnnxUploadButton
+                <button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>
+                {/*<OnnxUploadButton
                     style={{
                         display: "flex",
                         gridArea: "cytoscape",
@@ -38,9 +39,9 @@ export default function MenuBar(props: {
                     }}
                     setCytoscapeData={props.setCytoscapeData}
                     setFilename={setFilename}
-                />
-                <button onClick={() => props.setCytoscapeData(null)}>Clear Graph</button>
-                {props.panelVisibility.isVisible ? (
+                />*/}
+                {/*<button onClick={() => props.setCytoscapeData(null)}>Clear Graph</button>*/}
+                {/*props.panelVisibility.isVisible ? (
                     <button onClick={() => props.panelVisibility.setVisibility(false)}>
                         Hide Side Panel
                     </button>
@@ -48,7 +49,7 @@ export default function MenuBar(props: {
                     <button onClick={() => props.panelVisibility.setVisibility(true)}>
                         Display Side Panel
                     </button>
-                )}
+                )*/}
                 <Dropdown setLayout={props.setLayout} />
                 <Themess setStylesheet={props.setStylesheet} />
                 <div style={{ display: "flex", alignItems: "center" }}>
@@ -57,11 +58,9 @@ export default function MenuBar(props: {
                         onChange={(c) => props.setNodeColor?.(c)}
                     />
                 </div>
-                {filename && <button onClick={async () => await fetch(`http://localhost:4000/server/start/${filename}`, { method: "POST" })}>&#9654;</button>}
-                <button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>
                 <button onClick={async () => {
                     props.setTransformationOps(await fetchTransformationOpportunities(3000));
-                    props.panelVisibility.setVisibility(true);
+                    props.panelVisibility.setVisibility(props.panelVisibility.isVisible ? false : true);
                 }}>Transformation Opportunities</button>
                 <button 
                     disabled={props.transformationsHistory.undo.stack.length == 0} 

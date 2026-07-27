@@ -82,7 +82,8 @@ export function startExplorerServer(
             res.status(500).json({ error: "There is no active session!" });
         } else {
             try {
-                const success = activeSession.applyOpportunity(req.params["id"]);
+                const oppId: string = req.params["id"] as string;
+                const success = activeSession.applyOpportunity(oppId);
                 if (success) {
                     // Instantly return the updated graph so the UI can re-render
                     res.json({
