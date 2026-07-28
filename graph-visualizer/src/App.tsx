@@ -85,6 +85,9 @@ function App() {
                 setSelectedNode(null);
                 setPopupPos(null);
               }}
+              stylesheet={cytoscapeStylesheet}
+              layout={cytoscapeLayout}
+              nodeColor={nodeColor}
             />
             <CytoscapeGraph
               style={{ gridArea: "cytoscape", border: "3px solid rgb(74, 70, 82)", margin: "30px",marginTop: "20px",marginLeft: "25px", borderRadius: "5px", backgroundColor: "#1d1b20"}}

@@ -8,7 +8,7 @@ const defaultStylesheet=[
     style: {
       "label": (ele:any) => {
         return (
-          ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType || ele.data("onnxData")?.proto.dataType
+          ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType || ele.data("onnxData")?.proto?.dataType
         );
       },
       "text-valign": "center",

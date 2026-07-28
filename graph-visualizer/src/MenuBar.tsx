@@ -51,7 +51,7 @@ export default function MenuBar(props: {
                     </button>
                 )*/}
                 <Dropdown setLayout={props.setLayout} />
-                <Themess setStylesheet={props.setStylesheet} />
+                <Themess setStyleshet={props.setStylesheet} />
                 <div style={{ display: "flex", alignItems: "center" }}>
                     <ColorPicker
                         value={props.nodeColor}

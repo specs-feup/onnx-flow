@@ -1,15 +1,18 @@
-import { useRef, useState } from 'react';
-import CytoscapeComponent from 'react-cytoscapejs';
-import stylesheet from './styleSheets/default.ts';
+import { useState } from 'react';
+import CytoscapeGraph, { type CytoscapeData } from './Cytoscape';
 
-export default function NodePopup({ selectedNode, popupPos, onClose, ...props }: any) {
-  const cyRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [, setCyReady] = useState(false);
+export default function NodePopup({ 
+  selectedNode, 
+  popupPos, 
+  onClose, 
+  cytoscapeStylesheet, 
+  cytoscapeLayout, 
+  nodeColor,
+  }: any) {
   const [showLoopWindow, setShowLoopWindow] = useState(false);
 
   if (!selectedNode || !popupPos) return null;
-  var typeNode;
+  let typeNode;
   if (selectedNode.onnxData.tensorType) {
     typeNode = "Tensor";
   } else if (selectedNode.onnxData.opType) {
@@ -17,6 +20,8 @@ export default function NodePopup({ selectedNode, popupPos, onClose, ...props }:
   } else {
     typeNode = "Constant";
   }
+  const cytoscapeData: CytoscapeData | null = selectedNode.onnxData?.regions[0] ?? null;
+  console.log(cytoscapeLayout)
   return (
     <div>
       <div
@@ -81,17 +86,19 @@ export default function NodePopup({ selectedNode, popupPos, onClose, ...props }:
               <p><b>Loop Content</b></p>
               <button className="close-btn" onClick={() => setShowLoopWindow(false)}>Exit</button>
             </div>
-            <div style={{width:'100%', height:'100%' }} ref={containerRef}>
-              {props.cytoscapeData && (
-                <CytoscapeComponent
-                  elements={CytoscapeComponent.normalizeElements(selectedNode.onnxData.regions[0].elements)}
-                  style={{ width: '100%', height: '100%' }}
-                  stylesheet={stylesheet as any}
-                  layout={props.layout}
-                  cy={(cy) => { cyRef.current = cy; setCyReady(true); }}
-                />
-              )}
-            </div>
+            <CytoscapeGraph
+              style={{ border: "3px solid rgb(74, 70, 82)", margin: "30px",marginTop: "20px",marginLeft: "25px", borderRadius: "5px", backgroundColor: "#1d1b20"}}
+              cytoscapeData={cytoscapeData}
+              layout={cytoscapeLayout ?? {name: "fcose"}}
+              stylesheet={cytoscapeStylesheet}
+              nodeColor={nodeColor}
+              // selectedNodeId={selectedNode?.id ?? null}
+              /*
+              onNodeSelected={(node: any, pos: {x:number; y:number}) => {
+                setSelectedNode(node);
+                setPopupPos(pos);
+              }}*/
+            />
           </div>
         </div>
       )}

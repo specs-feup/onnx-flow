@@ -34,7 +34,7 @@ button, a  {
 .GL {
   width: 130px;
 }
-button:hover {
+button:hover, a:hover {
   background-color:#3e3c46;
   border: 2px solid rgb(132, 124, 150)
 }
