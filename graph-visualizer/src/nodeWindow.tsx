@@ -87,9 +87,16 @@ export default function NodePopup({
               <button className="close-btn" onClick={() => setShowLoopWindow(false)}>Exit</button>
             </div>
             <CytoscapeGraph
-              style={{ border: "3px solid rgb(74, 70, 82)", margin: "30px",marginTop: "20px",marginLeft: "25px", borderRadius: "5px", backgroundColor: "#1d1b20"}}
+              style={{ 
+                width: "100%", 
+                height: "calc(100% - 40px)",
+                border: "3px solid rgb(74, 70, 82)", 
+                borderRadius: "5px", 
+                backgroundColor: "#1d1b20",
+                marginTop: "10px"
+              }}
               cytoscapeData={cytoscapeData}
-              layout={cytoscapeLayout ?? {name: "fcose"}}
+              layout={cytoscapeLayout ?? {name: "dagre", rankDir: "LR"}}
               stylesheet={cytoscapeStylesheet}
               nodeColor={nodeColor}
               // selectedNodeId={selectedNode?.id ?? null}
