@@ -119,12 +119,12 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
     let clickedPosition = { x: 0, y: 0 };
 
     cy.on('cxttapstart', (event) => {
-      // event.target is the core graph. target.pointer contains the exact canvas model coordinates
-      if (event.target && event.target.pointer) {
-        console.log('Context menu opened at model coordinates:', event.target.pointer);
+      // No Cytoscape.js, event.position dá-te as coordenadas exatas do modelo
+      if (event.position) {
+        console.log('Context menu opened at model coordinates:', event.position);
         clickedPosition = {
-          x: event.target.pointer.x,
-          y: event.target.pointer.y
+          x: event.position.x,
+          y: event.position.y
         };
       }
     });
@@ -138,7 +138,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
           fillColor: 'rgba(32, 70, 92, 0.79)', // Green background for creation
           content: '＋ Add Node',
           select: function() {
-            const newId = `node`;
+            const newId = `node_${Math.random().toString(36).substr(2, 9)}`;
             
             // Add the new node directly into cytoscape at the recorded position
             cy.add({

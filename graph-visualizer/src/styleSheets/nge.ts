@@ -3,7 +3,7 @@ const defaultStylesheet=[
   {
     selector: "node",
     layout: {
-      name: "default"
+      name: "nge"
     },
     style: {
       "label": (ele:any) => {
@@ -12,10 +12,12 @@ const defaultStylesheet=[
         );
       },
       "text-valign": "center",
-      color: "#000000",
+      color: "#e07f00",
       "font-size": "12px",
       "background-color": "#bd0000",
-
+      "text-border-width": 2,
+      "text-outline-width": 2,
+      "text-outline-color": "rgb(0, 0, 0)",
       "outline-color": "#e07f00",
       "outline-width": "2px",
       "outline-style": "solid",
@@ -38,9 +40,13 @@ const defaultStylesheet=[
     style: {
       width: 2,
       "line-color": "#000000",
+      "line-outline-color": "#bd0000",
+      "line-outline-width": 1,
       "target-arrow-color": "#000000",
       "curve-style": "straight",
-      "target-arrow-shape": "triangle",
+      "target-arrow-outline-color": "#bd0000",
+      "target-arrow-outline-width": 1,
+      "target-arrow-shape": "none",
     },
   },
   {
@@ -48,10 +54,12 @@ const defaultStylesheet=[
     style: {
       width: 2,
       'line-style': 'dashed',
-      "line-color": "#b4bfca",
-      "target-arrow-color": "#b4bfca",
+      "line-color": "#ca6225",
+      "line-outline-color": "#222222",
+      "line-outline-width": 1,
+      "target-arrow-color": "#ca6225",
       "curve-style": "straight",
-      "target-arrow-shape": "triangle",
+      "target-arrow-shape": "none",
     },
   },
 ]

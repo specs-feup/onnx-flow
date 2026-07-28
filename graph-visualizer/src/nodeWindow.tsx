@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import CytoscapeGraph, { type CytoscapeData } from './Cytoscape';
-
+//loop | scan | if
 export default function NodePopup({ 
   selectedNode, 
   popupPos, 
@@ -65,7 +65,7 @@ export default function NodePopup({
       {!selectedNode.onnxData.tensorType && !selectedNode.onnxData.opType && (<div>Data Type: {selectedNode.onnxData.proto.dataType}</div>)}
       {selectedNode.onnxData.opType  && <br></br> &&
       <button className="loop-btn" onClick={() => setShowLoopWindow(true)}><b>Open Loop</b></button>}
-
+      
       {showLoopWindow && (
         <div
           style={{
@@ -101,16 +101,12 @@ export default function NodePopup({
                 backgroundColor: "#1d1b20",
                 marginTop: "10px"
               }}
+              
               cytoscapeData={cytoscapeData}
               layout={cytoscapeLayout ?? {name: "dagre", rankDir: "LR"}}
               stylesheet={cytoscapeStylesheet}
               nodeColor={nodeColor}
-              // selectedNodeId={selectedNode?.id ?? null}
-              /*
-              onNodeSelected={(node: any, pos: {x:number; y:number}) => {
-                setSelectedNode(node);
-                setPopupPos(pos);
-              }}*/
+              
             />
           </div>
         </div>

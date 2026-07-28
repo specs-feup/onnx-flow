@@ -3,7 +3,7 @@ const defaultStylesheet=[
   {
     selector: "node",
     layout: {
-      name: "default"
+      name: "copeland"
     },
     style: {
       "label": (ele:any) => {
@@ -51,8 +51,8 @@ const defaultStylesheet=[
     style: {
       width: 2,
       'line-style': 'dashed',
-      "line-color": "#b4bfca",
-      "target-arrow-color": "#b4bfca",
+      "line-color": "#0080ff",
+      "target-arrow-color": "#0080ff",
       "curve-style": "straight",
       "target-arrow-shape": "triangle",
     },

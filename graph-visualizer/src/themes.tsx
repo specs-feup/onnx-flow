@@ -4,6 +4,8 @@ import ss1 from './styleSheets/ss1.ts';
 import defaultstylesheet from './styleSheets/default.ts';
 import copeland from './styleSheets/copeland.ts';
 import nge from './styleSheets/nge.ts';
+import valentines from './styleSheets/valentines.ts';
+
 
 export default function Themess({setStylesheet}: {setStylesheet: (sheet: string) => void }) {
   return (
@@ -16,13 +18,16 @@ export default function Themess({setStylesheet}: {setStylesheet: (sheet: string)
           default
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setStylesheet(ss1)}>
-          tester
+          bright
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setStylesheet(copeland)}>
           copeland
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setStylesheet(nge)}>
-          nge
+          nerv
+        </DropdownMenu.Item>
+        <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setStylesheet(valentines)}>
+          valentines
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>

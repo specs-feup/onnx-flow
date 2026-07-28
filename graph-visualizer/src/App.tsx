@@ -18,6 +18,7 @@ function App() {
     const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
     const [undoStack, setUndoStack] = useState<string[]>([]);
     const [redoStack, setRedoStack] = useState<string[]>([]);
+    const [editorMode, setEditorMode] = useState(false);
 
     if (!cytoscapeData) fetchGraph(3000).then(data => setCytoscapeData(data)).catch(err => console.log(err));
 
@@ -54,28 +55,36 @@ function App() {
                 undo: {stack: undoStack, setStack: setUndoStack},
                 redo: {stack: redoStack, setStack: setRedoStack},
               }}
+              editorMode={{
+                isActive: editorMode,
+                setMode: setEditorMode
+              }}
             />
 
             {isSidePanelVisible && (
               <SidePanel
-                  style={{
-                    gridArea: "sidepanel",
-                    backgroundColor: "#2c2a30",
-                    padding: "10px",
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'scroll',
-                    gap: '1rem',
-                  }}
-                  transformationOps={{
-                    ops: transformationOps,
-                    setOps: setTransformationOps,
-                  }}
-                  setCytoscapeData={setCytoscapeData}
-                  transformationsHistory={{
-                    undo: {stack: undoStack, setStack: setUndoStack},
-                    redo: {stack: redoStack, setStack: setRedoStack},
-                  }}
+                style={{
+                  gridArea: "sidepanel",
+                  backgroundColor: "#2c2a30",
+                  padding: "10px",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'scroll',
+                  gap: '1rem',
+                }}
+                transformationOps={{
+                  ops: transformationOps,
+                  setOps: setTransformationOps,
+                }}
+                setCytoscapeData={setCytoscapeData}
+                transformationsHistory={{
+                  undo: {stack: undoStack, setStack: setUndoStack},
+                  redo: {stack: redoStack, setStack: setRedoStack},
+                }}
+                editorMode={{
+                  isActive: editorMode,
+                  setMode: setEditorMode
+                }}
               />
             )}
             <NodePopup
