@@ -42,13 +42,14 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
         }, []);
         
     useEffect(() => {
-      if (!cyRef.current) return;
+      if (!cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
 
-      cyRef.current.layout(props.layout ).run();
-    }, [props.layout]);
+      console.log(props.layout)
+      cyRef.current.layout(props.layout).run();
+    }, [props.layout, props.cytoscapeData]);
 
     useEffect(() => {
-      if (!cyRef.current) return;
+      if (!cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
       const defaultColor = props.nodeColor || '#533b6e';
       cyRef.current.nodes().removeStyle('background-color');
       const isDefaultTheme = !props.stylesheet || props.stylesheet === defaultStylesheet;
@@ -66,7 +67,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
     }, [props.nodeColor, props.selectedNodeId, props.cytoscapeData, props.stylesheet]);
 
     useEffect(() => {
-      if (!cyReady || !cyRef.current || !props.onNodeSelected) return;
+      if (!cyReady || !cyRef.current || cyRef.current.destroyed() ||  !props.onNodeSelected) return;
 
       const handler = (event: any) => {
       if (!event.target?.isNode?.()) return;
@@ -82,10 +83,10 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
 
       cyRef.current.on('tap', 'node', handler);
       return () => cyRef.current?.off('tap', 'node', handler);
-    }, [cyReady, props.onNodeSelected]);
+    }, [cyReady, props.cytoscapeData, props.onNodeSelected]);
 
     useEffect(() => {
-      if (!cyReady || !cyRef.current) return;
+      if (!cyReady || !cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
       
       const cy = cyRef.current;
       if (menuRef.current) {
@@ -164,7 +165,7 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
       }
     }
 
-    }, [cyReady])
+    }, [cyReady, props.cytoscapeData])
 
     return ( 
       <div style={props.style} ref={containerRef}>

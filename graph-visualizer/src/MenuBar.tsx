@@ -1,9 +1,8 @@
-import { useState, type CSSProperties } from "react";
-import OnnxUploadButton from "./OnnxUploadButton";
+import { type CSSProperties } from "react";
 import Dropdown from "./Dropdown";
 import ColorPicker from "./colorPicker";
 import type { CytoscapeData } from "./Cytoscape.tsx";
-import { exportOnnxJson, exportUnifiedJson, fetchGraph, fetchTransformationOpportunities, undoTransformation, type TransformationOpportunity } from "./api/api.ts";
+import { fetchGraph, fetchTransformationOpportunities, undoTransformation, type TransformationOpportunity } from "./api/api.ts";
 
 
 import  Themess from "./themes.tsx";
@@ -22,36 +21,14 @@ export default function MenuBar(props: {
         redo: {stack: string[], setStack: (history: string[]) => void}
     }
 }) {
-    const [filename, setFilename] = useState<string | null>(null);
 
     return (
         <header style={props.style}>
             <h1>ONNX Graph Visualizer</h1>
             <div className="button-group">
-                <button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>
-                {/*<OnnxUploadButton
-                    style={{
-                        display: "flex",
-                        gridArea: "cytoscape",
-                        width: "100%",
-                        height: "100%",
-                        border: "2px solid white",
-                    }}
-                    setCytoscapeData={props.setCytoscapeData}
-                    setFilename={setFilename}
-                />*/}
-                {/*<button onClick={() => props.setCytoscapeData(null)}>Clear Graph</button>*/}
-                {/*props.panelVisibility.isVisible ? (
-                    <button onClick={() => props.panelVisibility.setVisibility(false)}>
-                        Hide Side Panel
-                    </button>
-                ) : (
-                    <button onClick={() => props.panelVisibility.setVisibility(true)}>
-                        Display Side Panel
-                    </button>
-                )*/}
+                {/*<button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>*/}
                 <Dropdown setLayout={props.setLayout} />
-                <Themess setStyleshet={props.setStylesheet} />
+                <Themess setStylesheet={props.setStylesheet} />
                 <div style={{ display: "flex", alignItems: "center" }}>
                     <ColorPicker
                         value={props.nodeColor}

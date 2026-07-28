@@ -78,15 +78,3 @@ export async function redoTransformation(port: number): Promise<any> {
   }
   return response.json();
 }
-
-export async function exportOnnxJson(port: number): Promise<any> {
-  return await fetch(`http://localhost:${port}/api/export/onnx-json`, { method: "GET" });
-}
-
-export async function exportUnifiedJson(port: number): Promise<any> {
-  const response = await fetch(`http://localhost:${port}/api/export/unified-json`, { method: "GET" });
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-  return response.json();
-}

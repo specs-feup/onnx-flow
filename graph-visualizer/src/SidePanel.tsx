@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { applyTransformation, fetchGraph, fetchTransformationOpportunities, type TransformationOpportunity} from './api/api.ts';
 import type { CytoscapeData } from './Cytoscape.tsx';

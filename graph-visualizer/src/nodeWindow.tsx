@@ -8,6 +8,7 @@ export default function NodePopup({
   cytoscapeStylesheet, 
   cytoscapeLayout, 
   nodeColor,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }: any) {
   const [showLoopWindow, setShowLoopWindow] = useState(false);
 
@@ -20,7 +21,11 @@ export default function NodePopup({
   } else {
     typeNode = "Constant";
   }
-  const cytoscapeData: CytoscapeData | null = selectedNode.onnxData?.regions[0] ?? null;
+  let cytoscapeData: CytoscapeData;
+  if (selectedNode.onnxData.opType) {
+    cytoscapeData = selectedNode.onnxData?.regions[0] ?? null;
+  }
+
   console.log(cytoscapeLayout)
   return (
     <div>
@@ -57,9 +62,10 @@ export default function NodePopup({
       {selectedNode.onnxData.opType && (<div>Inputs: {selectedNode.onnxData.inputs.join(", ")}</div>)}
       {selectedNode.onnxData.opType && selectedNode.onnxData.inputs.metadata && JSON.stringify(selectedNode.onnxData.inputs.metadata)!='{}' &&(<div>Metadata: {selectedNode.onnxData.inputs.metadata}</div>)}
 
-      {!selectedNode.onnxData.tensorType && !selectedNode.onnxData.opType && (<div>Data Type: {selectedNode.onnxData.proto.dataType}</div>)} 
-      <br></br>
-      <button className="loop-btn" onClick={() => setShowLoopWindow(true)}><b>Open Loop</b></button>
+      {!selectedNode.onnxData.tensorType && !selectedNode.onnxData.opType && (<div>Data Type: {selectedNode.onnxData.proto.dataType}</div>)}
+      {selectedNode.onnxData.opType  && <br></br> &&
+      <button className="loop-btn" onClick={() => setShowLoopWindow(true)}><b>Open Loop</b></button>}
+
       {showLoopWindow && (
         <div
           style={{
