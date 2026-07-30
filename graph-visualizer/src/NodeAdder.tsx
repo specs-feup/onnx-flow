@@ -28,22 +28,64 @@ const dataTypeOptions: DataTypeOption[] = Object.entries(DataType)
     .map(([key, val]) => ({
         value: val as DataType,
         label: key,
+        color: 'white',
     }));
+    
 
 const customStyles = {
-  option: (provided: any, state: any) => ({
-    ...provided,
-    color: 'black', 
+    singleValue: (provided: any, state: any) => ({
+        ...provided,
+        color: 'white',
+    }),
+    color: 'white',
+    menu: (provided: any, state: any) => ({
+        ...provided,
+        backgroundColor: '#2c2a30',
+        border: '2px solid rgb(95, 92, 102)',
+        '&:hover': {
+            backgroundColor: '#3e3c46',
+            border: '2px solid rgb(132, 124, 150)',
+            },
+        }),
+
+    control: (provided: any, state: any) => ({
+      ...provided,
+      color: '#ffc400',
+      backgroundColor: '#2c2a30',
+      border: '2px solid rgb(95, 92, 102)',
+
+      '&:hover': {
+        backgroundColor: '#3e3c46',
+        border: '2px solid rgb(132, 124, 150)',
+      },
+    }),
+    
+    option: (provided: any, state: any) => ({
+        ...provided,
+        color: 'white', 
+        backgroundColor: '#2c2a30',
+        '&:hover': {
+        backgroundColor: '#3e3c46',
+
+        },
+    margin: '0px',
   }),
+
 };
 
+interface NodeAdderProps {
+    position?: { x: number; y: number } | null;
+    onSubmit?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
+}
 
-export default function NodeAdder() {
+
+export default function NodeAdder({ position, onSubmit }: NodeAdderProps) {
+    const [nodeId, setNodeId] = useState<string>("")
     const [nodeKind, setNodeKind] = useState<string>("constant");
 
     /*Tensor Attributes*/
     const [tensorDataType, setTensorDataType] = useState<DataType>();
-    const [tensorShapeValue, setTensorShapeValue] = useState<Shape>();
+    const [tensorShapeValue, setTensorShapeValue] = useState<Shape>([]);
     const [tensorKind, setTensorKind] = useState<TensorNode.TensorKind>();
 
 
@@ -51,12 +93,51 @@ export default function NodeAdder() {
     const [operationType, setOperationType] = useState<string>("");
 
 
+    const handleCreateClick = () => {
+        let onnxData: Record<string, any> = {};
+
+        if (nodeKind === "tensor") {
+            onnxData = {
+                kind: "TensorNode",
+                tensorType: tensorKind || "intermediate",
+                literalType: tensorDataType,
+                shape: tensorShapeValue || []
+            };
+        } else if (nodeKind === "operation") {
+            onnxData = {
+                kind: "OperationNode",
+                opType: operationType || "Operation",
+                inputs: [],
+                attributes: {}
+            };
+        } else {
+            onnxData = {
+                kind: "Constant",
+                proto: { dataType: "Constant" }
+            };
+        }
+
+        const nodePayload = {
+            onnxData
+        };
+
+        if (onSubmit) {
+            onSubmit(nodePayload, position || null);
+        }
+    };
+
+
 
     return (
+        
         <aside style={{display: 'flex', flexDirection: 'column'}}>
-            <label htmlFor="kind">Node Kind: </label>
+            <label htmlFor="id">Node ID: </label>
+            <input  name="id" type="text"  color="white"/>
+
+            <label  color="white"  htmlFor="kind">Node Kind: </label>
             <Select 
                 id="kind"
+                
                 onChange={(e: any) => setNodeKind(e.value)}
                 options={[
                     {value: "constant", label: "Constant Node"},
@@ -66,9 +147,10 @@ export default function NodeAdder() {
                 styles={customStyles}
                 />
 
-            {nodeKind === 'operation' && (
+            {nodeKind === 'operation' && ( 
                 <>
                 <label htmlFor="operation-type">Operation Type:</label>
+
                 <Select 
                     isSearchable
                     isClearable
@@ -113,8 +195,15 @@ export default function NodeAdder() {
                     onChange={(e: any) => setTensorKind(e.value)}
                 />
                 </>
-            )
-            }
+            )}
+            {/* BOTÃO ADICIONADO NO FINAL DO FORMULÁRIO PARA CRIAR O NÓ NO GRAFO */}
+            <button 
+                type="button" 
+                onClick={handleCreateClick}
+                style={{ marginTop: '15px' }}
+            >
+                Create Node
+            </button>
         </aside>
     );
 }

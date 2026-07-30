@@ -43,7 +43,7 @@ const valentines = [
             "curve-style": "straight",
             "target-arrow-outline-color": "#bd0000",
             "target-arrow-outline-width": 1,
-            "target-arrow-shape": "vee",
+            "target-arrow-shape": "triangle-cross",
         },
     },
     {
@@ -54,7 +54,7 @@ const valentines = [
             "line-color": "#83001c",
             "target-arrow-color": "#83001c",
             "curve-style": "straight",
-            "target-arrow-shape": "vee",
+            "target-arrow-shape": "triangle-cross",
         },
     },
 ];

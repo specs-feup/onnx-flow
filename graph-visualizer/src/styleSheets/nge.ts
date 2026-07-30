@@ -42,11 +42,11 @@ const defaultStylesheet=[
       "line-color": "#000000",
       "line-outline-color": "#bd0000",
       "line-outline-width": 1,
-      "target-arrow-color": "#000000",
+      "target-arrow-color": "#bd0000",
       "curve-style": "straight",
       "target-arrow-outline-color": "#bd0000",
       "target-arrow-outline-width": 1,
-      "target-arrow-shape": "none",
+      "target-arrow-shape": "vee",
     },
   },
   {
@@ -59,7 +59,7 @@ const defaultStylesheet=[
       "line-outline-width": 1,
       "target-arrow-color": "#ca6225",
       "curve-style": "straight",
-      "target-arrow-shape": "none",
+      "target-arrow-shape": "vee",
     },
   },
 ]

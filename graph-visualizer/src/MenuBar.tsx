@@ -86,7 +86,7 @@ export default function MenuBar(props: {
                 </>
                 }
                 
-                <button onClick={() => {props.editorMode.setMode(props.editorMode.isActive ? false : true)}}>&#9998;</button>
+                <button onClick={() => {props.editorMode.setMode(props.editorMode.isActive ? false : true)}}>Editor</button>
                 
             </div>
         </header>

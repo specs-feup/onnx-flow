@@ -20,7 +20,17 @@ export type CytoscapeData = {
   };
 };
 
-export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeData: CytoscapeData | null, layout: cytoscape.LayoutOptions,stylesheet?: any, nodeColor?: string, selectedNodeId?: string | null, onNodeSelected?: (node:any, pos:{x:number,y:number})=>void}) {
+export default function CytoscapeGraph(props: {
+  style: CSSProperties, 
+  cytoscapeData: CytoscapeData | null, 
+  layout: cytoscape.LayoutOptions,
+  stylesheet?: any, 
+  nodeColor?: string, 
+  selectedNodeId?: string | null, 
+  onNodeSelected?: (node:any, pos:{x:number,y:number}) => void,
+  onAddNodeRequested?: (pos: { x: number, y: number }) => void
+}) {
+
   const cyRef = useRef<cytoscape.Core | null>(null);
   const menuRef = useRef(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -138,21 +148,10 @@ export default function CytoscapeGraph(props: {style: CSSProperties, cytoscapeDa
           fillColor: 'rgba(32, 70, 92, 0.79)', // Green background for creation
           content: '＋ Add Node',
           select: function() {
-            const newId = `node_${Math.random().toString(36).substr(2, 9)}`;
-            
-            // Add the new node directly into cytoscape at the recorded position
-            cy.add({
-              group: 'nodes',
-              data: { 
-                id: newId, 
-                label: `New Node (${newId})` 
-              },
-              // Use the model position captured when the menu opened
-              position: { 
-                x: clickedPosition.x, 
-                y: clickedPosition.y 
-              }
-            });
+            // Em vez de cy.add(), notificamos o pai passando as coordenadas do modelo
+            if (props.onAddNodeRequested) {
+              props.onAddNodeRequested(clickedPosition);
+            }
           }
         }
       ]

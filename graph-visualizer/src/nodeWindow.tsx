@@ -27,7 +27,7 @@ export default function NodePopup({
     cytoscapeData = selectedNode.onnxData?.regions[0] ?? null;
   }
 
-  console.log(cytoscapeLayout)
+  console.log(selectedNode)
   return (
     <div>
       <div

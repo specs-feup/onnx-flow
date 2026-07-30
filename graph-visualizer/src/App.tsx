@@ -19,8 +19,39 @@ function App() {
     const [undoStack, setUndoStack] = useState<string[]>([]);
     const [redoStack, setRedoStack] = useState<string[]>([]);
     const [editorMode, setEditorMode] = useState(false);
+    const [newNodePos, setNewNodePos] = useState<{ x: number; y: number } | null>(null);
     
     if (!cytoscapeData) fetchGraph(3000).then(data => setCytoscapeData(data)).catch(err => console.log(err));
+
+    // NOVA FUNÇÃO: Manipulador para inserir o novo nó no estado do CytoscapeData
+    const handleCreateNode = (nodePayload: any, pos: { x: number; y: number } | null) => {
+        if (!cytoscapeData) return;
+
+        const positionToUse = pos || { x: 0, y: 0 };
+        const newId = `node_${Math.random().toString(36).substr(2, 9)}`;
+
+        const newNode = {
+            group: 'nodes',
+            data: {
+                id: newId,
+                label: nodePayload.label || `Node (${newId})`,
+                onnxData: nodePayload.onnxData
+            },
+            position: positionToUse
+        };
+
+        // Atualiza o grafo adicionando o novo nó aos elementos existentes
+        setCytoscapeData({
+            ...cytoscapeData,
+            elements: {
+                ...cytoscapeData.elements,
+                nodes: [...cytoscapeData.elements.nodes, newNode]
+            }
+        });
+
+        // Limpa a posição após a criação
+        setNewNodePos(null);
+    };
 
     return (
         <main
@@ -85,6 +116,8 @@ function App() {
                   isActive: editorMode,
                   setMode: setEditorMode
                 }}
+                newNodePosition={newNodePos}
+                onCreateNode={handleCreateNode}
               />
             )}
             <NodePopup
@@ -108,6 +141,11 @@ function App() {
               onNodeSelected={(node: any, pos: {x:number; y:number}) => {
                 setSelectedNode(node);
                 setPopupPos(pos);
+              }}
+              onAddNodeRequested={(pos) => {
+                setNewNodePos(pos);
+                setSidePanelVisibility(true);
+                setEditorMode(true);
               }}
             />
         </main>

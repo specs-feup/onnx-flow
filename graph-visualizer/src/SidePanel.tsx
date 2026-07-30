@@ -24,11 +24,16 @@ export default function SidePanel(props: {
         isActive: boolean;
         setMode: (activate: boolean) => void;
     };
+    newNodePosition?: { x: number; y: number } | null;
+    onCreateNode?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
 }) {
     return (
         <>
             {props.editorMode.isActive ? (
-                <NodeAdder />
+                <NodeAdder
+                    position={props.newNodePosition}
+                    onSubmit={props.onCreateNode} 
+                />
             ) : (
                 <TransformationOps
                     style={props.style}
