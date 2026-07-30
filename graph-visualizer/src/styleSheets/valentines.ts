@@ -25,9 +25,9 @@ const valentines = [
                 if (ele.data("onnxData")?.kind == "OperationNode") {
                     return "circle";
                 } else if (ele.data("onnxData")?.kind == "TensorNode") {
-                    return "pentagon";
+                    return "round-pentagon";
                 } else {
-                    return "diamond";
+                    return "round-diamond";
                 }
             },
             width: "40px",

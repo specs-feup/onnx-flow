@@ -1,0 +1,99 @@
+import React from "react";
+
+import { type Shape } from "../../src/Onnx/OnnxTypes";
+
+interface DimensionBuilderProps {
+    value: Shape;
+    onChange: (shape: Shape) => void;
+}
+
+export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onChange }) => {
+    const addDimension = () => {
+        onChange([...value, undefined]);
+    };
+
+    const removeDimension = (indexToRemove: number) => {
+        onChange(value.filter((_, idx) => idx !== indexToRemove));
+    };
+
+    const updateDimension = (index: number, rawValue: string) => {
+        const nextShape = [...value];
+        const trimmed = rawValue.trim();
+
+        if (trimmed === "" || trimmed === "?" || trimmed === "undefined") {
+            nextShape[index] = undefined;
+        } else if (/^-?\d+$/.test(trimmed)) {
+            nextShape[index] = Number(trimmed);
+        } else {
+            nextShape[index] = trimmed;
+        }
+
+        onChange(nextShape);
+    };
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {value.map((dim, idx) => (
+                    <div
+                        key={idx}
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            background: "#2c2a30",
+                            border: "1px solid rgb(95, 92, 102)",
+                            borderRadius: "6px",
+                            padding: "2px 6px",
+                            gap: "4px",
+                        }}
+                    >
+                        <span style={{ fontSize: "11px", color: "#888" }}>D{idx}:</span>
+                        <input
+                            type="text"
+                            value={dim === undefined ? "" : String(dim)}
+                            placeholder="?"
+                            onChange={(e) => updateDimension(idx, e.target.value)}
+                            style={{
+                                width: "60px",
+                                background: "transparent",
+                                border: "none",
+                                color: "white",
+                                fontSize: "13px",
+                                outline: "none",
+                            }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => removeDimension(idx)}
+                            style={{
+                                background: "transparent",
+                                border: "none",
+                                color: "#ff4d4f",
+                                cursor: "pointer",
+                                padding: "0 4px",
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            <button
+                type="button"
+                onClick={addDimension}
+                style={{
+                    padding: "6px",
+                    borderRadius: "4px",
+                    background: "#3e3c46",
+                    color: "white",
+                    border: "1px solid rgb(95, 92, 102)",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                }}
+            >
+                + Add Dim (Rank: {value.length})
+            </button>
+        </div>
+    );
+};

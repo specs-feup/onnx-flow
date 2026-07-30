@@ -19,7 +19,7 @@ function App() {
     const [undoStack, setUndoStack] = useState<string[]>([]);
     const [redoStack, setRedoStack] = useState<string[]>([]);
     const [editorMode, setEditorMode] = useState(false);
-
+    
     if (!cytoscapeData) fetchGraph(3000).then(data => setCytoscapeData(data)).catch(err => console.log(err));
 
     return (

@@ -8,6 +8,7 @@ export default function NodePopup({
   cytoscapeStylesheet, 
   cytoscapeLayout, 
   nodeColor,
+  onNodeSelected,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }: any) {
   const [showLoopWindow, setShowLoopWindow] = useState(false);
@@ -106,7 +107,7 @@ export default function NodePopup({
               layout={cytoscapeLayout ?? {name: "dagre", rankDir: "LR"}}
               stylesheet={cytoscapeStylesheet}
               nodeColor={nodeColor}
-              
+              onNodeSelected={onNodeSelected}
             />
           </div>
         </div>

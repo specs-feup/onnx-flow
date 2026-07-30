@@ -1,35 +1,31 @@
 
-const defaultStylesheet=[
+const special=[
   {
     selector: "node",
     layout: {
-      name: "copeland"
+      name: "special"
     },
     style: {
       "label": (ele:any) => {
         return (
           ele.data("onnxData")?.tensorType || ele.data("onnxData")?.opType || ele.data("onnxData")?.proto.dataType
         );
-      },  
+      },
       "text-valign": "center",
       color: "#ffffff",
       "font-size": "12px",
-
-      "outline-color": "#8ac7ff",
-      "outline-width": "1px",
-      "outline-style": "solid",
-      "text-outline-color": "rgb(0, 60, 255)",
-      "text-outline-width": "1px",
-
-      "background-fill": "radial-gradient",
-      "background-gradient-stop-colors": "#63b9db #3077c9 #13389c #13389c ",
+      "background-color": "#C70B38",
       
+      /*
+      "background-fill": "linear-gradient",
+      "background-gradient-stop-colors": "#ff0044 #e5ff00  #00d9ff",
+      */
       //"shape": "star",
       "shape": (ele:any) => {
         if((ele.data("onnxData")?.kind == "OperationNode")){
           return ("circle")
         }else if ((ele.data("onnxData")?.kind == "TensorNode")){
-          return ("pentagon")
+          return ("star")
         }else{
           return ("diamond")
         }
@@ -42,10 +38,10 @@ const defaultStylesheet=[
     selector: "edge",
     style: {
       width: 2,
-      "line-color": "#daedff",
-      "target-arrow-color": "#daedff",
+      "line-color": "#282D30",
+      "target-arrow-color": "#282D30",
       "curve-style": "straight",
-      "target-arrow-shape": "circle",
+      "target-arrow-shape": "chevron",
     },
   },
   {
@@ -53,14 +49,14 @@ const defaultStylesheet=[
     style: {
       width: 2,
       'line-style': 'dashed',
-      "line-color": "#0080ff",
-      "target-arrow-color": "#0080ff",
+      "line-color": "#ffffff",
+      "target-arrow-color": "#ffffff",
       "curve-style": "straight",
-      "target-arrow-shape": "circle",
+      "target-arrow-shape": "chevron",
     },
   },
 ]
 //node shape: "star" "ellipse" "circle" "triangle" "pentagon" "tag" "octagon" "vee" "rhomboid" "rectangle" "diamond"
 //line style: "straight" "taxi" "segments" "bezier" "unbundled-bezier" "haystack" "loop"
 //pointer style: "triangle" "circle-triangle" "circle" "chevron" "diamond" "tee" "vee" "triangle-tee" "triangle-cross" "triangle-backcurve" "circle" "none"
-export default defaultStylesheet;
+export default special;
