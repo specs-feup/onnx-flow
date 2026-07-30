@@ -1,20 +1,50 @@
 import { useState } from "react";
+import Select from "react-select";
+import { StandardOps } from '../../src/Onnx/Schema/definitions/StandardOps/index.ts'
+
+const operationsTypes: Array<{ value: string; label: string }> = StandardOps.map((op) => ({
+    value: op.opType,
+    label: op.opType,
+})).sort((a, b) => a.label.localeCompare(b.label));
+
+const customStyles = {
+  option: (provided: any, state: any) => ({
+    ...provided,
+    color: 'black', 
+  }),
+};
+
 
 export default function NodeAdder() {
     const [nodeKind, setNodeKind] = useState<string>("constant");
 
+    const [operationType, setOperationType] = useState<string>("");
+
+
     return (
-        <aside>
+        <aside style={{display: 'flex', flexDirection: 'column'}}>
             <label htmlFor="kind">Node Kind: </label>
-            <select id="kind" onChange={(e) => setNodeKind(e.target.value)}>
-                <option value="constant">Constant Node</option>
-                <option value="tensor">Tensor Node</option>
-                <option value="operation">Operation Node</option>
-            </select>
+            <Select 
+                id="kind"
+                onChange={(e: any) => setNodeKind(e.value)}
+                options={[
+                    {value: "constant", label: "Constant Node"},
+                    {value: "tensor", label: "Tensor Node"},
+                    {value: "operation", label: "Operation Node"},
+                ]}
+                styles={customStyles}
+                />
 
             {nodeKind === 'operation' && (
                 <>
-                <label>Operation Type:</label>
+                <label htmlFor="operation-type">Operation Type:</label>
+                <Select 
+                    isSearchable
+                    isClearable
+                    name="operation-type"
+                    options={operationsTypes}
+                    styles={customStyles}
+                />
                 </>
             )}
         </aside>

@@ -47,8 +47,8 @@
         "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js",
         "webapp:frontend": "vite graph-visualizer",
         "webapp:backend": "onnx-flow ./examples/onnx/matmul_test.onnx --i",
-        "webapp:dev": "concurrently \"npm run webapp:frontend\" \"npm run webapp:backend\""
-        ,"tsx":"tsx src/ExplorerAPI/ExplorerServerManager.ts"
+        "webapp:dev": "concurrently \"npm run webapp:frontend\" \"npm run webapp:backend\"",
+        "tsx": "tsx src/ExplorerAPI/ExplorerServerManager.ts"
     },
     "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
     "repository": {
@@ -72,6 +72,7 @@
         "protobufjs": "^7.4.0",
         "react": "^19.2.8",
         "react-cytoscapejs": "^2.0.0",
+        "react-select": "^5.10.2",
         "tsx": "^4.23.1",
         "vite": "^8.1.5",
         "yargs": "^17.7.2"
