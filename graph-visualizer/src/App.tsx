@@ -1,4 +1,4 @@
-import { useRef, useState , type ComponentPropsWithRef } from "react";
+import { useMemo, useState } from "react";
 import MenuBar from "./MenuBar.tsx";
 import SidePanel from "./SidePanel.tsx";
 import CytoscapeGraph,{ type CytoscapeData } from "./Cytoscape.tsx";
@@ -6,6 +6,7 @@ import NodePopup from "./nodeWindow";
 import { fetchGraph, type TransformationOpportunity } from "./api/api.ts"
 import "./App.css";
 import defaultStylesheet from './styleSheets/default.ts';
+import { valueNodeExtractor } from "./graphicalEditor/ValueNodeExtractor.ts";
 
 function App() {
     const [cytoscapeStylesheet, setCytoscapeStylesheet] = useState<cytoscape.CssStyleDeclaration>(defaultStylesheet);
@@ -20,6 +21,7 @@ function App() {
     const [redoStack, setRedoStack] = useState<string[]>([]);
     const [editorMode, setEditorMode] = useState(false);
     const [newNodePos, setNewNodePos] = useState<{ x: number; y: number } | null>(null);
+    const valueNodes = useMemo(() => valueNodeExtractor(cytoscapeData), [cytoscapeData]);
     
     if (!cytoscapeData) fetchGraph(3000).then(data => setCytoscapeData(data)).catch(err => console.log(err));
 
@@ -28,23 +30,49 @@ function App() {
         if (!cytoscapeData) return;
 
         const positionToUse = pos || { x: 0, y: 0 };
-        const newId = `node_${Math.random().toString(36).substr(2, 9)}`;
+        const newId = nodePayload.label === "" ? `node_${Math.random().toString(36)}` : nodePayload.label;
 
         const newNode = {
-            group: 'nodes',
             data: {
                 id: newId,
-                label: nodePayload.label || `Node (${newId})`,
                 onnxData: nodePayload.onnxData
             },
-            position: positionToUse
+            position: positionToUse,
+            group: 'nodes',
+            removed: false,
+            selected: false,
+            selectable: true,
+            locked: false,
+            grabbable: true,
+            classes: "",
         };
+        
+        const newEdges = [];
+        if (nodePayload.onnxData.kind === "OperationNode") {
+            for (const input of nodePayload.onnxData.inputs) {
+              const newEdge = {
+                data: {
+                  id: `${Math.random().toString(36)}`,
+                  source: input,
+                  target: newId,
+                },
+                group: 'edges',
+                removed: false,
+                selected: false,
+                selectable: true,
+                locked: false,
+                grabbable: true,
+                classes: "",
+              }
+              newEdges.push(newEdge);
+            }
+        }
 
         // Atualiza o grafo adicionando o novo nó aos elementos existentes
         setCytoscapeData({
             ...cytoscapeData,
             elements: {
-                ...cytoscapeData.elements,
+                edges: [...cytoscapeData.elements.edges, ...newEdges],
                 nodes: [...cytoscapeData.elements.nodes, newNode]
             }
         });
@@ -118,6 +146,7 @@ function App() {
                 }}
                 newNodePosition={newNodePos}
                 onCreateNode={handleCreateNode}
+                valueNodes={valueNodes}
               />
             )}
             <NodePopup

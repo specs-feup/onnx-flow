@@ -1,10 +1,5 @@
 import type { CSSProperties } from "react";
-import {
-    applyTransformation,
-    fetchGraph,
-    fetchTransformationOpportunities,
-    type TransformationOpportunity,
-} from "./api/api.ts";
+import { type TransformationOpportunity } from "./api/api.ts";
 import type { CytoscapeData } from "./Cytoscape.tsx";
 import TransformationOps from "./TransformationOps.tsx";
 import NodeAdder from "./NodeAdder.tsx";
@@ -26,13 +21,15 @@ export default function SidePanel(props: {
     };
     newNodePosition?: { x: number; y: number } | null;
     onCreateNode?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
+    valueNodes: Array<unknown>;
 }) {
     return (
         <>
             {props.editorMode.isActive ? (
                 <NodeAdder
                     position={props.newNodePosition}
-                    onSubmit={props.onCreateNode} 
+                    onSubmit={props.onCreateNode}
+                    valueNodes={props.valueNodes}
                 />
             ) : (
                 <TransformationOps

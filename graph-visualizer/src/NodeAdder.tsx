@@ -1,37 +1,12 @@
 import { useState } from "react";
 import Select from "react-select";
-import { StandardOps } from '../../src/Onnx/Schema/definitions/StandardOps/index.ts'
 import TensorNode from '../../src/Onnx/TensorNode.ts';
-import { DimensionBuilder} from "./DimensionBuilder.tsx";
 import { DataType, type Shape } from '../../src/Onnx/OnnxTypes.ts'
 
+import TensorNodeAdder from "./graphicalEditor/TensorNodeAdder.tsx";
+import OperationNodeAdder from "./graphicalEditor/OperationNodeAdder.tsx";
 
-const operationsTypes: Array<{ value: string; label: string }> = StandardOps.map((op) => ({
-    value: op.opType,
-    label: op.opType,
-})).sort((a, b) => a.label.localeCompare(b.label));
-
-/*Tensor Options*/
-const tensorTypes = ['Input', 'Output', 'Intermediate', 'Index', 'Index_Aux'].map((e) => ({
-    value: e.toLowerCase(),
-    label: e
-}));
-
-interface DataTypeOption {
-    value: DataType;
-    label: string;
-}
-
-
-const dataTypeOptions: DataTypeOption[] = Object.entries(DataType)
-    .filter(([key]) => isNaN(Number(key)))
-    .map(([key, val]) => ({
-        value: val as DataType,
-        label: key,
-        color: 'white',
-    }));
-    
-
+/*--- REACT SELECT STYLE---*/
 const customStyles = {
     singleValue: (provided: any, state: any) => ({
         ...provided,
@@ -70,18 +45,21 @@ const customStyles = {
         },
     margin: '0px',
   }),
-
 };
+/*---   ---*/
 
 interface NodeAdderProps {
     position?: { x: number; y: number } | null;
     onSubmit?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
+    valueNodes: Array<unknown>;
 }
 
-
-export default function NodeAdder({ position, onSubmit }: NodeAdderProps) {
+export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderProps) {
+    /* General Attributes*/
     const [nodeId, setNodeId] = useState<string>("")
     const [nodeKind, setNodeKind] = useState<string>("constant");
+
+    /*Constant Attributes*/
 
     /*Tensor Attributes*/
     const [tensorDataType, setTensorDataType] = useState<DataType>();
@@ -91,6 +69,7 @@ export default function NodeAdder({ position, onSubmit }: NodeAdderProps) {
 
     /*Operation Attributes*/
     const [operationType, setOperationType] = useState<string>("");
+    const [operationInputs, setOperationInputs] = useState<string[]>([]);
 
 
     const handleCreateClick = () => {
@@ -98,27 +77,34 @@ export default function NodeAdder({ position, onSubmit }: NodeAdderProps) {
 
         if (nodeKind === "tensor") {
             onnxData = {
+                id: nodeId,
                 kind: "TensorNode",
-                tensorType: tensorKind || "intermediate",
+                tensorType: tensorKind,
                 literalType: tensorDataType,
-                shape: tensorShapeValue || []
+                shape: tensorShapeValue,
+                metadata: {}
             };
         } else if (nodeKind === "operation") {
             onnxData = {
+                id: nodeId,
                 kind: "OperationNode",
-                opType: operationType || "Operation",
-                inputs: [],
-                attributes: {}
+                opType: operationType,
+                inputs: operationInputs,
+                regions: [],
+                attributes: {},
+                metadata: {}
             };
         } else {
             onnxData = {
+                id: nodeId,
                 kind: "Constant",
                 proto: { dataType: "Constant" }
             };
         }
 
         const nodePayload = {
-            onnxData
+            onnxData,
+            label: nodeId,
         };
 
         if (onSubmit) {
@@ -126,18 +112,16 @@ export default function NodeAdder({ position, onSubmit }: NodeAdderProps) {
         }
     };
 
-
-
     return (
         
         <aside style={{display: 'flex', flexDirection: 'column'}}>
             <label htmlFor="id">Node ID: </label>
-            <input  name="id" type="text"  color="white"/>
+            <input  name="id" type="text" value={nodeId} color="white"/>
+            <button type="button" onClick={() => setNodeId(`node_${Math.random().toString(36).substr(2, 9)}`)}>Generate Random ID</button>
 
             <label  color="white"  htmlFor="kind">Node Kind: </label>
             <Select 
                 id="kind"
-                
                 onChange={(e: any) => setNodeKind(e.value)}
                 options={[
                     {value: "constant", label: "Constant Node"},
@@ -147,55 +131,24 @@ export default function NodeAdder({ position, onSubmit }: NodeAdderProps) {
                 styles={customStyles}
                 />
 
-            {nodeKind === 'operation' && ( 
-                <>
-                <label htmlFor="operation-type">Operation Type:</label>
-
-                <Select 
-                    isSearchable
-                    isClearable
-                    name="operation-type"
-                    options={operationsTypes}
-                    styles={customStyles}
+            {nodeKind === 'operation' && 
+                <OperationNodeAdder
+                    reactSelectStyles={customStyles}
+                    setOperationType={setOperationType}
+                    setOperationInputs={setOperationInputs}
+                    valueNodes={valueNodes}
                 />
-                </>
-            )}
+            }
 
-            {nodeKind === 'tensor' && (
-                /*
-                -- literalType: DataType
-                -- shape: Shape
-                -- type: TensorKind
-                ?? extraAttrs?: AttributeProto[] | undefined
-                ?? metadata: AttributeMap
-                */ 
-
-                <>
-                <label htmlFor="dataType">Literal Type: </label>
-                <Select
-                    isClearable
-                    name="dataType"
-                    styles={customStyles}
-                    options={dataTypeOptions}
-                    onChange={(e: any) => setTensorDataType(e.value)}
+            {nodeKind === 'tensor' &&
+                <TensorNodeAdder
+                    reactSelectStyles={customStyles}
+                    setTensorDataType={setTensorDataType}
+                    setTensorShapeValue={setTensorShapeValue}
+                    tensorShapeValue={tensorShapeValue}
+                    setTensorKind={setTensorKind}
                 />
-
-                <label htmlFor="shape">Shape:</label>
-                <DimensionBuilder 
-                    value={tensorShapeValue}
-                    onChange={setTensorShapeValue}
-                />
-
-                <label htmlFor="tensorKind">Tensor Kind:</label>
-                <Select
-                    isClearable
-                    name="tensorKind"
-                    styles={customStyles}
-                    options={tensorTypes}
-                    onChange={(e: any) => setTensorKind(e.value)}
-                />
-                </>
-            )}
+            }
             {/* BOTÃO ADICIONADO NO FINAL DO FORMULÁRIO PARA CRIAR O NÓ NO GRAFO */}
             <button 
                 type="button" 
