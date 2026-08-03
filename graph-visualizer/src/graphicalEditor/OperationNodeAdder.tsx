@@ -24,7 +24,7 @@ export default function OperationNodeAdder({
 /*
 -- type: string;
 attributes?: AttributeMap | undefined;
-inputs?: ValueNode[] | undefined;
+-- inputs?: ValueNode[] | undefined;
 regions?: OnnxGraph.Class[] | undefined;
 metadata: AttributeMap;
 */

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import Select from "react-select";
 import TensorNode from '../../src/Onnx/TensorNode.ts';
-import { DataType, type Shape } from '../../src/Onnx/OnnxTypes.ts'
+import { DataType, type Shape, type TensorProto } from '../../src/Onnx/OnnxTypes.ts'
 
 import TensorNodeAdder from "./graphicalEditor/TensorNodeAdder.tsx";
 import OperationNodeAdder from "./graphicalEditor/OperationNodeAdder.tsx";
+import ConstantNodeAdder from "./graphicalEditor/ConstantNodeAdder.tsx";
 
 /*--- REACT SELECT STYLE---*/
 const customStyles = {
@@ -60,6 +61,9 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
     const [nodeKind, setNodeKind] = useState<string>("constant");
 
     /*Constant Attributes*/
+    const [constantTensorProto, setConstantTensorProto] = useState<TensorProto>();
+    const [isConstantInput, setIsConstantInput] = useState<boolean>(false);
+
 
     /*Tensor Attributes*/
     const [tensorDataType, setTensorDataType] = useState<DataType>();
@@ -97,8 +101,10 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
         } else {
             onnxData = {
                 id: nodeId,
-                kind: "Constant",
-                proto: { dataType: "Constant" }
+                kind: "ConstantNode",
+                isInput: false,
+                proto: {},
+                metadata: {}
             };
         }
 
@@ -130,6 +136,13 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                 ]}
                 styles={customStyles}
                 />
+            
+            {nodeKind === 'constant' && 
+                <ConstantNodeAdder
+                    setConstantTensorProto={setConstantTensorProto}
+                    setIsConstantInput={setIsConstantInput} 
+                />
+            }
 
             {nodeKind === 'operation' && 
                 <OperationNodeAdder
