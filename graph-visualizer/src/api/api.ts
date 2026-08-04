@@ -42,7 +42,14 @@ export async function getAvailableFiles(): Promise<any> {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  return response.json();
+  const jsonResponse = await response.json();
+  if (!jsonResponse.success) {
+    throw new Error(`API error! message: ${jsonResponse.message}`);
+  }
+
+  jsonResponse.files.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+
+  return jsonResponse.files;
 }
 
 export async function fetchGraph(port: number): Promise<CytoscapeData> {

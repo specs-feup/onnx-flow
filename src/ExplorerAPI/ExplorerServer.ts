@@ -237,6 +237,7 @@ export function startExplorerServer(
         console.log(`\n======================================================`);
         console.log(`🚀 ONNX-Flow Explorer Server running on port ${port}`);
         console.log(`📡 API Endpoints available:`);
+        console.log(`   GET  http://localhost:${port}/api/files`);
         console.log(`   POST http://localhost:${port}/api/session/start`);
         console.log(`   GET  http://localhost:${port}/api/graph`);
         console.log(`   GET  http://localhost:${port}/api/opportunities`);
