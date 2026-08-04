@@ -1,35 +1,43 @@
 import Select from "react-select";
 
-import type { TensorProto } from "../../../src/Onnx/OnnxTypes";
+import type { KnownShape, TensorProto } from "../../../src/Onnx/OnnxTypes";
+
+import { dataTypeOptions } from "./Definitions.ts";
+import { DimensionBuilder } from "./DimensionBuilder.tsx";
 
 interface ConstantNodeAdderProps {
+    reactSelectStyles: any;
+    constantTensorProto: TensorProto;
     setConstantTensorProto: (value: TensorProto) => void;
-    setIsConstantInput: (value: boolean) => void;
 }
 
 export default function ConstantNodeAdder({
+    reactSelectStyles,
+    constantTensorProto,
     setConstantTensorProto,
-    setIsConstantInput,
 }: ConstantNodeAdderProps) {
-    /*
-    -- value: TensorProto;
-    isInput: boolean;
-    metadata: AttributeMap; 
-    */
+
     return (
         <>
-        <label htmlFor="isInput">Is Input?:</label>
-        <input 
-            type="checkbox" 
-            name="isInput" 
-            onChange={(e) => setIsConstantInput(e.target.checked)}
-        />
-
-        <label htmlFor="tensorProto">Tensor Proto</label>
-        <label htmlFor="tensorName"> Tensor Name:</label>
+        <label htmlFor="constantTensorProto">Constant TensorProto</label>
+        <label>Name:</label>
         <input type="text" name="tensorName" />
 
-        <Select />
+        <label>Data Type:</label>
+        <Select 
+            name="dataType"
+            options={dataTypeOptions}
+            styles={reactSelectStyles} 
+        />
+
+        <label>Shape:</label>
+        <DimensionBuilder 
+            value={constantTensorProto.dims ?? []}
+            onChange={(knownShape: KnownShape) => setConstantTensorProto({
+                ...constantTensorProto,
+                dims: knownShape,
+            })}
+        />
 
 
         </>

@@ -1,10 +1,11 @@
 import React from "react";
 
-import { type Shape } from "../../../src/Onnx/OnnxTypes";
+import { type Shape, type KnownShape } from "../../../src/Onnx/OnnxTypes";
+
 
 interface DimensionBuilderProps {
-    value: Shape;
-    onChange: (shape: Shape) => void;
+    value: Shape | KnownShape;
+    onChange: (shape: Shape | KnownShape) => void;
 }
 
 export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onChange }) => {

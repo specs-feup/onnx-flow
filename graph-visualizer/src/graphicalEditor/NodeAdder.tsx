@@ -1,53 +1,13 @@
 import { useState } from "react";
 import Select from "react-select";
-import TensorNode from '../../src/Onnx/TensorNode.ts';
-import { DataType, type Shape, type TensorProto } from '../../src/Onnx/OnnxTypes.ts'
+import TensorNode from '../../../src/Onnx/TensorNode.ts';
+import { DataType, type KnownShape, type Shape } from '../../../src/Onnx/OnnxTypes.ts'
 
-import TensorNodeAdder from "./graphicalEditor/TensorNodeAdder.tsx";
-import OperationNodeAdder from "./graphicalEditor/OperationNodeAdder.tsx";
-import ConstantNodeAdder from "./graphicalEditor/ConstantNodeAdder.tsx";
+import TensorNodeAdder from "./TensorNodeAdder.tsx";
+import OperationNodeAdder from "./OperationNodeAdder.tsx";
+import ConstantNodeAdder from "./ConstantNodeAdder.tsx";
 
-/*--- REACT SELECT STYLE---*/
-const customStyles = {
-    singleValue: (provided: any, state: any) => ({
-        ...provided,
-        color: 'white',
-    }),
-    color: 'white',
-    menu: (provided: any, state: any) => ({
-        ...provided,
-        backgroundColor: '#2c2a30',
-        border: '2px solid rgb(95, 92, 102)',
-        '&:hover': {
-            backgroundColor: '#3e3c46',
-            border: '2px solid rgb(132, 124, 150)',
-            },
-        }),
-
-    control: (provided: any, state: any) => ({
-      ...provided,
-      color: '#ffc400',
-      backgroundColor: '#2c2a30',
-      border: '2px solid rgb(95, 92, 102)',
-
-      '&:hover': {
-        backgroundColor: '#3e3c46',
-        border: '2px solid rgb(132, 124, 150)',
-      },
-    }),
-    
-    option: (provided: any, state: any) => ({
-        ...provided,
-        color: 'white', 
-        backgroundColor: '#2c2a30',
-        '&:hover': {
-        backgroundColor: '#3e3c46',
-
-        },
-    margin: '0px',
-  }),
-};
-/*---   ---*/
+import { reactSelectCustomStyles } from "./Style.ts";
 
 interface NodeAdderProps {
     position?: { x: number; y: number } | null;
@@ -61,15 +21,16 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
     const [nodeKind, setNodeKind] = useState<string>("constant");
 
     /*Constant Attributes*/
-    const [constantTensorProto, setConstantTensorProto] = useState<TensorProto>();
-    const [isConstantInput, setIsConstantInput] = useState<boolean>(false);
-
+    const [constantProtoName, setConstantProtoName] = useState<string>("");
+    const [constantDataType, setConstantDataType] = useState<DataType>(DataType.UNDEFINED);
+    const [constantShape, setConstantShape] = useState<KnownShape>([]);
+    const [stringData, setStringData] = useState<string[]>([]);
+    const [numberData, setNumberData] = useState<number[]>([]);
 
     /*Tensor Attributes*/
-    const [tensorDataType, setTensorDataType] = useState<DataType>();
+    const [tensorDataType, setTensorDataType] = useState<DataType>(DataType.UNDEFINED);
     const [tensorShapeValue, setTensorShapeValue] = useState<Shape>([]);
     const [tensorKind, setTensorKind] = useState<TensorNode.TensorKind>();
-
 
     /*Operation Attributes*/
     const [operationType, setOperationType] = useState<string>("");
@@ -77,7 +38,8 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
 
 
     const handleCreateClick = () => {
-        let onnxData: Record<string, any> = {};
+        // eslint-disable-next-line no-useless-assignment
+        let onnxData = {};
 
         if (nodeKind === "tensor") {
             onnxData = {
@@ -86,7 +48,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                 tensorType: tensorKind,
                 literalType: tensorDataType,
                 shape: tensorShapeValue,
-                metadata: {}
+                metadata: {},
             };
         } else if (nodeKind === "operation") {
             onnxData = {
@@ -96,7 +58,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                 inputs: operationInputs,
                 regions: [],
                 attributes: {},
-                metadata: {}
+                metadata: {},
             };
         } else {
             onnxData = {
@@ -134,19 +96,20 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     {value: "tensor", label: "Tensor Node"},
                     {value: "operation", label: "Operation Node"},
                 ]}
-                styles={customStyles}
+                styles={reactSelectCustomStyles}
                 />
             
             {nodeKind === 'constant' && 
                 <ConstantNodeAdder
+                    reactSelectStyles={reactSelectCustomStyles}
+                    constantTensorProto={constantTensorProto}
                     setConstantTensorProto={setConstantTensorProto}
-                    setIsConstantInput={setIsConstantInput} 
                 />
             }
 
             {nodeKind === 'operation' && 
                 <OperationNodeAdder
-                    reactSelectStyles={customStyles}
+                    reactSelectStyles={reactSelectCustomStyles}
                     setOperationType={setOperationType}
                     setOperationInputs={setOperationInputs}
                     valueNodes={valueNodes}
@@ -155,7 +118,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
 
             {nodeKind === 'tensor' &&
                 <TensorNodeAdder
-                    reactSelectStyles={customStyles}
+                    reactSelectStyles={reactSelectCustomStyles}
                     setTensorDataType={setTensorDataType}
                     setTensorShapeValue={setTensorShapeValue}
                     tensorShapeValue={tensorShapeValue}

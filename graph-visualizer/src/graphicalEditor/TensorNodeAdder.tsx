@@ -5,25 +5,14 @@ import { DataType, type Shape } from "../../../src/Onnx/OnnxTypes";
 import { DimensionBuilder } from "./DimensionBuilder.tsx";
 import type TensorNode from "../../../src/Onnx/TensorNode.ts";
 
+import { dataTypeOptions } from "./Definitions.ts";
+
 /*--- TENSOR OPTIONS ---*/
 const tensorTypes = ['Input', 'Output', 'Intermediate', 'Index', 'Index_Aux'].map((e) => ({
     value: e.toLowerCase(),
     label: e
 }));
 
-interface DataTypeOption {
-    value: DataType;
-    label: string;
-}
-
-const dataTypeOptions: DataTypeOption[] = Object.entries(DataType)
-    .filter(([key]) => isNaN(Number(key)))
-    .map(([key, val]) => ({
-        value: val as DataType,
-        label: key,
-        color: 'white',
-    })
-);
 /*---   ---*/
 
 interface TensorNodeAdderProps {
