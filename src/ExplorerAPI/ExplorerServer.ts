@@ -2,8 +2,9 @@ import express from "express";
 import type { Request, Response } from "express";
 import { ExplorerSession } from "./ExplorerSession.js";
 import { generateUnifiedExplorerJson } from "../flow2json.js";
-import * as fs from "fs";
-import * as path from "path";
+import { readdir, stat } from "node:fs/promises";
+import path from "node:path";
+import type { PathLike } from "node:fs";
 
 let activeSession: ExplorerSession | null = null;
 
@@ -26,14 +27,35 @@ export function startExplorerServer(
         next();
     });
 
-    app.get("/api/files", (req: Request, res: Response) => {
+    app.get("/api/files", async (req: Request, res: Response) => {
         try {
+            /*
             const folderPath: string = "./examples/onnx";
             const files: string[] = fs.readdirSync(folderPath);
             const newfiles: string[] = files.filter(
                 (file: string) => path.extname(file) === ".onnx",
             );
             res.json({ success: true, files: newfiles });
+            */
+            const folderPath: PathLike = "./examples/onnx";
+            const entries = await readdir(folderPath, {
+                encoding: "utf8",
+                withFileTypes: true,
+                recursive: false,
+            });
+            const onnxFiles = entries
+                .filter((entry) => entry.isFile() && entry.name.endsWith(".onnx"))
+                .map(async (entry) => {
+                    const fullPath = path.join(folderPath, entry.name);
+                    const fileStat = await stat(fullPath);
+                    return {
+                        name: entry.name,
+                        size: fileStat.size,
+                        lastModified: fileStat.mtime,
+                    };
+                });
+            const filesMetadata = await Promise.all(onnxFiles);
+            res.json({ success: true, files: filesMetadata });
         } catch (error) {
             res.status(500).json({ success: false, error: String(error) });
         }
