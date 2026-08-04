@@ -2,6 +2,8 @@ import express from "express";
 import type { Request, Response } from "express";
 import { ExplorerSession } from "./ExplorerSession.js";
 import { generateUnifiedExplorerJson } from "../flow2json.js";
+import * as fs from "fs";
+import * as path from "path";
 
 let activeSession: ExplorerSession | null = null;
 
@@ -22,6 +24,19 @@ export function startExplorerServer(
         res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
         res.header("Access-Control-Allow-Headers", "Content-Type");
         next();
+    });
+
+    app.get("/api/files", (req: Request, res: Response) => {
+        try {
+            const folderPath: string = "./examples/onnx";
+            const files: string[] = fs.readdirSync(folderPath);
+            const newfiles: string[] = files.filter(
+                (file: string) => path.extname(file) === ".onnx",
+            );
+            res.json({ success: true, files: newfiles });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
+        }
     });
 
     // 2. DYNAMICALLY LOAD / RESET SESSION

@@ -36,6 +36,14 @@ export async function startNewSession(
 
   return response.json();
 }
+export async function getAvailableFiles(): Promise<any> {
+  const response = await fetch("http://localhost:3000/api/files", { method: "GET" });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export async function fetchGraph(port: number): Promise<CytoscapeData> {
   const response = await fetch(`http://localhost:${port}/api/graph`, { method: "GET" });

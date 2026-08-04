@@ -3,7 +3,7 @@ import Dropdown from "./Dropdown";
 import ColorPicker from "./colorPicker";
 import type { CytoscapeData } from "./Cytoscape.tsx";
 import { fetchGraph, fetchTransformationOpportunities, undoTransformation, type TransformationOpportunity } from "./api/api.ts";
-import { StandardOps } from '../../src/Onnx/Schema/definitions/StandardOps/index.ts'
+import { Link } from "react-router-dom";
 
 
 import  Themess from "./themes.tsx";
@@ -29,6 +29,7 @@ export default function MenuBar(props: {
 
     return (
         <header style={props.style}>
+            <Link to="/">Home</Link>
             <h1>ONNX Graph Visualizer</h1>
             <div className="button-group">
                 {/*<button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>*/}

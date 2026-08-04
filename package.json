@@ -76,6 +76,7 @@
         "protobufjs": "^7.4.0",
         "react": "^19.2.8",
         "react-cytoscapejs": "^2.0.0",
+        "react-router-dom": "^7.18.2",
         "react-select": "^5.10.2",
         "tsx": "^4.23.1",
         "vite": "^8.1.5",
