@@ -8,6 +8,7 @@ import OperationNodeAdder from "./OperationNodeAdder.tsx";
 import ConstantNodeAdder from "./ConstantNodeAdder.tsx";
 
 import { reactSelectCustomStyles } from "./Style.ts";
+import type { OnnxData } from "./Definitions.ts";
 
 interface NodeAdderProps {
     position?: { x: number; y: number } | null;
@@ -24,13 +25,12 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
     const [constantProtoName, setConstantProtoName] = useState<string>("");
     const [constantDataType, setConstantDataType] = useState<DataType>(DataType.UNDEFINED);
     const [constantShape, setConstantShape] = useState<KnownShape>([]);
-    const [stringData, setStringData] = useState<string[]>([]);
-    const [numberData, setNumberData] = useState<number[]>([]);
+    const [protoData, setProtoData] = useState<(number | bigint | string)[]>([]);
 
     /*Tensor Attributes*/
     const [tensorDataType, setTensorDataType] = useState<DataType>(DataType.UNDEFINED);
     const [tensorShapeValue, setTensorShapeValue] = useState<Shape>([]);
-    const [tensorKind, setTensorKind] = useState<TensorNode.TensorKind>();
+    const [tensorKind, setTensorKind] = useState<TensorNode.TensorKind>("input");
 
     /*Operation Attributes*/
     const [operationType, setOperationType] = useState<string>("");
@@ -39,7 +39,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
 
     const handleCreateClick = () => {
         // eslint-disable-next-line no-useless-assignment
-        let onnxData = {};
+        let onnxData: OnnxData;
 
         if (nodeKind === "tensor") {
             onnxData = {
@@ -65,10 +65,59 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                 id: nodeId,
                 kind: "ConstantNode",
                 isInput: false,
-                proto: {},
+                proto: {
+                    name: constantProtoName,
+                    dataType: constantDataType,
+                    dims: constantShape,
+                    rawData: undefined,
+                    floatData: [],
+                    int32Data: [],
+                    int64Data: [],
+                    stringData: [],
+                    doubleData: [],
+                    uint64Data: [],
+                },
                 metadata: {}
             };
+
+            let selectedArray;
+            switch (constantDataType) {
+                case DataType.FLOAT:
+                    selectedArray = "floatData";
+                    break;
+                case DataType.DOUBLE:
+                case DataType.COMPLEX128:
+                    selectedArray = "doubleData";
+                    break;
+                case DataType.INT64:
+                    selectedArray = "int64Data";
+                    break;
+                case DataType.UINT64:
+                    selectedArray = "uint64Data";
+                    break;
+                case DataType.STRING:
+                    selectedArray = "stringData";
+                    break;
+                case DataType.INT32:
+                case DataType.INT16:
+                case DataType.UINT16:
+                case DataType.INT8:
+                case DataType.UINT8:
+                case DataType.BOOL:
+                case DataType.FLOAT16:
+                case DataType.BFLOAT16:
+                // case DataType.FLOAT8:
+                case DataType.INT4:
+                    selectedArray = "int32Data";
+                    break;
+                default:
+                    selectedArray = "rawData";
+                    break;
+            }
+            onnxData.proto[selectedArray] = protoData;
         }
+
+        console.log(onnxData);
 
         const nodePayload = {
             onnxData,
@@ -96,14 +145,21 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     {value: "tensor", label: "Tensor Node"},
                     {value: "operation", label: "Operation Node"},
                 ]}
+                defaultValue={{value: "constant", label: "Constant Node"}}
                 styles={reactSelectCustomStyles}
                 />
             
             {nodeKind === 'constant' && 
                 <ConstantNodeAdder
                     reactSelectStyles={reactSelectCustomStyles}
-                    constantTensorProto={constantTensorProto}
-                    setConstantTensorProto={setConstantTensorProto}
+                    constantProtoName={constantProtoName}
+                    constantDataType={constantDataType}
+                    constantShape={constantShape}
+                    protoData={protoData}
+                    setConstantProtoName={setConstantProtoName}
+                    setConstantDataType={setConstantDataType}
+                    setConstantShape={setConstantShape}
+                    setProtoData={setProtoData}
                 />
             }
 

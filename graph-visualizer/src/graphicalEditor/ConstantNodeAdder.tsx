@@ -1,44 +1,72 @@
 import Select from "react-select";
 
-import type { KnownShape, TensorProto } from "../../../src/Onnx/OnnxTypes";
+import type { DataType, KnownShape } from "../../../src/Onnx/OnnxTypes";
 
 import { dataTypeOptions } from "./Definitions.ts";
 import { DimensionBuilder } from "./DimensionBuilder.tsx";
 
 interface ConstantNodeAdderProps {
     reactSelectStyles: any;
-    constantTensorProto: TensorProto;
-    setConstantTensorProto: (value: TensorProto) => void;
+    constantProtoName: string;
+    constantDataType: DataType;
+    constantShape: KnownShape;
+    protoData: (number | bigint | string)[];
+    setConstantProtoName: (value: string) => void;
+    setConstantDataType: (value: DataType) => void;
+    setConstantShape: (value: KnownShape) => void;
+    setProtoData: (value: (number | bigint | string)[]) => void;
 }
 
 export default function ConstantNodeAdder({
     reactSelectStyles,
-    constantTensorProto,
-    setConstantTensorProto,
+    constantProtoName,
+    constantDataType,
+    constantShape,
+    protoData,
+    setConstantProtoName,
+    setConstantDataType,
+    setConstantShape,
+    setProtoData,
 }: ConstantNodeAdderProps) {
 
     return (
         <>
         <label htmlFor="constantTensorProto">Constant TensorProto</label>
         <label>Name:</label>
-        <input type="text" name="tensorName" />
+        <input 
+            type="text" 
+            name="tensorName" 
+            onChange={(e) => setConstantProtoName(e.target.value)}
+        />
 
         <label>Data Type:</label>
         <Select 
             name="dataType"
             options={dataTypeOptions}
-            styles={reactSelectStyles} 
+            styles={reactSelectStyles}
+            onChange={(e: any) => setConstantDataType(e.value)}
+            defaultValue={dataTypeOptions[0]}
         />
 
         <label>Shape:</label>
         <DimensionBuilder 
-            value={constantTensorProto.dims ?? []}
-            onChange={(knownShape: KnownShape) => setConstantTensorProto({
-                ...constantTensorProto,
-                dims: knownShape,
-            })}
+            value={constantShape}
+            onChange={setConstantShape}
         />
-
+        {constantShape.length !== 0 && 
+                <p>Expected Value: {constantShape.reduce((total, v) => v * total)}</p>}
+        <p>Actual Values: {protoData.length }</p>
+        <label>Data:</label>
+        <textarea 
+            rows={5} 
+            name="data" 
+            style={{
+                flexShrink: 0, 
+                alignSelf: "stretch"
+            }}
+            onChange={(e) => {setProtoData(e.target.value.split(",").filter(Boolean))}}
+        >    
+        </textarea>
 
         </>
     )

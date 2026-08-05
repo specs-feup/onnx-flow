@@ -21,13 +21,6 @@ export default function OperationNodeAdder({
     setOperationInputs,
     valueNodes,
 }: OperationNodeAdderProps) {
-/*
--- type: string;
-attributes?: AttributeMap | undefined;
--- inputs?: ValueNode[] | undefined;
-regions?: OnnxGraph.Class[] | undefined;
-metadata: AttributeMap;
-*/
     return (
         <>
         <label htmlFor="operation-type">Operation Type:</label>
@@ -36,6 +29,7 @@ metadata: AttributeMap;
             isClearable
             name="operation-type"
             options={operationsTypes}
+            defaultValue={operationsTypes[0]}
             styles={reactSelectStyles}
             onChange={(op) => setOperationType(op!.value)}
         />

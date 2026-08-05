@@ -5,7 +5,7 @@ import { type Shape, type KnownShape } from "../../../src/Onnx/OnnxTypes";
 
 interface DimensionBuilderProps {
     value: Shape | KnownShape;
-    onChange: (shape: Shape | KnownShape) => void;
+    onChange: ((shape: KnownShape) => void) | ((shape: Shape) => void)
 }
 
 export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onChange }) => {

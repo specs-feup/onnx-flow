@@ -12,7 +12,6 @@ const tensorTypes = ['Input', 'Output', 'Intermediate', 'Index', 'Index_Aux'].ma
     value: e.toLowerCase(),
     label: e
 }));
-
 /*---   ---*/
 
 interface TensorNodeAdderProps {
@@ -61,6 +60,7 @@ export default function TensorNodeAdder({
             styles={reactSelectStyles}
             options={tensorTypes}
             onChange={(e: any) => setTensorKind(e.value)}
+            defaultValue={tensorTypes[0]}
         />
     </> 
     )
