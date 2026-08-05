@@ -4,7 +4,7 @@ import MenuBar from "../MenuBar.tsx";
 import SidePanel from "../SidePanel.tsx";
 import CytoscapeGraph, { type CytoscapeData } from "../Cytoscape.tsx";
 import NodePopup from "../nodeWindow.tsx";
-import { endSession, fetchGraph, type TransformationOpportunity } from "../api/api.ts";
+import { endSession, fetchGraph, regionsToCompoundNodes, type TransformationOpportunity } from "../api/api.ts";
 import "../App.css";
 import defaultStylesheet from "../styleSheets/default.ts";
 import { valueNodeExtractor } from "../graphicalEditor/ValueNodeExtractor.ts";
@@ -44,7 +44,7 @@ function Visualizer() {
 
     if (!cytoscapeData)
         fetchGraph(3000, sessionId!)
-            .then((data) => setCytoscapeData(data))
+            .then((data) => setCytoscapeData(regionsToCompoundNodes(data)))
             .catch((err) => console.log(err));
 
     // NOVA FUNÇÃO: Manipulador para inserir o novo nó no estado do CytoscapeData

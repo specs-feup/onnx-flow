@@ -15,6 +15,40 @@ export interface TransformationOpportunity {
   targetNodeId: string;
 }
 
+export function regionsToCompoundNodes(graphData: any): any {
+  const compoundNodes = [];
+  const compoundEdges = [];
+  
+
+  console.log(graphData)
+
+
+  for (const node of graphData.elements.nodes) {
+    if (node.data.onnxData.kind === "OperationNode") {
+      if (node.data.onnxData.regions !== 0) {
+        for (const innerNode of node.data.onnxData.regions[0].elements.nodes) {
+          const newNode = {
+            ...innerNode,
+            data: {
+              ...innerNode.data,
+              parent: node.data.id,
+            }
+          }
+          compoundNodes.push(newNode);
+        }
+        compoundEdges.push(...node.data.onnxData.regions[0].elements.edges)
+      }
+    }
+  }
+
+  graphData.elements.nodes.push(...compoundNodes);
+  graphData.elements.edges.push(...compoundEdges);
+
+  console.log(graphData)
+
+  return graphData;
+}
+
 export async function startNewSession(
   port: number,
   onnxFilename: string,
