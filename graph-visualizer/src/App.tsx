@@ -6,7 +6,7 @@ function App() {
         <BrowserRouter>
             <Routes>
                 <Route path="/" element={<Home />} />
-                <Route path="/app" element={<Visualizer />} />
+                <Route path="/app/:sessionId" element={<Visualizer />} />
             </Routes>
         </BrowserRouter>
     );

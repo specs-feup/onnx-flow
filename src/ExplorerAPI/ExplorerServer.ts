@@ -1,42 +1,56 @@
 import express from "express";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { ExplorerSession } from "./ExplorerSession.js";
 import { generateUnifiedExplorerJson } from "../flow2json.js";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { PathLike } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { parseOnnxFile } from "../index.js";
+import { createGraph } from "../initGraph.js";
 
-let activeSession: ExplorerSession | null = null;
+// Mapa global para armazenar múltiplas sessões em simultâneo
+const sessions = new Map<string, ExplorerSession>();
+
+/**
+ * Middleware auxiliar para validar a existência da sessão no mapa.
+ * Anexa a sessão ao objeto Request via `res.locals.session`.
+ */
+function requireSession(req: Request, res: Response, next: NextFunction): void {
+    const sessionId = req.params["sessionId"] as string;
+    if (!sessionId || !sessions.has(sessionId)) {
+        res.status(404).json({
+            success: false,
+            error: `Session '${sessionId}' not found or expired.`,
+        });
+        return;
+    }
+    res.locals["session"] = sessions.get(sessionId);
+    next();
+}
 
 export function startExplorerServer(
     initialSession: ExplorerSession | null,
     port: number = 3000,
 ): void {
+    // Se for passada uma sessão inicial, registamo-la com um ID predefinido ("default")
     if (initialSession) {
-        activeSession = initialSession;
+        // sessions.set("default", initialSession);
     }
 
     const app = express();
     app.use(express.json({ limit: "150mb" }));
 
-    // 1. CORS Middleware (Essential for local frontend development)
-    app.use((req: Request, res: Response, next) => {
+    // 1. CORS Middleware
+    app.use((req: Request, res: Response, next: NextFunction) => {
         res.header("Access-Control-Allow-Origin", "*");
-        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         res.header("Access-Control-Allow-Headers", "Content-Type");
         next();
     });
 
     app.get("/api/files", async (req: Request, res: Response) => {
         try {
-            /*
-            const folderPath: string = "./examples/onnx";
-            const files: string[] = fs.readdirSync(folderPath);
-            const newfiles: string[] = files.filter(
-                (file: string) => path.extname(file) === ".onnx",
-            );
-            res.json({ success: true, files: newfiles });
-            */
             const folderPath: PathLike = "./examples/onnx";
             const entries = await readdir(folderPath, {
                 encoding: "utf8",
@@ -61,204 +75,224 @@ export function startExplorerServer(
         }
     });
 
-    // 2. DYNAMICALLY LOAD / RESET SESSION
-    app.post("/api/session/start", (req: Request, res: Response) => {
+    // ============================================================================
+    // GESTÃO DE SESSÕES
+    // ============================================================================
+
+    // 2. CRIAR NOVA SESSÃO
+    app.post("/api/sessions", async (req: Request, res: Response) => {
         try {
-            const { graphData, options } = req.body;
-            // Instantiates a brand new session dynamically
-            activeSession = new ExplorerSession(graphData, options);
-            res.json({
+            const { onnxFilename } = req.body;
+            const sessionId = onnxFilename;
+
+            if (sessions.has(sessionId)) {
+                res.status(409).json({
+                    success: false,
+                    error: `Session '${sessionId}' already exists.`,
+                });
+                return;
+            }
+
+            const onnxObject = await parseOnnxFile("./examples/onnx/" + onnxFilename);
+            const graphData = createGraph(onnxObject);
+
+            const newSession = new ExplorerSession(graphData, {
+                canonicalize: true,
+                fuse: true,
+                recurse: true,
+                coalesce: true,
+                decomposeForCgra: true,
+                loopLowering: true,
+            });
+
+            sessions.set(sessionId, newSession);
+
+            res.status(201).json({
                 success: true,
+                sessionId,
                 message: "New session started successfully.",
-                graph: generateUnifiedExplorerJson(activeSession.graph),
+                graph: generateUnifiedExplorerJson(newSession.graph),
             });
         } catch (error) {
             res.status(500).json({ success: false, error: String(error) });
         }
     });
 
-    // 3. Graph Endpoint
-    app.get("/api/graph", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                const payload = generateUnifiedExplorerJson(activeSession.graph);
-                res.json(payload);
-            } catch (error) {
-                res.status(500).json({ error: String(error) });
-            }
+    // 3. LISTAR TODAS AS SESSÕES ATIVAS
+    app.get("/api/sessions", (_req: Request, res: Response) => {
+        res.json({
+            success: true,
+            activeSessions: Array.from(sessions.keys()),
+        });
+    });
+
+    // 4. ELIMINAR UMA SESSÃO
+    app.delete("/api/sessions/:sessionId", (req: Request, res: Response) => {
+        const sessionId = req.params["sessionId"] as string;
+        const deleted = sessions.delete(sessionId);
+        if (!deleted) {
+            res.status(404).json({ success: false, error: `Session '${sessionId}' not found.` });
+            return;
+        }
+        res.json({ success: true, message: `Session '${sessionId}' deleted.` });
+    });
+
+    // ============================================================================
+    // OPERAÇÕES SOBRE UMA SESSÃO ESPECÍFICA (via requireSession)
+    // ============================================================================
+
+    // 5. Graph Endpoint
+    app.get("/api/sessions/:sessionId/graph", requireSession, (_req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const payload = generateUnifiedExplorerJson(session.graph);
+            res.json(payload);
+        } catch (error) {
+            res.status(500).json({ error: String(error) });
         }
     });
 
-    // 4. Opportunities Endpoint
-    app.get("/api/opportunities", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                const opps = activeSession.getOpportunities().map((opp) => ({
-                    id: opp.id,
-                    description: opp.description,
-                    recipeName: opp.recipeName,
-                    targetNodeId: opp.targetNodeId,
-                }));
-                res.json(opps);
-            } catch (error) {
-                res.status(500).json({
-                    error: String(error),
-                    stack: error instanceof Error ? error.stack : undefined,
-                });
-            }
+    // 6. Opportunities Endpoint
+    app.get("/api/sessions/:sessionId/opportunities", requireSession, (_req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const opps = session.getOpportunities().map((opp) => ({
+                id: opp.id,
+                description: opp.description,
+                recipeName: opp.recipeName,
+                targetNodeId: opp.targetNodeId,
+            }));
+            res.json(opps);
+        } catch (error) {
+            res.status(500).json({
+                error: String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
         }
     });
 
-    // 5. Trigger an optimization
-    app.post("/api/apply/:id", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                const oppId: string = req.params["id"] as string;
-                const success = activeSession.applyOpportunity(oppId);
-                if (success) {
-                    // Instantly return the updated graph so the UI can re-render
-                    res.json({
-                        success: true,
-                        graph: generateUnifiedExplorerJson(activeSession.graph),
-                    });
-                } else {
-                    res.status(404).json({ success: false, error: "Opportunity no longer valid." });
-                }
-            } catch (error) {
-                res.status(500).json({ success: false, error: String(error) });
-            }
-        }
-    });
+    // 7. Trigger an optimization
+    app.post("/api/sessions/:sessionId/apply/:id", requireSession, (req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const oppId = req.params["id"] as string;
+            const success = session.applyOpportunity(oppId);
 
-    // 6. Time-Travel: Undo
-    app.post("/api/undo", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                const undone = activeSession.undo();
+            if (success) {
                 res.json({
-                    success: !!undone,
-                    patch: undone,
-                    graph: generateUnifiedExplorerJson(activeSession.graph),
+                    success: true,
+                    graph: generateUnifiedExplorerJson(session.graph),
                 });
-            } catch (error) {
-                res.status(500).json({ success: false, error: String(error) });
+            } else {
+                res.status(404).json({ success: false, error: "Opportunity no longer valid." });
             }
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
         }
     });
 
-    // 7. Time-Travel: Redo
-    app.post("/api/redo", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                const redone = activeSession.redo();
-                res.json({
-                    success: !!redone,
-                    patch: redone,
-                    graph: generateUnifiedExplorerJson(activeSession.graph),
-                });
-            } catch (error) {
-                res.status(500).json({ success: false, error: String(error) });
-            }
+    // 8. Time-Travel: Undo
+    app.post("/api/sessions/:sessionId/undo", requireSession, (_req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const undone = session.undo();
+            res.json({
+                success: !!undone,
+                patch: undone,
+                graph: generateUnifiedExplorerJson(session.graph),
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
         }
     });
 
-    // 8. Update Compiler Settings dynamically
-    app.put("/api/config", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                // Merges new options (e.g., { fuse: false }) into the session
-                activeSession.options = { ...activeSession.options, ...req.body };
-                res.json({ success: true, options: activeSession.options });
-            } catch (error) {
-                res.status(500).json({ success: false, error: String(error) });
-            }
+    // 9. Time-Travel: Redo
+    app.post("/api/sessions/:sessionId/redo", requireSession, (_req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const redone = session.redo();
+            res.json({
+                success: !!redone,
+                patch: redone,
+                graph: generateUnifiedExplorerJson(session.graph),
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
         }
     });
 
-    // 9. Download standard ONNX JSON (.json)
-    app.get("/api/export/onnx-json", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                // Get the raw JSON object from the session
-                const jsonProto = activeSession.getOutputOnnxJson();
-
-                // Tell the browser to open a "Save File" dialog
-                res.setHeader("Content-Disposition", "attachment; filename=onnxflow_output.json");
-                res.setHeader("Content-Type", "application/json");
-
-                // Send the data over the network
-                res.send(JSON.stringify(jsonProto, null, 2));
-            } catch (error) {
-                console.error("\n💥 Error exporting ONNX JSON:", error);
-                res.status(500).json({ success: false, error: String(error) });
-            }
+    // 10. Update Compiler Settings dynamically
+    app.put("/api/sessions/:sessionId/config", requireSession, (req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            session.options = { ...session.options, ...req.body };
+            res.json({ success: true, options: session.options });
+        } catch (error) {
+            res.status(500).json({ success: false, error: String(error) });
         }
     });
 
-    // 10. Download Cytoscape Unified JSON (.json)
-    app.get("/api/export/unified-json", (req: Request, res: Response) => {
-        if (!activeSession) {
-            res.status(500).json({ error: "There is no active session!" });
-        } else {
-            try {
-                // Get the Cytoscape-ready object
-                const cyJson = activeSession.getOutputUnifiedJson();
+    // 11. Download standard ONNX JSON (.json)
+    app.get("/api/sessions/:sessionId/export/onnx-json", requireSession, (_req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const jsonProto = session.getOutputOnnxJson();
 
-                res.setHeader(
-                    "Content-Disposition",
-                    "attachment; filename=onnxflow_output_unified.json",
-                );
-                res.setHeader("Content-Type", "application/json");
-
-                res.send(JSON.stringify(cyJson, null, 2));
-            } catch (error) {
-                console.error("\n💥 Error exporting Unified JSON:", error);
-                res.status(500).json({ success: false, error: String(error) });
-            }
+            res.setHeader("Content-Disposition", "attachment; filename=onnxflow_output.json");
+            res.setHeader("Content-Type", "application/json");
+            res.send(JSON.stringify(jsonProto, null, 2));
+        } catch (error) {
+            console.error("Error exporting ONNX JSON:", error);
+            res.status(500).json({ success: false, error: String(error) });
         }
     });
 
-    //Start the API
+    // 12. Download Cytoscape Unified JSON (.json)
+    app.get("/api/sessions/:sessionId/export/unified-json", requireSession, (_req: Request, res: Response) => {
+        try {
+            const session = res.locals["session"] as ExplorerSession;
+            const cyJson = session.getOutputUnifiedJson();
+
+            res.setHeader("Content-Disposition", "attachment; filename=onnxflow_output_unified.json");
+            res.setHeader("Content-Type", "application/json");
+            res.send(JSON.stringify(cyJson, null, 2));
+        } catch (error) {
+            console.error("\Error exporting Unified JSON:", error);
+            res.status(500).json({ success: false, error: String(error) });
+        }
+    });
+
+    // ============================================================================
+    // SERVIDOR & SHUTDOWN
+    // ============================================================================
+
     const server = app.listen(port, () => {
-        console.log(`\n======================================================`);
-        console.log(`🚀 ONNX-Flow Explorer Server running on port ${port}`);
-        console.log(`📡 API Endpoints available:`);
-        console.log(`   GET  http://localhost:${port}/api/files`);
-        console.log(`   POST http://localhost:${port}/api/session/start`);
-        console.log(`   GET  http://localhost:${port}/api/graph`);
-        console.log(`   GET  http://localhost:${port}/api/opportunities`);
-        console.log(`   POST http://localhost:${port}/api/apply/:id`);
-        console.log(`   POST http://localhost:${port}/api/undo`);
-        console.log(`   POST http://localhost:${port}/api/redo`);
-        console.log(`   GET  http://localhost:${port}/api/export/onnx-json`);
-        console.log(`   GET  http://localhost:${port}/api/export/unified-json`);
+        console.log(`======================================================`);
+        console.log(`ONNX-Flow Explorer Server running on port ${port}`);
+        console.log(`API Endpoints available:`);
+        console.log(`   GET    http://localhost:${port}/api/files`);
+        console.log(`   POST   http://localhost:${port}/api/sessions`);
+        console.log(`   GET    http://localhost:${port}/api/sessions`);
+        console.log(`   DELETE http://localhost:${port}/api/sessions/:sessionId`);
+        console.log(`   GET    http://localhost:${port}/api/sessions/:sessionId/graph`);
+        console.log(`   GET    http://localhost:${port}/api/sessions/:sessionId/opportunities`);
+        console.log(`   POST   http://localhost:${port}/api/sessions/:sessionId/apply/:id`);
+        console.log(`   POST   http://localhost:${port}/api/sessions/:sessionId/undo`);
+        console.log(`   POST   http://localhost:${port}/api/sessions/:sessionId/redo`);
+        console.log(`   PUT    http://localhost:${port}/api/sessions/:sessionId/config`);
+        console.log(`   GET    http://localhost:${port}/api/sessions/:sessionId/export/onnx-json`);
+        console.log(`   GET    http://localhost:${port}/api/sessions/:sessionId/export/unified-json`);
         console.log(`======================================================\n`);
     });
 
-    app.post("/api/shutdown", (req: Request, res: Response) => {
+    app.post("/api/shutdown", (_req: Request, res: Response) => {
         res.json({ success: true, message: "Server shutting down..." });
+        console.log("Received shutdown signal. Closing server...");
 
-        console.log("\n🛑 Received shutdown signal. Closing server...");
-
-        // Delay slightly so the HTTP response finishes sending to the browser
         setTimeout(() => {
             server.close(() => {
-                console.log("👋 Server stopped cleanly. Exiting process.");
-                process.exit(0); // Terminate the Node.js process
+                console.log("Server stopped cleanly. Exiting process.");
+                process.exit(0);
             });
         }, 500);
     });

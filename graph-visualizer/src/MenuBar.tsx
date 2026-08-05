@@ -2,8 +2,8 @@ import { type CSSProperties } from "react";
 import Dropdown from "./Dropdown";
 import ColorPicker from "./colorPicker";
 import type { CytoscapeData } from "./Cytoscape.tsx";
-import { fetchGraph, fetchTransformationOpportunities, undoTransformation, type TransformationOpportunity } from "./api/api.ts";
-import { Link } from "react-router-dom";
+import { endSession, fetchGraph, fetchTransformationOpportunities, undoTransformation, type TransformationOpportunity } from "./api/api.ts";
+import { Link, useParams } from "react-router-dom";
 
 
 import  Themess from "./themes.tsx";
@@ -27,9 +27,11 @@ export default function MenuBar(props: {
     }
 }) {
 
+    const { sessionId } = useParams();
+
     return (
         <header style={props.style}>
-            <Link to="/">Home</Link>
+            <Link to="/" onClick={() => endSession(3000, sessionId!)}>Home</Link>
             <h1>ONNX Graph Visualizer</h1>
             <div className="button-group">
                 {/*<button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>*/}
@@ -44,7 +46,7 @@ export default function MenuBar(props: {
 
                 {!props.editorMode.isActive ?
                     <button onClick={async () => {
-                        props.setTransformationOps(await fetchTransformationOpportunities(3000));
+                        props.setTransformationOps(await fetchTransformationOpportunities(3000, sessionId!));
                         props.panelVisibility.setVisibility(props.panelVisibility.isVisible ? false : true);
                     }}>Transformation Opportunities</button>
                     :
@@ -62,9 +64,9 @@ export default function MenuBar(props: {
                             props.transformationsHistory.redo.setStack([...tempRedoStack, actualState]);
                             props.setCytoscapeData(null);
                             props.setTransformationOps([]);
-                            await undoTransformation(3000);
-                            props.setCytoscapeData(await fetchGraph(3000));
-                            props.setTransformationOps(await fetchTransformationOpportunities(3000));
+                            await undoTransformation(3000, sessionId!);
+                            props.setCytoscapeData(await fetchGraph(3000, sessionId!));
+                            props.setTransformationOps(await fetchTransformationOpportunities(3000, sessionId!));
                         }}
                         >↩ Undo
                     </button>
@@ -77,9 +79,9 @@ export default function MenuBar(props: {
                             props.transformationsHistory.undo.setStack([...tempUndoStack, actualState]);
                             props.setCytoscapeData(null);
                             props.setTransformationOps([]);
-                            await undoTransformation(3000);
-                            props.setCytoscapeData(await fetchGraph(3000));
-                            props.setTransformationOps(await fetchTransformationOpportunities(3000));
+                            await undoTransformation(3000, sessionId!);
+                            props.setCytoscapeData(await fetchGraph(3000, sessionId!));
+                            props.setTransformationOps(await fetchTransformationOpportunities(3000, sessionId!));
                         }}>↪ Redo
                     </button>
                     <a href="http://localhost:3000/api/export/onnx-json">&#10515; Onnx in .json</a>

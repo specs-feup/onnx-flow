@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { type TransformationOpportunity, applyTransformation, fetchGraph, fetchTransformationOpportunities } from "./api/api";
 import type { CytoscapeData } from "./Cytoscape";
+import { useParams } from "react-router-dom";
 
 export default function TransformationOps(
     props: { 
@@ -16,6 +17,9 @@ export default function TransformationOps(
         };
     }
 ) {
+
+    const { sessionId } = useParams();
+
     return(
         <aside style={props.style}>
             {props.transformationOps.ops.map((op) => (
@@ -23,11 +27,11 @@ export default function TransformationOps(
                     const operationId: string = op.id;
                     props.transformationOps.setOps([]);
                     props.setCytoscapeData(null);
-                    await applyTransformation(3000, operationId);
+                    await applyTransformation(3000, sessionId!,operationId);
                     props.transformationsHistory.undo.setStack([...props.transformationsHistory.undo.stack, operationId]);
                     props.transformationsHistory.redo.setStack([]);
-                    props.setCytoscapeData(await fetchGraph(3000));
-                    props.transformationOps.setOps(await fetchTransformationOpportunities(3000));
+                    props.setCytoscapeData(await fetchGraph(3000, sessionId!));
+                    props.transformationOps.setOps(await fetchTransformationOpportunities(3000, sessionId!));
                 }  
                 }>{op.recipeName} - {op.targetNodeId}</button>
             ))    

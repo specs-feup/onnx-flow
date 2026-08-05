@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
-import { getAvailableFiles } from "../api/api";
+import { getAvailableFiles, startNewSession } from "../api/api";
+import { Link } from "react-router-dom";
 
 const filterOptions = [
     {label: "Name", value: "name"},
@@ -100,6 +101,7 @@ function Home() {
                                 <h2 style={{cursor: "pointer"}}>{file.name}</h2>
                                 <p>Size: {file.size} bytes</p>
                                 <p>Last Modified: {(new Date(file.lastModified)).toLocaleString("pt-PT")}</p>
+                                <Link to={`/app/${file.name}`} target="_blank" rel="noopener noreferrer" onClick={() => startNewSession(3000, file.name)}>Open File</Link>
                             </li>
                     ))}
                 </ul>

@@ -1,14 +1,30 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import MenuBar from "../MenuBar.tsx";
 import SidePanel from "../SidePanel.tsx";
 import CytoscapeGraph, { type CytoscapeData } from "../Cytoscape.tsx";
 import NodePopup from "../nodeWindow.tsx";
-import { fetchGraph, type TransformationOpportunity } from "../api/api.ts";
+import { endSession, fetchGraph, type TransformationOpportunity } from "../api/api.ts";
 import "../App.css";
 import defaultStylesheet from "../styleSheets/default.ts";
 import { valueNodeExtractor } from "../graphicalEditor/ValueNodeExtractor.ts";
 
 function Visualizer() {
+    const {sessionId} = useParams();
+
+    // End Session when closing Tab
+    useEffect(() => {
+    const endCurrentSession = () => {
+        endSession(3000, sessionId!);
+    };
+
+    window.addEventListener('beforeunload', endCurrentSession);
+
+    return () => {
+      window.removeEventListener('beforeunload', endCurrentSession);
+    };
+  }, []);
+
     const [cytoscapeStylesheet, setCytoscapeStylesheet] =
         useState<cytoscape.CssStyleDeclaration>(defaultStylesheet);
     const [isSidePanelVisible, setSidePanelVisibility] = useState(false);
@@ -27,7 +43,7 @@ function Visualizer() {
     const valueNodes = useMemo(() => valueNodeExtractor(cytoscapeData), [cytoscapeData]);
 
     if (!cytoscapeData)
-        fetchGraph(3000)
+        fetchGraph(3000, sessionId!)
             .then((data) => setCytoscapeData(data))
             .catch((err) => console.log(err));
 
