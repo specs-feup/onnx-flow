@@ -14,16 +14,16 @@ function Visualizer() {
 
     // End Session when closing Tab
     useEffect(() => {
-    const endCurrentSession = () => {
-        endSession(3000, sessionId!);
-    };
+        const endCurrentSession = () => {
+            endSession(3000, sessionId!);
+        };
 
-    window.addEventListener('beforeunload', endCurrentSession);
+        window.addEventListener('beforeunload', endCurrentSession);
 
-    return () => {
-      window.removeEventListener('beforeunload', endCurrentSession);
-    };
-  }, []);
+        return () => {
+            window.removeEventListener('beforeunload', endCurrentSession);
+        };
+    }, []);
 
     const [cytoscapeStylesheet, setCytoscapeStylesheet] =
         useState<cytoscape.CssStyleDeclaration>(defaultStylesheet);

@@ -67,6 +67,7 @@
         "cytoscape": "^3.34.0",
         "cytoscape-cxtmenu": "^3.5.0",
         "cytoscape-dagre": "^4.0.0",
+        "cytoscape-expand-collapse": "^4.1.1",
         "cytoscape-fcose": "^2.2.0",
         "express": "^4.21.1",
         "link": "^2.1.2",

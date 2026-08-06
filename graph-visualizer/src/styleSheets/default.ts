@@ -44,6 +44,27 @@ const defaultStylesheet=[
     },
   },
   {
+    selector: ':parent',
+    style: {
+      'background-opacity': 0.25
+    }
+  },/*
+  {
+    selector: 'node[parent]',
+    style: {
+      'width': '10px',
+      'height': '10px',
+      'font-size': '12px'
+    }
+  },
+  {
+    selector: 'edge[parent]',
+    style: {
+      'width': '4px',
+      'font-size': '10px'
+    }
+  },*/
+  {
     selector: ".cross-graph-capture",
     style: {
       width: 2,

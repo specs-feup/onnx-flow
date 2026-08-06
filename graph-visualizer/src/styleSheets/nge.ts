@@ -36,6 +36,12 @@ const defaultStylesheet=[
     },
   },
   {
+    selector: ':parent',
+    style: {
+      'background-opacity': 0.25
+    }
+  },
+  {
     selector: "edge",
     style: {
       width: 2,

@@ -7,11 +7,13 @@ import cxtmenu from 'cytoscape-cxtmenu';
 import stylesheet from './styleSheets/default.ts';
 import chroma from 'chroma-js';
 import defaultStylesheet from './styleSheets/default.ts';
+import expandCollapse from 'cytoscape-expand-collapse';
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 
 cytoscape.use(cxtmenu);
+expandCollapse(cytoscape);
 
 export type CytoscapeData = {
   elements: {
@@ -33,6 +35,7 @@ export default function CytoscapeGraph(props: {
 
   const cyRef = useRef<cytoscape.Core | null>(null);
   const menuRef = useRef(null);
+  const apiRef = useRef(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [cyReady, setCyReady] = useState(false);
 
@@ -57,6 +60,20 @@ export default function CytoscapeGraph(props: {
       console.log(props.layout)
       cyRef.current.layout(props.layout).run();
     }, [props.layout, props.cytoscapeData]);
+
+    useEffect(() => {
+      if (cyRef.current && !apiRef.current) {
+        apiRef.current = cyRef.current.expandCollapse({
+          layoutBy: null  , // Specify a layout name if you want to rearrange nodes on collapse/expand
+          animate: false,  // Smooth transitions
+          cueEnabled: false // Shows the visual +/- cues on compound nodes
+        });
+
+        apiRef.current.collapseAll({
+          animate: false
+        });
+      }
+    }, [cyRef.current]);
 
     useEffect(() => {
       if (!cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
@@ -103,26 +120,49 @@ export default function CytoscapeGraph(props: {
         menuRef.current.destroy();
       }
       
-      menuRef.current = cy.cxtmenu({
-      selector: 'node', // Options: 'node', 'edge', or 'core' (for background)
+     menuRef.current = cy.cxtmenu({
+      selector: 'node', // Options: 'node', 'edge', or 'core'
       activeFillColor: '#2d293300',
-      commands: [
-        {
-          fillColor:  'rgba(64, 67, 75, 0.9)',
-          content: 'Log Info',
-          select: function(ele) {
-            console.log('Selected node ID:', ele.id());
+      commands: function (ele) {
+        const commands = [
+          {
+            fillColor: 'rgba(64, 67, 75, 0.9)',
+            content: 'Log Info',
+            select: function(ele) {
+              console.log('Selected node ID:', ele.id());
+            }
+          },
+          {
+            fillColor: 'rgba(75, 26, 38, 0.9)',
+            content: 'Delete',
+            select: function(ele) {
+              cy.remove(ele); // Manipulate the graph directly via the API
+            }
           }
-        },
-        {
-          fillColor: 'rgba(75, 26, 38, 0.9)',
+        ];
 
-          content: 'Delete',
-          select: function(ele) {
-            cy.remove(ele); // Manipulate the graph directly via the API
-          }
+        // Conditionally add 'Collapse' only if the node is collapsible
+        if (apiRef.current && apiRef.current.isCollapsible(ele)) {
+          commands.push({
+            content: 'Collapse',
+            select: (ele) => {
+              apiRef.current.collapse(ele);
+            }
+          });
         }
-      ]
+
+        // Conditionally add 'Expand' only if the node is expandable
+        if (apiRef.current && apiRef.current.isExpandable(ele)) {
+          commands.push({
+            content: 'Expand',
+            select: (ele) => {
+              apiRef.current.expand(ele);
+            }
+          });
+        }
+
+        return commands;
+      }
     });
 
     // Variable to temporarily store the click coordinate location
@@ -153,6 +193,20 @@ export default function CytoscapeGraph(props: {
               props.onAddNodeRequested(clickedPosition);
             }
           }
+        },
+        {
+          fillColor: 'rgba(64, 67, 75, 0.9)',
+          content: 'Expand All',
+          select: () => {
+            apiRef.current.expandAll();
+          }
+        },
+        {
+          fillColor: 'rgba(64, 67, 75, 0.9)',
+          content: 'Collapse All',
+          select: () => {
+            apiRef.current.collapseAll();
+          }
         }
       ]
     });
@@ -164,7 +218,7 @@ export default function CytoscapeGraph(props: {
       }
     }
 
-    }, [cyReady, props.cytoscapeData])
+    }, [cyReady, props.cytoscapeData]);
 
     return ( 
       <div style={props.style} ref={containerRef}>

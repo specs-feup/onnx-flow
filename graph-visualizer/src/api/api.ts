@@ -18,20 +18,20 @@ export interface TransformationOpportunity {
 export function regionsToCompoundNodes(graphData: any): any {
   const compoundNodes = [];
   const compoundEdges = [];
-  
-
-  console.log(graphData)
-
 
   for (const node of graphData.elements.nodes) {
-    if (node.data.onnxData.kind === "OperationNode") {
+    if (node.data.onnxData.kind === "OperationNode" && ( 
+        node.data.onnxData.opType === "Loop" ||
+        node.data.onnxData.opType === "If" ||
+        node.data.onnxData.opType === "Scan"
+      )) {
       if (node.data.onnxData.regions !== 0) {
         for (const innerNode of node.data.onnxData.regions[0].elements.nodes) {
           const newNode = {
             ...innerNode,
             data: {
               ...innerNode.data,
-              parent: node.data.id,
+              parent: node.data.id  ,
             }
           }
           compoundNodes.push(newNode);
