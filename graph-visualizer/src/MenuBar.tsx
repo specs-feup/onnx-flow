@@ -84,8 +84,8 @@ export default function MenuBar(props: {
                             props.setTransformationOps(await fetchTransformationOpportunities(3000, sessionId!));
                         }}>↪ Redo
                     </button>
-                    <a href="http://localhost:3000/api/export/onnx-json">&#10515; Onnx in .json</a>
-                    <a href="http://localhost:3000/api/export/unified-json">&#10515; Unified .json</a>
+                    <a href={`http://localhost:3000/api/sessions/${sessionId}/export/onnx-json`}>&#10515; Onnx in .json</a>
+                    <a href={`http://localhost:3000/api/sessions/${sessionId}/export/unified-json`}>&#10515; Unified .json</a>
                 </>
                 }
                 

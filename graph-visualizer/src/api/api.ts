@@ -19,6 +19,12 @@ export function regionsToCompoundNodes(graphData: any): any {
   const compoundNodes = [];
   const compoundEdges = [];
 
+  const idSet: Set<string> = new Set();
+
+  for (const node of graphData.elements.nodes) {
+    idSet.add(node.data.id);
+  } 
+
   for (const node of graphData.elements.nodes) {
     if (node.data.onnxData.kind === "OperationNode" && ( 
         node.data.onnxData.opType === "Loop" ||
@@ -27,6 +33,9 @@ export function regionsToCompoundNodes(graphData: any): any {
       )) {
       if (node.data.onnxData.regions !== 0) {
         for (const innerNode of node.data.onnxData.regions[0].elements.nodes) {
+          if (idSet.has(innerNode.data.id)) {
+            continue;
+          }
           const newNode = {
             ...innerNode,
             data: {
