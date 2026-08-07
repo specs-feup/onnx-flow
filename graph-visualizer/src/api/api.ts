@@ -1,5 +1,5 @@
 // api.ts (Frontend API Helper)
-import type { CytoscapeData } from "../Cytoscape.tsx";
+import type { CytoscapeData } from "@/types/Cytoscape.ts";
 
 interface StartSessionResponse {
   success: boolean;

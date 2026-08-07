@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import CytoscapeGraph, { type CytoscapeData } from './Cytoscape';
-//loop | scan | if
+
+import CytoscapeGraph from '@/components/Cytoscape.tsx';
+import type { CytoscapeData } from '@/types/Cytoscape.ts';
+
 export default function NodePopup({ 
   selectedNode, 
   popupPos, 

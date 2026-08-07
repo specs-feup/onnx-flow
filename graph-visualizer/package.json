@@ -35,6 +35,8 @@
     "@eslint/js": "^10.0.1",
     "@rolldown/plugin-babel": "^0.2.3",
     "@types/babel__core": "^7.20.5",
+    "@types/chroma-js": "^3.1.2",
+    "@types/cytoscape-cxtmenu": "^3.4.5",
     "@types/cytoscape-fcose": "^2.2.5",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",

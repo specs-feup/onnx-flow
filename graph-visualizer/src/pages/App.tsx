@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import MenuBar from "../MenuBar.tsx";
-import SidePanel from "../SidePanel.tsx";
-import CytoscapeGraph, { type CytoscapeData } from "../Cytoscape.tsx";
-import NodePopup from "../nodeWindow.tsx";
-import { endSession, fetchGraph, regionsToCompoundNodes, type TransformationOpportunity } from "../api/api.ts";
-import "../App.css";
-import defaultStylesheet from "../styleSheets/default.ts";
-import { valueNodeExtractor } from "../graphicalEditor/ValueNodeExtractor.ts";
 
-function Visualizer() {
-    const {sessionId} = useParams();
+import MenuBar from "@/components/MenuBar.tsx";
+import SidePanel from "@/components/SidePanel.tsx";
+import type { CytoscapeData } from "@/types/Cytoscape.ts";
+import CytoscapeGraph from "@/components/Cytoscape.tsx";
+import NodePopup from "@/components/visualizer/NodeWindow.tsx";
+import {
+    endSession,
+    fetchGraph,
+    regionsToCompoundNodes,
+    type TransformationOpportunity,
+} from "@/api/api.ts";
+import "@/styles/App.css";
+import defaultStylesheet from "@/styles/cytoscape/default.ts";
+import { valueNodeExtractor } from "@/utils/ValueNodeExtractor.ts";
+
+function App() {
+    const { sessionId } = useParams();
 
     // End Session when closing Tab
     useEffect(() => {
@@ -18,10 +25,10 @@ function Visualizer() {
             endSession(3000, sessionId!);
         };
 
-        window.addEventListener('beforeunload', endCurrentSession);
+        window.addEventListener("beforeunload", endCurrentSession);
 
         return () => {
-            window.removeEventListener('beforeunload', endCurrentSession);
+            window.removeEventListener("beforeunload", endCurrentSession);
         };
     }, []);
 
@@ -212,4 +219,4 @@ function Visualizer() {
     );
 }
 
-export default Visualizer;
+export default App;

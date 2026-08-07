@@ -1,6 +1,6 @@
 import React from "react";
 
-import { type Shape, type KnownShape } from "../../../src/Onnx/OnnxTypes";
+import { type Shape, type KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
 
 interface DimensionBuilderProps {

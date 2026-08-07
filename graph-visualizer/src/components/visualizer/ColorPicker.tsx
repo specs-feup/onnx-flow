@@ -1,5 +1,3 @@
-import React from 'react';
-
 export default function ColorPicker({ value,onChange }: { value?: string;
     onChange?: (v:string) => void }) {
     return (

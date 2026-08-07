@@ -1,14 +1,14 @@
 import { useState } from "react";
 import Select from "react-select";
-import TensorNode from '../../../src/Onnx/TensorNode.ts';
-import { DataType, type KnownShape, type Shape } from '../../../src/Onnx/OnnxTypes.ts'
+import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
+import { DataType, type KnownShape, type Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes.ts";
 
 import TensorNodeAdder from "./TensorNodeAdder.tsx";
 import OperationNodeAdder from "./OperationNodeAdder.tsx";
 import ConstantNodeAdder from "./ConstantNodeAdder.tsx";
 
-import { reactSelectCustomStyles } from "./Style.ts";
-import type { OnnxData } from "./Definitions.ts";
+import { reactSelectCustomStyles } from "@/styles/ReactSelectStyle.ts";
+import type { OnnxData } from "@/types/Onnx.ts";
 
 interface NodeAdderProps {
     position?: { x: number; y: number } | null;
@@ -18,7 +18,7 @@ interface NodeAdderProps {
 
 export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderProps) {
     /* General Attributes*/
-    const [nodeId, setNodeId] = useState<string>("")
+    const [nodeId, setNodeId] = useState<string>("");
     const [nodeKind, setNodeKind] = useState<string>("constant");
 
     /*Constant Attributes*/
@@ -35,7 +35,6 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
     /*Operation Attributes*/
     const [operationType, setOperationType] = useState<string>("");
     const [operationInputs, setOperationInputs] = useState<string[]>([]);
-
 
     const handleCreateClick = () => {
         // eslint-disable-next-line no-useless-assignment
@@ -77,7 +76,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     doubleData: [],
                     uint64Data: [],
                 },
-                metadata: {}
+                metadata: {},
             };
 
             let selectedArray;
@@ -130,26 +129,32 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
     };
 
     return (
-        
-        <aside style={{display: 'flex', flexDirection: 'column'}}>
+        <aside style={{ display: "flex", flexDirection: "column" }}>
             <label htmlFor="id">Node ID: </label>
-            <input  name="id" type="text" value={nodeId} color="white"/>
-            <button type="button" onClick={() => setNodeId(`node_${Math.random().toString(36).substr(2, 9)}`)}>Generate Random ID</button>
+            <input name="id" type="text" value={nodeId} color="white" />
+            <button
+                type="button"
+                onClick={() => setNodeId(`node_${Math.random().toString(36).substr(2, 9)}`)}
+            >
+                Generate Random ID
+            </button>
 
-            <label  color="white"  htmlFor="kind">Node Kind: </label>
-            <Select 
+            <label color="white" htmlFor="kind">
+                Node Kind:{" "}
+            </label>
+            <Select
                 id="kind"
                 onChange={(e: any) => setNodeKind(e.value)}
                 options={[
-                    {value: "constant", label: "Constant Node"},
-                    {value: "tensor", label: "Tensor Node"},
-                    {value: "operation", label: "Operation Node"},
+                    { value: "constant", label: "Constant Node" },
+                    { value: "tensor", label: "Tensor Node" },
+                    { value: "operation", label: "Operation Node" },
                 ]}
-                defaultValue={{value: "constant", label: "Constant Node"}}
+                defaultValue={{ value: "constant", label: "Constant Node" }}
                 styles={reactSelectCustomStyles}
-                />
-            
-            {nodeKind === 'constant' && 
+            />
+
+            {nodeKind === "constant" && (
                 <ConstantNodeAdder
                     reactSelectStyles={reactSelectCustomStyles}
                     constantProtoName={constantProtoName}
@@ -161,18 +166,18 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     setConstantShape={setConstantShape}
                     setProtoData={setProtoData}
                 />
-            }
+            )}
 
-            {nodeKind === 'operation' && 
+            {nodeKind === "operation" && (
                 <OperationNodeAdder
                     reactSelectStyles={reactSelectCustomStyles}
                     setOperationType={setOperationType}
                     setOperationInputs={setOperationInputs}
                     valueNodes={valueNodes}
                 />
-            }
+            )}
 
-            {nodeKind === 'tensor' &&
+            {nodeKind === "tensor" && (
                 <TensorNodeAdder
                     reactSelectStyles={reactSelectCustomStyles}
                     setTensorDataType={setTensorDataType}
@@ -180,13 +185,9 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     tensorShapeValue={tensorShapeValue}
                     setTensorKind={setTensorKind}
                 />
-            }
+            )}
             {/* BOTÃO ADICIONADO NO FINAL DO FORMULÁRIO PARA CRIAR O NÓ NO GRAFO */}
-            <button 
-                type="button" 
-                onClick={handleCreateClick}
-                style={{ marginTop: '15px' }}
-            >
+            <button type="button" onClick={handleCreateClick} style={{ marginTop: "15px" }}>
                 Create Node
             </button>
         </aside>

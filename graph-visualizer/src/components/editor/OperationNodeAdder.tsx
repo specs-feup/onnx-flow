@@ -1,5 +1,5 @@
 import Select from "react-select";
-import { StandardOps } from "../../../src/Onnx/Schema/definitions/StandardOps";
+import { StandardOps } from "@specs-feup/onnx-flow/Onnx/Schema/definitions/StandardOps";
 
 /*--- OPERATION OPTIONS ---*/
 const operationsTypes: Array<{ value: string; label: string }> = StandardOps.map((op) => ({

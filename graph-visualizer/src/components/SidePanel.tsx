@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
-import { type TransformationOpportunity } from "./api/api.ts";
-import type { CytoscapeData } from "./Cytoscape.tsx";
-import TransformationOps from "./TransformationOps.tsx";
-import NodeAdder from "./graphicalEditor/NodeAdder.tsx";
+import { type TransformationOpportunity } from "@/api/api.ts";
+import type { CytoscapeData } from "@/types/Cytoscape.ts";
+import TransformationOps from "@/components/visualizer/TransformationOps.tsx";
+import NodeAdder from "@/components/editor/NodeAdder.tsx";
 
 export default function SidePanel(props: {
     style: CSSProperties;

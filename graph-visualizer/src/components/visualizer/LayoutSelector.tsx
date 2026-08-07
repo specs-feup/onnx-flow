@@ -1,8 +1,7 @@
-import React from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 
-export default function CustomDropdown({ setLayout }) {
+export default function LayoutSelector({ setLayout }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>

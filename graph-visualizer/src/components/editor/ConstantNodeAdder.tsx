@@ -1,8 +1,8 @@
 import Select from "react-select";
 
-import type { DataType, KnownShape } from "../../../src/Onnx/OnnxTypes";
+import type { DataType, KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
-import { dataTypeOptions } from "./Definitions.ts";
+import { dataTypeOptions } from "@/types/Onnx.ts";
 import { DimensionBuilder } from "./DimensionBuilder.tsx";
 
 interface ConstantNodeAdderProps {
