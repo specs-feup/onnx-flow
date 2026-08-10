@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import Select from "react-select";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
 import { DataType, type KnownShape, type Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes.ts";
+import type { OpSchema } from "@specs-feup/onnx-flow/Onnx/Schema/OpSchema.ts";
 
 import TensorNodeAdder from "./TensorNodeAdder.tsx";
-import OperationNodeAdder from "./OperationNodeAdder.tsx";
+import OperationNodeAdder, { operationsTypes } from "./OperationNodeAdder.tsx";
 import ConstantNodeAdder from "./ConstantNodeAdder.tsx";
 
 import { reactSelectCustomStyles } from "@/styles/ReactSelectStyle.ts";
@@ -40,7 +41,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
     const [tensorKind, setTensorKind] = useState<TensorNode.TensorKind>("input");
 
     /*Operation Attributes*/
-    const [operationType, setOperationType] = useState<string>("");
+    const [operationType, setOperationType] = useState<OpSchema>(operationsTypes[0].value);
     const [operationInputs, setOperationInputs] = useState<string[]>([]);
 
     /* Node Editor */
@@ -55,8 +56,13 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                 setTensorShapeValue(onnx.shape || []);
                 setTensorKind(onnx.tensorType);
             } else if (onnx.kind === "OperationNode") {
-                setNodeKind("operation");
-                setOperationType(onnx.opType || "");
+                setNodeKind("operation");   
+                const opMatch = operationsTypes.find(op => op.value.opType === onnx.opType);
+                if (opMatch) {
+                    setOperationType(opMatch.value);
+                } else {
+                    setOperationType(operationsTypes[0].value); 
+                }
                 setOperationInputs(onnx.inputs || []);
             } else if (onnx.kind === "ConstantNode") {
                 setNodeKind("constant");
@@ -106,7 +112,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
             onnxData = {
                 id: nodeId,
                 kind: "OperationNode",
-                opType: operationType,
+                opType: operationType!.opType,
                 inputs: operationInputs,
                 regions: [],
                 attributes: {},
@@ -182,7 +188,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
     };
 
     return (
-        <aside style={{ display: "flex", flexDirection: "column" }}>
+        <>
             <label htmlFor="id">Node ID: </label>
             <input name="id" type="text" value={nodeId} color="white" />
             <button
@@ -243,6 +249,6 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
             <button type="button" onClick={handleCreateClick} style={{ marginTop: "15px" }}>
                 {nodeToEdit ? "Edit Node" : "Create Node"}
             </button>
-        </aside>
+        </>
     );
 }

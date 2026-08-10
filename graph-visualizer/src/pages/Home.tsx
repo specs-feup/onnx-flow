@@ -95,7 +95,10 @@ function Home() {
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
             {onnxFiles.length != 0 ? (
-                <ul style={{ overflow: "auto" }}>
+                <ul style={{
+                     overflow: "auto",
+                     maxHeight: "80vh" 
+                }}>
                     {displayedFiles.map((file, index) => (
                         <li key={index}>
                                 <h2 style={{cursor: "pointer"}}>{file.name}</h2>

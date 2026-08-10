@@ -25,7 +25,7 @@ export default function TransformationOps(props: {
     const { sessionId } = useParams();
 
     return (
-        <aside style={props.style}>
+        <>
             {props.transformationOps.ops.map((op) => (
                 <button
                     onClick={async () => {
@@ -47,6 +47,6 @@ export default function TransformationOps(props: {
                     {op.recipeName} - {op.targetNodeId}
                 </button>
             ))}
-        </aside>
+        </>
     );
 }

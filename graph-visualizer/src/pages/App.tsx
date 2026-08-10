@@ -225,7 +225,7 @@ function App() {
                         padding: "10px",
                         display: "flex",
                         flexDirection: "column",
-                        overflow: "scroll",
+                        overflowY: "auto",
                         gap: "1rem",
                     }}
                     transformationOps={{

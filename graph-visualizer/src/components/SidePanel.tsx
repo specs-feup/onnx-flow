@@ -25,9 +25,10 @@ export default function SidePanel(props: {
     nodeToEdit?: any;
 }) {
     return (
-        <>
+        <aside style={props.style}>
             {props.editorMode.isActive ? (
                 <NodeAdder
+                    key={props.nodeToEdit ? props.nodeToEdit.id : "new-node"}
                     position={props.newNodePosition}
                     onSubmit={props.onCreateNode}
                     valueNodes={props.valueNodes}
@@ -44,6 +45,6 @@ export default function SidePanel(props: {
                     transformationsHistory={props.transformationsHistory}
                 />
             )}
-        </>
+        </aside>
     );
 }
