@@ -6,6 +6,7 @@ import SidePanel from "@/components/SidePanel.tsx";
 import type { CytoscapeData } from "@/types/Cytoscape.ts";
 import CytoscapeGraph from "@/components/Cytoscape.tsx";
 import NodePopup from "@/components/visualizer/NodeWindow.tsx";
+import EdgePopup from "@/components/visualizer/EdgeWindow.tsx";
 import {
     endSession,
     fetchGraph,
@@ -41,8 +42,10 @@ function App() {
     });
     const [nodeColor, setNodeColor] = useState<string>("#533b6e");
     const [selectedNode, setSelectedNode] = useState<any | null>(null);
-    const [transformationOps, setTransformationOps] = useState<TransformationOpportunity[]>([]);
     const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
+    const [selectedEdge, setSelectedEdge] = useState<any | null>(null);
+    const [edgePopupPos, setEdgePopupPos] = useState<{ x: number; y: number } | null>(null);
+    const [transformationOps, setTransformationOps] = useState<TransformationOpportunity[]>([]);
     const [undoStack, setUndoStack] = useState<string[]>([]);
     const [redoStack, setRedoStack] = useState<string[]>([]);
     const [editorMode, setEditorMode] = useState(false);
@@ -190,6 +193,14 @@ function App() {
                 layout={cytoscapeLayout}
                 nodeColor={nodeColor}
             />
+            <EdgePopup
+                selectedEdge={selectedEdge}
+                popupPos={edgePopupPos}
+                onClose={() => {
+                    setSelectedEdge(null);
+                    setEdgePopupPos(null);
+                }}
+            />
             <CytoscapeGraph
                 style={{
                     gridArea: "cytoscape",
@@ -208,6 +219,14 @@ function App() {
                 onNodeSelected={(node: any, pos: { x: number; y: number }) => {
                     setSelectedNode(node);
                     setPopupPos(pos);
+                    setSelectedEdge(null);
+                    setEdgePopupPos(null);
+                }}
+                onEdgeSelected={(edge: any, pos: { x: number; y: number }) => {
+                    setSelectedEdge(edge);
+                    setEdgePopupPos(pos);
+                    setSelectedNode(null);
+                    setPopupPos(null);
                 }}
                 onAddNodeRequested={(pos) => {
                     setNewNodePos(pos);

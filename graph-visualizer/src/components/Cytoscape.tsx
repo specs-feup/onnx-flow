@@ -8,16 +8,59 @@ import chroma from "chroma-js";
 import expandCollapse from "cytoscape-expand-collapse";
 
 import defaultStylesheet from "@/styles/cytoscape/default.ts";
-
-import type { CytoscapeData } from "@/types/Cytoscape.ts"
+import type { CytoscapeData } from "@/types/Cytoscape.ts";
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
-
 cytoscape.use(cxtmenu);
 expandCollapse(cytoscape);
 
-export default function CytoscapeGraph(props: {
+// --- HELPER FUNCTIONS ---
+
+const setupContextMenus = (cy: cytoscape.Core, api: any, onAddNodeRequested?: (pos: any) => void) => {
+    let clickedPos = { x: 0, y: 0 };
+    cy.on("cxttapstart", (e) => { if (e.position) clickedPos = e.position; });
+
+    const nodeMenu = cy.cxtmenu({
+        selector: "node",
+        activeFillColor: "#2d293300",
+        commands: (ele: any) => [
+            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Log Info", select: (e: any) => console.log("Selected node ID:", e.id()) },
+            { fillColor: "rgba(75, 26, 38, 0.9)", content: "Delete", select: (e: any) => cy.remove(e) },
+            ...(api?.isCollapsible(ele) ? [{ content: "Collapse", select: (e: any) => api.collapse(e) }] : []),
+            ...(api?.isExpandable(ele) ? [{ content: "Expand", select: (e: any) => api.expand(e) }] : [])
+        ]
+    });
+
+    const coreMenu = cy.cxtmenu({
+        selector: "core",
+        activeFillColor: "#533b6e00",
+        commands: [
+            { fillColor: "rgba(32, 70, 92, 0.79)", content: "＋ Add Node", select: () => onAddNodeRequested?.(clickedPos) },
+            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Expand All", select: () => api?.expandAll() },
+            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Collapse All", select: () => api?.collapseAll() }
+        ]
+    });
+
+    return [nodeMenu, coreMenu];
+};
+
+const updateStyles = (cy: cytoscape.Core, { stylesheet, nodeColor = "#533b6e", selectedNodeId }: any) => {
+    cy.nodes().removeStyle("background-color");
+    if ((!stylesheet || stylesheet === defaultStylesheet) && nodeColor) {
+        cy.nodes().style("background-color", nodeColor);
+    }
+    if (selectedNodeId) {
+        const selected = cy.getElementById(selectedNodeId);
+        if (selected?.nonempty()) {
+            selected.style("background-color", chroma(nodeColor).brighten(2).hex());
+        }
+    }
+};
+
+// --- MAIN COMPONENT ---
+
+type Props = {
     style: CSSProperties;
     cytoscapeData: CytoscapeData | null;
     layout: cytoscape.LayoutOptions;
@@ -25,205 +68,95 @@ export default function CytoscapeGraph(props: {
     nodeColor?: string;
     selectedNodeId?: string | null;
     onNodeSelected?: (node: any, pos: { x: number; y: number }) => void;
+    onEdgeSelected?: (edge: any, pos: { x: number; y: number }) => void;
     onAddNodeRequested?: (pos: { x: number; y: number }) => void;
-}) {
+};
+
+export default function CytoscapeGraph({
+    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested
+}: Props) {
     const cyRef = useRef<cytoscape.Core | null>(null);
-    const menuRef = useRef(null);
-    const apiRef = useRef(null);
+    const apiRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [cyReady, setCyReady] = useState(false);
 
+    // Helper to safely fetch the instance without rewriting checks
+    const getCy = () => cyRef.current && !cyRef.current.destroyed() ? cyRef.current : null;
+
+    // 1. Resize Observer
     useEffect(() => {
         if (!containerRef.current) return;
-
-        const resizeObserver = new ResizeObserver(() => {
-            if (cyRef.current) {
-                cyRef.current.resize();
-                cyRef.current.fit();
-            }
+        const observer = new ResizeObserver(() => {
+            getCy()?.resize();
+            getCy()?.fit();
         });
-
-        resizeObserver.observe(containerRef.current);
-
-        return () => {
-            resizeObserver.disconnect();
-        };
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
     }, []);
 
+    // 2. Expand/Collapse Init
     useEffect(() => {
-        if (!cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
-
-        console.log(props.layout);
-        cyRef.current.layout(props.layout).run();
-    }, [props.layout, props.cytoscapeData]);
-
-    useEffect(() => {
-        if (cyRef.current && !apiRef.current) {
-            apiRef.current = cyRef.current.expandCollapse({
-                layoutBy: null, // Specify a layout name if you want to rearrange nodes on collapse/expand
-                animate: false, // Smooth transitions
-                cueEnabled: false, // Shows the visual +/- cues on compound nodes
-            });
-
-            apiRef.current.collapseAll({
-                animate: false,
-            });
+        const cy = getCy();
+        if (cy && !apiRef.current) {
+            apiRef.current = cy.expandCollapse({ layoutBy: null, animate: false, cueEnabled: false });
+            apiRef.current.collapseAll({ animate: false });
         }
-    }, [cyRef.current]);
+    }, [cyReady]);
 
+    // 3. Layout updates
     useEffect(() => {
-        if (!cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
-        const defaultColor = props.nodeColor || "#533b6e";
-        cyRef.current.nodes().removeStyle("background-color");
-        const isDefaultTheme = !props.stylesheet || props.stylesheet === defaultStylesheet;
-        if (isDefaultTheme && props.nodeColor) {
-            cyRef.current.nodes().style("background-color", props.nodeColor);
-        }
-        if (props.selectedNodeId) {
-            const selected = cyRef.current.getElementById(props.selectedNodeId);
-            if (selected && selected.nonempty()) {
-                const activeColor = selected.style("background-color");
-                selected.style("background-color", chroma(defaultColor).brighten(2).hex());
-            }
-        }
-        cyRef.current.resize();
-    }, [props.nodeColor, props.selectedNodeId, props.cytoscapeData, props.stylesheet]);
+        if (cytoscapeData) getCy()?.layout(layout).run();
+    }, [layout, cytoscapeData]);
 
+    // 4. Styling updates
     useEffect(() => {
-        if (!cyReady || !cyRef.current || cyRef.current.destroyed() || !props.onNodeSelected)
-            return;
+        const cy = getCy();
+        if (cy && cytoscapeData) {
+            updateStyles(cy, { stylesheet, nodeColor, selectedNodeId });
+            cy.resize();
+        }
+    }, [nodeColor, selectedNodeId, cytoscapeData, stylesheet, cyReady]);
 
-        const handler = (event: any) => {
-            if (!event.target?.isNode?.()) return;
+    // 5. Events & Context Menus
+    useEffect(() => {
+        const cy = getCy();
+        if (!cy || !cytoscapeData) return;
 
-            const pos = event.renderedPosition;
+        const onNodeTap = (e: any) => {
+            if (!e.target?.isNode?.() || !onNodeSelected) return;
             const rect = containerRef.current?.getBoundingClientRect();
-            const screenPos = rect
-                ? { x: rect.left + pos.x, y: rect.top + pos.y }
-                : { x: 10, y: 10 };
-
-            props.onNodeSelected(event.target.data(), screenPos);
+            const pos = e.renderedPosition;
+            onNodeSelected(e.target.data(), rect ? { x: rect.left + pos.x, y: rect.top + pos.y } : { x: 10, y: 10 });
         };
+        cy.on("tap", "node", onNodeTap);
 
-        cyRef.current.on("tap", "node", handler);
-        return () => cyRef.current?.off("tap", "node", handler);
-    }, [cyReady, props.cytoscapeData, props.onNodeSelected]);
-
-    useEffect(() => {
-        if (!cyReady || !cyRef.current || cyRef.current.destroyed() || !props.cytoscapeData) return;
-
-        const cy = cyRef.current;
-        if (menuRef.current) {
-            menuRef.current.destroy();
-        }
-
-        menuRef.current = cy.cxtmenu({
-            selector: "node", // Options: 'node', 'edge', or 'core'
-            activeFillColor: "#2d293300",
-            commands: function (ele) {
-                const commands = [
-                    {
-                        fillColor: "rgba(64, 67, 75, 0.9)",
-                        content: "Log Info",
-                        select: function (ele) {
-                            console.log("Selected node ID:", ele.id());
-                        },
-                    },
-                    {
-                        fillColor: "rgba(75, 26, 38, 0.9)",
-                        content: "Delete",
-                        select: function (ele) {
-                            cy.remove(ele); // Manipulate the graph directly via the API
-                        },
-                    },
-                ];
-
-                // Conditionally add 'Collapse' only if the node is collapsible
-                if (apiRef.current && apiRef.current.isCollapsible(ele)) {
-                    commands.push({
-                        content: "Collapse",
-                        select: (ele) => {
-                            apiRef.current.collapse(ele);
-                        },
-                    });
-                }
-
-                // Conditionally add 'Expand' only if the node is expandable
-                if (apiRef.current && apiRef.current.isExpandable(ele)) {
-                    commands.push({
-                        content: "Expand",
-                        select: (ele) => {
-                            apiRef.current.expand(ele);
-                        },
-                    });
-                }
-
-                return commands;
-            },
-        });
-
-        // Variable to temporarily store the click coordinate location
-        let clickedPosition = { x: 0, y: 0 };
-
-        cy.on("cxttapstart", (event) => {
-            // No Cytoscape.js, event.position dá-te as coordenadas exatas do modelo
-            if (event.position) {
-                console.log("Context menu opened at model coordinates:", event.position);
-                clickedPosition = {
-                    x: event.position.x,
-                    y: event.position.y,
-                };
+        const onEdgeTap = (e: any) => {
+            if (!e.target?.isEdge?.() || !onEdgeSelected) return;
+            const rect = containerRef.current?.getBoundingClientRect();
+            const pos = e.renderedPosition;
+            if (onEdgeSelected) {
+                onEdgeSelected(e.target.data(), rect ? { x: rect.left + pos.x, y: rect.top + pos.y } : { x: 10, y: 10 });
             }
-        });
+        };
+        cy.on("tap", "edge", onEdgeTap);
 
-        // Set up the context menu for the background canvas ('core')
-        menuRef.current = cy.cxtmenu({
-            selector: "core", // Targets the empty background space
-            activeFillColor: "#533b6e00",
-            commands: [
-                {
-                    fillColor: "rgba(32, 70, 92, 0.79)", // Green background for creation
-                    content: "＋ Add Node",
-                    select: function () {
-                        // Em vez de cy.add(), notificamos o pai passando as coordenadas do modelo
-                        if (props.onAddNodeRequested) {
-                            props.onAddNodeRequested(clickedPosition);
-                        }
-                    },
-                },
-                {
-                    fillColor: "rgba(64, 67, 75, 0.9)",
-                    content: "Expand All",
-                    select: () => {
-                        apiRef.current.expandAll();
-                    },
-                },
-                {
-                    fillColor: "rgba(64, 67, 75, 0.9)",
-                    content: "Collapse All",
-                    select: () => {
-                        apiRef.current.collapseAll();
-                    },
-                },
-            ],
-        });
+        const menus = setupContextMenus(cy, apiRef.current, onAddNodeRequested);
 
         return () => {
-            if (menuRef.current) {
-                menuRef.current.destroy();
-                menuRef.current = null;
-            }
+            cy.off("tap", "node", onNodeTap);
+            cy.off("tap", "edge", onEdgeTap);
+            menus.forEach(m => m.destroy());
         };
-    }, [cyReady, props.cytoscapeData]);
+    }, [cyReady, cytoscapeData, onNodeSelected, onEdgeSelected, onAddNodeRequested]);
 
     return (
-        <div style={props.style} ref={containerRef}>
-            {props.cytoscapeData && (
+        <div style={style} ref={containerRef}>
+            {cytoscapeData && (
                 <CytoscapeComponent
-                    elements={CytoscapeComponent.normalizeElements(props.cytoscapeData.elements)}
+                    elements={CytoscapeComponent.normalizeElements(cytoscapeData.elements)}
                     style={{ width: "100%", height: "100%" }}
-                    stylesheet={props.stylesheet || stylesheet}
-                    layout={props.layout}
+                    stylesheet={stylesheet || defaultStylesheet}
+                    layout={layout}
                     cy={(cy) => {
                         cyRef.current = cy;
                         setCyReady(true);
