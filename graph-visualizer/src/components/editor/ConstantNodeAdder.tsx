@@ -14,7 +14,7 @@ interface ConstantNodeAdderProps {
     setConstantProtoName: (value: string) => void;
     setConstantDataType: (value: DataType) => void;
     setConstantShape: (value: KnownShape) => void;
-    setProtoData: (value: (number | bigint | string)[]) => void;
+    setProtoData: (value: (number | bigint | string)[]) => void;        
 }
 
 export default function ConstantNodeAdder({
@@ -37,6 +37,7 @@ export default function ConstantNodeAdder({
             type="text" 
             name="tensorName" 
             onChange={(e) => setConstantProtoName(e.target.value)}
+            value={constantProtoName}
         />
 
         <label>Data Type:</label>
@@ -45,6 +46,7 @@ export default function ConstantNodeAdder({
             options={dataTypeOptions}
             styles={reactSelectStyles}
             onChange={(e: any) => setConstantDataType(e.value)}
+            value={dataTypeOptions.find(opt => opt.value === constantDataType) || null}
             defaultValue={dataTypeOptions[0]}
         />
 
@@ -65,6 +67,7 @@ export default function ConstantNodeAdder({
                 alignSelf: "stretch"
             }}
             onChange={(e) => {setProtoData(e.target.value.split(",").filter(Boolean))}}
+            value={protoData.join(",")}
         >    
         </textarea>
 

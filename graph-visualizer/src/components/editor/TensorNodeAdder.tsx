@@ -20,6 +20,8 @@ interface TensorNodeAdderProps {
     setTensorShapeValue: (value: Shape) => void;
     tensorShapeValue: Shape;
     setTensorKind: (value: TensorNode.TensorKind) => void;
+    tensorDataType: DataType;
+    tensorKind: TensorNode.TensorKind;
 }
 
 export default function TensorNodeAdder({
@@ -28,6 +30,8 @@ export default function TensorNodeAdder({
     setTensorShapeValue,
     tensorShapeValue,
     setTensorKind,
+    tensorDataType,
+    tensorKind,
 }: TensorNodeAdderProps) {
     /*
     -- literalType: DataType
@@ -45,6 +49,7 @@ export default function TensorNodeAdder({
                 styles={reactSelectStyles}
                 options={dataTypeOptions}
                 onChange={(e: any) => setTensorDataType(e.value)}
+                value={dataTypeOptions.find(opt => opt.value === tensorDataType) || null} // Node Editor
             />
 
             <label htmlFor="shape">Shape:</label>
@@ -57,6 +62,7 @@ export default function TensorNodeAdder({
                 styles={reactSelectStyles}
                 options={tensorTypes}
                 onChange={(e: any) => setTensorKind(e.value)}
+                value={tensorTypes.find(opt => opt.value === tensorKind) || null} // Node Editor
                 defaultValue={tensorTypes[0]}
             />
         </>

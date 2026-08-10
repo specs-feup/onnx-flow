@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Select from "react-select";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
 import { DataType, type KnownShape, type Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes.ts";
@@ -14,9 +14,16 @@ interface NodeAdderProps {
     position?: { x: number; y: number } | null;
     onSubmit?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
     valueNodes: Array<unknown>;
+    nodeToEdit?: any;   
 }
 
-export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderProps) {
+const nodeKindOptions = [
+        { value: "constant", label: "Constant Node" },
+        { value: "tensor", label: "Tensor Node" },
+        { value: "operation", label: "Operation Node" },
+    ];
+
+export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }: NodeAdderProps) {
     /* General Attributes*/
     const [nodeId, setNodeId] = useState<string>("");
     const [nodeKind, setNodeKind] = useState<string>("constant");
@@ -35,6 +42,52 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
     /*Operation Attributes*/
     const [operationType, setOperationType] = useState<string>("");
     const [operationInputs, setOperationInputs] = useState<string[]>([]);
+
+    /* Node Editor */
+    useEffect(() => {
+        if (nodeToEdit) {
+            const onnx = nodeToEdit.onnxData;
+            setNodeId(onnx.id || "");
+            
+            if (onnx.kind === "TensorNode") {
+                setNodeKind("tensor");
+                setTensorDataType(onnx.literalType);
+                setTensorShapeValue(onnx.shape || []);
+                setTensorKind(onnx.tensorType);
+            } else if (onnx.kind === "OperationNode") {
+                setNodeKind("operation");
+                setOperationType(onnx.opType || "");
+                setOperationInputs(onnx.inputs || []);
+            } else if (onnx.kind === "ConstantNode") {
+                setNodeKind("constant");
+                setConstantProtoName(onnx.proto?.name || "");
+                const dType = onnx.proto?.dataType || DataType.UNDEFINED;
+                setConstantDataType(dType);
+                setConstantShape(onnx.proto?.dims || []);
+                
+                let selectedArray: any[] = [];
+                switch (dType) {
+                    case DataType.FLOAT: selectedArray = onnx.proto?.floatData || []; break;
+                    case DataType.DOUBLE:
+                    case DataType.COMPLEX128: selectedArray = onnx.proto?.doubleData || []; break;
+                    case DataType.INT64: selectedArray = onnx.proto?.int64Data || []; break;
+                    case DataType.UINT64: selectedArray = onnx.proto?.uint64Data || []; break;
+                    case DataType.STRING: selectedArray = onnx.proto?.stringData || []; break;
+                    case DataType.INT32:
+                    case DataType.INT16:
+                    case DataType.UINT16:
+                    case DataType.INT8:
+                    case DataType.UINT8:
+                    case DataType.BOOL:
+                    case DataType.FLOAT16:
+                    case DataType.BFLOAT16:
+                    case DataType.INT4: selectedArray = onnx.proto?.int32Data || []; break;
+                    default: selectedArray = onnx.proto?.rawData || []; break;
+                }
+                setProtoData(selectedArray);
+            }
+        }
+    }, [nodeToEdit]);
 
     const handleCreateClick = () => {
         // eslint-disable-next-line no-useless-assignment
@@ -145,12 +198,9 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
             <Select
                 id="kind"
                 onChange={(e: any) => setNodeKind(e.value)}
-                options={[
-                    { value: "constant", label: "Constant Node" },
-                    { value: "tensor", label: "Tensor Node" },
-                    { value: "operation", label: "Operation Node" },
-                ]}
-                defaultValue={{ value: "constant", label: "Constant Node" }}
+                options={nodeKindOptions}
+                value={nodeKindOptions.find(opt => opt.value === nodeKind) || null} // Node Editor
+                // defaultValue={{ value: "constant", label: "Constant Node" }}
                 styles={reactSelectCustomStyles}
             />
 
@@ -174,6 +224,8 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     setOperationType={setOperationType}
                     setOperationInputs={setOperationInputs}
                     valueNodes={valueNodes}
+                    operationType={operationType} // Node Editor
+                    operationInputs={operationInputs} // Node Editor
                 />
             )}
 
@@ -184,11 +236,12 @@ export default function NodeAdder({ position, onSubmit, valueNodes }: NodeAdderP
                     setTensorShapeValue={setTensorShapeValue}
                     tensorShapeValue={tensorShapeValue}
                     setTensorKind={setTensorKind}
+                    tensorDataType={tensorDataType} // Node Editor
+                    tensorKind={tensorKind} // Node Editor
                 />
             )}
-            {/* BOTÃO ADICIONADO NO FINAL DO FORMULÁRIO PARA CRIAR O NÓ NO GRAFO */}
             <button type="button" onClick={handleCreateClick} style={{ marginTop: "15px" }}>
-                Create Node
+                {nodeToEdit ? "Edit Node" : "Create Node"}
             </button>
         </aside>
     );

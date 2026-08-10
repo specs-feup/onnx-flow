@@ -13,6 +13,8 @@ interface OperationNodeAdderProps {
     setOperationType: (value: string) => void;
     setOperationInputs: (value: string[]) => void;
     valueNodes: Array<unknown>;
+    operationType: string;
+    operationInputs: string[];
 }
 
 export default function OperationNodeAdder({
@@ -20,6 +22,8 @@ export default function OperationNodeAdder({
     setOperationType,
     setOperationInputs,
     valueNodes,
+    operationType,
+    operationInputs,
 }: OperationNodeAdderProps) {
     return (
         <>
@@ -32,6 +36,7 @@ export default function OperationNodeAdder({
             defaultValue={operationsTypes[0]}
             styles={reactSelectStyles}
             onChange={(op) => setOperationType(op!.value)}
+            value={operationsTypes.find(op => op.value === operationType) || null} // Node Editor
         />
 
         <label htmlFor="inputs">Inputs:</label>
@@ -44,6 +49,7 @@ export default function OperationNodeAdder({
                 label: node.data.id,
             }))}
             onChange={(inputs) => setOperationInputs(inputs.map((input: any) => input.value))}
+            value={operationInputs.map(input => ({ value: input, label: input }))} // Node Editor
             styles={reactSelectStyles}
             name="inputs"
         />

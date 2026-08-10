@@ -22,6 +22,7 @@ export default function SidePanel(props: {
     newNodePosition?: { x: number; y: number } | null;
     onCreateNode?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
     valueNodes: Array<unknown>;
+    nodeToEdit?: any;
 }) {
     return (
         <>
@@ -30,6 +31,7 @@ export default function SidePanel(props: {
                     position={props.newNodePosition}
                     onSubmit={props.onCreateNode}
                     valueNodes={props.valueNodes}
+                    nodeToEdit={props.nodeToEdit}
                 />
             ) : (
                 <TransformationOps

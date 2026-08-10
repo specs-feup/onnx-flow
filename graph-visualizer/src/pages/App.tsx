@@ -50,6 +50,7 @@ function App() {
     const [redoStack, setRedoStack] = useState<string[]>([]);
     const [editorMode, setEditorMode] = useState(false);
     const [newNodePos, setNewNodePos] = useState<{ x: number; y: number } | null>(null);
+    const [nodeToEdit, setNodeToEdit] = useState<any | null>(null);
     const valueNodes = useMemo(() => valueNodeExtractor(cytoscapeData), [cytoscapeData]);
 
     if (!cytoscapeData)
@@ -57,61 +58,124 @@ function App() {
             .then((data) => setCytoscapeData(regionsToCompoundNodes(data)))
             .catch((err) => console.log(err));
 
-    // NOVA FUNÇÃO: Manipulador para inserir o novo nó no estado do CytoscapeData
-    const handleCreateNode = (nodePayload: any, pos: { x: number; y: number } | null) => {
+    const handleNodeSubmit = (nodePayload: any, pos: { x: number; y: number } | null) => {
         if (!cytoscapeData) return;
 
-        const positionToUse = pos || { x: 0, y: 0 };
-        const newId =
-            nodePayload.label === "" ? `node_${Math.random().toString(36)}` : nodePayload.label;
+        if (nodeToEdit) {
+            // --- LÓGICA DE EDIÇÃO ---
+            const originalId = nodeToEdit.id;
+            const newId = nodePayload.onnxData.id;
 
-        const newNode = {
-            data: {
-                id: newId,
-                onnxData: nodePayload.onnxData,
-            },
-            position: positionToUse,
-            group: "nodes",
-            removed: false,
-            selected: false,
-            selectable: true,
-            locked: false,
-            grabbable: true,
-            classes: "",
-        };
+            // 1. Substituir os dados do nó existente
+            const updatedNodes = cytoscapeData.elements.nodes.map((node) => {
+                if (node.data.id === originalId) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            id: newId,
+                            onnxData: nodePayload.onnxData,
+                        },
+                    };
+                }
+                return node;
+            });
 
-        const newEdges = [];
-        if (nodePayload.onnxData.kind === "OperationNode") {
-            for (const input of nodePayload.onnxData.inputs) {
-                const newEdge = {
-                    data: {
-                        id: `${Math.random().toString(36)}`,
-                        source: input,
-                        target: newId,
-                    },
-                    group: "edges",
-                    removed: false,
-                    selected: false,
-                    selectable: true,
-                    locked: false,
-                    grabbable: true,
-                    classes: "",
-                };
-                newEdges.push(newEdge);
+            // 2. Atualizar as arestas existentes
+            // Alterar o ID nas arestas que saíam ou entravam neste nó,
+            // e depois remover as antigas arestas de entrada para as reconstruir.
+            let updatedEdges = cytoscapeData.elements.edges
+                .map((edge) => {
+                    const newEdge = { ...edge };
+                    if (newEdge.data.source === originalId) newEdge.data.source = newId;
+                    if (newEdge.data.target === originalId) newEdge.data.target = newId;
+                    return newEdge;
+                })
+                .filter((edge) => edge.data.target !== newId); // Limpar os inputs antigos
+
+            // 3. Gerar as novas arestas de entrada (se for OperationNode)
+            const newEdges = [];
+            if (nodePayload.onnxData.kind === "OperationNode") {
+                for (const input of nodePayload.onnxData.inputs) {
+                    newEdges.push({
+                        data: {
+                            id: `${Math.random().toString(36)}`,
+                            source: input,
+                            target: newId,
+                        },
+                        group: "edges",
+                        removed: false,
+                        selected: false,
+                        selectable: true,
+                        locked: false,
+                        grabbable: true,
+                        classes: "",
+                    });
+                }
             }
+
+            setCytoscapeData({
+                ...cytoscapeData,
+                elements: {
+                    nodes: updatedNodes,
+                    edges: [...updatedEdges, ...newEdges],
+                },
+            });
+
+            // Fechar o modo de edição
+            setNodeToEdit(null);
+            setSidePanelVisibility(false);
+
+        } else {
+            // --- LÓGICA DE CRIAÇÃO (A tua lógica original) ---
+            const positionToUse = pos || { x: 0, y: 0 };
+            const newId =
+                nodePayload.label === "" ? `node_${Math.random().toString(36)}` : nodePayload.label;
+            const newNode = {
+                data: {
+                    id: newId,
+                    onnxData: nodePayload.onnxData,
+                },
+                position: positionToUse,
+                group: "nodes",
+                removed: false,
+                selected: false,
+                selectable: true,
+                locked: false,
+                grabbable: true,
+                classes: "",
+            };
+
+            const newEdges = [];
+            if (nodePayload.onnxData.kind === "OperationNode") {
+                for (const input of nodePayload.onnxData.inputs) {
+                    const newEdge = {
+                        data: {
+                            id: `${Math.random().toString(36)}`,
+                            source: input,
+                            target: newId,
+                        },
+                        group: "edges",
+                        removed: false,
+                        selected: false,
+                        selectable: true,
+                        locked: false,
+                        grabbable: true,
+                        classes: "",
+                    };
+                    newEdges.push(newEdge);
+                }
+            }
+
+            setCytoscapeData({
+                ...cytoscapeData,
+                elements: {
+                    edges: [...cytoscapeData.elements.edges, ...newEdges],
+                    nodes: [...cytoscapeData.elements.nodes, newNode],
+                },
+            });
+            setNewNodePos(null);
         }
-
-        // Atualiza o grafo adicionando o novo nó aos elementos existentes
-        setCytoscapeData({
-            ...cytoscapeData,
-            elements: {
-                edges: [...cytoscapeData.elements.edges, ...newEdges],
-                nodes: [...cytoscapeData.elements.nodes, newNode],
-            },
-        });
-
-        // Limpa a posição após a criação
-        setNewNodePos(null);
     };
 
     return (
@@ -178,8 +242,9 @@ function App() {
                         setMode: setEditorMode,
                     }}
                     newNodePosition={newNodePos}
-                    onCreateNode={handleCreateNode}
+                    onCreateNode={handleNodeSubmit}
                     valueNodes={valueNodes}
+                    nodeToEdit={nodeToEdit} 
                 />
             )}
             <NodePopup
@@ -217,10 +282,19 @@ function App() {
                 nodeColor={nodeColor}
                 selectedNodeId={selectedNode?.id ?? null}
                 onNodeSelected={(node: any, pos: { x: number; y: number }) => {
-                    setSelectedNode(node);
-                    setPopupPos(pos);
                     setSelectedEdge(null);
                     setEdgePopupPos(null);
+                    if (editorMode) {
+                        setSidePanelVisibility(true);
+                        setNodeToEdit(node);
+                        setSelectedNode(null);
+                        setPopupPos(null);
+                    } else {
+                        setSelectedNode(node);
+                        setPopupPos(pos);
+                        setNodeToEdit(null);
+                    }
+                    
                 }}
                 onEdgeSelected={(edge: any, pos: { x: number; y: number }) => {
                     setSelectedEdge(edge);
@@ -230,6 +304,7 @@ function App() {
                 }}
                 onAddNodeRequested={(pos) => {
                     setNewNodePos(pos);
+                    setNodeToEdit(null);
                     setSidePanelVisibility(true);
                     setEditorMode(true);
                 }}
