@@ -15,16 +15,34 @@ export default function LayoutSelector({ setLayout }) {
           BFS
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({name: "dagre", rankDir: "LR"})}>
-          Left to Right
+          Dagre (Left to Right)
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout( {name: "dagre", rankDir: "TB"})}>
-          Top to Bottom
+          Dagre (Top to Bottom)
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({name: "grid"})}>
           Grid
         </DropdownMenu.Item>
         <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout( {name:"concentric"})}>
           Circle
+        </DropdownMenu.Item>
+        <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({
+            name: "elk", 
+            elk: { 
+                algorithm: 'layered', 
+                'elk.direction': 'RIGHT' 
+            }
+        })}>
+            ELK (Left to Right)
+        </DropdownMenu.Item>
+        <DropdownMenu.Item className='DropdownMenuItem' onSelect={() => setLayout({
+            name: "elk", 
+            elk: { 
+                algorithm: 'layered', 
+                'elk.direction': 'DOWN' 
+            }
+        })}>
+            ELK (Top to Bottom)
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>

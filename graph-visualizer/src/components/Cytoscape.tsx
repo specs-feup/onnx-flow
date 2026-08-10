@@ -3,6 +3,7 @@ import fcose from "cytoscape-fcose";
 import cytoscape from "cytoscape";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import dagre from "cytoscape-dagre";
+import elk from 'cytoscape-elk';
 import cxtmenu from "cytoscape-cxtmenu";
 import chroma from "chroma-js";
 import expandCollapse from "cytoscape-expand-collapse";
@@ -12,6 +13,7 @@ import type { CytoscapeData } from "@/types/Cytoscape.ts";
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
+cytoscape.use(elk);
 cytoscape.use(cxtmenu);
 expandCollapse(cytoscape);
 
@@ -105,7 +107,10 @@ export default function CytoscapeGraph({
 
     // 3. Layout updates
     useEffect(() => {
-        if (cytoscapeData) getCy()?.layout(layout).run();
+        if (cytoscapeData) {
+            getCy()?.layout(layout).run();
+            apiRef.current?.collapseAll({ animate: false });
+        }
     }, [layout, cytoscapeData]);
 
     // 4. Styling updates
