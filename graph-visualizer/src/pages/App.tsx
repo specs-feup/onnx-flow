@@ -3,12 +3,11 @@ import { useParams } from "react-router-dom";
 
 import MenuBar from "@/components/MenuBar.tsx";
 import SidePanel from "@/components/SidePanel.tsx";
-import type { CytoscapeData } from "@/types/Cytoscape.ts";
 import CytoscapeGraph from "@/components/Cytoscape.tsx";
 import NodePopup from "@/components/visualizer/NodeWindow.tsx";
 import EdgePopup from "@/components/visualizer/EdgeWindow.tsx";
+import type { CytoscapeData } from "@/types/Cytoscape.ts";
 import {
-    endSession,
     fetchGraph,
     regionsToCompoundNodes,
     type TransformationOpportunity,
@@ -22,16 +21,17 @@ function App() {
 
     // End Session when closing Tab
     useEffect(() => {
-        const endCurrentSession = () => {
-            endSession(3000, sessionId!);
-        };
+    const endCurrentSession = () => {
+        const url = `http://localhost:3000/api/sessions/${sessionId}/end`;
+        navigator.sendBeacon(url);
+    };
 
-        window.addEventListener("beforeunload", endCurrentSession);
+    window.addEventListener("beforeunload", endCurrentSession);
 
-        return () => {
-            window.removeEventListener("beforeunload", endCurrentSession);
-        };
-    }, []);
+    return () => {
+        window.removeEventListener("beforeunload", endCurrentSession);
+    };
+}, [sessionId]);
 
     const [cytoscapeStylesheet, setCytoscapeStylesheet] =
         useState<cytoscape.CssStyleDeclaration>(defaultStylesheet);

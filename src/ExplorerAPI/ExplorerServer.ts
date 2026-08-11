@@ -5,12 +5,13 @@ import { generateUnifiedExplorerJson } from "../flow2json.js";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { PathLike } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { parseOnnxFile } from "../index.js";
 import { createGraph } from "../initGraph.js";
 
-// Mapa global para armazenar múltiplas sessões em simultâneo
 const sessions = new Map<string, ExplorerSession>();
+
+const pendingDeletions = new Map<string, NodeJS.Timeout>();
+const GRACE_PERIOD_MS = 5000;
 
 /**
  * Middleware auxiliar para validar a existência da sessão no mapa.
@@ -18,6 +19,7 @@ const sessions = new Map<string, ExplorerSession>();
  */
 function requireSession(req: Request, res: Response, next: NextFunction): void {
     const sessionId = req.params["sessionId"] as string;
+
     if (!sessionId || !sessions.has(sessionId)) {
         res.status(404).json({
             success: false,
@@ -25,6 +27,13 @@ function requireSession(req: Request, res: Response, next: NextFunction): void {
         });
         return;
     }
+
+    if (pendingDeletions.has(sessionId)) {
+        clearTimeout(pendingDeletions.get(sessionId));
+        pendingDeletions.delete(sessionId);
+        console.log(`[Keep-Alive] Session Elimination '${sessionId}' cancelled.`);
+    }
+
     res.locals["session"] = sessions.get(sessionId);
     next();
 }
@@ -135,6 +144,34 @@ export function startExplorerServer(
             return;
         }
         res.json({ success: true, message: `Session '${sessionId}' deleted.` });
+    });
+
+    // 4.5 MARCAR SESSÃO PARA ELIMINAÇÃO (Via Beacon do Frontend)
+    app.post("/api/sessions/:sessionId/end", (req: Request, res: Response) => {
+        const sessionId = req.params["sessionId"] as string;
+
+        if (!sessions.has(sessionId)) {
+            res.status(404).json({ success: false, error: `Session '${sessionId}' not found.` });
+            return;
+        }
+
+        if (!pendingDeletions.has(sessionId)) {
+            const timeoutId = setTimeout(() => {
+                sessions.delete(sessionId);
+                pendingDeletions.delete(sessionId);
+                console.log(`[Cleanup] Session '${sessionId}' eliminated after the grace period.`);
+            }, GRACE_PERIOD_MS);
+
+            pendingDeletions.set(sessionId, timeoutId);
+            console.log(
+                `[Grace Period] Session '${sessionId}' marked for deletion in ${GRACE_PERIOD_MS}ms.`,
+            );
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Session '${sessionId}' marked for deletion.`,
+        });
     });
 
     // ============================================================================

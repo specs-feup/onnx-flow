@@ -35,9 +35,6 @@ export default function MenuBar(props: {
 
     return (
         <header style={props.style}>
-            <Link to="/" onClick={() => endSession(3000, sessionId!)}>
-                Home
-            </Link>
             <h1>ONNX Graph Visualizer</h1>
             <div className="button-group">
                 {/*<button onClick={async () => props.setCytoscapeData(await fetchGraph(3000))}>Get Graph</button>*/}
