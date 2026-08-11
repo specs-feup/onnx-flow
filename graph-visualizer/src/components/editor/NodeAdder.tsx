@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Select from "react-select";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
-import { DataType, type KnownShape, type Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes.ts";
+import { AttributeType, DataType, type AttributeValue, type KnownShape, type Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes.ts";
 import type { OpSchema } from "@specs-feup/onnx-flow/Onnx/Schema/OpSchema.ts";
 
 import TensorNodeAdder from "./TensorNodeAdder.tsx";
@@ -25,6 +25,7 @@ const nodeKindOptions = [
     ];
 
 export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }: NodeAdderProps) {
+    console.log(nodeToEdit)
     /* General Attributes*/
     const [nodeId, setNodeId] = useState<string>("");
     const [nodeKind, setNodeKind] = useState<string>("constant");
@@ -43,6 +44,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
     /*Operation Attributes*/
     const [operationType, setOperationType] = useState<OpSchema>(operationsTypes[0].value);
     const [operationInputs, setOperationInputs] = useState<string[]>([]);
+    const [operationAttributes, setOperationAttributes] = useState<AttributeValue[]>([]);
 
     /* Node Editor */
     useEffect(() => {
@@ -56,14 +58,38 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                 setTensorShapeValue(onnx.shape || []);
                 setTensorKind(onnx.tensorType);
             } else if (onnx.kind === "OperationNode") {
-                setNodeKind("operation");   
+                setNodeKind("operation");
+                
                 const opMatch = operationsTypes.find(op => op.value.opType === onnx.opType);
-                if (opMatch) {
-                    setOperationType(opMatch.value);
-                } else {
-                    setOperationType(operationsTypes[0].value); 
+                const matchedOp = opMatch ? opMatch.value : operationsTypes[0].value;
+                setOperationType(matchedOp);
+                
+                const flatInputs = onnx.inputs || [];
+                const formInputs: string[] = [];
+                let flatIndex = 0;
+
+                matchedOp.inputs.forEach((schemaInput, i) => {
+                    if (schemaInput.variadic) {
+                        formInputs[i] = flatInputs.slice(flatIndex).join(",");
+                        flatIndex = flatInputs.length; 
+                    } else {
+                        formInputs[i] = flatInputs[flatIndex] || "";
+                        flatIndex++;
+                    }
+                });
+
+                setOperationInputs(formInputs);
+
+                if (matchedOp.attributes) {
+                    const mappedAttributes = Object.values(matchedOp.attributes).map((attr) => {
+                        const existingVal = onnx.attributes?.[attr.name];
+                        if (existingVal !== undefined) {
+                            return Array.isArray(existingVal) ? existingVal.join(",") : existingVal;
+                        }
+                        return attr.defaultValue !== undefined ? attr.defaultValue : "";
+                    });
+                    setOperationAttributes(mappedAttributes);
                 }
-                setOperationInputs(onnx.inputs || []);
             } else if (onnx.kind === "ConstantNode") {
                 setNodeKind("constant");
                 setConstantProtoName(onnx.proto?.name || "");
@@ -109,13 +135,39 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                 metadata: {},
             };
         } else if (nodeKind === "operation") {
+    
+            const parsedAttributes: Record<string, AttributeValue> = {};
+            
+            if (operationType?.attributes) {
+                Object.values(operationType.attributes).forEach((attr, index) => {
+                    const val = operationAttributes[index];
+                    
+                    if (val !== "" && val !== undefined) {
+                        if (attr.type === AttributeType.INT || attr.type === AttributeType.FLOAT) {
+                            parsedAttributes[attr.name] = Number(val);
+                        } else if (attr.type === AttributeType.INTS || attr.type === AttributeType.FLOATS) {
+                            parsedAttributes[attr.name] = String(val).split(",").map(Number);
+                        } else if (attr.type === AttributeType.STRINGS) {
+                            parsedAttributes[attr.name] = String(val).split(",").map(s => s.trim());
+                        } else {
+                            parsedAttributes[attr.name] = val;
+                        }
+                    }
+                });
+            }
+
+            const parsedInputs = operationInputs
+                .filter(Boolean)
+                .flatMap(input => input.split(",").map(i => i.trim()))
+                .filter(Boolean);
+
             onnxData = {
                 id: nodeId,
                 kind: "OperationNode",
                 opType: operationType!.opType,
-                inputs: operationInputs,
+                inputs: parsedInputs,
                 regions: [],
-                attributes: {},
+                attributes: parsedAttributes,
                 metadata: {},
             };
         } else {
@@ -229,9 +281,11 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                     reactSelectStyles={reactSelectCustomStyles}
                     setOperationType={setOperationType}
                     setOperationInputs={setOperationInputs}
+                    setOperationAttributes={setOperationAttributes}
                     valueNodes={valueNodes}
                     operationType={operationType} // Node Editor
                     operationInputs={operationInputs} // Node Editor
+                    operationAttributes={operationAttributes} // Node Editor
                 />
             )}
 

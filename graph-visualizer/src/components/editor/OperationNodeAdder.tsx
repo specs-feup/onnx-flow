@@ -1,8 +1,8 @@
 import Select from "react-select";
 import { StandardOps } from "@specs-feup/onnx-flow/Onnx/Schema/definitions/StandardOps";
 import type { OpSchema, AttributeDefinition, IOInterface } from "@specs-feup/onnx-flow/Onnx/Schema/OpSchema";
-import { AttributeType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-import { useState } from "react";
+import { AttributeType, type AttributeValue } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { useEffect, useState } from "react";
 
 /*--- OPERATION OPTIONS ---*/
 export const operationsTypes: Array<{ value: OpSchema; label: string }> = StandardOps.map((op) => ({
@@ -15,19 +15,37 @@ interface OperationNodeAdderProps {
     reactSelectStyles: any;
     setOperationType: (value: OpSchema) => void;
     setOperationInputs: (value: string[]) => void;
+    setOperationAttributes: (value: AttributeValue[]) => void;
     valueNodes: Array<unknown>;
     operationType: OpSchema;
     operationInputs: string[];
+    operationAttributes: AttributeValue[];
 }
 
 export default function OperationNodeAdder({
     reactSelectStyles,
     setOperationType,
     setOperationInputs,
+    setOperationAttributes,
     valueNodes,
     operationType,
     operationInputs,
+    operationAttributes
 }: OperationNodeAdderProps) {
+    const [requiredInputs, setRequiredInputs] = useState<boolean[]>(operationType.inputs.map((input) => input.optional === undefined ? true : !input.optional));
+    const [disabledAttr, setDisabledAttr] = useState<boolean[]>(operationType.attributes ? Object.values(operationType.attributes).map(() => {
+            return false;
+        }) : [])
+
+    useEffect(() => {
+        setRequiredInputs(operationType.inputs.map((input) => input.optional === undefined ? true : !input.optional));
+
+        const requiredAttrArray = operationType.attributes ? Object.values(operationType.attributes).map(() => {
+            return false;
+        }) : [];
+        setDisabledAttr(requiredAttrArray);
+    }, [operationType]);
+
     return (
         <>
         <label htmlFor="operation-type">Operation Type:</label>
@@ -38,13 +56,24 @@ export default function OperationNodeAdder({
             options={operationsTypes}
             defaultValue={operationsTypes[0]}
             styles={reactSelectStyles}
-            onChange={(op) => setOperationType(op!.value)}
+            onChange={(op) => {
+                 const newOp = op!.value;
+                 setOperationType(newOp);
+                 
+                 setOperationInputs([]);
+                 const newAttributes = newOp.attributes ? Object.values(newOp.attributes).map((att) => {
+                     return att.defaultValue !== undefined ? att.defaultValue : "";
+                 }) : [];
+                 setOperationAttributes(newAttributes);
+             }}
             value={operationsTypes.find(op => op.value === operationType) || null} 
         />
         
         <label htmlFor="inputs">Inputs:</label>
         {operationType.inputs.map((input: IOInterface, index: number) => {
-            const [isRequired, setIsRequired] = useState(!input.optional);
+            const isOptional = input.optional || false;
+            const isRequired = requiredInputs[index];
+
             return (
                 <div key={input.name || index} style={{display: "flex", flexDirection: "column", gap: "5px", backgroundColor: "rgb(77, 74, 85)", padding: "1em", borderRadius: "20px"}}>
                     <label>Name: {input.name}</label>
@@ -53,15 +82,19 @@ export default function OperationNodeAdder({
                     <label>Required?</label>
                     <input 
                         type="checkbox"
-                        checked={!input.optional ? true : undefined}
-                        disabled={!input.optional}
+                        checked={!isOptional ? true : undefined}
+                        disabled={!isOptional}
                         onChange={(e) => {
                             if (!e.target.checked) {
                                 const newInputs = [...operationInputs];
                                 newInputs[index] = "";
                                 setOperationInputs(newInputs);
                             }
-                            setIsRequired(e.target.checked);
+                            setRequiredInputs((prevRequiredInputs) => {
+                                const newRequiredInputs = [...prevRequiredInputs];
+                                newRequiredInputs[index] = e.target.checked;
+                                return newRequiredInputs;
+                            });
                         }}
                     />
                     {input.variadic ? 
@@ -109,83 +142,72 @@ export default function OperationNodeAdder({
         {Object.values(operationType.attributes).length > 0 && (
             <label htmlFor="attributes">Attributes</label>
         )}
-        {Object.values(operationType.attributes).map((att: AttributeDefinition) => {
-            let inputField;
+        {Object.values(operationType.attributes).map((att: AttributeDefinition, index: number) => {
+            let pattern;
             
             switch (att.type) {
+                default:
                 case AttributeType.UNDEFINED:
-                    inputField = 
-                        <input 
-                            type="text"
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
+                    pattern = ".*";
                     break;
                 case AttributeType.FLOAT:
-                    inputField = 
-                        <input 
-                            type="text"
-                            pattern="^-?[1-9]\d*\.\d+$" 
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
+                    pattern = "^-?[1-9]\d*\.\d+$"; 
                     break;
                 case AttributeType.INT:
-                    inputField = 
-                        <input 
-                            type="text"
-                            pattern="^-?[1-9]\d*$" 
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
+                    pattern = "^-?[1-9]\d*$";
                     break;
                 case AttributeType.STRING:
-                    inputField = 
-                        <input 
-                            type="text"
-                            pattern="^[a-zA-Z0-9_\-]+$" 
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
+                    pattern = "^[a-zA-Z0-9_\-]+$";
                     break;
                 case AttributeType.FLOATS:
-                    inputField = 
-                        <input 
-                            type="text"
-                            pattern="^-?[1-9]\d*\.\d+(,-?[1-9]\d*\.\d+)*$" 
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
+                    pattern = "^-?[1-9]\d*\.\d+(,-?[1-9]\d*\.\d+)*$";
                     break;
                 case AttributeType.INTS:
-                    inputField = 
-                        <input 
-                            type="text"
-                            pattern="^-?[1-9]\d*(,-?[1-9]\d*)*$" 
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
+                    pattern = "^-?[1-9]\d*(,-?[1-9]\d*)*$";
                     break;
                 case AttributeType.STRINGS:
-                    inputField = 
-                        <input 
-                            type="text"
-                            pattern="^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+)*$" 
-                            name={att.name} 
-                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
-                        />;
-                    break;
-                default: // TODO: Handle TENSOR, GRAPH and any related types
-                    inputField = <p>{AttributeType[att.type]}</p>;
+                    pattern = "^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+)*$" 
                     break;
             }
 
-            console.log(StandardOps)
+            console.log(StandardOps.find(op => op.opType === operationType.opType));
 
             return (
                 <div key={att.name} title={att.description}>
                     <label>{att.name}</label>
-                    {inputField}
+                    <label>Type: {AttributeType[att.type]}</label>
+                    <input 
+                        type="text"
+                        pattern={pattern}
+                        disabled={att.required ? false : disabledAttr[index]}
+                        name={att.name}
+                        value={
+                            operationAttributes[index]
+                        } 
+                        defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""}
+                        onChange={(e) => {
+                            const newAttributes = [...operationAttributes];
+                            newAttributes[index] = e.target.value;
+                            setOperationAttributes(newAttributes);
+                        }}
+                    />
+                    <input
+                        type="checkbox"
+                        defaultChecked={true}
+                        disabled={att.required ? true : false}
+                        onChange={(e) => {
+                            const newAttributes = [...operationAttributes];
+                            const newDisabledAttr = [...disabledAttr];
+                            newDisabledAttr[index] = !e.target.checked;
+                            if (!e.target.checked) {
+                                newAttributes[index] = "";
+                            } else {
+                                newAttributes[index] = att.defaultValue !== undefined ? att.defaultValue : "";
+                            }
+                            setOperationAttributes(newAttributes);
+                            setDisabledAttr(newDisabledAttr);
+                        }}
+                    />
                 </div>
             );
         })}
