@@ -51,6 +51,7 @@ export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onCha
                         <span style={{ fontSize: "11px", color: "#888" }}>D{idx}:</span>
                         <input
                             type="text"
+                            pattern="[0-9]+"
                             value={dim === undefined ? "" : String(dim)}
                             placeholder="?"
                             onChange={(e) => updateDimension(idx, e.target.value)}

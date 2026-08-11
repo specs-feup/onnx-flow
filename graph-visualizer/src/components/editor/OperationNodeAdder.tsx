@@ -2,6 +2,7 @@ import Select from "react-select";
 import { StandardOps } from "@specs-feup/onnx-flow/Onnx/Schema/definitions/StandardOps";
 import type { OpSchema, AttributeDefinition, IOInterface } from "@specs-feup/onnx-flow/Onnx/Schema/OpSchema";
 import { AttributeType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { useState } from "react";
 
 /*--- OPERATION OPTIONS ---*/
 export const operationsTypes: Array<{ value: OpSchema; label: string }> = StandardOps.map((op) => ({
@@ -43,13 +44,48 @@ export default function OperationNodeAdder({
         
         <label htmlFor="inputs">Inputs:</label>
         {operationType.inputs.map((input: IOInterface, index: number) => {
+            const [isRequired, setIsRequired] = useState(!input.optional);
             return (
                 <div key={input.name || index} style={{display: "flex", flexDirection: "column", gap: "5px", backgroundColor: "rgb(77, 74, 85)", padding: "1em", borderRadius: "20px"}}>
                     <label>Name: {input.name}</label>
                     <label>Constraint: {input.typeConstraint}</label>
                     <label>Is Variadic: {input.variadic ? "Yes" : "No"}</label>
-                    <label>Is Optional: {input.optional ? "Yes" : "No"}</label>
-                    <Select
+                    <label>Required?</label>
+                    <input 
+                        type="checkbox"
+                        checked={!input.optional ? true : undefined}
+                        disabled={!input.optional}
+                        onChange={(e) => {
+                            if (!e.target.checked) {
+                                const newInputs = [...operationInputs];
+                                newInputs[index] = "";
+                                setOperationInputs(newInputs);
+                            }
+                            setIsRequired(e.target.checked);
+                        }}
+                    />
+                    {input.variadic ? 
+                        <Select
+                        isDisabled={!isRequired} 
+                        isSearchable
+                        isClearable
+                        isMulti
+                        options={valueNodes.map((node: any) => ({
+                            value: node.data.id,
+                            label: node.data.id,
+                        }))}
+                        onChange={(selectedInputs) => {
+                            const newInputs = [...operationInputs];
+                            newInputs[index] = selectedInputs ? selectedInputs.map((input) => input.value).join(",") : "";
+                            setOperationInputs(newInputs);
+                        }}
+                        value={operationInputs[index] ? operationInputs[index].split(",").map((inputId) => ({ value: inputId, label: inputId })) : []}
+                        styles={reactSelectStyles}
+                        name={`input-${input.name}`}
+                        /> 
+                        : 
+                        <Select
+                        isDisabled={!isRequired}
                         isSearchable
                         isClearable
                         options={valueNodes.map((node: any) => ({
@@ -64,32 +100,90 @@ export default function OperationNodeAdder({
                         value={operationInputs[index] ? { value: operationInputs[index], label: operationInputs[index] } : null}
                         styles={reactSelectStyles}
                         name={`input-${input.name}`}
-                    />
+                    />}
                     <br/>
                 </div>
             )})
         }
         
-        <label htmlFor="attributes">Attributes</label>
+        {Object.values(operationType.attributes).length > 0 && (
+            <label htmlFor="attributes">Attributes</label>
+        )}
         {Object.values(operationType.attributes).map((att: AttributeDefinition) => {
             let inputField;
             
             switch (att.type) {
                 case AttributeType.UNDEFINED:
-                case AttributeType.STRING:
-                    inputField = <input type="text" name={att.name} defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} />;
+                    inputField = 
+                        <input 
+                            type="text"
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
                     break;
                 case AttributeType.FLOAT:
-                case AttributeType.INT:
-                    inputField = <input type="number" name={att.name} defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} />;
+                    inputField = 
+                        <input 
+                            type="text"
+                            pattern="^-?[1-9]\d*\.\d+$" 
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
                     break;
-                default:
+                case AttributeType.INT:
+                    inputField = 
+                        <input 
+                            type="text"
+                            pattern="^-?[1-9]\d*$" 
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
+                    break;
+                case AttributeType.STRING:
+                    inputField = 
+                        <input 
+                            type="text"
+                            pattern="^[a-zA-Z0-9_\-]+$" 
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
+                    break;
+                case AttributeType.FLOATS:
+                    inputField = 
+                        <input 
+                            type="text"
+                            pattern="^-?[1-9]\d*\.\d+(,-?[1-9]\d*\.\d+)*$" 
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
+                    break;
+                case AttributeType.INTS:
+                    inputField = 
+                        <input 
+                            type="text"
+                            pattern="^-?[1-9]\d*(,-?[1-9]\d*)*$" 
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
+                    break;
+                case AttributeType.STRINGS:
+                    inputField = 
+                        <input 
+                            type="text"
+                            pattern="^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+)*$" 
+                            name={att.name} 
+                            defaultValue={att.defaultValue !== undefined ? att.defaultValue : ""} 
+                        />;
+                    break;
+                default: // TODO: Handle TENSOR, GRAPH and any related types
                     inputField = <p>{AttributeType[att.type]}</p>;
                     break;
             }
 
+            console.log(StandardOps)
+
             return (
-                <div key={att.name}>
+                <div key={att.name} title={att.description}>
                     <label>{att.name}</label>
                     {inputField}
                 </div>

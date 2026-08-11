@@ -2,7 +2,6 @@ import { createBrowserRouter, RouterProvider, useRouteError } from "react-router
 import App from "@/pages/App";
 import Home from "@/pages/Home";
 
-// 1. Create a quick error display component
 function ErrorFallback() {
     const error = useRouteError() as any;
     return (
@@ -13,17 +12,16 @@ function ErrorFallback() {
     );
 }
 
-// 2. Attach it to your routes
 const router = createBrowserRouter([
     {
         path: "/",
         element: <Home />,
-        errorElement: <ErrorFallback />, // <-- Catches crashes in <Home />
+        errorElement: <ErrorFallback />,
     },
     {
         path: "/app/:sessionId",
         element: <App />,
-        errorElement: <ErrorFallback />, // <-- Catches crashes in <App />
+        errorElement: <ErrorFallback />,
     },
 ]);
 
