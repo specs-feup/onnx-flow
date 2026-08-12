@@ -7,8 +7,10 @@ import CytoscapeGraph from "@/components/Cytoscape.tsx";
 import NodePopup from "@/components/visualizer/NodeWindow.tsx";
 import EdgePopup from "@/components/visualizer/EdgeWindow.tsx";
 import RestoreModal from "@/components/editor/RestoreModal.tsx";
+import CompileModal from "@/components/editor/CompileModal.tsx";
 import type { CytoscapeData } from "@/types/Cytoscape.ts";
 import {
+    compileOnnxModel,
     fetchGraph,
     regionsToCompoundNodes,
     type TransformationOpportunity,
@@ -50,6 +52,7 @@ function App() {
         useState<cytoscape.CssStyleDeclaration>(defaultStylesheet);
     const [isSidePanelVisible, setSidePanelVisibility] = useState(false);
     const [cytoscapeData, setCytoscapeData] = useState<CytoscapeData | null>();
+    const [originalGraph, setOriginalGraph] = useState<CytoscapeData | null>(null);
     const [cytoscapeLayout, setCytoscapeLayout] = useState<cytoscape.LayoutOptions>({
         name: "fcose",
     });
@@ -65,12 +68,51 @@ function App() {
     const [newNodePos, setNewNodePos] = useState<{ x: number; y: number } | null>(null);
     const [nodeToEdit, setNodeToEdit] = useState<any | null>(null);
     const [isRestoreModalOpen, setRestoreModalOpen] = useState(false);
+    const [compileResult, setCompileResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isCompileModalOpen, setCompileModalOpen] = useState(false);
     const valueNodes = useMemo(() => valueNodeExtractor(cytoscapeData), [cytoscapeData]);
 
     if (!cytoscapeData)
         fetchGraph(3000, sessionId!)
-            .then((data) => setCytoscapeData(regionsToCompoundNodes(data)))
+            .then((data) => {
+                const formatted = regionsToCompoundNodes(data);
+                setOriginalGraph(formatted);
+                setCytoscapeData(formatted);
+            })
             .catch((err) => console.log(err));
+
+    const handleCompileModel = async () => {
+        if (!cytoscapeData || !sessionId) return;
+        try {
+            const res = await compileOnnxModel(3000, sessionId, cytoscapeData);
+            if (res.success) {
+                // Clear session storage for the modified graph upon successful compilation
+                sessionStorage.removeItem(SAVED_GRAPH_KEY);
+                sessionStorage.removeItem(PENDING_RESTORE_KEY);
+
+                if (res.graph) {
+                    const formattedGraph = regionsToCompoundNodes(res.graph);
+                    setOriginalGraph(formattedGraph);
+                    setCytoscapeData(formattedGraph);
+                }
+                setCompileResult({
+                    success: true,
+                    message: res.message || "ONNX Model compiled successfully!",
+                });
+            } else {
+                setCompileResult({
+                    success: false,
+                    message: res.error || "Failed to compile ONNX Model",
+                });
+            }
+        } catch (err) {
+            setCompileResult({
+                success: false,
+                message: err instanceof Error ? err.message : String(err),
+            });
+        }
+        setCompileModalOpen(true);
+    };
 
     const handleToggleEditorMode = (activate: boolean) => {
         if (activate) {
@@ -79,6 +121,11 @@ function App() {
             if (hasPending && savedData) {
                 setRestoreModalOpen(true);
                 return;
+            }
+        } else {
+            // Returning to visualizer: restore original graph while keeping changes in session storage
+            if (originalGraph) {
+                setCytoscapeData(originalGraph);
             }
         }
         setEditorMode(activate);
@@ -90,11 +137,11 @@ function App() {
             try {
                 const restoredData = JSON.parse(savedDataStr);
                 setCytoscapeData(restoredData);
+                sessionStorage.setItem(PENDING_RESTORE_KEY, "true");
             } catch (e) {
                 console.error("Error parsing saved graph data:", e);
             }
         }
-        sessionStorage.removeItem(PENDING_RESTORE_KEY);
         setRestoreModalOpen(false);
         setEditorMode(true);
     };
@@ -137,7 +184,7 @@ function App() {
             const newId = nodePayload.onnxData.id;
 
             // 1. Substituir os dados do nó existente
-            const updatedNodes = cytoscapeData.elements.nodes.map((node) => {
+            const updatedNodes = cytoscapeData.elements.nodes.map((node: any) => {
                 if (node.data.id === originalId) {
                     return {
                         ...node,
@@ -153,16 +200,19 @@ function App() {
 
             // 2. Atualizar as arestas existentes
             let updatedEdges = cytoscapeData.elements.edges
-                .map((edge) => {
-                    const newEdge = { ...edge };
+                .map((edge: any) => {
+                    const newEdge: any = { ...edge };
                     if (newEdge.data.source === originalId) newEdge.data.source = newId;
                     if (newEdge.data.target === originalId) newEdge.data.target = newId;
                     return newEdge;
                 })
-                .filter((edge) => edge.data.target !== newId); // Limpar os inputs antigos
+                .filter((edge: any) => edge.data.target !== newId); // Limpar os inputs antigos
 
-            // 3. Gerar as novas arestas de entrada (se for OperationNode)
+            // 3. Gerar as novas arestas de entrada e nós de saída (se for OperationNode)
             const newEdges = [];
+            const newOutputNodes = [];
+            const newOutputEdges = [];
+
             if (nodePayload.onnxData.kind === "OperationNode") {
                 for (const input of nodePayload.onnxData.inputs) {
                     newEdges.push({
@@ -180,13 +230,70 @@ function App() {
                         classes: "",
                     });
                 }
+
+                // Retrieve schema outputs (or fallback to [{ name: "output" }])
+                const schemaOutputs = nodePayload.schemaOutputs && nodePayload.schemaOutputs.length > 0
+                    ? nodePayload.schemaOutputs
+                    : [{ name: "output" }];
+
+                const existingOutgoingEdges = updatedEdges.filter((e: any) => e.data.source === newId);
+                const basePos = nodeToEdit.position || { x: 0, y: 0 };
+
+                if (existingOutgoingEdges.length < schemaOutputs.length) {
+                    for (let i = existingOutgoingEdges.length; i < schemaOutputs.length; i++) {
+                        const outputDef = schemaOutputs[i];
+                        const randomOutputId = `output_${newId}_${outputDef.name || "val"}_${Math.random().toString(36).substr(2, 6)}`;
+                        
+                        const outputNode = {
+                            data: {
+                                id: randomOutputId,
+                                onnxData: {
+                                    id: randomOutputId,
+                                    kind: "TensorNode",
+                                    tensorType: "intermediate",
+                                    literalType: 0,
+                                    shape: [],
+                                    metadata: {},
+                                },
+                            },
+                            position: {
+                                x: basePos.x + 180,
+                                y: basePos.y + i * 60,
+                            },
+                            group: "nodes",
+                            removed: false,
+                            selected: false,
+                            selectable: true,
+                            locked: false,
+                            grabbable: true,
+                            classes: "",
+                        };
+                        newOutputNodes.push(outputNode);
+
+                        const outputEdge = {
+                            data: {
+                                id: `${Math.random().toString(36)}`,
+                                source: newId,
+                                target: randomOutputId,
+                            },
+                            group: "edges",
+                            removed: false,
+                            selected: false,
+                            selectable: true,
+                            locked: false,
+                            grabbable: true,
+                            classes: "",
+                        };
+                        newOutputEdges.push(outputEdge);
+                    }
+                }
             }
 
             newData = {
                 ...cytoscapeData,
                 elements: {
-                    nodes: updatedNodes,
-                    edges: [...updatedEdges, ...newEdges],
+                    nodes: [...updatedNodes, ...newOutputNodes],
+                    edges: [...updatedEdges, ...newEdges, ...newOutputEdges],
                 },
             };
 
@@ -215,6 +322,9 @@ function App() {
             };
 
             const newEdges = [];
+            const newOutputNodes = [];
+            const newOutputEdges = [];
+
             if (nodePayload.onnxData.kind === "OperationNode") {
                 for (const input of nodePayload.onnxData.inputs) {
                     const newEdge = {
@@ -233,13 +343,64 @@ function App() {
                     };
                     newEdges.push(newEdge);
                 }
+
+                // Retrieve schema outputs (or fallback to [{ name: "output" }])
+                const schemaOutputs = nodePayload.schemaOutputs && nodePayload.schemaOutputs.length > 0
+                    ? nodePayload.schemaOutputs
+                    : [{ name: "output" }];
+
+                schemaOutputs.forEach((outputDef: any, idx: number) => {
+                    const randomOutputId = `output_${newId}_${outputDef.name || "val"}_${Math.random().toString(36).substr(2, 6)}`;
+                    
+                    const outputNode = {
+                        data: {
+                            id: randomOutputId,
+                            onnxData: {
+                                id: randomOutputId,
+                                kind: "TensorNode",
+                                tensorType: "intermediate",
+                                literalType: 0,
+                                shape: [],
+                                metadata: {},
+                            },
+                        },
+                        position: {
+                            x: positionToUse.x + 180,
+                            y: positionToUse.y + idx * 60,
+                        },
+                        group: "nodes",
+                        removed: false,
+                        selected: false,
+                        selectable: true,
+                        locked: false,
+                        grabbable: true,
+                        classes: "",
+                    };
+                    newOutputNodes.push(outputNode);
+
+                    const outputEdge = {
+                        data: {
+                            id: `${Math.random().toString(36)}`,
+                            source: newId,
+                            target: randomOutputId,
+                        },
+                        group: "edges",
+                        removed: false,
+                        selected: false,
+                        selectable: true,
+                        locked: false,
+                        grabbable: true,
+                        classes: "",
+                    };
+                    newOutputEdges.push(outputEdge);
+                });
             }
 
             newData = {
                 ...cytoscapeData,
                 elements: {
-                    edges: [...cytoscapeData.elements.edges, ...newEdges],
-                    nodes: [...cytoscapeData.elements.nodes, newNode],
+                    edges: [...cytoscapeData.elements.edges, ...newEdges, ...newOutputEdges],
+                    nodes: [...cytoscapeData.elements.nodes, newNode, ...newOutputNodes],
                 },
             };
             setNewNodePos(null);
@@ -267,19 +428,28 @@ function App() {
                 onDiscard={handleDiscardChanges}
             />
 
+            <CompileModal
+                isOpen={isCompileModalOpen}
+                result={compileResult}
+                onClose={() => setCompileModalOpen(false)}
+            />
+
             <MenuBar
                 style={{
                     gridArea: "menubar",
                     color: "white",
                     padding: "25px",
                 }}
-                setCytoscapeData={setCytoscapeData}
+                setCytoscapeData={(data) => {
+                    if (!editorMode && data) setOriginalGraph(data);
+                    setCytoscapeData(data);
+                }}
                 panelVisibility={{
                     isVisible: isSidePanelVisible,
                     setVisibility: setSidePanelVisibility,
                 }}
-                setLayout={setCytoscapeLayout}
-                setStylesheet={setCytoscapeStylesheet}
+                setLayout={(layoutName: any) => setCytoscapeLayout({ name: layoutName })}
+                setStylesheet={(sheet: any) => setCytoscapeStylesheet(sheet)}
                 nodeColor={nodeColor}
                 selectedNodeId={selectedNode?.id ?? null}
                 setNodeColor={setNodeColor}
@@ -292,6 +462,7 @@ function App() {
                     isActive: editorMode,
                     setMode: handleToggleEditorMode,
                 }}
+                onCompileOnnxModel={handleCompileModel}
             />
 
             {isSidePanelVisible && (

@@ -20,6 +20,8 @@ import inferShapes from "./Onnx/InferShapes.js";
 import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
+import OperationNode from "./Onnx/OperationNode.js";
+import OnnxEdge from "./Onnx/OnnxEdge.js";
 import { tryAsValueNode, uniq, UNKNOWN_SHAPE } from "./Onnx/Utils.js";
 import { GraphBuilder } from "./Onnx/GraphBuilder.js";
 
@@ -401,4 +403,138 @@ function createGraphWithCaptures(
 export function createGraph(data: RawOnnxModel): OnnxGraph.Class {
     applyAdapters(data);
     return createGraphWithCaptures(data, undefined).graph;
+}
+
+export function createGraphFromCytoscape(cyJson: any): OnnxGraph.Class {
+    const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const nodes = cyJson?.elements?.nodes || [];
+    const edges = cyJson?.elements?.edges || [];
+
+    if (!Array.isArray(nodes)) {
+        throw new Error("Invalid graph JSON: 'elements.nodes' must be an array.");
+    }
+
+    const createdNodeIds = new Set<string>();
+
+    // Pass 1: Add all nodes (TensorNode, ConstantNode, OperationNode, RegionArgumentNode)
+    for (const node of nodes) {
+        const id = node.data?.id;
+        const onnxData = node.data?.onnxData;
+
+        if (!id) {
+            throw new Error("Graph element missing required 'id'.");
+        }
+
+        if (!onnxData) {
+            continue;
+        }
+
+        if (onnxData.kind === "TensorNode") {
+            graph
+                .addNode(id)
+                .init(
+                    new TensorNode.Builder(
+                        onnxData.literalType ?? DataType.UNDEFINED,
+                        onnxData.shape ?? [],
+                        onnxData.tensorType ?? "intermediate",
+                        undefined,
+                        onnxData.metadata ?? {}
+                    )
+                )
+                .as(TensorNode);
+            createdNodeIds.add(id);
+        } else if (onnxData.kind === "ConstantNode") {
+            graph
+                .addNode(id)
+                .init(
+                    new ConstantNode.Builder(
+                        onnxData.proto ?? { name: id },
+                        onnxData.isInput ?? false,
+                        onnxData.metadata ?? {}
+                    )
+                )
+                .as(ConstantNode);
+            createdNodeIds.add(id);
+        } else if (onnxData.kind === "OperationNode") {
+            if (!onnxData.opType) {
+                throw new Error(`OperationNode '${id}' is missing required 'opType'.`);
+            }
+            graph
+                .addNode(id)
+                .init(
+                    new OperationNode.Builder(
+                        onnxData.opType,
+                        [],
+                        onnxData.attributes ?? {},
+                        [],
+                        onnxData.metadata ?? {}
+                    )
+                )
+                .as(OperationNode);
+            createdNodeIds.add(id);
+        }
+    }
+
+    // Pass 2: Wire operation node inputs
+    for (const node of nodes) {
+        const id = node.data?.id;
+        const onnxData = node.data?.onnxData;
+        if (onnxData?.kind === "OperationNode") {
+            const opNode = graph.getNodeById(id)?.as(OperationNode);
+            if (opNode && Array.isArray(onnxData.inputs)) {
+                const inputNodes: ValueNode[] = [];
+                for (const inputId of onnxData.inputs) {
+                    const inputNode = graph.getNodeById(inputId);
+                    if (!inputNode) {
+                        throw new Error(
+                            `Compilation Error: OperationNode '${id}' references missing input node '${inputId}'.`
+                        );
+                    }
+                    if (tryAsValueNode(inputNode)) {
+                        inputNodes.push(inputNode as ValueNode);
+                    } else {
+                        throw new Error(
+                            `Compilation Error: Input '${inputId}' of OperationNode '${id}' is not a valid ValueNode.`
+                        );
+                    }
+                }
+                opNode.setInputs(inputNodes);
+            }
+        }
+    }
+
+    // Pass 3: Add graph edges
+    if (Array.isArray(edges)) {
+        for (const edge of edges) {
+            const sourceId = edge.data?.source;
+            const targetId = edge.data?.target;
+            if (
+                sourceId &&
+                targetId &&
+                createdNodeIds.has(sourceId) &&
+                createdNodeIds.has(targetId)
+            ) {
+                const src = graph.getNodeById(sourceId);
+                const tgt = graph.getNodeById(targetId);
+                if (src && tgt && !graph.getEdge(src.id, tgt.id)) {
+                    const type =
+                        src.is(TensorNode) || src.is(ConstantNode)
+                            ? (src as any).literalType
+                            : DataType.UNDEFINED;
+                    const shape =
+                        src.is(TensorNode) || src.is(ConstantNode)
+                            ? (src as any).shape
+                            : [];
+                    graph
+                        .addEdge(src, tgt)
+                        .init(new OnnxEdge.Builder(type, shape))
+                        .as(OnnxEdge);
+                }
+            }
+        }
+    }
+
+    inferShapes(graph);
+
+    return graph;
 }

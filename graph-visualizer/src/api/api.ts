@@ -153,3 +153,27 @@ export async function redoTransformation(port: number, sessionId: string): Promi
   }
   return response.json();
 }
+
+export async function compileOnnxModel(
+  port: number,
+  sessionId: string,
+  graphData: any,
+): Promise<{ success: boolean; message?: string; error?: string; graph?: any }> {
+  const response = await fetch(`http://localhost:${port}/api/sessions/${sessionId}/compile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ graph: graphData }),
+  });
+
+  const json = await response.json();
+  if (!response.ok || !json.success) {
+    return {
+      success: false,
+      error: json.error || json.message || "Failed to compile ONNX Model",
+    };
+  }
+
+  return json;
+}

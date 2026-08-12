@@ -248,6 +248,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
         const nodePayload = {
             onnxData,
             label: nodeId,
+            schemaOutputs: nodeKind === "operation" ? (operationType?.outputs || [{ name: "output" }]) : [],
         };
 
         if (onSubmit) {

@@ -6,7 +6,8 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { PathLike } from "node:fs";
 import { parseOnnxFile } from "../index.js";
-import { createGraph } from "../initGraph.js";
+import { createGraph, createGraphFromCytoscape } from "../initGraph.js";
+import { HistoryManager } from "../Onnx/transformation/tracking/HistoryManager.js";
 
 const sessions = new Map<string, ExplorerSession>();
 
@@ -186,6 +187,39 @@ export function startExplorerServer(
             res.json(payload);
         } catch (error) {
             res.status(500).json({ error: String(error) });
+        }
+    });
+
+    // 5.5 Compile Edited Graph Endpoint
+    app.post("/api/sessions/:sessionId/compile", requireSession, (req: Request, res: Response) => {
+        try {
+            const cyJson = req.body.graph || req.body;
+            if (!cyJson || !cyJson.elements) {
+                res.status(400).json({
+                    success: false,
+                    error: "Invalid request payload: missing graph elements.",
+                });
+                return;
+            }
+
+            const newGraph = createGraphFromCytoscape(cyJson);
+
+            const session = res.locals["session"] as ExplorerSession;
+            session.graph = newGraph;
+            session.history = new HistoryManager(newGraph);
+
+            const updatedPayload = generateUnifiedExplorerJson(session.graph);
+            res.json({
+                success: true,
+                message: "ONNX Model compiled successfully!",
+                graph: updatedPayload,
+            });
+        } catch (error) {
+            console.error("Compilation error:", error);
+            res.status(400).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+            });
         }
     });
 

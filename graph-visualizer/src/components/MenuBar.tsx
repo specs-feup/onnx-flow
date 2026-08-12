@@ -30,6 +30,7 @@ export default function MenuBar(props: {
         isActive: boolean;
         setMode: (activate: boolean) => void;
     };
+    onCompileOnnxModel?: () => void;
 }) {
     const { sessionId } = useParams();
 
@@ -69,6 +70,12 @@ export default function MenuBar(props: {
                         }}
                     >
                         &#9776;
+                    </button>
+                )}
+
+                {props.editorMode.isActive && (
+                    <button onClick={props.onCompileOnnxModel}>
+                        Compile ONNX Model
                     </button>
                 )}
 
@@ -138,7 +145,7 @@ export default function MenuBar(props: {
                         props.editorMode.setMode(props.editorMode.isActive ? false : true);
                     }}
                 >
-                    Editor
+                    {!props.editorMode.isActive ? "Editor" : "Visualizer"}
                 </button>
             </div>
         </header>
