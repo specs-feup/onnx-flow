@@ -6,6 +6,7 @@ import SidePanel from "@/components/SidePanel.tsx";
 import CytoscapeGraph from "@/components/Cytoscape.tsx";
 import NodePopup from "@/components/visualizer/NodeWindow.tsx";
 import EdgePopup from "@/components/visualizer/EdgeWindow.tsx";
+import RestoreModal from "@/components/editor/RestoreModal.tsx";
 import type { CytoscapeData } from "@/types/Cytoscape.ts";
 import {
     fetchGraph,
@@ -19,19 +20,31 @@ import { valueNodeExtractor } from "@/utils/ValueNodeExtractor.ts";
 function App() {
     const { sessionId } = useParams();
 
+    const SAVED_GRAPH_KEY = `saved_cytoscape_data_${sessionId || "default"}`;
+    const PENDING_RESTORE_KEY = `pending_restore_${sessionId || "default"}`;
+
+    const saveGraphToSession = (data: CytoscapeData) => {
+        try {
+            sessionStorage.setItem(SAVED_GRAPH_KEY, JSON.stringify(data));
+            sessionStorage.setItem(PENDING_RESTORE_KEY, "true");
+        } catch (err) {
+            console.error("Error saving graph to sessionStorage:", err);
+        }
+    };
+
     // End Session when closing Tab
     useEffect(() => {
-    const endCurrentSession = () => {
-        const url = `http://localhost:3000/api/sessions/${sessionId}/end`;
-        navigator.sendBeacon(url);
-    };
+        const endCurrentSession = () => {
+            const url = `http://localhost:3000/api/sessions/${sessionId}/end`;
+            navigator.sendBeacon(url);
+        };
 
-    window.addEventListener("beforeunload", endCurrentSession);
+        window.addEventListener("beforeunload", endCurrentSession);
 
-    return () => {
-        window.removeEventListener("beforeunload", endCurrentSession);
-    };
-}, [sessionId]);
+        return () => {
+            window.removeEventListener("beforeunload", endCurrentSession);
+        };
+    }, [sessionId]);
 
     const [cytoscapeStylesheet, setCytoscapeStylesheet] =
         useState<cytoscape.CssStyleDeclaration>(defaultStylesheet);
@@ -51,6 +64,7 @@ function App() {
     const [editorMode, setEditorMode] = useState(false);
     const [newNodePos, setNewNodePos] = useState<{ x: number; y: number } | null>(null);
     const [nodeToEdit, setNodeToEdit] = useState<any | null>(null);
+    const [isRestoreModalOpen, setRestoreModalOpen] = useState(false);
     const valueNodes = useMemo(() => valueNodeExtractor(cytoscapeData), [cytoscapeData]);
 
     if (!cytoscapeData)
@@ -58,8 +72,64 @@ function App() {
             .then((data) => setCytoscapeData(regionsToCompoundNodes(data)))
             .catch((err) => console.log(err));
 
+    const handleToggleEditorMode = (activate: boolean) => {
+        if (activate) {
+            const hasPending = sessionStorage.getItem(PENDING_RESTORE_KEY) === "true";
+            const savedData = sessionStorage.getItem(SAVED_GRAPH_KEY);
+            if (hasPending && savedData) {
+                setRestoreModalOpen(true);
+                return;
+            }
+        }
+        setEditorMode(activate);
+    };
+
+    const handleRestoreChanges = () => {
+        const savedDataStr = sessionStorage.getItem(SAVED_GRAPH_KEY);
+        if (savedDataStr) {
+            try {
+                const restoredData = JSON.parse(savedDataStr);
+                setCytoscapeData(restoredData);
+            } catch (e) {
+                console.error("Error parsing saved graph data:", e);
+            }
+        }
+        sessionStorage.removeItem(PENDING_RESTORE_KEY);
+        setRestoreModalOpen(false);
+        setEditorMode(true);
+    };
+
+    const handleDiscardChanges = () => {
+        sessionStorage.removeItem(SAVED_GRAPH_KEY);
+        sessionStorage.removeItem(PENDING_RESTORE_KEY);
+        setRestoreModalOpen(false);
+        setEditorMode(true);
+    };
+
+    const handleNodeDelete = (nodeId: string) => {
+        if (!cytoscapeData) return;
+        const updatedNodes = cytoscapeData.elements.nodes.filter((node: any) => node.data.id !== nodeId);
+        const updatedEdges = cytoscapeData.elements.edges.filter(
+            (edge: any) => edge.data.source !== nodeId && edge.data.target !== nodeId
+        );
+        const newData: CytoscapeData = {
+            ...cytoscapeData,
+            elements: {
+                nodes: updatedNodes,
+                edges: updatedEdges,
+            },
+        };
+        if (nodeToEdit?.id === nodeId) {
+            setNodeToEdit(null);
+        }
+        setCytoscapeData(newData);
+        saveGraphToSession(newData);
+    };
+
     const handleNodeSubmit = (nodePayload: any, pos: { x: number; y: number } | null) => {
         if (!cytoscapeData) return;
+
+        let newData: CytoscapeData;
 
         if (nodeToEdit) {
             // --- LÓGICA DE EDIÇÃO ---
@@ -82,8 +152,6 @@ function App() {
             });
 
             // 2. Atualizar as arestas existentes
-            // Alterar o ID nas arestas que saíam ou entravam neste nó,
-            // e depois remover as antigas arestas de entrada para as reconstruir.
             let updatedEdges = cytoscapeData.elements.edges
                 .map((edge) => {
                     const newEdge = { ...edge };
@@ -114,20 +182,20 @@ function App() {
                 }
             }
 
-            setCytoscapeData({
+            newData = {
                 ...cytoscapeData,
                 elements: {
                     nodes: updatedNodes,
                     edges: [...updatedEdges, ...newEdges],
                 },
-            });
+            };
 
             // Fechar o modo de edição
             setNodeToEdit(null);
             setSidePanelVisibility(false);
 
         } else {
-            // --- LÓGICA DE CRIAÇÃO (A tua lógica original) ---
+            // --- LÓGICA DE CRIAÇÃO ---
             const positionToUse = pos || { x: 0, y: 0 };
             const newId =
                 nodePayload.label === "" ? `node_${Math.random().toString(36)}` : nodePayload.label;
@@ -167,15 +235,18 @@ function App() {
                 }
             }
 
-            setCytoscapeData({
+            newData = {
                 ...cytoscapeData,
                 elements: {
                     edges: [...cytoscapeData.elements.edges, ...newEdges],
                     nodes: [...cytoscapeData.elements.nodes, newNode],
                 },
-            });
+            };
             setNewNodePos(null);
         }
+
+        setCytoscapeData(newData);
+        saveGraphToSession(newData);
     };
 
     return (
@@ -190,6 +261,12 @@ function App() {
                     : `"menubar" "cytoscape"`,
             }}
         >
+            <RestoreModal
+                isOpen={isRestoreModalOpen}
+                onRestore={handleRestoreChanges}
+                onDiscard={handleDiscardChanges}
+            />
+
             <MenuBar
                 style={{
                     gridArea: "menubar",
@@ -213,7 +290,7 @@ function App() {
                 }}
                 editorMode={{
                     isActive: editorMode,
-                    setMode: setEditorMode,
+                    setMode: handleToggleEditorMode,
                 }}
             />
 
@@ -239,7 +316,7 @@ function App() {
                     }}
                     editorMode={{
                         isActive: editorMode,
-                        setMode: setEditorMode,
+                        setMode: handleToggleEditorMode,
                     }}
                     newNodePosition={newNodePos}
                     onCreateNode={handleNodeSubmit}
@@ -281,6 +358,7 @@ function App() {
                 stylesheet={cytoscapeStylesheet}
                 nodeColor={nodeColor}
                 selectedNodeId={selectedNode?.id ?? null}
+                editorMode={editorMode}
                 onNodeSelected={(node: any, pos: { x: number; y: number }) => {
                     setSelectedEdge(null);
                     setEdgePopupPos(null);
@@ -308,6 +386,7 @@ function App() {
                     setSidePanelVisibility(true);
                     setEditorMode(true);
                 }}
+                onDeleteNodeRequested={handleNodeDelete}
             />
         </main>
     );

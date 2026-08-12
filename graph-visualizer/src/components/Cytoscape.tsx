@@ -22,8 +22,10 @@ expandCollapse(cytoscape);
 const setupContextMenus = (
     cy: cytoscape.Core, 
     api: any, 
+    editorMode: boolean = false,
     onAddNodeRequested?: (pos: any) => void,
-    onEditNodeRequested?: (node: any) => void
+    onEditNodeRequested?: (node: any) => void,
+    onDeleteNodeRequested?: (nodeId: string) => void
 ) => {
     let clickedPos = { x: 0, y: 0 };
     cy.on("cxttapstart", (e) => { if (e.position) clickedPos = e.position; });
@@ -33,8 +35,18 @@ const setupContextMenus = (
         activeFillColor: "#2d293300",
         commands: (ele: any) => [
             { fillColor: "rgba(64, 67, 75, 0.9)", content: "Log Info", select: (e: any) => console.log("Selected node ID:", e.id()) },
-            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Edit", select: (e: any) => onEditNodeRequested?.(e.data()) },
-            { fillColor: "rgba(75, 26, 38, 0.9)", content: "Delete", select: (e: any) => cy.remove(e) },
+            ...(editorMode ? [
+                { fillColor: "rgba(64, 67, 75, 0.9)", content: "Edit", select: (e: any) => onEditNodeRequested?.(e.data()) },
+                { 
+                    fillColor: "rgba(75, 26, 38, 0.9)", 
+                    content: "Delete", 
+                    select: (e: any) => {
+                        const deletedId = e.id();
+                        cy.remove(e);
+                        onDeleteNodeRequested?.(deletedId);
+                    } 
+                },
+            ] : []),
             ...(api?.isCollapsible(ele) ? [{ content: "Collapse", select: (e: any) => api.collapse(e) }] : []),
             ...(api?.isExpandable(ele) ? [{ content: "Expand", select: (e: any) => api.expand(e) }] : [])
         ]
@@ -44,7 +56,9 @@ const setupContextMenus = (
         selector: "core",
         activeFillColor: "#533b6e00",
         commands: [
-            { fillColor: "rgba(32, 70, 92, 0.79)", content: "＋ Add Node", select: () => onAddNodeRequested?.(clickedPos) },
+            ...(editorMode ? [
+                { fillColor: "rgba(32, 70, 92, 0.79)", content: "＋ Add Node", select: () => onAddNodeRequested?.(clickedPos) },
+            ] : []),
             { fillColor: "rgba(64, 67, 75, 0.9)", content: "Expand All", select: () => api?.expandAll() },
             { fillColor: "rgba(64, 67, 75, 0.9)", content: "Collapse All", select: () => api?.collapseAll() }
         ]
@@ -79,10 +93,12 @@ type Props = {
     onEdgeSelected?: (edge: any, pos: { x: number; y: number }) => void;
     onAddNodeRequested?: (pos: { x: number; y: number }) => void;
     onEditNodeRequested?: (node: any) => void;
+    onDeleteNodeRequested?: (nodeId: string) => void;
+    editorMode?: boolean;
 };
 
 export default function CytoscapeGraph({
-    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested
+    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested, editorMode = false
 }: Props) {
     const cyRef = useRef<cytoscape.Core | null>(null);
     const apiRef = useRef<any>(null);
@@ -152,14 +168,14 @@ export default function CytoscapeGraph({
         };
         cy.on("tap", "edge", onEdgeTap);
 
-        const menus = setupContextMenus(cy, apiRef.current, onAddNodeRequested, onEditNodeRequested);
+        const menus = setupContextMenus(cy, apiRef.current, editorMode, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested);
 
         return () => {
             cy.off("tap", "node", onNodeTap);
             cy.off("tap", "edge", onEdgeTap);
             menus.forEach(m => m.destroy());
         };
-    }, [cyReady, cytoscapeData, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested]);
+    }, [cyReady, cytoscapeData, editorMode, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested]);
 
     return (
         <div style={style} ref={containerRef}>
