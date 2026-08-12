@@ -284,17 +284,8 @@ function App() {
                 onNodeSelected={(node: any, pos: { x: number; y: number }) => {
                     setSelectedEdge(null);
                     setEdgePopupPos(null);
-                    if (editorMode) {
-                        setSidePanelVisibility(true);
-                        setNodeToEdit(node);
-                        setSelectedNode(null);
-                        setPopupPos(null);
-                    } else {
-                        setSelectedNode(node);
-                        setPopupPos(pos);
-                        setNodeToEdit(null);
-                    }
-                    
+                    setSelectedNode(node);
+                    setPopupPos(pos);
                 }}
                 onEdgeSelected={(edge: any, pos: { x: number; y: number }) => {
                     setSelectedEdge(edge);
@@ -305,6 +296,15 @@ function App() {
                 onAddNodeRequested={(pos) => {
                     setNewNodePos(pos);
                     setNodeToEdit(null);
+                    setSidePanelVisibility(true);
+                    setEditorMode(true);
+                }}
+                onEditNodeRequested={(node: any) => {
+                    setSelectedEdge(null);
+                    setEdgePopupPos(null);
+                    setSelectedNode(null);
+                    setPopupPos(null);
+                    setNodeToEdit(node);
                     setSidePanelVisibility(true);
                     setEditorMode(true);
                 }}

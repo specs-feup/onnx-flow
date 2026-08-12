@@ -19,7 +19,12 @@ expandCollapse(cytoscape);
 
 // --- HELPER FUNCTIONS ---
 
-const setupContextMenus = (cy: cytoscape.Core, api: any, onAddNodeRequested?: (pos: any) => void) => {
+const setupContextMenus = (
+    cy: cytoscape.Core, 
+    api: any, 
+    onAddNodeRequested?: (pos: any) => void,
+    onEditNodeRequested?: (node: any) => void
+) => {
     let clickedPos = { x: 0, y: 0 };
     cy.on("cxttapstart", (e) => { if (e.position) clickedPos = e.position; });
 
@@ -28,6 +33,7 @@ const setupContextMenus = (cy: cytoscape.Core, api: any, onAddNodeRequested?: (p
         activeFillColor: "#2d293300",
         commands: (ele: any) => [
             { fillColor: "rgba(64, 67, 75, 0.9)", content: "Log Info", select: (e: any) => console.log("Selected node ID:", e.id()) },
+            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Edit", select: (e: any) => onEditNodeRequested?.(e.data()) },
             { fillColor: "rgba(75, 26, 38, 0.9)", content: "Delete", select: (e: any) => cy.remove(e) },
             ...(api?.isCollapsible(ele) ? [{ content: "Collapse", select: (e: any) => api.collapse(e) }] : []),
             ...(api?.isExpandable(ele) ? [{ content: "Expand", select: (e: any) => api.expand(e) }] : [])
@@ -72,10 +78,11 @@ type Props = {
     onNodeSelected?: (node: any, pos: { x: number; y: number }) => void;
     onEdgeSelected?: (edge: any, pos: { x: number; y: number }) => void;
     onAddNodeRequested?: (pos: { x: number; y: number }) => void;
+    onEditNodeRequested?: (node: any) => void;
 };
 
 export default function CytoscapeGraph({
-    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested
+    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested
 }: Props) {
     const cyRef = useRef<cytoscape.Core | null>(null);
     const apiRef = useRef<any>(null);
@@ -145,14 +152,14 @@ export default function CytoscapeGraph({
         };
         cy.on("tap", "edge", onEdgeTap);
 
-        const menus = setupContextMenus(cy, apiRef.current, onAddNodeRequested);
+        const menus = setupContextMenus(cy, apiRef.current, onAddNodeRequested, onEditNodeRequested);
 
         return () => {
             cy.off("tap", "node", onNodeTap);
             cy.off("tap", "edge", onEdgeTap);
             menus.forEach(m => m.destroy());
         };
-    }, [cyReady, cytoscapeData, onNodeSelected, onEdgeSelected, onAddNodeRequested]);
+    }, [cyReady, cytoscapeData, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested]);
 
     return (
         <div style={style} ref={containerRef}>
