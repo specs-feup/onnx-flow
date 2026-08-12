@@ -224,7 +224,23 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                     selectedArray = "rawData";
                     break;
             }
-            onnxData.proto[selectedArray] = protoData;
+            let processedProtoData: any[];
+            if (selectedArray === "floatData" || selectedArray === "doubleData" || selectedArray === "int32Data") {
+                processedProtoData = protoData.map((item) => Number(item)).filter((n) => !isNaN(n));
+            } else if (selectedArray === "int64Data" || selectedArray === "uint64Data") {
+                processedProtoData = protoData.map((item) => {
+                    try {
+                        return BigInt(item);
+                    } catch {
+                        return Number(item) || 0;
+                    }
+                });
+            } else if (selectedArray === "stringData") {
+                processedProtoData = protoData.map((item) => String(item));
+            } else {
+                processedProtoData = protoData;
+            }
+            onnxData.proto[selectedArray] = processedProtoData;
         }
 
         console.log(onnxData);
@@ -242,7 +258,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
     return (
         <>
             <label htmlFor="id">Node ID: </label>
-            <input name="id" type="text" value={nodeId} color="white" />
+            <input name="id" type="text" value={nodeId} onChange={(e) => setNodeId(e.target.value)} color="white" />
             <button
                 type="button"
                 onClick={() => setNodeId(`node_${Math.random().toString(36).substr(2, 9)}`)}

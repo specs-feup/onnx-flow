@@ -56,7 +56,7 @@ export default function ConstantNodeAdder({
             onChange={setConstantShape}
         />
         {constantShape.length !== 0 && 
-                <p>Expected Value: {constantShape.reduce((total, v) => v * total)}</p>}
+                <p>Expected Value: {constantShape.reduce((acc, v) => acc * (Number(v) || 1), 1)}</p>}
         <p>Actual Values: {protoData.length }</p>
         <label>Data:</label>
         <textarea 

@@ -145,30 +145,30 @@ export default function OperationNodeAdder({
         {Object.values(operationType.attributes).map((att: AttributeDefinition, index: number) => {
             let pattern;
             
-            switch (att.type) {
-                default:
-                case AttributeType.UNDEFINED:
-                    pattern = ".*";
-                    break;
-                case AttributeType.FLOAT:
-                    pattern = "^-?[1-9]\d*\.\d+$"; 
-                    break;
-                case AttributeType.INT:
-                    pattern = "^-?[1-9]\d*$";
-                    break;
-                case AttributeType.STRING:
-                    pattern = "^[a-zA-Z0-9_\-]+$";
-                    break;
-                case AttributeType.FLOATS:
-                    pattern = "^-?[1-9]\d*\.\d+(,-?[1-9]\d*\.\d+)*$";
-                    break;
-                case AttributeType.INTS:
-                    pattern = "^-?[1-9]\d*(,-?[1-9]\d*)*$";
-                    break;
-                case AttributeType.STRINGS:
-                    pattern = "^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+)*$" 
-                    break;
-            }
+                switch (att.type) {
+                    default:
+                    case AttributeType.UNDEFINED:
+                        pattern = ".*";
+                        break;
+                    case AttributeType.FLOAT:
+                        pattern = "^-?\\d+(\\.\\d+)?$"; 
+                        break;
+                    case AttributeType.INT:
+                        pattern = "^-?\\d+$";
+                        break;
+                    case AttributeType.STRING:
+                        pattern = "^[a-zA-Z0-9_\\-]+$";
+                        break;
+                    case AttributeType.FLOATS:
+                        pattern = "^-?\\d+(\\.\\d+)?(,-?\\d+(\\.\\d+)?)*$";
+                        break;
+                    case AttributeType.INTS:
+                        pattern = "^-?\\d+(,-?\\d+)*$";
+                        break;
+                    case AttributeType.STRINGS:
+                        pattern = "^[a-zA-Z0-9_\\-]+(,[a-zA-Z0-9_\\-]+)*$";
+                        break;
+                }
 
             console.log(StandardOps.find(op => op.opType === operationType.opType));
 
