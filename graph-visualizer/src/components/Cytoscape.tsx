@@ -19,6 +19,81 @@ expandCollapse(cytoscape);
 
 // --- HELPER FUNCTIONS ---
 
+const expandedRegionsMap = new Map<string, number>();
+
+function getRegionName(nodeData: any, region: any, index: number): string {
+    if (region?.name) return region.name;
+    if (region?.data?.name) return region.data.name;
+    const opType = nodeData?.onnxData?.opType;
+    if (opType === "If") {
+        return index === 0 ? "then_branch" : index === 1 ? "else_branch" : `branch_${index + 1}`;
+    }
+    if (opType === "Loop" || opType === "Scan") {
+        return index === 0 ? "body" : `region_${index + 1}`;
+    }
+    return `Region ${index + 1}`;
+}
+
+function showRegion(cy: cytoscape.Core, api: any, nodeId: string, regionIndex: number) {
+    const parentNode = cy.getElementById(nodeId);
+    if (!parentNode || parentNode.empty()) return;
+
+    if (api && api.isExpandable(parentNode)) {
+        api.expand(parentNode);
+    }
+
+    expandedRegionsMap.set(nodeId, regionIndex);
+
+    const children = cy.nodes(`[parent = "${nodeId}"]`);
+    children.forEach((child) => {
+        const childRegionIdx = child.data("regionIndex");
+        if (childRegionIdx === regionIndex || childRegionIdx === undefined) {
+            child.style("display", "element");
+            child.connectedEdges().forEach((edge) => {
+                const srcVis = cy.getElementById(edge.data("source")).style("display") !== "none";
+                const tgtVis = cy.getElementById(edge.data("target")).style("display") !== "none";
+                if (srcVis && tgtVis) {
+                    edge.style("display", "element");
+                }
+            });
+        } else {
+            child.style("display", "none");
+            child.connectedEdges().style("display", "none");
+        }
+    });
+}
+
+function hideAllRegions(cy: cytoscape.Core, api: any, nodeId: string) {
+    const parentNode = cy.getElementById(nodeId);
+    if (!parentNode || parentNode.empty()) return;
+
+    expandedRegionsMap.delete(nodeId);
+
+    if (api && api.isCollapsible(parentNode)) {
+        api.collapse(parentNode);
+    } else {
+        const children = cy.nodes(`[parent = "${nodeId}"]`);
+        children.style("display", "none");
+        children.connectedEdges().style("display", "none");
+    }
+}
+
+function handleCollapseAll(cy: cytoscape.Core, api: any) {
+    expandedRegionsMap.clear();
+    cy.elements().removeStyle("display");
+    if (api && typeof api.collapseAll === "function") {
+        api.collapseAll({ animate: false });
+    }
+}
+
+function handleExpandAll(cy: cytoscape.Core, api: any) {
+    expandedRegionsMap.clear();
+    if (api && typeof api.expandAll === "function") {
+        api.expandAll({ animate: false });
+    }
+    cy.elements().removeStyle("display");
+}
+
 const setupContextMenus = (
     cy: cytoscape.Core, 
     api: any, 
@@ -33,23 +108,58 @@ const setupContextMenus = (
     const nodeMenu = cy.cxtmenu({
         selector: "node",
         activeFillColor: "#2d293300",
-        commands: (ele: any) => [
-            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Log Info", select: (e: any) => console.log("Selected node ID:", e.id()) },
-            ...(editorMode ? [
-                { fillColor: "rgba(64, 67, 75, 0.9)", content: "Edit", select: (e: any) => onEditNodeRequested?.(e.data()) },
-                { 
-                    fillColor: "rgba(75, 26, 38, 0.9)", 
-                    content: "Delete", 
-                    select: (e: any) => {
-                        const deletedId = e.id();
-                        cy.remove(e);
-                        onDeleteNodeRequested?.(deletedId);
-                    } 
-                },
-            ] : []),
-            ...(api?.isCollapsible(ele) ? [{ content: "Collapse", select: (e: any) => api.collapse(e) }] : []),
-            ...(api?.isExpandable(ele) ? [{ content: "Expand", select: (e: any) => api.expand(e) }] : [])
-        ]
+        commands: (ele: any) => {
+            const onnxData = ele.data("onnxData");
+            const nodeId = ele.id();
+
+            const cmds: any[] = [
+                { fillColor: "rgba(64, 67, 75, 0.9)", content: "Log Info", select: (e: any) => console.log("Selected node ID:", e.id()) },
+                ...(editorMode ? [
+                    { fillColor: "rgba(64, 67, 75, 0.9)", content: "Edit", select: (e: any) => onEditNodeRequested?.(e.data()) },
+                    { 
+                        fillColor: "rgba(75, 26, 38, 0.9)", 
+                        content: "Delete", 
+                        select: (e: any) => {
+                            const deletedId = e.id();
+                            cy.remove(e);
+                            onDeleteNodeRequested?.(deletedId);
+                        } 
+                    },
+                ] : []),
+            ];
+
+            if (onnxData?.kind === "OperationNode" && Array.isArray(onnxData.regions) && onnxData.regions.length > 1) {
+                const currentExpandedIdx = expandedRegionsMap.get(nodeId);
+
+                onnxData.regions.forEach((region: any, idx: number) => {
+                    const regionName = getRegionName(ele.data(), region, idx);
+                    const isThisExpanded = currentExpandedIdx === idx;
+
+                    if (isThisExpanded) {
+                        cmds.push({
+                            fillColor: "rgba(46, 117, 89, 0.9)",
+                            content: `Collapse ${regionName}`,
+                            select: () => hideAllRegions(cy, api, nodeId),
+                        });
+                    } else {
+                        cmds.push({
+                            fillColor: "rgba(46, 89, 117, 0.9)",
+                            content: `Expand ${regionName}`,
+                            select: () => showRegion(cy, api, nodeId, idx),
+                        });
+                    }
+                });
+            } else {
+                if (api?.isCollapsible(ele)) {
+                    cmds.push({ fillColor: "rgba(64, 67, 75, 0.9)", content: "Collapse", select: (e: any) => api.collapse(e) });
+                }
+                if (api?.isExpandable(ele)) {
+                    cmds.push({ fillColor: "rgba(64, 67, 75, 0.9)", content: "Expand", select: (e: any) => api.expand(e) });
+                }
+            }
+
+            return cmds;
+        }
     });
 
     const coreMenu = cy.cxtmenu({
@@ -59,8 +169,8 @@ const setupContextMenus = (
             ...(editorMode ? [
                 { fillColor: "rgba(32, 70, 92, 0.79)", content: "＋ Add Node", select: () => onAddNodeRequested?.(clickedPos) },
             ] : []),
-            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Expand All", select: () => api?.expandAll() },
-            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Collapse All", select: () => api?.collapseAll() }
+            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Expand All", select: () => handleExpandAll(cy, api) },
+            { fillColor: "rgba(64, 67, 75, 0.9)", content: "Collapse All", select: () => handleCollapseAll(cy, api) }
         ]
     });
 
@@ -132,7 +242,6 @@ export default function CytoscapeGraph({
     useEffect(() => {
         if (cytoscapeData) {
             getCy()?.layout(layout).run();
-            apiRef.current?.collapseAll({ animate: false });
         }
     }, [layout, cytoscapeData]);
 

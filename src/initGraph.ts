@@ -459,6 +459,12 @@ export function createGraphFromCytoscape(cyJson: any): OnnxGraph.Class {
             if (!onnxData.opType) {
                 throw new Error(`OperationNode '${id}' is missing required 'opType'.`);
             }
+            let regionGraphs: OnnxGraph.Class[] = [];
+            if (Array.isArray(onnxData.regions)) {
+                regionGraphs = onnxData.regions.map((regionJson: any) =>
+                    createGraphFromCytoscape(regionJson)
+                );
+            }
             graph
                 .addNode(id)
                 .init(
@@ -466,7 +472,7 @@ export function createGraphFromCytoscape(cyJson: any): OnnxGraph.Class {
                         onnxData.opType,
                         [],
                         onnxData.attributes ?? {},
-                        [],
+                        regionGraphs,
                         onnxData.metadata ?? {}
                     )
                 )
@@ -506,6 +512,9 @@ export function createGraphFromCytoscape(cyJson: any): OnnxGraph.Class {
     // Pass 3: Add graph edges
     if (Array.isArray(edges)) {
         for (const edge of edges) {
+            if (edge.data?.isCrossGraph || edge.data?.id?.startsWith("cross_edge_")) {
+                continue;
+            }
             const sourceId = edge.data?.source;
             const targetId = edge.data?.target;
             if (

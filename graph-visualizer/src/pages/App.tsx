@@ -153,11 +153,27 @@ function App() {
         setEditorMode(true);
     };
 
+    const getDescendantNodeIds = (parentIds: Set<string>, allNodes: any[]): Set<string> => {
+        const toDelete = new Set<string>(parentIds);
+        let added = true;
+        while (added) {
+            added = false;
+            for (const n of allNodes) {
+                if (n.data?.parent && toDelete.has(n.data.parent) && !toDelete.has(n.data.id)) {
+                    toDelete.add(n.data.id);
+                    added = true;
+                }
+            }
+        }
+        return toDelete;
+    };
+
     const handleNodeDelete = (nodeId: string) => {
         if (!cytoscapeData) return;
-        const updatedNodes = cytoscapeData.elements.nodes.filter((node: any) => node.data.id !== nodeId);
+        const deletedNodeIds = getDescendantNodeIds(new Set([nodeId]), cytoscapeData.elements.nodes);
+        const updatedNodes = cytoscapeData.elements.nodes.filter((node: any) => !deletedNodeIds.has(node.data.id));
         const updatedEdges = cytoscapeData.elements.edges.filter(
-            (edge: any) => edge.data.source !== nodeId && edge.data.target !== nodeId
+            (edge: any) => !deletedNodeIds.has(edge.data.source) && !deletedNodeIds.has(edge.data.target)
         );
         const newData: CytoscapeData = {
             ...cytoscapeData,
@@ -166,7 +182,7 @@ function App() {
                 edges: updatedEdges,
             },
         };
-        if (nodeToEdit?.id === nodeId) {
+        if (nodeToEdit && deletedNodeIds.has(nodeToEdit.id)) {
             setNodeToEdit(null);
         }
         setCytoscapeData(newData);
@@ -183,7 +199,7 @@ function App() {
             const originalId = nodeToEdit.id;
             const newId = nodePayload.onnxData.id;
 
-            // 1. Substituir os dados do nó existente
+            // 1. Substituir os dados do nó existente e atualizar referências de parent se o ID mudou
             const updatedNodes = cytoscapeData.elements.nodes.map((node: any) => {
                 if (node.data.id === originalId) {
                     return {
@@ -192,6 +208,15 @@ function App() {
                             ...node.data,
                             id: newId,
                             onnxData: nodePayload.onnxData,
+                        },
+                    };
+                }
+                if (node.data.parent === originalId) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            parent: newId,
                         },
                     };
                 }
@@ -448,7 +473,7 @@ function App() {
                     isVisible: isSidePanelVisible,
                     setVisibility: setSidePanelVisibility,
                 }}
-                setLayout={(layoutName: any) => setCytoscapeLayout({ name: layoutName })}
+                setLayout={(l: any) => setCytoscapeLayout(typeof l === "string" ? { name: l } : l)}
                 setStylesheet={(sheet: any) => setCytoscapeStylesheet(sheet)}
                 nodeColor={nodeColor}
                 selectedNodeId={selectedNode?.id ?? null}

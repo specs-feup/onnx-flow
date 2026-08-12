@@ -16,46 +16,68 @@ export interface TransformationOpportunity {
 }
 
 export function regionsToCompoundNodes(graphData: any): any {
-  const compoundNodes = [];
-  const compoundEdges = [];
+  if (!graphData || !graphData.elements || !Array.isArray(graphData.elements.nodes)) {
+    return graphData;
+  }
 
-  const idSet: Set<string> = new Set();
+  const allNodes = [...graphData.elements.nodes];
+  const allEdges = [...(graphData.elements.edges || [])];
+  const existingNodeIds: Set<string> = new Set(
+    allNodes.map((n: any) => n.data?.id).filter(Boolean),
+  );
 
-  for (const node of graphData.elements.nodes) {
-    idSet.add(node.data.id);
-  } 
+  function extractRegions(nodes: any[]) {
+    for (const node of nodes) {
+      const onnxData = node?.data?.onnxData;
+      if (
+        onnxData?.kind === "OperationNode" &&
+        Array.isArray(onnxData.regions) &&
+        onnxData.regions.length > 0
+      ) {
+        const parentId = node.data.id;
 
-  for (const node of graphData.elements.nodes) {
-    if (node.data.onnxData.kind === "OperationNode" && ( 
-        node.data.onnxData.opType === "Loop" ||
-        node.data.onnxData.opType === "If" ||
-        node.data.onnxData.opType === "Scan"
-      )) {
-      if (node.data.onnxData.regions !== 0) {
-        for (const innerNode of node.data.onnxData.regions[0].elements.nodes) {
-          if (idSet.has(innerNode.data.id)) {
-            continue;
-          }
-          const newNode = {
-            ...innerNode,
-            data: {
-              ...innerNode.data,
-              parent: node.data.id  ,
+        for (let regionIdx = 0; regionIdx < onnxData.regions.length; regionIdx++) {
+          const region = onnxData.regions[regionIdx];
+          if (region?.elements?.nodes && Array.isArray(region.elements.nodes)) {
+            for (const innerNode of region.elements.nodes) {
+              if (!innerNode?.data?.id) continue;
+
+              if (!existingNodeIds.has(innerNode.data.id)) {
+                existingNodeIds.add(innerNode.data.id);
+                const compoundNode = {
+                  ...innerNode,
+                  data: {
+                    ...innerNode.data,
+                    parent: parentId,
+                    regionIndex: regionIdx,
+                  },
+                };
+                allNodes.push(compoundNode);
+              }
             }
           }
-          compoundNodes.push(newNode);
+
+          if (region?.elements?.edges && Array.isArray(region.elements.edges)) {
+            allEdges.push(...region.elements.edges);
+          }
+
+          if (region?.elements?.nodes) {
+            extractRegions(region.elements.nodes);
+          }
         }
-        compoundEdges.push(...node.data.onnxData.regions[0].elements.edges)
       }
     }
   }
 
-  graphData.elements.nodes.push(...compoundNodes);
-  graphData.elements.edges.push(...compoundEdges);
+  extractRegions(allNodes);
 
-  console.log(graphData)
-
-  return graphData;
+  return {
+    ...graphData,
+    elements: {
+      nodes: allNodes,
+      edges: allEdges,
+    },
+  };
 }
 
 export async function startNewSession(
