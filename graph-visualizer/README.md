@@ -186,3 +186,17 @@ npm install
   ```bash
   npm run webapp:backend
   ```
+
+### Known Bugs
+
+  - **Compound Nodes for Subgraphs Visualization**:
+  If too many Compound Nodes are being rendered, performance may be affected, as well as some bugs may occur, like edges being deleted or a collapsed compound node loosing his compound property.
+  
+  - **Transformation Opportunities Sidepanel**:
+  When failing to fetch from endpoint, the Sidepanel simply doesn't open instead of showing any error.
+
+  - **createGraphFromCytoscape() in initGraph.ts**:
+  This function is a prototype to process the mixed cytoscape + ONNX format into pure ONNX and should be revised.
+
+  - **Creating Loop Body when creating a new Operation Node**:
+  Nodes being used inside a Loop body seem to be deleted and become unrecognized by the compiler (?? maybe the problem is from createGraphFromCytoscape) 

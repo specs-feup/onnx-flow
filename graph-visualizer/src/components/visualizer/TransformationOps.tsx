@@ -27,6 +27,7 @@ export default function TransformationOps(props: {
     return (
         <>
             {props.transformationOps.ops.map((op) => (
+                <>
                 <button
                     onClick={async () => {
                         const operationId: string = op.id;
@@ -46,6 +47,8 @@ export default function TransformationOps(props: {
                 >
                     {op.recipeName} - {op.targetNodeId}
                 </button>
+                <span>{op.description}</span>
+                </>
             ))}
         </>
     );
