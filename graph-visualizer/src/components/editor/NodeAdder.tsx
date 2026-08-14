@@ -15,6 +15,7 @@ interface NodeAdderProps {
     position?: { x: number; y: number } | null;
     onSubmit?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
     valueNodes: Array<unknown>;
+    graphNodes?: Array<unknown>;
     nodeToEdit?: any;   
 }
 
@@ -24,7 +25,7 @@ const nodeKindOptions = [
         { value: "operation", label: "Operation Node" },
     ];
 
-export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }: NodeAdderProps) {
+export default function NodeAdder({ position, onSubmit, valueNodes, graphNodes, nodeToEdit }: NodeAdderProps) {
     console.log(nodeToEdit)
     /* General Attributes*/
     const [nodeId, setNodeId] = useState<string>("");
@@ -81,10 +82,60 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                 setOperationInputs(formInputs);
 
                 if (matchedOp.attributes) {
+                    let regionIndex = 0;
                     const mappedAttributes = Object.values(matchedOp.attributes).map((attr) => {
                         const existingVal = onnx.attributes?.[attr.name];
                         if (existingVal !== undefined) {
+                            if (attr.type === AttributeType.GRAPH || attr.type === AttributeType.GRAPHS) {
+                                regionIndex++;
+                                if (Array.isArray(existingVal)) return existingVal;
+                                if (typeof existingVal === "string") return existingVal.split(",").map(s => s.trim()).filter(Boolean);
+                                if (typeof existingVal === "object" && existingVal !== null) {
+                                    if ("elements" in existingVal && (existingVal as any).elements?.nodes) {
+                                        return (existingVal as any).elements.nodes.map((n: any) => n.data?.id || n.id);
+                                    }
+                                    return existingVal;
+                                }
+                            }
+                            if (
+                                attr.type === AttributeType.TENSOR ||
+                                attr.type === AttributeType.SPARSE_TENSOR ||
+                                attr.type === AttributeType.TENSORS ||
+                                attr.type === AttributeType.SPARSE_TENSORS
+                            ) {
+                                return existingVal;
+                            }
                             return Array.isArray(existingVal) ? existingVal.join(",") : existingVal;
+                        }
+                        if (attr.type === AttributeType.GRAPH || attr.type === AttributeType.GRAPHS) {
+                            if (onnx.regions && onnx.regions[regionIndex]?.elements?.nodes) {
+                                const ids = onnx.regions[regionIndex].elements.nodes.map((n: any) => n.data?.id || n.id).filter(Boolean);
+                                regionIndex++;
+                                return ids;
+                            }
+                            if (graphNodes && Array.isArray(graphNodes)) {
+                                const childIds = graphNodes
+                                    .filter((n: any) => (n as any)?.data?.parent === onnx.id && ((n as any)?.data?.regionIndex === regionIndex || (n as any)?.data?.regionIndex === undefined))
+                                    .map((n: any) => (n as any)?.data?.id || (n as any)?.id)
+                                    .filter(Boolean);
+                                if (childIds.length > 0) {
+                                    regionIndex++;
+                                    return childIds;
+                                }
+                            }
+                            regionIndex++;
+                            return [];
+                        }
+                        if (
+                            attr.type === AttributeType.TENSOR ||
+                            attr.type === AttributeType.SPARSE_TENSOR ||
+                            attr.type === AttributeType.TENSORS ||
+                            attr.type === AttributeType.SPARSE_TENSORS
+                        ) {
+                            return {
+                                dataType: DataType.UNDEFINED,
+                                dims: [],
+                            };
                         }
                         return attr.defaultValue !== undefined ? attr.defaultValue : "";
                     });
@@ -137,18 +188,68 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
         } else if (nodeKind === "operation") {
     
             const parsedAttributes: Record<string, AttributeValue> = {};
+            const constructedRegions: any[] = [];
             
             if (operationType?.attributes) {
+                let regionIdx = 0;
                 Object.values(operationType.attributes).forEach((attr, index) => {
                     const val = operationAttributes[index];
                     
-                    if (val !== "" && val !== undefined) {
+                    if (val !== "" && val !== undefined && val !== null) {
                         if (attr.type === AttributeType.INT || attr.type === AttributeType.FLOAT) {
                             parsedAttributes[attr.name] = Number(val);
                         } else if (attr.type === AttributeType.INTS || attr.type === AttributeType.FLOATS) {
-                            parsedAttributes[attr.name] = String(val).split(",").map(Number);
+                            parsedAttributes[attr.name] = Array.isArray(val)
+                                ? val.map(Number)
+                                : String(val).split(",").map(Number);
                         } else if (attr.type === AttributeType.STRINGS) {
-                            parsedAttributes[attr.name] = String(val).split(",").map(s => s.trim());
+                            parsedAttributes[attr.name] = Array.isArray(val)
+                                ? val.map(s => String(s).trim())
+                                : String(val).split(",").map(s => s.trim());
+                        } else if (attr.type === AttributeType.GRAPH || attr.type === AttributeType.GRAPHS) {
+                            const nodeIds: string[] = Array.isArray(val)
+                                ? val.map((v: any) => (typeof v === "string" ? v : (v?.value || v?.id || v?.data?.id || String(v))))
+                                : typeof val === "string" && val.length > 0
+                                ? val.split(",").map(s => s.trim()).filter(Boolean)
+                                : [];
+                            parsedAttributes[attr.name] = nodeIds;
+
+                            const selectedIdSet = new Set(nodeIds);
+                            const allNodes = (graphNodes || valueNodes || []) as any[];
+                            const regionNodes = allNodes
+                                .filter((n: any) => selectedIdSet.has(n?.data?.id || n?.id))
+                                .map((n: any) => ({
+                                    ...JSON.parse(JSON.stringify(n)),
+                                    data: {
+                                        ...(n?.data || {}),
+                                        parent: nodeId,
+                                        regionIndex: regionIdx,
+                                    },
+                                }));
+                            constructedRegions.push({
+                                elements: {
+                                    nodes: regionNodes,
+                                    edges: [],
+                                },
+                            });
+                            regionIdx++;
+                        } else if (
+                            attr.type === AttributeType.TENSOR ||
+                            attr.type === AttributeType.SPARSE_TENSOR ||
+                            attr.type === AttributeType.TENSORS ||
+                            attr.type === AttributeType.SPARSE_TENSORS
+                        ) {
+                            if (typeof val === "object" && val !== null) {
+                                const tVal = val as any;
+                                parsedAttributes[attr.name] = {
+                                    name: attr.name,
+                                    dataType: tVal.dataType ?? tVal.literalType ?? DataType.UNDEFINED,
+                                    dims: tVal.dims ?? tVal.shape ?? [],
+                                    ...tVal,
+                                };
+                            } else {
+                                parsedAttributes[attr.name] = val;
+                            }
                         } else {
                             parsedAttributes[attr.name] = val;
                         }
@@ -166,7 +267,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                 kind: "OperationNode",
                 opType: operationType!.opType,
                 inputs: parsedInputs,
-                regions: [],
+                regions: constructedRegions,
                 attributes: parsedAttributes,
                 metadata: {},
             };
@@ -196,7 +297,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                     selectedArray = "floatData";
                     break;
                 case DataType.DOUBLE:
-                case DataType.COMPLEX128:
+                    case DataType.COMPLEX128:
                     selectedArray = "doubleData";
                     break;
                 case DataType.INT64:
@@ -300,6 +401,7 @@ export default function NodeAdder({ position, onSubmit, valueNodes, nodeToEdit }
                     setOperationInputs={setOperationInputs}
                     setOperationAttributes={setOperationAttributes}
                     valueNodes={valueNodes}
+                    graphNodes={graphNodes || valueNodes}
                     operationType={operationType} // Node Editor
                     operationInputs={operationInputs} // Node Editor
                     operationAttributes={operationAttributes} // Node Editor

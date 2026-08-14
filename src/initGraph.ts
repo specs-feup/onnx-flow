@@ -429,6 +429,11 @@ export function createGraphFromCytoscape(cyJson: any): OnnxGraph.Class {
             continue;
         }
 
+        // If this node has a parent in the current scope, it will be added inside the parent's region subgraph instead
+        if (node.data?.parent && nodes.some((n: any) => n.data?.id === node.data.parent)) {
+            continue;
+        }
+
         if (onnxData.kind === "TensorNode") {
             graph
                 .addNode(id)
@@ -485,6 +490,9 @@ export function createGraphFromCytoscape(cyJson: any): OnnxGraph.Class {
     for (const node of nodes) {
         const id = node.data?.id;
         const onnxData = node.data?.onnxData;
+        if (node.data?.parent && nodes.some((n: any) => n.data?.id === node.data.parent)) {
+            continue;
+        }
         if (onnxData?.kind === "OperationNode") {
             const opNode = graph.getNodeById(id)?.as(OperationNode);
             if (opNode && Array.isArray(onnxData.inputs)) {

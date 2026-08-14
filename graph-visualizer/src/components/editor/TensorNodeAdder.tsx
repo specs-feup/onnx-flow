@@ -19,9 +19,11 @@ interface TensorNodeAdderProps {
     setTensorDataType: (value: DataType) => void;
     setTensorShapeValue: (value: Shape) => void;
     tensorShapeValue: Shape;
-    setTensorKind: (value: TensorNode.TensorKind) => void;
+    setTensorKind?: (value: TensorNode.TensorKind) => void;
     tensorDataType: DataType;
-    tensorKind: TensorNode.TensorKind;
+    tensorKind?: TensorNode.TensorKind;
+    showTensorKind?: boolean;
+    disabled?: boolean;
 }
 
 export default function TensorNodeAdder({
@@ -32,6 +34,8 @@ export default function TensorNodeAdder({
     setTensorKind,
     tensorDataType,
     tensorKind,
+    showTensorKind = true,
+    disabled = false,
 }: TensorNodeAdderProps) {
     /*
     -- literalType: DataType
@@ -41,30 +45,36 @@ export default function TensorNodeAdder({
     ?? metadata: AttributeMap
     */
     return (
-        <>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? "none" : "auto" }}>
             <label htmlFor="dataType">Literal Type: </label>
             <Select
+                isDisabled={disabled}
                 isClearable
                 name="dataType"
                 styles={reactSelectStyles}
                 options={dataTypeOptions}
-                onChange={(e: any) => setTensorDataType(e.value)}
+                onChange={(e: any) => setTensorDataType(e?.value ?? DataType.UNDEFINED)}
                 value={dataTypeOptions.find(opt => opt.value === tensorDataType) || null} // Node Editor
             />
 
             <label htmlFor="shape">Shape:</label>
-            <DimensionBuilder value={tensorShapeValue} onChange={setTensorShapeValue} />
+            <DimensionBuilder value={tensorShapeValue || []} onChange={setTensorShapeValue} />
 
-            <label htmlFor="tensorKind">Tensor Kind:</label>
-            <Select
-                isClearable
-                name="tensorKind"
-                styles={reactSelectStyles}
-                options={tensorTypes}
-                onChange={(e: any) => setTensorKind(e.value)}
-                value={tensorTypes.find(opt => opt.value === tensorKind) || null} // Node Editor
-                defaultValue={tensorTypes[0]}
-            />
-        </>
+            {showTensorKind && setTensorKind && (
+                <>
+                    <label htmlFor="tensorKind">Tensor Kind:</label>
+                    <Select
+                        isDisabled={disabled}
+                        isClearable
+                        name="tensorKind"
+                        styles={reactSelectStyles}
+                        options={tensorTypes}
+                        onChange={(e: any) => setTensorKind(e?.value ?? "intermediate")}
+                        value={tensorTypes.find(opt => opt.value === tensorKind) || null} // Node Editor
+                        defaultValue={tensorTypes[0]}
+                    />
+                </>
+            )}
+        </div>
     );
 }

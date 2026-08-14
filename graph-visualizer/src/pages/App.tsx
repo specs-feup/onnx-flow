@@ -18,6 +18,8 @@ import {
 import "@/styles/App.css";
 import defaultStylesheet from "@/styles/cytoscape/default.ts";
 import { valueNodeExtractor } from "@/utils/ValueNodeExtractor.ts";
+import { StandardOps } from "@specs-feup/onnx-flow/Onnx/Schema/definitions/StandardOps";
+import { AttributeType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
 function App() {
     const { sessionId } = useParams();
@@ -194,12 +196,109 @@ function App() {
 
         let newData: CytoscapeData;
 
+        // Extract GRAPH attributes and construct region graphs with copied nodes and edges
+        const buildRegionsAndParentMap = (
+            opType: string,
+            attributes: Record<string, any> | undefined,
+            targetLoopId: string,
+            existingNodes: any[],
+            existingEdges: any[]
+        ) => {
+            const regions: any[] = [];
+            const selectedNodesMap = new Map<string, number>(); // nodeId -> regionIndex
+
+            if (!attributes) return { regions, selectedNodesMap };
+
+            const opDef = StandardOps.find((op) => op.opType === opType);
+            let regionIdx = 0;
+
+            const processGraphAttr = (val: any) => {
+                const nodeIds: string[] = Array.isArray(val)
+                    ? val.map((v: any) => (typeof v === "string" ? v : (v?.value || v?.id || v?.data?.id || String(v))))
+                    : typeof val === "string" && val.length > 0
+                    ? val.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : (val && typeof val === "object" && Array.isArray((val as any).elements?.nodes))
+                    ? (val as any).elements.nodes.map((n: any) => n.data?.id || n.id).filter(Boolean)
+                    : [];
+
+                const selectedIdSet = new Set(nodeIds);
+                nodeIds.forEach((id) => selectedNodesMap.set(id, regionIdx));
+
+                const regionNodes = selectedIdSet.size > 0
+                    ? nodeIds
+                          .map((id) => existingNodes.find((n: any) => (n.data?.id || n.id) === id))
+                          .filter(Boolean)
+                          .map((node: any) => ({
+                              ...JSON.parse(JSON.stringify(node)),
+                              data: {
+                                  ...(node.data || {}),
+                                  parent: targetLoopId,
+                                  regionIndex: regionIdx,
+                              },
+                          }))
+                    : [];
+
+                const regionEdges = existingEdges
+                    .filter((e: any) => selectedIdSet.has(e.data?.source) && selectedIdSet.has(e.data?.target))
+                    .map((e: any) => ({
+                        ...JSON.parse(JSON.stringify(e)),
+                        data: {
+                            ...(e.data || {}),
+                        },
+                    }));
+
+                regions.push({
+                    elements: {
+                        nodes: regionNodes,
+                        edges: regionEdges,
+                    },
+                });
+                regionIdx++;
+            };
+
+            if (opDef && opDef.attributes) {
+                Object.values(opDef.attributes).forEach((attr) => {
+                    if (attr.type === AttributeType.GRAPH || attr.type === AttributeType.GRAPHS) {
+                        const val = attributes[attr.name];
+                        processGraphAttr(val);
+                    }
+                });
+            } else {
+                Object.entries(attributes).forEach(([key, val]) => {
+                    if (key === "body" || key === "then_branch" || key === "else_branch") {
+                        processGraphAttr(val);
+                    }
+                });
+            }
+
+            return { regions, selectedNodesMap };
+        };
+
         if (nodeToEdit) {
             // --- LÓGICA DE EDIÇÃO ---
             const originalId = nodeToEdit.id;
-            const newId = nodePayload.onnxData.id;
+            const newId = nodePayload.onnxData.id || originalId;
+            nodePayload.onnxData.id = newId;
 
-            // 1. Substituir os dados do nó existente e atualizar referências de parent se o ID mudou
+            let updatedRegions: any[] = nodePayload.onnxData.regions || [];
+            const selectedNodesMap = new Map<string, number>();
+
+            if (nodePayload.onnxData.kind === "OperationNode") {
+                const { regions, selectedNodesMap: sMap } = buildRegionsAndParentMap(
+                    nodePayload.onnxData.opType,
+                    nodePayload.onnxData.attributes,
+                    newId,
+                    cytoscapeData.elements.nodes,
+                    cytoscapeData.elements.edges
+                );
+                if (regions.length > 0) {
+                    updatedRegions = regions;
+                }
+                nodePayload.onnxData.regions = updatedRegions;
+                sMap.forEach((rIdx, nId) => selectedNodesMap.set(nId, rIdx));
+            }
+
+            // 1. Substituir os dados do nó existente e atualizar referências de parent
             const updatedNodes = cytoscapeData.elements.nodes.map((node: any) => {
                 if (node.data.id === originalId) {
                     return {
@@ -211,13 +310,23 @@ function App() {
                         },
                     };
                 }
-                if (node.data.parent === originalId) {
+                if (selectedNodesMap.has(node.data.id)) {
                     return {
                         ...node,
                         data: {
                             ...node.data,
                             parent: newId,
+                            regionIndex: selectedNodesMap.get(node.data.id),
                         },
+                    };
+                }
+                if (node.data.parent === originalId) {
+                    const nextData = { ...node.data };
+                    delete nextData.parent;
+                    delete nextData.regionIndex;
+                    return {
+                        ...node,
+                        data: nextData,
                     };
                 }
                 return node;
@@ -330,7 +439,29 @@ function App() {
             // --- LÓGICA DE CRIAÇÃO ---
             const positionToUse = pos || { x: 0, y: 0 };
             const newId =
-                nodePayload.label === "" ? `node_${Math.random().toString(36)}` : nodePayload.label;
+                nodePayload.label === "" || !nodePayload.label
+                    ? (nodePayload.onnxData.id || `node_${Math.random().toString(36).substr(2, 9)}`)
+                    : nodePayload.label;
+            nodePayload.onnxData.id = newId;
+
+            let constructedRegions: any[] = nodePayload.onnxData.regions || [];
+            const selectedNodesMap = new Map<string, number>();
+
+            if (nodePayload.onnxData.kind === "OperationNode") {
+                const { regions, selectedNodesMap: sMap } = buildRegionsAndParentMap(
+                    nodePayload.onnxData.opType,
+                    nodePayload.onnxData.attributes,
+                    newId,
+                    cytoscapeData.elements.nodes,
+                    cytoscapeData.elements.edges
+                );
+                if (regions.length > 0) {
+                    constructedRegions = regions;
+                }
+                nodePayload.onnxData.regions = constructedRegions;
+                sMap.forEach((rIdx, nId) => selectedNodesMap.set(nId, rIdx));
+            }
+
             const newNode = {
                 data: {
                     id: newId,
@@ -345,6 +476,20 @@ function App() {
                 grabbable: true,
                 classes: "",
             };
+
+            const updatedExistingNodes = cytoscapeData.elements.nodes.map((node: any) => {
+                if (selectedNodesMap.has(node.data.id)) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            parent: newId,
+                            regionIndex: selectedNodesMap.get(node.data.id),
+                        },
+                    };
+                }
+                return node;
+            });
 
             const newEdges = [];
             const newOutputNodes = [];
@@ -425,10 +570,11 @@ function App() {
                 ...cytoscapeData,
                 elements: {
                     edges: [...cytoscapeData.elements.edges, ...newEdges, ...newOutputEdges],
-                    nodes: [...cytoscapeData.elements.nodes, newNode, ...newOutputNodes],
+                    nodes: [...updatedExistingNodes, newNode, ...newOutputNodes],
                 },
             };
             setNewNodePos(null);
+            setSidePanelVisibility(false);
         }
 
         setCytoscapeData(newData);
@@ -517,6 +663,7 @@ function App() {
                     newNodePosition={newNodePos}
                     onCreateNode={handleNodeSubmit}
                     valueNodes={valueNodes}
+                    graphNodes={cytoscapeData?.elements?.nodes || []}
                     nodeToEdit={nodeToEdit} 
                 />
             )}

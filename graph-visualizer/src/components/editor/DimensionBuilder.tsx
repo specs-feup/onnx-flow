@@ -8,17 +8,19 @@ interface DimensionBuilderProps {
     onChange: ((shape: KnownShape) => void) | ((shape: Shape) => void)
 }
 
-export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onChange }) => {
+export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value = [], onChange }) => {
+    const shapeList = value || [];
+
     const addDimension = () => {
-        onChange([...value, undefined]);
+        onChange([...shapeList, undefined]);
     };
 
     const removeDimension = (indexToRemove: number) => {
-        onChange(value.filter((_, idx) => idx !== indexToRemove));
+        onChange(shapeList.filter((_, idx) => idx !== indexToRemove));
     };
 
     const updateDimension = (index: number, rawValue: string) => {
-        const nextShape = [...value];
+        const nextShape = [...shapeList];
         const trimmed = rawValue.trim();
 
         if (trimmed === "" || trimmed === "?" || trimmed === "undefined") {
@@ -35,7 +37,7 @@ export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onCha
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {value.map((dim, idx) => (
+                {shapeList.map((dim, idx) => (
                     <div
                         key={idx}
                         style={{
@@ -94,7 +96,7 @@ export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value, onCha
                     fontSize: "12px",
                 }}
             >
-                + Add Dim (Rank: {value.length})
+                + Add Dim (Rank: {shapeList.length})
             </button>
         </div>
     );
