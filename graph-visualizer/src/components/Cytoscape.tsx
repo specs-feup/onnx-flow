@@ -95,12 +95,13 @@ function handleExpandAll(cy: cytoscape.Core, api: any) {
 }
 
 const setupContextMenus = (
-    cy: cytoscape.Core, 
-    api: any, 
+    cy: cytoscape.Core,
+    api: any,
     editorMode: boolean = false,
     onAddNodeRequested?: (pos: any) => void,
     onEditNodeRequested?: (node: any) => void,
-    onDeleteNodeRequested?: (nodeId: string) => void
+    onDeleteNodeRequested?: (nodeId: string) => void,
+    onDeleteEdgeRequested?: (edgeId: string) => void
 ) => {
     let clickedPos = { x: 0, y: 0 };
     cy.on("cxttapstart", (e) => { if (e.position) clickedPos = e.position; });
@@ -162,6 +163,32 @@ const setupContextMenus = (
         }
     });
 
+    const edgeMenu = cy.cxtmenu({
+        selector: "edge",
+        activeFillColor: "#2d293300",
+        commands: (_ele: any) => {
+            const cmds: any[] = [
+                {
+                    fillColor: "rgba(64, 67, 75, 0.9)",
+                    content: "Log Info",
+                    select: (e: any) => console.log("Selected edge ID:", e.id())
+                },
+                ...(editorMode ? [
+                    {
+                        fillColor: "rgba(75, 26, 38, 0.9)",
+                        content: "Delete",
+                        select: (e: any) => {
+                            const deletedId = e.id();
+                            cy.remove(e);
+                            onDeleteEdgeRequested?.(deletedId);
+                        }
+                    }
+                ] : []),
+            ];
+            return cmds;
+        }
+    });
+
     const coreMenu = cy.cxtmenu({
         selector: "core",
         activeFillColor: "#533b6e00",
@@ -174,7 +201,7 @@ const setupContextMenus = (
         ]
     });
 
-    return [nodeMenu, coreMenu];
+    return [nodeMenu, edgeMenu, coreMenu];
 };
 
 const updateStyles = (cy: cytoscape.Core, { stylesheet, nodeColor = "#533b6e", selectedNodeId }: any) => {
@@ -204,11 +231,12 @@ type Props = {
     onAddNodeRequested?: (pos: { x: number; y: number }) => void;
     onEditNodeRequested?: (node: any) => void;
     onDeleteNodeRequested?: (nodeId: string) => void;
+    onDeleteEdgeRequested?: (edgeId: string) => void;
     editorMode?: boolean;
 };
 
 export default function CytoscapeGraph({
-    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested, editorMode = false
+    style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested, onDeleteEdgeRequested, editorMode = false
 }: Props) {
     const cyRef = useRef<cytoscape.Core | null>(null);
     const apiRef = useRef<any>(null);
@@ -238,12 +266,27 @@ export default function CytoscapeGraph({
         }
     }, [cyReady]);
 
+    const prevLayoutRef = useRef<cytoscape.LayoutOptions>(layout);
+    const hasInitialLayoutRunRef = useRef(false);
+
     // 3. Layout updates
     useEffect(() => {
-        if (cytoscapeData) {
-            getCy()?.layout(layout).run();
+        const cy = getCy();
+        if (!cy || !cytoscapeData) return;
+
+        const isExplicitLayoutChange = prevLayoutRef.current !== layout;
+        prevLayoutRef.current = layout;
+
+        if (!hasInitialLayoutRunRef.current || isExplicitLayoutChange) {
+            hasInitialLayoutRunRef.current = true;
+            cy.layout(layout).run();
+            return;
         }
-    }, [layout, cytoscapeData]);
+
+        if (!editorMode) {
+            cy.layout(layout).run();
+        }
+    }, [layout, cytoscapeData, editorMode, cyReady]);
 
     // 4. Styling updates
     useEffect(() => {
@@ -277,14 +320,14 @@ export default function CytoscapeGraph({
         };
         cy.on("tap", "edge", onEdgeTap);
 
-        const menus = setupContextMenus(cy, apiRef.current, editorMode, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested);
+        const menus = setupContextMenus(cy, apiRef.current, editorMode, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested, onDeleteEdgeRequested);
 
         return () => {
             cy.off("tap", "node", onNodeTap);
             cy.off("tap", "edge", onEdgeTap);
             menus.forEach(m => m.destroy());
         };
-    }, [cyReady, cytoscapeData, editorMode, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested]);
+    }, [cyReady, cytoscapeData, editorMode, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested, onDeleteEdgeRequested]);
 
     return (
         <div style={style} ref={containerRef}>
@@ -293,7 +336,7 @@ export default function CytoscapeGraph({
                     elements={CytoscapeComponent.normalizeElements(cytoscapeData.elements)}
                     style={{ width: "100%", height: "100%" }}
                     stylesheet={stylesheet || defaultStylesheet}
-                    layout={layout}
+                    layout={editorMode ? { name: "preset" } : layout}
                     cy={(cy) => {
                         cyRef.current = cy;
                         setCyReady(true);

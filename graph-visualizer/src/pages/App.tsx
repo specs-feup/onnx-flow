@@ -191,6 +191,51 @@ function App() {
         saveGraphToSession(newData);
     };
 
+    const handleEdgeDelete = (edgeId: string) => {
+        if (!cytoscapeData) return;
+        const deletedEdge = cytoscapeData.elements.edges.find((e: any) => e.data.id === edgeId);
+        const updatedEdges = cytoscapeData.elements.edges.filter((e: any) => e.data.id !== edgeId);
+
+        let updatedNodes = cytoscapeData.elements.nodes;
+        if (deletedEdge) {
+            const targetId = deletedEdge.data?.target;
+            const sourceId = deletedEdge.data?.source;
+            if (targetId && sourceId) {
+                updatedNodes = updatedNodes.map((node: any) => {
+                    if (node.data.id === targetId && node.data.onnxData?.kind === "OperationNode") {
+                        const inputs = node.data.onnxData.inputs || [];
+                        const nextInputs = inputs.filter((inp: string) => inp !== sourceId);
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                onnxData: {
+                                    ...node.data.onnxData,
+                                    inputs: nextInputs,
+                                },
+                            },
+                        };
+                    }
+                    return node;
+                });
+            }
+        }
+
+        const newData: CytoscapeData = {
+            ...cytoscapeData,
+            elements: {
+                nodes: updatedNodes,
+                edges: updatedEdges,
+            },
+        };
+        if (selectedEdge && (selectedEdge.id === edgeId || selectedEdge.data?.id === edgeId)) {
+            setSelectedEdge(null);
+            setEdgePopupPos(null);
+        }
+        setCytoscapeData(newData);
+        saveGraphToSession(newData);
+    };
+
     const handleNodeSubmit = (nodePayload: any, pos: { x: number; y: number } | null) => {
         if (!cytoscapeData) return;
 
@@ -329,18 +374,36 @@ function App() {
                         data: nextData,
                     };
                 }
+                // If a node was renamed (originalId -> newId), update inputs array on OperationNodes referencing it
+                if (originalId !== newId && node.data.onnxData?.kind === "OperationNode" && Array.isArray(node.data.onnxData.inputs)) {
+                    if (node.data.onnxData.inputs.includes(originalId)) {
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                onnxData: {
+                                    ...node.data.onnxData,
+                                    inputs: node.data.onnxData.inputs.map((inp: string) => (inp === originalId ? newId : inp)),
+                                },
+                            },
+                        };
+                    }
+                }
                 return node;
             });
 
             // 2. Atualizar as arestas existentes
-            let updatedEdges = cytoscapeData.elements.edges
-                .map((edge: any) => {
-                    const newEdge: any = { ...edge };
-                    if (newEdge.data.source === originalId) newEdge.data.source = newId;
-                    if (newEdge.data.target === originalId) newEdge.data.target = newId;
-                    return newEdge;
-                })
-                .filter((edge: any) => edge.data.target !== newId); // Limpar os inputs antigos
+            let updatedEdges = cytoscapeData.elements.edges.map((edge: any) => {
+                const newEdge: any = { ...edge };
+                if (newEdge.data.source === originalId) newEdge.data.source = newId;
+                if (newEdge.data.target === originalId) newEdge.data.target = newId;
+                return newEdge;
+            });
+
+            // Only clear incoming edges for OperationNode (which will be recreated from inputs below)
+            if (nodePayload.onnxData.kind === "OperationNode") {
+                updatedEdges = updatedEdges.filter((edge: any) => edge.data.target !== newId);
+            }
 
             // 3. Gerar as novas arestas de entrada e nós de saída (se for OperationNode)
             const newEdges = [];
@@ -730,6 +793,7 @@ function App() {
                     setEditorMode(true);
                 }}
                 onDeleteNodeRequested={handleNodeDelete}
+                onDeleteEdgeRequested={handleEdgeDelete}
             />
         </main>
     );
