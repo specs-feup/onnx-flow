@@ -5,10 +5,12 @@ import { type Shape, type KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxType
 
 interface DimensionBuilderProps {
     value: Shape | KnownShape;
-    onChange: ((shape: KnownShape) => void) | ((shape: Shape) => void)
+    onChange: ((shape: KnownShape) => void) | ((shape: Shape) => void);
+    hasError?: boolean;
+    errorIndices?: number[];
 }
 
-export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value = [], onChange }) => {
+export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value = [], onChange, hasError = false, errorIndices = [] }) => {
     const shapeList = value || [];
 
     const addDimension = () => {
@@ -37,50 +39,53 @@ export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value = [], 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {shapeList.map((dim, idx) => (
-                    <div
-                        key={idx}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            background: "#2c2a30",
-                            border: "1px solid rgb(95, 92, 102)",
-                            borderRadius: "6px",
-                            padding: "2px 6px",
-                            gap: "4px",
-                        }}
-                    >
-                        <span style={{ fontSize: "11px", color: "#888" }}>D{idx}:</span>
-                        <input
-                            type="text"
-                            pattern="[0-9]+"
-                            value={dim === undefined ? "" : String(dim)}
-                            placeholder="?"
-                            onChange={(e) => updateDimension(idx, e.target.value)}
+                {shapeList.map((dim, idx) => {
+                    const isDimError = hasError || errorIndices.includes(idx);
+                    return (
+                        <div
+                            key={idx}
                             style={{
-                                width: "60px",
-                                background: "transparent",
-                                border: "none",
-                                color: "white",
-                                fontSize: "13px",
-                                outline: "none",
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => removeDimension(idx)}
-                            style={{
-                                background: "transparent",
-                                border: "none",
-                                color: "#ff4d4f",
-                                cursor: "pointer",
-                                padding: "0 4px",
+                                display: "flex",
+                                alignItems: "center",
+                                background: isDimError ? "#321d23" : "#2c2a30",
+                                border: isDimError ? "1px solid #ff4d4f" : "1px solid rgb(95, 92, 102)",
+                                borderRadius: "6px",
+                                padding: "2px 6px",
+                                gap: "4px",
                             }}
                         >
-                            ×
-                        </button>
-                    </div>
-                ))}
+                            <span style={{ fontSize: "11px", color: isDimError ? "#ff7875" : "#888" }}>D{idx}:</span>
+                            <input
+                                type="text"
+                                pattern="[0-9]+"
+                                value={dim === undefined ? "" : String(dim)}
+                                placeholder="?"
+                                onChange={(e) => updateDimension(idx, e.target.value)}
+                                style={{
+                                    width: "60px",
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "white",
+                                    fontSize: "13px",
+                                    outline: "none",
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => removeDimension(idx)}
+                                style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "#ff4d4f",
+                                    cursor: "pointer",
+                                    padding: "0 4px",
+                                }}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    );
+                })}
             </div>
 
             <button

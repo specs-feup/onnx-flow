@@ -198,8 +198,8 @@ function App() {
 
         let updatedNodes = cytoscapeData.elements.nodes;
         if (deletedEdge) {
-            const targetId = deletedEdge.data?.target;
-            const sourceId = deletedEdge.data?.source;
+            const targetId = (deletedEdge as any)?.data?.target;
+            const sourceId = (deletedEdge as any)?.data?.source;
             if (targetId && sourceId) {
                 updatedNodes = updatedNodes.map((node: any) => {
                     if (node.data.id === targetId && node.data.onnxData?.kind === "OperationNode") {
@@ -685,7 +685,6 @@ function App() {
                 setLayout={(l: any) => setCytoscapeLayout(typeof l === "string" ? { name: l } : l)}
                 setStylesheet={(sheet: any) => setCytoscapeStylesheet(sheet)}
                 nodeColor={nodeColor}
-                selectedNodeId={selectedNode?.id ?? null}
                 setNodeColor={setNodeColor}
                 setTransformationOps={setTransformationOps}
                 transformationsHistory={{

@@ -6,6 +6,7 @@ import { DimensionBuilder } from "./DimensionBuilder.tsx";
 import type TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
 
 import { dataTypeOptions } from "@/types/Onnx.ts";
+import { getReactSelectStyles } from "@/styles/ReactSelectStyle.ts";
 
 /*--- TENSOR OPTIONS ---*/
 const tensorTypes = ["Input", "Output", "Intermediate", "Index", "Index_Aux"].map((e) => ({
@@ -15,7 +16,7 @@ const tensorTypes = ["Input", "Output", "Intermediate", "Index", "Index_Aux"].ma
 /*---   ---*/
 
 interface TensorNodeAdderProps {
-    reactSelectStyles: any;
+    reactSelectStyles?: any;
     setTensorDataType: (value: DataType) => void;
     setTensorShapeValue: (value: Shape) => void;
     tensorShapeValue: Shape;
@@ -24,6 +25,7 @@ interface TensorNodeAdderProps {
     tensorKind?: TensorNode.TensorKind;
     showTensorKind?: boolean;
     disabled?: boolean;
+    errors?: Record<string, string>;
 }
 
 export default function TensorNodeAdder({
@@ -36,43 +38,53 @@ export default function TensorNodeAdder({
     tensorKind,
     showTensorKind = true,
     disabled = false,
+    errors = {},
 }: TensorNodeAdderProps) {
-    /*
-    -- literalType: DataType
-    -- shape: Shape
-    -- type: TensorKind
-    ?? extraAttrs?: AttributeProto[] | undefined
-    ?? metadata: AttributeMap
-    */
+    const dataTypeSelectStyles = getReactSelectStyles(Boolean(errors.tensorDataType));
+    const tensorKindSelectStyles = getReactSelectStyles(Boolean(errors.tensorKind));
+
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? "none" : "auto" }}>
-            <label htmlFor="dataType">Literal Type: </label>
+            <label htmlFor="dataType">Literal Type:</label>
             <Select
                 isDisabled={disabled}
                 isClearable
                 name="dataType"
-                styles={reactSelectStyles}
+                styles={dataTypeSelectStyles}
                 options={dataTypeOptions}
                 onChange={(e: any) => setTensorDataType(e?.value ?? DataType.UNDEFINED)}
-                value={dataTypeOptions.find(opt => opt.value === tensorDataType) || null} // Node Editor
+                value={dataTypeOptions.find(opt => opt.value === tensorDataType) || null}
             />
+            {errors.tensorDataType && (
+                <span style={{ color: "#ff7875", fontSize: "12px", marginTop: "-2px" }}>{errors.tensorDataType}</span>
+            )}
 
             <label htmlFor="shape">Shape:</label>
-            <DimensionBuilder value={tensorShapeValue || []} onChange={setTensorShapeValue} />
+            <DimensionBuilder
+                value={tensorShapeValue || []}
+                onChange={setTensorShapeValue}
+                hasError={Boolean(errors.tensorShape)}
+            />
+            {errors.tensorShape && (
+                <span style={{ color: "#ff7875", fontSize: "12px", marginTop: "-2px" }}>{errors.tensorShape}</span>
+            )}
 
             {showTensorKind && setTensorKind && (
                 <>
-                    <label htmlFor="tensorKind">Tensor Kind:</label>
+                    <label htmlFor="tensorKind">Tensor Kind: *</label>
                     <Select
                         isDisabled={disabled}
                         isClearable
                         name="tensorKind"
-                        styles={reactSelectStyles}
+                        styles={tensorKindSelectStyles}
                         options={tensorTypes}
                         onChange={(e: any) => setTensorKind(e?.value ?? "intermediate")}
-                        value={tensorTypes.find(opt => opt.value === tensorKind) || null} // Node Editor
+                        value={tensorTypes.find(opt => opt.value === tensorKind) || null}
                         defaultValue={tensorTypes[0]}
                     />
+                    {errors.tensorKind && (
+                        <span style={{ color: "#ff7875", fontSize: "12px", marginTop: "-2px" }}>{errors.tensorKind}</span>
+                    )}
                 </>
             )}
         </div>

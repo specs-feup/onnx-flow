@@ -4,6 +4,7 @@ import type { OpSchema, AttributeDefinition, IOInterface } from "@specs-feup/onn
 import { AttributeType, DataType, type AttributeValue } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 import { useEffect, useState } from "react";
 import TensorNodeAdder from "./TensorNodeAdder.tsx";
+import { getReactSelectStyles } from "@/styles/ReactSelectStyle.ts";
 
 /*--- OPERATION OPTIONS ---*/
 export const operationsTypes: Array<{ value: OpSchema; label: string }> = StandardOps.map((op) => ({
@@ -11,29 +12,29 @@ export const operationsTypes: Array<{ value: OpSchema; label: string }> = Standa
     label: op.opType,
 })).sort((a, b) => a.label.localeCompare(b.label));
 
-function getPattern(type: AttributeType): string | undefined {
+export function getPattern(type: AttributeType): string | undefined {
     switch (type) {
         default:
         case AttributeType.UNDEFINED:
             return ".*";
         case AttributeType.FLOAT:
-            return "^-?\\d+(\\.\\d+)?$";
+            return "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$";
         case AttributeType.INT:
             return "^-?\\d+$";
         case AttributeType.STRING:
-            return "^[a-zA-Z0-9_\\-]+$";
+            return "^[a-zA-Z0-9_\\-\\.\\/\\s]+$";
         case AttributeType.FLOATS:
-            return "^-?\\d+(\\.\\d+)?(,-?\\d+(\\.\\d+)?)*$";
+            return "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?(,-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?)*$";
         case AttributeType.INTS:
             return "^-?\\d+(,-?\\d+)*$";
         case AttributeType.STRINGS:
-            return "^[a-zA-Z0-9_\\-]+(,[a-zA-Z0-9_\\-]+)*$";
+            return "^[a-zA-Z0-9_\\-\\.\\/\\s]+(,[a-zA-Z0-9_\\-\\.\\/\\s]+)*$";
     }
 }
 
 /*---   ---*/
 interface OperationNodeAdderProps {
-    reactSelectStyles: any;
+    reactSelectStyles?: any;
     setOperationType: (value: OpSchema) => void;
     setOperationInputs: (value: string[]) => void;
     setOperationAttributes: (value: AttributeValue[]) => void;
@@ -42,6 +43,7 @@ interface OperationNodeAdderProps {
     operationType: OpSchema;
     operationInputs: string[];
     operationAttributes: AttributeValue[];
+    errors?: Record<string, string>;
 }
 
 export default function OperationNodeAdder({
@@ -53,7 +55,8 @@ export default function OperationNodeAdder({
     graphNodes,
     operationType,
     operationInputs,
-    operationAttributes
+    operationAttributes,
+    errors = {},
 }: OperationNodeAdderProps) {
     const [requiredInputs, setRequiredInputs] = useState<boolean[]>(operationType.inputs.map((input) => input.optional === undefined ? true : !input.optional));
     const [disabledAttr, setDisabledAttr] = useState<boolean[]>(operationType.attributes ? Object.values(operationType.attributes).map(() => {
@@ -81,16 +84,18 @@ export default function OperationNodeAdder({
         setDisabledAttr(requiredAttrArray);
     }, [operationType]);
 
+    const opTypeSelectStyles = getReactSelectStyles(Boolean(errors.operationType));
+
     return (
         <>
-        <label htmlFor="operation-type">Operation Type:</label>
+        <label htmlFor="operation-type">Operation Type: *</label>
         <Select 
             isSearchable
             isClearable
             name="operation-type"
             options={operationsTypes}
             defaultValue={operationsTypes[0]}
-            styles={reactSelectStyles}
+            styles={opTypeSelectStyles}
             onChange={(op) => {
                  const newOp = op!.value;
                  setOperationType(newOp);
@@ -117,15 +122,21 @@ export default function OperationNodeAdder({
              }}
             value={operationsTypes.find(op => op.value === operationType) || null} 
         />
+        {errors.operationType && (
+            <span style={{ color: "#ff7875", fontSize: "12px", marginTop: "-2px" }}>{errors.operationType}</span>
+        )}
         
-        <label htmlFor="inputs">Inputs:</label>
+        <label htmlFor="inputs" style={{ marginTop: "8px", fontWeight: "bold" }}>Inputs:</label>
         {operationType.inputs.map((input: IOInterface, index: number) => {
             const isOptional = input.optional || false;
             const isRequired = requiredInputs[index];
+            const inputErrorKey = `input_${input.name || index}`;
+            const hasInputError = Boolean(errors[inputErrorKey]);
+            const inputSelectStyles = getReactSelectStyles(hasInputError);
 
             return (
-                <div key={input.name || index} style={{display: "flex", flexDirection: "column", gap: "5px", backgroundColor: "rgb(77, 74, 85)", padding: "1em", borderRadius: "20px"}}>
-                    <label>Name: {input.name}</label>
+                <div key={input.name || index} style={{display: "flex", flexDirection: "column", gap: "5px", backgroundColor: "rgb(77, 74, 85)", padding: "1em", borderRadius: "20px", border: hasInputError ? "1px solid #ff4d4f" : "none"}}>
+                    <label>Name: {input.name} {isRequired && "*"}</label>
                     <label>Constraint: {input.typeConstraint}</label>
                     <label>Is Variadic: {input.variadic ? "Yes" : "No"}</label>
                     <label>Required?</label>
@@ -162,7 +173,7 @@ export default function OperationNodeAdder({
                             setOperationInputs(newInputs);
                         }}
                         value={operationInputs[index] ? operationInputs[index].split(",").map((inputId) => ({ value: inputId, label: inputId })) : []}
-                        styles={reactSelectStyles}
+                        styles={inputSelectStyles}
                         name={`input-${input.name}`}
                         /> 
                         : 
@@ -180,10 +191,12 @@ export default function OperationNodeAdder({
                             setOperationInputs(newInputs);
                         }}
                         value={operationInputs[index] ? { value: operationInputs[index], label: operationInputs[index] } : null}
-                        styles={reactSelectStyles}
+                        styles={inputSelectStyles}
                         name={`input-${input.name}`}
                     />}
-                    <br/>
+                    {errors[inputErrorKey] && (
+                        <span style={{ color: "#ff7875", fontSize: "12px", marginTop: "2px" }}>{errors[inputErrorKey]}</span>
+                    )}
                 </div>
             )})
         }
@@ -194,6 +207,9 @@ export default function OperationNodeAdder({
         {Object.values(operationType.attributes).map((att: AttributeDefinition, index: number) => {
             const isAttrDisabled = att.required ? false : disabledAttr[index];
             const currentVal = operationAttributes[index];
+            const attrErrorKey = `attr_${att.name}`;
+            const hasAttrError = Boolean(errors[attrErrorKey]);
+            const attrSelectStyles = getReactSelectStyles(hasAttrError);
 
             const isGraphAttr = att.type === AttributeType.GRAPH || att.type === AttributeType.GRAPHS;
             const isTensorAttr =
@@ -214,10 +230,11 @@ export default function OperationNodeAdder({
                         padding: "12px",
                         borderRadius: "12px",
                         marginBottom: "10px",
+                        border: hasAttrError ? "1px solid #ff4d4f" : "none",
                     }}
                 >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <label style={{ fontWeight: "bold" }}>{att.name}</label>
+                        <label style={{ fontWeight: "bold" }}>{att.name} {att.required && "*"}</label>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <label style={{ fontSize: "12px" }}>Enabled:</label>
                             <input
@@ -258,7 +275,7 @@ export default function OperationNodeAdder({
                             isDisabled={isAttrDisabled}
                             name={`attr-${att.name}`}
                             options={graphNodeOptions}
-                            styles={reactSelectStyles}
+                            styles={attrSelectStyles}
                             placeholder="Select graph nodes..."
                             value={
                                 Array.isArray(currentVal)
@@ -319,6 +336,10 @@ export default function OperationNodeAdder({
                             }
                             showTensorKind={false}
                             disabled={isAttrDisabled}
+                            errors={{
+                                tensorDataType: errors[`${attrErrorKey}_dataType`],
+                                tensorShape: errors[`${attrErrorKey}_shape`],
+                            }}
                         />
                     ) : (
                         <input 
@@ -333,12 +354,23 @@ export default function OperationNodeAdder({
                                     ? currentVal.join(",")
                                     : ""
                             } 
+                            style={{
+                                border: hasAttrError ? "2px solid #ff4d4f" : "2px solid rgb(95, 92, 102)",
+                                background: hasAttrError ? "#321d23" : "#2c2a30",
+                                color: "white",
+                                borderRadius: "6px",
+                                padding: "8px",
+                                outline: "none",
+                            }}
                             onChange={(e) => {
                                 const newAttributes = [...operationAttributes];
                                 newAttributes[index] = e.target.value;
                                 setOperationAttributes(newAttributes);
                             }}
                         />
+                    )}
+                    {errors[attrErrorKey] && (
+                        <span style={{ color: "#ff7875", fontSize: "12px", marginTop: "2px" }}>{errors[attrErrorKey]}</span>
                     )}
                 </div>
             );
