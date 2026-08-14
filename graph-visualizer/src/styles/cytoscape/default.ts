@@ -1,5 +1,12 @@
+/**
+ * @file default.ts
+ * @description Default visual theme stylesheet for Cytoscape.js graphs.
+ * Distinguishes OperationNodes (circles), TensorNodes (pentagons), and ConstantNodes (diamonds)
+ * with purple node styling, directional arrow edges, and dashed cross-graph capture edges.
+ */
 
-const defaultStylesheet=[
+const defaultStylesheet = [
+
   {
     selector: "node",
     layout: {

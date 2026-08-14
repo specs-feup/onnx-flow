@@ -1,3 +1,11 @@
+/**
+ * @file NodeAdder.tsx
+ * @description Master form component for adding new nodes or editing existing nodes in the graph.
+ * Supports ConstantNode, TensorNode, and OperationNode kinds, pre-populating fields during edits,
+ * extracting and constructing nested subgraph regions, generating random IDs, validating form inputs,
+ * and synthesizing schema output tensor nodes.
+ */
+
 import { useEffect, useState } from "react";
 import Select from "react-select";
 import TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
@@ -11,21 +19,39 @@ import ConstantNodeAdder from "./ConstantNodeAdder.tsx";
 import { reactSelectCustomStyles, getReactSelectStyles } from "@/styles/ReactSelectStyle.ts";
 import type { OnnxData } from "@/types/Onnx.ts";
 
+/**
+ * Properties for the NodeAdder component.
+ */
 interface NodeAdderProps {
+    /** Coordinates on the Cytoscape canvas where the new node should be placed */
     position?: { x: number; y: number } | null;
+    /** Callback invoked with the completed node payload and coordinate position upon submission */
     onSubmit?: (nodePayload: any, pos: { x: number; y: number } | null) => void;
+    /** List of value nodes available for operation input binding */
     valueNodes: Array<unknown>;
+    /** Full list of graph nodes for region/parent mapping */
     graphNodes?: Array<unknown>;
+    /** Node object to populate when editing an existing graph node */
     nodeToEdit?: any;   
 }
 
+/**
+ * Options for selecting the high-level ONNX node kind.
+ */
 const nodeKindOptions = [
     { value: "constant", label: "Constant Node" },
     { value: "tensor", label: "Tensor Node" },
     { value: "operation", label: "Operation Node" },
 ];
 
+/**
+ * Main node adder and editor form component.
+ *
+ * @param props - NodeAdder properties
+ * @returns JSX element containing the node creation/editing controls
+ */
 export default function NodeAdder({ position, onSubmit, valueNodes, graphNodes, nodeToEdit }: NodeAdderProps) {
+
     /* General Attributes*/
     const [nodeId, setNodeId] = useState<string>("");
     const [nodeKind, setNodeKind] = useState<string>("constant");

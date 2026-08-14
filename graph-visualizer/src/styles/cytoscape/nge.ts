@@ -1,5 +1,11 @@
+/**
+ * @file nge.ts
+ * @description 'Nerv' (Evangelion-inspired) theme stylesheet for Cytoscape.js graphs.
+ * Features vivid red, orange, and black contrasting color palettes with vee arrow pointers.
+ */
 
-const defaultStylesheet=[
+const defaultStylesheet = [
+
   {
     selector: "node",
     layout: {

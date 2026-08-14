@@ -1,4 +1,14 @@
+/**
+ * @file ReactSelectStyle.ts
+ * @description Custom design tokens and styling generators for React-Select dropdown components.
+ * Provides unified dark-theme styling, hover states, and dynamic red-highlighted error states.
+ */
+
+/**
+ * Base dark-theme stylesheet overrides for React-Select components.
+ */
 export const reactSelectCustomStyles = {
+
     singleValue: (provided: any) => ({
         ...provided,
         color: 'white',

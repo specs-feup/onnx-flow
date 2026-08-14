@@ -1,3 +1,11 @@
+/**
+ * @file MenuBar.tsx
+ * @description Top navigation bar and action toolbar component. Houses graph layout selection,
+ * theme switching, node tinting color picker, transformation opportunity panels, undo/redo
+ * optimization history controls, model compilation trigger, model export download links,
+ * and the Visualizer/Editor mode toggle.
+ */
+
 import { type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -13,26 +21,49 @@ import {
     type TransformationOpportunity,
 } from "@/api/api.ts";
 
-export default function MenuBar(props: {
+/**
+ * Properties for the MenuBar component.
+ */
+interface MenuBarProps {
+    /** CSS style properties applied to the container header */
     style: CSSProperties;
+    /** State setter for the active Cytoscape graph data payload */
     setCytoscapeData: (cytoscapeData: CytoscapeData | null) => void;
+    /** Object containing side panel visibility state and toggle setter */
     panelVisibility: { isVisible: boolean; setVisibility: (visible: boolean) => void };
+    /** State setter for the active graph layout */
     setLayout: (layout: string) => void;
+    /** State setter for the active theme stylesheet */
     setStylesheet: (stylesheet: string) => void;
+    /** Base color value applied to graph nodes */
     nodeColor?: string;
+    /** State setter for node background color */
     setNodeColor?: (c: string) => void;
+    /** State setter for available transformation opportunities */
     setTransformationOps: (transformationsOps: TransformationOpportunity[]) => void;
+    /** Object containing transformation undo and redo history stacks */
     transformationsHistory: {
         undo: { stack: string[]; setStack: (history: string[]) => void };
         redo: { stack: string[]; setStack: (history: string[]) => void };
     };
+    /** Object containing active editor mode status and toggle handler */
     editorMode: {
         isActive: boolean;
         setMode: (activate: boolean) => void;
     };
+    /** Optional callback to trigger ONNX model compilation */
     onCompileOnnxModel?: () => void;
-}) {
+}
+
+/**
+ * Top application menu bar component.
+ *
+ * @param props - MenuBar properties
+ * @returns JSX element containing the navigation bar and controls
+ */
+export default function MenuBar(props: MenuBarProps) {
     const { sessionId } = useParams();
+
 
     return (
         <header style={props.style}>

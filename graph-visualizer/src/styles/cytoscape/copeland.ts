@@ -1,5 +1,12 @@
+/**
+ * @file copeland.ts
+ * @description 'Copeland' theme stylesheet for Cytoscape.js graphs.
+ * Features radial blue gradient fills, solid light-blue outlines, circle arrow pointers,
+ * and high-contrast blue accented edges.
+ */
 
-const defaultStylesheet=[
+const defaultStylesheet = [
+
   {
     selector: "node",
     layout: {

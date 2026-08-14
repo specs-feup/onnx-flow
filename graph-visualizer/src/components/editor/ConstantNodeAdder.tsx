@@ -1,25 +1,50 @@
+/**
+ * @file ConstantNodeAdder.tsx
+ * @description Sub-form component for configuring an ONNX ConstantNode (TensorProto).
+ * Manages tensor proto name, literal data type selection, shape dimension configuration,
+ * and comma-separated raw constant values with count validation.
+ */
+
 import Select from "react-select";
-
 import type { DataType, KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-
 import { dataTypeOptions } from "@/types/Onnx.ts";
 import { DimensionBuilder } from "./DimensionBuilder.tsx";
 import { getReactSelectStyles } from "@/styles/ReactSelectStyle.ts";
 
+/**
+ * Properties for the ConstantNodeAdder component.
+ */
 interface ConstantNodeAdderProps {
+    /** Optional custom styles for ReactSelect */
     reactSelectStyles?: any;
+    /** Current constant TensorProto name */
     constantProtoName: string;
+    /** Selected ONNX DataType for the constant values */
     constantDataType: DataType;
+    /** Array of fixed integer dimensions defining the constant tensor shape */
     constantShape: KnownShape;
+    /** Array of raw parsed data values */
     protoData: (number | bigint | string)[];
+    /** State setter for the constant TensorProto name */
     setConstantProtoName: (value: string) => void;
+    /** State setter for the constant data type */
     setConstantDataType: (value: DataType) => void;
+    /** State setter for the constant shape */
     setConstantShape: (value: KnownShape) => void;
+    /** State setter for the raw data array */
     setProtoData: (value: (number | bigint | string)[]) => void;
+    /** Object containing form validation error messages keyed by field name */
     errors?: Record<string, string>;
 }
 
+/**
+ * Form component for creating or editing an ONNX ConstantNode.
+ *
+ * @param props - ConstantNodeAdder properties
+ * @returns JSX element containing constant configuration inputs
+ */
 export default function ConstantNodeAdder({
+
     reactSelectStyles,
     constantProtoName,
     constantDataType,

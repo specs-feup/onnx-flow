@@ -1,5 +1,11 @@
+/**
+ * @file mono.ts
+ * @description 'Mono' theme stylesheet for Cytoscape.js graphs.
+ * Features a minimalist monochromatic black and white aesthetic with chevron arrow pointers.
+ */
 
-const mono=[
+const mono = [
+
   {
     selector: "node",
     layout: {

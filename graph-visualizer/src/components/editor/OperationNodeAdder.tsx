@@ -1,3 +1,11 @@
+/**
+ * @file OperationNodeAdder.tsx
+ * @description Sub-form component for configuring an ONNX OperationNode.
+ * Allows selecting standard ONNX operator schemas (StandardOps), binding input slots
+ * to existing value nodes (with support for optional flags and variadic inputs),
+ * configuring typed attributes (graph subgraphs, tensors, scalars, arrays), and validation feedback.
+ */
+
 import Select from "react-select";
 import { StandardOps } from "@specs-feup/onnx-flow/Onnx/Schema/definitions/StandardOps";
 import type { OpSchema, AttributeDefinition, IOInterface } from "@specs-feup/onnx-flow/Onnx/Schema/OpSchema";
@@ -6,12 +14,20 @@ import { useEffect, useState } from "react";
 import TensorNodeAdder from "./TensorNodeAdder.tsx";
 import { getReactSelectStyles } from "@/styles/ReactSelectStyle.ts";
 
-/*--- OPERATION OPTIONS ---*/
+/**
+ * Array of sorted ONNX operator schema options for the operation type selector.
+ */
 export const operationsTypes: Array<{ value: OpSchema; label: string }> = StandardOps.map((op) => ({
     value: op,
     label: op.opType,
 })).sort((a, b) => a.label.localeCompare(b.label));
 
+/**
+ * Returns a regular expression validation pattern string corresponding to an AttributeType.
+ *
+ * @param type - The ONNX AttributeType enum value
+ * @returns Regex pattern string for validating textual input, or undefined
+ */
 export function getPattern(type: AttributeType): string | undefined {
     switch (type) {
         default:
@@ -32,21 +48,40 @@ export function getPattern(type: AttributeType): string | undefined {
     }
 }
 
-/*---   ---*/
+/**
+ * Properties for the OperationNodeAdder component.
+ */
 interface OperationNodeAdderProps {
+    /** Optional custom styles for ReactSelect */
     reactSelectStyles?: any;
+    /** State setter for the active ONNX operator schema */
     setOperationType: (value: OpSchema) => void;
+    /** State setter for the array of operation input node IDs */
     setOperationInputs: (value: string[]) => void;
+    /** State setter for the array of operation attribute values */
     setOperationAttributes: (value: AttributeValue[]) => void;
+    /** List of value nodes available for input binding */
     valueNodes: Array<unknown>;
+    /** Full list of graph nodes for GRAPH attribute sub-region selection */
     graphNodes?: Array<unknown>;
+    /** Currently selected ONNX operator schema */
     operationType: OpSchema;
+    /** Current input bindings array */
     operationInputs: string[];
+    /** Current attribute values array */
     operationAttributes: AttributeValue[];
+    /** Object containing form validation error messages keyed by field name */
     errors?: Record<string, string>;
 }
 
+/**
+ * Form component for creating or editing an ONNX OperationNode.
+ *
+ * @param props - OperationNodeAdder properties
+ * @returns JSX element containing operator configuration inputs
+ */
 export default function OperationNodeAdder({
+
     reactSelectStyles,
     setOperationType,
     setOperationInputs,

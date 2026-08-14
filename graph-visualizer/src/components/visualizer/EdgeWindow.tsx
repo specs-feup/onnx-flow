@@ -1,8 +1,39 @@
+/**
+ * @file EdgeWindow.tsx
+ * @description Floating inspection popup component for displaying edge connections.
+ * Renders edge details including Edge ID, source node ID, target node ID, and inner target details.
+ */
+
+/**
+ * Properties for the EdgePopup component.
+ */
+interface EdgePopupProps {
+    /** Selected edge element data object */
+    selectedEdge: {
+        id: string;
+        source: string;
+        target: string;
+        innerTarget?: string;
+        [key: string]: any;
+    } | null;
+    /** Coordinate position on screen where the edge was clicked */
+    popupPos: { x: number; y: number } | null;
+    /** Callback triggered when dismissing the popup */
+    onClose: () => void;
+}
+
+/**
+ * Floating inspector popup displaying edge connection details.
+ *
+ * @param props - EdgePopup properties
+ * @returns JSX element containing the edge inspection window or null if not selected
+ */
 export default function EdgePopup({
    selectedEdge,
    popupPos,
    onClose
-}: any) {
+}: EdgePopupProps) {
+
    if (!selectedEdge || !popupPos) return null;
 
    return (

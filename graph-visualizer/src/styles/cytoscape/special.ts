@@ -1,5 +1,11 @@
+/**
+ * @file special.ts
+ * @description 'Easter Egg / Special' theme stylesheet for Cytoscape.js graphs.
+ * Features crimson nodes, star-shaped tensor nodes, and chevron arrows.
+ */
 
-const special=[
+const special = [
+
   {
     selector: "node",
     layout: {

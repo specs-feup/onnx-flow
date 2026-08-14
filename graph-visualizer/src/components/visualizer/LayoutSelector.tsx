@@ -1,7 +1,28 @@
+/**
+ * @file LayoutSelector.tsx
+ * @description Dropdown menu component powered by Radix UI for switching graph layout algorithms.
+ * Supported layouts include fcose (compound spring embedder), BFS, Dagre (LR/TB hierarchical),
+ * Grid, Concentric (Circle), and ELK layered (LR/DOWN).
+ */
+
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
+/**
+ * Properties for the LayoutSelector component.
+ */
+interface LayoutSelectorProps {
+    /** Callback invoked with selected Cytoscape layout configuration object */
+    setLayout: (layout: any) => void;
+}
 
-export default function LayoutSelector({ setLayout }) {
+/**
+ * Graph layout algorithm selector dropdown menu.
+ *
+ * @param props - LayoutSelector properties
+ * @returns JSX element containing the dropdown menu
+ */
+export default function LayoutSelector({ setLayout }: LayoutSelectorProps) {
+
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>

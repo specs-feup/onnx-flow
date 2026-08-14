@@ -1,3 +1,10 @@
+/**
+ * @file ExplorerSession.ts
+ * @description Manages an active in-memory exploration session for an ONNX computational graph.
+ * Orchestrates canonicalization recipes, single-op/multi-op loop lowering matchers,
+ * time-travel mutation tracking (HistoryManager and TrackedGraphBuilder), and serialization exports.
+ */
+
 import fs from "fs";
 import type { DecompositionOptions } from "../DecompositionOptions.js";
 import { createGraph } from "../initGraph.js";
@@ -25,10 +32,22 @@ import type { UnifiedExplorerJson } from "../flow2json.js";
 import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "../flow2json.js";
 import type { RawOnnxModel } from "../Onnx/OnnxTypes.js";
 
+/**
+ * Encapsulates the state and transformation pipeline of an active graph session in the explorer.
+ */
 export class ExplorerSession {
+    /** Time-travel history manager maintaining undo and redo mutation patches */
     public history: HistoryManager;
+    /** Registry containing all registered canonicalization transformation recipes */
     public registry: TransformationRegistry;
 
+    /**
+     * Creates an ExplorerSession by reading and parsing an ONNX binary model or JSON representation from disk.
+     *
+     * @param filePath - Path to the input file (.onnx or .json)
+     * @param options - Decomposition and lowering options
+     * @returns A new, initialized ExplorerSession instance
+     */
     public static async fromFile(
         filePath: string,
         options: DecompositionOptions,
@@ -36,20 +55,22 @@ export class ExplorerSession {
         console.log(`[ExplorerSession] Loading graph from ${filePath}...`);
         let onnxObject;
 
-        // 1. Read the file (Replace this with the exact logic from your index.ts!)
         if (filePath.endsWith(".json")) {
             onnxObject = JSON.parse(fs.readFileSync(filePath, "utf8"));
         } else {
             onnxObject = await parseOnnxFile(filePath);
         }
 
-        // 2. Create the graph
         const graph = createGraph(onnxObject);
-
-        // 3. Return a fully initialized session
         return new ExplorerSession(graph, options);
     }
 
+    /**
+     * Initializes a new ExplorerSession with an OnnxGraph and decomposition configuration.
+     *
+     * @param graph - The underlying OnnxGraph instance
+     * @param options - Active compiler/decomposition settings
+     */
     constructor(
         public graph: OnnxGraph.Class,
         public options: DecompositionOptions,
@@ -72,6 +93,7 @@ export class ExplorerSession {
             new LowerSubRecipe(),
         ]);
     }
+
 
     /**
      * Scans the current graph topology and yields a comprehensive list of

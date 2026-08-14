@@ -1,4 +1,12 @@
+/**
+ * @file valentines.ts
+ * @description 'Valentines' theme stylesheet for Cytoscape.js graphs.
+ * Features soft pink and magenta node palettes with round-pentagons, round-diamonds,
+ * and triangle-cross edge arrows.
+ */
+
 const valentines = [
+
     {
         selector: "node",
         layout: {

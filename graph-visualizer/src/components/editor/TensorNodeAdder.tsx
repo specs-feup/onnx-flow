@@ -1,34 +1,59 @@
+/**
+ * @file TensorNodeAdder.tsx
+ * @description Sub-form component for configuring an ONNX TensorNode.
+ * Manages tensor literal data type (FLOAT, INT32, etc.), shape dimensions
+ * via DimensionBuilder, and tensor role category ('input', 'output', 'intermediate', etc.).
+ */
+
 import Select from "react-select";
-
 import { DataType, type Shape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes.ts";
-
 import { DimensionBuilder } from "./DimensionBuilder.tsx";
 import type TensorNode from "@specs-feup/onnx-flow/Onnx/TensorNode.ts";
-
 import { dataTypeOptions } from "@/types/Onnx.ts";
 import { getReactSelectStyles } from "@/styles/ReactSelectStyle.ts";
 
-/*--- TENSOR OPTIONS ---*/
+/**
+ * Dropdown options for selecting the TensorKind category.
+ */
 const tensorTypes = ["Input", "Output", "Intermediate", "Index", "Index_Aux"].map((e) => ({
     value: e.toLowerCase(),
     label: e,
 }));
-/*---   ---*/
 
+/**
+ * Properties for the TensorNodeAdder component.
+ */
 interface TensorNodeAdderProps {
+    /** Optional custom styles for ReactSelect */
     reactSelectStyles?: any;
+    /** State setter for the tensor's literal DataType */
     setTensorDataType: (value: DataType) => void;
+    /** State setter for the tensor's Shape */
     setTensorShapeValue: (value: Shape) => void;
+    /** Current shape array of the tensor */
     tensorShapeValue: Shape;
+    /** Optional state setter for the TensorKind */
     setTensorKind?: (value: TensorNode.TensorKind) => void;
+    /** Current DataType value of the tensor */
     tensorDataType: DataType;
+    /** Current TensorKind category value */
     tensorKind?: TensorNode.TensorKind;
+    /** Flag to control visibility of the Tensor Kind selection field */
     showTensorKind?: boolean;
+    /** Flag indicating whether the entire form is disabled (e.g. inside an operation attribute) */
     disabled?: boolean;
+    /** Object containing form validation error messages keyed by field name */
     errors?: Record<string, string>;
 }
 
+/**
+ * Form component for creating or editing an ONNX TensorNode.
+ *
+ * @param props - TensorNodeAdder properties
+ * @returns JSX element containing tensor configuration inputs
+ */
 export default function TensorNodeAdder({
+
     reactSelectStyles,
     setTensorDataType,
     setTensorShapeValue,

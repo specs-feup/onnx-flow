@@ -1,3 +1,10 @@
+/**
+ * @file ExplorerServer.ts
+ * @description Express HTTP REST API server providing graph visualizer and editor backend services.
+ * Features multi-session management, ONNX file loading and parsing, Cytoscape graph compilation,
+ * transformation pass execution, undo/redo time-travel debugging, and format exporting (ONNX JSON / Unified JSON).
+ */
+
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { ExplorerSession } from "./ExplorerSession.js";
@@ -9,14 +16,20 @@ import { parseOnnxFile } from "../index.js";
 import { createGraph, createGraphFromCytoscape } from "../initGraph.js";
 import { HistoryManager } from "../Onnx/transformation/tracking/HistoryManager.js";
 
+/** Active in-memory session registry mapping sessionId -> ExplorerSession */
 const sessions = new Map<string, ExplorerSession>();
 
+/** Registry tracking scheduled session terminations during the grace period */
 const pendingDeletions = new Map<string, NodeJS.Timeout>();
 const GRACE_PERIOD_MS = 5000;
 
 /**
- * Middleware auxiliar para validar a existência da sessão no mapa.
- * Anexa a sessão ao objeto Request via `res.locals.session`.
+ * Express middleware to validate session existence for parameterized session routes.
+ * Attaches the retrieved ExplorerSession instance to `res.locals.session` and cancels any pending grace period deletions.
+ *
+ * @param req - Express request object
+ * @param res - Express response object
+ * @param next - Express next middleware callback
  */
 function requireSession(req: Request, res: Response, next: NextFunction): void {
     const sessionId = req.params["sessionId"] as string;
@@ -39,11 +52,16 @@ function requireSession(req: Request, res: Response, next: NextFunction): void {
     next();
 }
 
+/**
+ * Initializes and starts the Explorer Express HTTP server.
+ *
+ * @param initialSession - Optional pre-created session instance
+ * @param port - TCP port number for the HTTP server (default: 3000)
+ */
 export function startExplorerServer(
     initialSession: ExplorerSession | null,
     port: number = 3000,
 ): void {
-    // Se for passada uma sessão inicial, registamo-la com um ID predefinido ("default")
     if (initialSession) {
         // sessions.set("default", initialSession);
     }
@@ -59,6 +77,7 @@ export function startExplorerServer(
         next();
     });
 
+    // List available sample ONNX models
     app.get("/api/files", async (req: Request, res: Response) => {
         try {
             const folderPath: PathLike = "./examples/onnx";
@@ -86,10 +105,10 @@ export function startExplorerServer(
     });
 
     // ============================================================================
-    // GESTÃO DE SESSÕES
+    // SESSION MANAGEMENT
     // ============================================================================
 
-    // 2. CRIAR NOVA SESSÃO
+    // 2. CREATE NEW SESSION
     app.post("/api/sessions", async (req: Request, res: Response) => {
         try {
             const { onnxFilename } = req.body;
@@ -128,7 +147,7 @@ export function startExplorerServer(
         }
     });
 
-    // 3. LISTAR TODAS AS SESSÕES ATIVAS
+    // 3. LIST ALL ACTIVE SESSIONS
     app.get("/api/sessions", (_req: Request, res: Response) => {
         res.json({
             success: true,
@@ -136,7 +155,7 @@ export function startExplorerServer(
         });
     });
 
-    // 4. ELIMINAR UMA SESSÃO
+    // 4. DELETE A SESSION
     app.delete("/api/sessions/:sessionId", (req: Request, res: Response) => {
         const sessionId = req.params["sessionId"] as string;
         const deleted = sessions.delete(sessionId);
@@ -147,7 +166,7 @@ export function startExplorerServer(
         res.json({ success: true, message: `Session '${sessionId}' deleted.` });
     });
 
-    // 4.5 MARCAR SESSÃO PARA ELIMINAÇÃO (Via Beacon do Frontend)
+    // 4.5 MARK SESSION FOR DELETION (Via Frontend Beacon)
     app.post("/api/sessions/:sessionId/end", (req: Request, res: Response) => {
         const sessionId = req.params["sessionId"] as string;
 
@@ -176,7 +195,7 @@ export function startExplorerServer(
     });
 
     // ============================================================================
-    // OPERAÇÕES SOBRE UMA SESSÃO ESPECÍFICA (via requireSession)
+    // OPERATIONS ON A SPECIFIC SESSION (via requireSession)
     // ============================================================================
 
     // 5. Graph Endpoint
@@ -334,7 +353,7 @@ export function startExplorerServer(
     });
 
     // ============================================================================
-    // SERVIDOR & SHUTDOWN
+    // SERVER LIFECYCLE & SHUTDOWN
     // ============================================================================
 
     const server = app.listen(port, () => {

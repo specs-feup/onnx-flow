@@ -1,8 +1,40 @@
-import { useState } from 'react';
+/**
+ * @file NodeWindow.tsx
+ * @description Floating inspection popup component for viewing detailed node metadata.
+ * Displays node classifications (Tensor, Operation, Constant), tensor data types, shape dimensions,
+ * operator attributes, inputs, and includes an embedded Loop Viewer modal for exploring nested regions.
+ */
 
+import { useState } from 'react';
 import CytoscapeGraph from '@/components/Cytoscape.tsx';
 import type { CytoscapeData } from '@/types/Cytoscape.ts';
 
+/**
+ * Properties for the NodePopup component.
+ */
+interface NodePopupProps {
+    /** Selected node data object */
+    selectedNode: any;
+    /** Coordinate position on screen where the node was clicked */
+    popupPos: { x: number; y: number } | null;
+    /** Callback triggered to close the inspector popup */
+    onClose: () => void;
+    /** Optional Cytoscape stylesheet to apply to nested subgraphs */
+    cytoscapeStylesheet?: any;
+    /** Optional layout options for nested subgraph views */
+    cytoscapeLayout?: any;
+    /** Optional base node color */
+    nodeColor?: string;
+    /** Optional callback when a node within a nested subgraph is selected */
+    onNodeSelected?: (node: any, pos: { x: number; y: number }) => void;
+}
+
+/**
+ * Floating node inspection window component with nested subgraph viewer support.
+ *
+ * @param props - NodePopup properties
+ * @returns JSX element containing the node inspection popup or null if no node is selected
+ */
 export default function NodePopup({ 
   selectedNode, 
   popupPos, 
@@ -11,8 +43,8 @@ export default function NodePopup({
   cytoscapeLayout, 
   nodeColor,
   onNodeSelected,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }: any) {
+}: NodePopupProps) {
+
   const [showLoopWindow, setShowLoopWindow] = useState(false);
 
   if (!selectedNode || !popupPos) return null;

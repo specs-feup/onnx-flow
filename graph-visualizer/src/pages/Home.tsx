@@ -1,29 +1,54 @@
+/**
+ * @file Home.tsx
+ * @description Homepage and Model File Explorer component. Fetches available ONNX model files
+ * from the backend server, provides searching, sorting (by name, size, last modified date),
+ * ascending/descending order toggling, and session initialization navigation.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import Select from "react-select";
-import { getAvailableFiles, startNewSession } from "../api/api";
+import { getAvailableFiles, startNewSession, type ServerFileInfo } from "../api/api";
 import { Link } from "react-router-dom";
 
+/**
+ * Filter options for sorting the available ONNX files list.
+ */
 const filterOptions = [
-    {label: "Name", value: "name"},
-    {label: "Size", value: "size"},
-    {label: "Last Modified", value: "lastModified"},
+    { label: "Name", value: "name" },
+    { label: "Size", value: "size" },
+    { label: "Last Modified", value: "lastModified" },
 ];
 
+/**
+ * Represents file descriptor metadata for an ONNX model file on the server.
+ */
 interface OnnxFile {
+    /** File name including extension */
     name: string;
-    size: number; // in bytes
-    lastModified: string; // ISO 8601 timestamp
+    /** File size in bytes */
+    size: number;
+    /** ISO 8601 modification timestamp */
+    lastModified: string;
 }
 
+/**
+ * Home page component that displays the list of available ONNX files and handles
+ * search filtering, sorting, and session launching.
+ *
+ * @returns JSX element for the homepage view
+ */
 function Home() {
     const [onnxFiles, setOnnxFiles] = useState<OnnxFile[]>([]);
     const [filterOption, setFilterOption] = useState<string>(filterOptions[0].value);
     const [orderOption, setOrderOption] = useState<boolean>(true); // true for ascending, false for descending
     const [searchTerm, setSearchTerm] = useState<string>("");
 
+    /**
+     * Initial data fetching effect: retrieves the list of ONNX files from the backend server on mount.
+     */
     useEffect(() => {
         getAvailableFiles()
-            .then((files) => {
+            .then((files: ServerFileInfo[]) => {
                 setOnnxFiles(files);
             })
             .catch((error) => {
@@ -31,6 +56,9 @@ function Home() {
             });
     }, []);
 
+    /**
+     * Memoized list of displayed files, filtered by search query and sorted by the active filter criteria and order.
+     */
     const displayedFiles = useMemo(() => {
         const sorted = [...onnxFiles].sort((a, b) => {
             let result;
@@ -70,7 +98,7 @@ function Home() {
             <button onClick={() => {
                 setOnnxFiles([]);
                 getAvailableFiles()
-                    .then((files) => {
+                    .then((files: ServerFileInfo[]) => {
                         setOnnxFiles(files);
                     })
                     .catch((error) => {
@@ -103,7 +131,7 @@ function Home() {
                         <li key={index}>
                                 <h2 style={{cursor: "pointer"}}>{file.name}</h2>
                                 <p>Size: {file.size} bytes</p>
-                                <p>Last Modified: {(new Date(file.lastModified)).toLocaleString("pt-PT")}</p>
+                                <p>Last Modified: {(new Date(file.lastModified)).toLocaleString()}</p>
                                 <Link to={`/app/${file.name}`} target="_blank" rel="noopener noreferrer" onClick={() => startNewSession(3000, file.name)}>Open File</Link>
                             </li>
                     ))}
@@ -119,4 +147,4 @@ function Home() {
     );
 }
 
-export default Home;
+export default Home;

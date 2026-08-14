@@ -1,3 +1,10 @@
+/**
+ * @file App.tsx
+ * @description Main application workspace component for graph visualization, inspection, transformation,
+ * and interactive node/edge editing. Manages Cytoscape state, session storage synchronization,
+ * layout algorithms, theme selection, cascading element deletions, compilation, and restore dialogs.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -21,12 +28,22 @@ import { valueNodeExtractor } from "@/utils/ValueNodeExtractor.ts";
 import { StandardOps } from "@specs-feup/onnx-flow/Onnx/Schema/definitions/StandardOps";
 import { AttributeType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
+/**
+ * Main application component managing the active session's graph visualizer and editor workflow.
+ *
+ * @returns JSX element containing the full visualizer/editor UI workspace
+ */
 function App() {
     const { sessionId } = useParams();
 
     const SAVED_GRAPH_KEY = `saved_cytoscape_data_${sessionId || "default"}`;
     const PENDING_RESTORE_KEY = `pending_restore_${sessionId || "default"}`;
 
+    /**
+     * Persists the current in-memory graph state to browser sessionStorage for session recovery.
+     *
+     * @param data - The Cytoscape graph payload to save
+     */
     const saveGraphToSession = (data: CytoscapeData) => {
         try {
             sessionStorage.setItem(SAVED_GRAPH_KEY, JSON.stringify(data));
@@ -36,7 +53,9 @@ function App() {
         }
     };
 
-    // End Session when closing Tab
+    /**
+     * Clean up active session on the backend when the browser window or tab is closed.
+     */
     useEffect(() => {
         const endCurrentSession = () => {
             const url = `http://localhost:3000/api/sessions/${sessionId}/end`;
@@ -83,6 +102,10 @@ function App() {
             })
             .catch((err) => console.log(err));
 
+    /**
+     * Compiles the current in-memory Cytoscape graph back into an ONNX representation via the backend.
+     * Displays a success or error modal with compilation diagnostic details.
+     */
     const handleCompileModel = async () => {
         if (!cytoscapeData || !sessionId) return;
         try {
@@ -116,6 +139,12 @@ function App() {
         setCompileModalOpen(true);
     };
 
+    /**
+     * Toggles between Visualizer Mode and Editor Mode.
+     * When activating Editor Mode, checks for unsaved edits in sessionStorage and prompts restoration if available.
+     *
+     * @param activate - True to enter editor mode, false to return to visualizer mode
+     */
     const handleToggleEditorMode = (activate: boolean) => {
         if (activate) {
             const hasPending = sessionStorage.getItem(PENDING_RESTORE_KEY) === "true";
@@ -133,6 +162,9 @@ function App() {
         setEditorMode(activate);
     };
 
+    /**
+     * Restores previously saved graph edits from browser sessionStorage into the active workspace.
+     */
     const handleRestoreChanges = () => {
         const savedDataStr = sessionStorage.getItem(SAVED_GRAPH_KEY);
         if (savedDataStr) {
@@ -148,6 +180,9 @@ function App() {
         setEditorMode(true);
     };
 
+    /**
+     * Discards cached graph modifications from browser sessionStorage and opens a clean editor session.
+     */
     const handleDiscardChanges = () => {
         sessionStorage.removeItem(SAVED_GRAPH_KEY);
         sessionStorage.removeItem(PENDING_RESTORE_KEY);
@@ -155,6 +190,14 @@ function App() {
         setEditorMode(true);
     };
 
+    /**
+     * Recursively traverses compound child relationships to discover all descendant node IDs
+     * contained within a deleted parent node (e.g. inside Loop or If compound regions).
+     *
+     * @param parentIds - Set of initial parent node IDs to find descendants for
+     * @param allNodes - Full collection of graph node elements
+     * @returns Set containing all parent and descendant node IDs
+     */
     const getDescendantNodeIds = (parentIds: Set<string>, allNodes: any[]): Set<string> => {
         const toDelete = new Set<string>(parentIds);
         let added = true;
@@ -170,6 +213,12 @@ function App() {
         return toDelete;
     };
 
+    /**
+     * Handles cascading node deletion: deletes the specified node, all its descendant child nodes,
+     * attached edges, and saves updated graph state to session storage.
+     *
+     * @param nodeId - ID of the target node to delete
+     */
     const handleNodeDelete = (nodeId: string) => {
         if (!cytoscapeData) return;
         const deletedNodeIds = getDescendantNodeIds(new Set([nodeId]), cytoscapeData.elements.nodes);
@@ -191,6 +240,12 @@ function App() {
         saveGraphToSession(newData);
     };
 
+    /**
+     * Handles edge deletion: removes the specified edge, cleans up references in the target
+     * OperationNode's inputs array, and saves updated graph state.
+     *
+     * @param edgeId - ID of the edge to delete
+     */
     const handleEdgeDelete = (edgeId: string) => {
         if (!cytoscapeData) return;
         const deletedEdge = cytoscapeData.elements.edges.find((e: any) => e.data.id === edgeId);
@@ -236,6 +291,13 @@ function App() {
         saveGraphToSession(newData);
     };
 
+    /**
+     * Handles node submission from NodeAdder form (either creating a new node or updating an existing node).
+     * Connects input edges, updates compound subgraph regions, creates schema output nodes, and persists state.
+     *
+     * @param nodePayload - Prepared node payload containing onnxData, label, and schemaOutputs
+     * @param pos - Canvas coordinate position { x, y } where the node was dropped
+     */
     const handleNodeSubmit = (nodePayload: any, pos: { x: number; y: number } | null) => {
         if (!cytoscapeData) return;
 
@@ -320,7 +382,7 @@ function App() {
         };
 
         if (nodeToEdit) {
-            // --- LÓGICA DE EDIÇÃO ---
+            // --- NODE EDITING LOGIC ---
             const originalId = nodeToEdit.id;
             const newId = nodePayload.onnxData.id || originalId;
             nodePayload.onnxData.id = newId;
@@ -343,7 +405,7 @@ function App() {
                 sMap.forEach((rIdx, nId) => selectedNodesMap.set(nId, rIdx));
             }
 
-            // 1. Substituir os dados do nó existente e atualizar referências de parent
+            // 1. Replace existing node data and update parent references
             const updatedNodes = cytoscapeData.elements.nodes.map((node: any) => {
                 if (node.data.id === originalId) {
                     return {
@@ -392,7 +454,7 @@ function App() {
                 return node;
             });
 
-            // 2. Atualizar as arestas existentes
+            // 2. Update existing connected edges
             let updatedEdges = cytoscapeData.elements.edges.map((edge: any) => {
                 const newEdge: any = { ...edge };
                 if (newEdge.data.source === originalId) newEdge.data.source = newId;
@@ -405,7 +467,7 @@ function App() {
                 updatedEdges = updatedEdges.filter((edge: any) => edge.data.target !== newId);
             }
 
-            // 3. Gerar as novas arestas de entrada e nós de saída (se for OperationNode)
+            // 3. Generate new input edges and output nodes/edges (for OperationNode)
             const newEdges = [];
             const newOutputNodes = [];
             const newOutputEdges = [];
@@ -494,12 +556,12 @@ function App() {
                 },
             };
 
-            // Fechar o modo de edição
+            // Close edit mode
             setNodeToEdit(null);
             setSidePanelVisibility(false);
 
         } else {
-            // --- LÓGICA DE CRIAÇÃO ---
+            // --- NODE CREATION LOGIC ---
             const positionToUse = pos || { x: 0, y: 0 };
             const newId =
                 nodePayload.label === "" || !nodePayload.label

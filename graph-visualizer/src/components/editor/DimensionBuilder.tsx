@@ -1,16 +1,35 @@
-import React from "react";
+/**
+ * @file DimensionBuilder.tsx
+ * @description Interactive tensor shape builder component. Allows adding, removing,
+ * and editing individual tensor rank dimensions with support for fixed integers,
+ * dynamic/symbolic dimension strings, and undefined/unknown sizes.
+ */
 
+import React from "react";
 import { type Shape, type KnownShape } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
 
-
+/**
+ * Properties for the DimensionBuilder component.
+ */
 interface DimensionBuilderProps {
+    /** The active shape array (e.g. [1, 3, 224, 224] or ["batch", 3, undefined, undefined]) */
     value: Shape | KnownShape;
+    /** Callback triggered when shape dimensions are modified, added, or removed */
     onChange: ((shape: KnownShape) => void) | ((shape: Shape) => void);
+    /** Flag indicating whether the shape has validation errors */
     hasError?: boolean;
+    /** Optional array of dimension indices that failed validation */
     errorIndices?: number[];
 }
 
+/**
+ * Component for interactively configuring multi-dimensional tensor shapes.
+ *
+ * @param props - DimensionBuilder properties
+ * @returns JSX element containing the shape dimension tag list and Add Dimension button
+ */
 export const DimensionBuilder: React.FC<DimensionBuilderProps> = ({ value = [], onChange, hasError = false, errorIndices = [] }) => {
+
     const shapeList = value || [];
 
     const addDimension = () => {

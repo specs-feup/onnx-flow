@@ -1,12 +1,31 @@
+/**
+ * @file CompileModal.tsx
+ * @description Modal dialog component displaying the outcome of ONNX model compilation.
+ * Renders success confirmation or detailed error stack trace diagnostics with themed visual feedback.
+ */
+
 import type { CSSProperties } from "react";
 
+/**
+ * Properties for the CompileModal component.
+ */
 interface CompileModalProps {
+    /** Controls modal open/visible state */
     isOpen: boolean;
+    /** Compilation result object containing success flag and informational or error message */
     result: { success: boolean; message: string } | null;
+    /** Callback triggered to close the modal dialog */
     onClose: () => void;
 }
 
+/**
+ * Modal dialog for displaying compiler feedback after compiling the edited in-memory graph.
+ *
+ * @param props - CompileModal properties
+ * @returns JSX element containing the modal dialog or null if closed
+ */
 export default function CompileModal({ isOpen, result, onClose }: CompileModalProps) {
+
     if (!isOpen || !result) return null;
 
     const isSuccess = result.success;

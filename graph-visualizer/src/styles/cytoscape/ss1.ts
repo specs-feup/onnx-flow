@@ -1,5 +1,11 @@
+/**
+ * @file ss1.ts
+ * @description 'Eyestrain' theme stylesheet for Cytoscape.js graphs.
+ * Features ultra-saturated high-contrast neon yellow and cyan colors with red text.
+ */
 
-const ss1=[
+const ss1 = [
+
   {
     selector: "node",
     layout: {

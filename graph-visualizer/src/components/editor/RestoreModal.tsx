@@ -1,12 +1,31 @@
+/**
+ * @file RestoreModal.tsx
+ * @description Modal dialog component for graph edit recovery. Prompts the user when entering
+ * Editor Mode if cached, unsaved graph modifications are detected in browser sessionStorage.
+ */
+
 import type { CSSProperties } from "react";
 
+/**
+ * Properties for the RestoreModal component.
+ */
 interface RestoreModalProps {
+    /** Controls modal open/visible state */
     isOpen: boolean;
+    /** Callback triggered when user chooses to restore previous edits */
     onRestore: () => void;
+    /** Callback triggered when user chooses to discard cached edits and start fresh */
     onDiscard: () => void;
 }
 
+/**
+ * Session restoration prompt modal component.
+ *
+ * @param props - RestoreModal properties
+ * @returns JSX element containing the modal dialog or null if not open
+ */
 export default function RestoreModal({ isOpen, onRestore, onDiscard }: RestoreModalProps) {
+
     if (!isOpen) return null;
 
     const overlayStyle: CSSProperties = {

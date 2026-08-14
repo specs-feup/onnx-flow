@@ -1,3 +1,10 @@
+/**
+ * @file Cytoscape.tsx
+ * @description Core graph rendering component wrapping react-cytoscapejs. Manages Cytoscape.js
+ * lifecycle, layout execution (fcose, dagre, elk, bfs, grid, concentric), compound node
+ * expansion/collapse, radial context menus (cxtmenu), node/edge styling updates, and event handling.
+ */
+
 import CytoscapeComponent from "react-cytoscapejs";
 import fcose from "cytoscape-fcose";
 import cytoscape from "cytoscape";
@@ -11,6 +18,7 @@ import expandCollapse from "cytoscape-expand-collapse";
 import defaultStylesheet from "@/styles/cytoscape/default.ts";
 import type { CytoscapeData } from "@/types/Cytoscape.ts";
 
+// Register layout and UI plugins with the Cytoscape core
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 cytoscape.use(elk);
@@ -19,8 +27,20 @@ expandCollapse(cytoscape);
 
 // --- HELPER FUNCTIONS ---
 
+/**
+ * Tracks currently expanded subgraph region index for each compound operation node.
+ * Maps `nodeId` -> `regionIndex`.
+ */
 const expandedRegionsMap = new Map<string, number>();
 
+/**
+ * Generates a human-friendly name for a subgraph region (e.g. If branch or Loop body).
+ *
+ * @param nodeData - The parent OperationNode's data object
+ * @param region - Region data object
+ * @param index - Index of the region within the operation's regions array
+ * @returns Human-readable label for the region
+ */
 function getRegionName(nodeData: any, region: any, index: number): string {
     if (region?.name) return region.name;
     if (region?.data?.name) return region.data.name;
@@ -34,6 +54,14 @@ function getRegionName(nodeData: any, region: any, index: number): string {
     return `Region ${index + 1}`;
 }
 
+/**
+ * Expands a specific subgraph region within a compound node and adjusts the visibility of internal child elements.
+ *
+ * @param cy - The Cytoscape core instance
+ * @param api - The cytoscape-expand-collapse API instance
+ * @param nodeId - ID of the parent compound node
+ * @param regionIndex - Index of the region to display
+ */
 function showRegion(cy: cytoscape.Core, api: any, nodeId: string, regionIndex: number) {
     const parentNode = cy.getElementById(nodeId);
     if (!parentNode || parentNode.empty()) return;
@@ -63,6 +91,13 @@ function showRegion(cy: cytoscape.Core, api: any, nodeId: string, regionIndex: n
     });
 }
 
+/**
+ * Collapses and hides all child regions and elements within a compound node.
+ *
+ * @param cy - The Cytoscape core instance
+ * @param api - The cytoscape-expand-collapse API instance
+ * @param nodeId - ID of the parent compound node to collapse
+ */
 function hideAllRegions(cy: cytoscape.Core, api: any, nodeId: string) {
     const parentNode = cy.getElementById(nodeId);
     if (!parentNode || parentNode.empty()) return;
@@ -78,6 +113,12 @@ function hideAllRegions(cy: cytoscape.Core, api: any, nodeId: string) {
     }
 }
 
+/**
+ * Collapses all compound nodes across the entire graph.
+ *
+ * @param cy - The Cytoscape core instance
+ * @param api - The cytoscape-expand-collapse API instance
+ */
 function handleCollapseAll(cy: cytoscape.Core, api: any) {
     expandedRegionsMap.clear();
     cy.elements().removeStyle("display");
@@ -86,6 +127,12 @@ function handleCollapseAll(cy: cytoscape.Core, api: any) {
     }
 }
 
+/**
+ * Expands all compound nodes across the entire graph.
+ *
+ * @param cy - The Cytoscape core instance
+ * @param api - The cytoscape-expand-collapse API instance
+ */
 function handleExpandAll(cy: cytoscape.Core, api: any) {
     expandedRegionsMap.clear();
     if (api && typeof api.expandAll === "function") {
@@ -94,6 +141,18 @@ function handleExpandAll(cy: cytoscape.Core, api: any) {
     cy.elements().removeStyle("display");
 }
 
+/**
+ * Initializes interactive radial context menus for nodes, edges, and the canvas background.
+ *
+ * @param cy - The Cytoscape core instance
+ * @param api - The cytoscape-expand-collapse API instance
+ * @param editorMode - Boolean flag indicating if editor mode actions (add/edit/delete) should be enabled
+ * @param onAddNodeRequested - Callback when user clicks 'Add Node' on canvas
+ * @param onEditNodeRequested - Callback when user clicks 'Edit' on a node
+ * @param onDeleteNodeRequested - Callback when user clicks 'Delete' on a node
+ * @param onDeleteEdgeRequested - Callback when user clicks 'Delete' on an edge
+ * @returns Array of initialized cxtmenu plugin instances
+ */
 const setupContextMenus = (
     cy: cytoscape.Core,
     api: any,
@@ -204,6 +263,12 @@ const setupContextMenus = (
     return [nodeMenu, edgeMenu, coreMenu];
 };
 
+/**
+ * Updates dynamic styling on the Cytoscape graph (node background colors, highlight for selected node).
+ *
+ * @param cy - The Cytoscape core instance
+ * @param options - Style parameters including active stylesheet, base nodeColor, and selectedNodeId
+ */
 const updateStyles = (cy: cytoscape.Core, { stylesheet, nodeColor = "#533b6e", selectedNodeId }: any) => {
     cy.nodes().removeStyle("background-color");
     if ((!stylesheet || stylesheet === defaultStylesheet) && nodeColor) {
@@ -219,22 +284,45 @@ const updateStyles = (cy: cytoscape.Core, { stylesheet, nodeColor = "#533b6e", s
 
 // --- MAIN COMPONENT ---
 
+/**
+ * Properties for the CytoscapeGraph component.
+ */
 type Props = {
+    /** CSS styling container options */
     style: CSSProperties;
+    /** The Cytoscape graph data payload containing nodes and edges */
     cytoscapeData: CytoscapeData | null;
+    /** Layout options specification (e.g. fcose, dagre, elk) */
     layout: cytoscape.LayoutOptions;
+    /** Active Cytoscape CSS stylesheet */
     stylesheet?: any;
+    /** Base color used for node backgrounds */
     nodeColor?: string;
+    /** Currently selected node ID for visual highlight */
     selectedNodeId?: string | null;
+    /** Callback fired when a node is tapped/selected */
     onNodeSelected?: (node: any, pos: { x: number; y: number }) => void;
+    /** Callback fired when an edge is tapped/selected */
     onEdgeSelected?: (edge: any, pos: { x: number; y: number }) => void;
+    /** Callback fired when user requests adding a node at a canvas position */
     onAddNodeRequested?: (pos: { x: number; y: number }) => void;
+    /** Callback fired when user requests editing a specific node */
     onEditNodeRequested?: (node: any) => void;
+    /** Callback fired when user requests deleting a specific node */
     onDeleteNodeRequested?: (nodeId: string) => void;
+    /** Callback fired when user requests deleting a specific edge */
     onDeleteEdgeRequested?: (edgeId: string) => void;
+    /** Flag indicating whether editor mode is currently active */
     editorMode?: boolean;
 };
 
+
+/**
+ * Interactive Cytoscape graph canvas component for ONNX computation graph exploration and editing.
+ *
+ * @param props - Component properties (styling, data, layout, callbacks, editorMode flag)
+ * @returns JSX element containing the Cytoscape canvas container
+ */
 export default function CytoscapeGraph({
     style, cytoscapeData, layout, stylesheet, nodeColor, selectedNodeId, onNodeSelected, onEdgeSelected, onAddNodeRequested, onEditNodeRequested, onDeleteNodeRequested, onDeleteEdgeRequested, editorMode = false
 }: Props) {
