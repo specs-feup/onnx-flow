@@ -1262,8 +1262,10 @@ const TESTS: Array<{
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
 
+    // ===== Remaining Binary Ops =====
+
     {
-        label:"sub",
+        label:"Sub",
         originalPath: "examples/onnx/sub.onnx",
         tol: 1e-5,
         cliArgs:jsonFullArgs,
@@ -1432,7 +1434,7 @@ const TESTS: Array<{
     },
 
     {
-        label: "mod_fmod0",
+        label: "Mod fmod0",
         originalPath: "examples/onnx/mod_fmod0.onnx",
         exact: true,
         cliArgs: jsonFullArgs,
@@ -1443,7 +1445,7 @@ const TESTS: Array<{
     },
 
     {
-        label: "mod_fmod1",
+        label: "Mod fmod1",
         originalPath: "examples/onnx/mod_fmod1.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
