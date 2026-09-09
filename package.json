@@ -103,5 +103,8 @@
             "types": "./out/src/*.d.ts",
             "default": "./out/src/*.js"
         }
+    },
+    "allowScripts": {
+        "protobufjs@7.4.0": true
     }
 }

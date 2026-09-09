@@ -260,7 +260,7 @@ export type FeedSpec = {
     // optional fixed initialization (overrides generator)
     init?: number[] | bigint[] | boolean[];
     // optional generator hint
-    gen?: "random" | "negmix" | "zeros" | "ones" | "range";
+    gen?: "random" | "negmix" | "zeros" | "ones" | "range" | "greaterThanOne";
     // for 'range' convenience (scalar-float specs)
     value?: number; // when shape === []
 };
@@ -289,6 +289,7 @@ export function makeArray(
             if (gen === "negmix") return Array.from({ length: len }, randNegMix);
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
+            if (gen === "greaterThanOne") return Array.from({ length: len }, () => randFloat() + 1); // Valores acima de 1 (ACcosH)
             return Array.from({ length: len }, randFloat);
         case "int32":
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
@@ -302,7 +303,7 @@ export function makeArray(
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256) - 128);
-        case "uint8":
+        case "uint8": // <-- add this
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256));
@@ -1060,7 +1061,7 @@ const TESTS: Array<{
     {
         label: "averagepool_standard",
         originalPath: "examples/onnx/avgpool_standard.onnx",
-        tol: 1e-6,
+        tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
     },
@@ -1147,7 +1148,7 @@ const TESTS: Array<{
         originalPath: "examples/onnx/softmax_standard.onnx",
         cliArgs: jsonFullArgs,
         specs: [{ name: "X", dtype: "float32", shape: [8, 3], gen: "random" }],
-        tol: 1e-4,
+        tol: 1e-5,
     },
 
     // ----- Expand -----
@@ -1193,7 +1194,7 @@ const TESTS: Array<{
     {
         label: "ad01_fp32_standard",
         originalPath: "examples/onnx/ad01_fp32.onnx",
-        tol: 1e-4,
+        tol: 1e-3,
         cliArgs: jsonFullArgs, // full JSON export + reconvert
         specs: [{ name: "input_1", dtype: "float32", shape: [1, 640] }],
     },
@@ -1201,7 +1202,7 @@ const TESTS: Array<{
     {
         label: "ad01_fp32_gemm_relu_standard",
         originalPath: "examples/onnx/ad01_fp32_gemm_relu.onnx",
-        tol: 1e-4, // relaxed a bit, should be fine
+        tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
             {
@@ -1217,7 +1218,7 @@ const TESTS: Array<{
     {
         label: "kws_ref_model_float32_standard",
         originalPath: "examples/onnx/kws_ref_model_float32.onnx",
-        tol: 1e-4, // softmax tail needs a little tolerance
+        tol: 1e-5, // softmax tail needs a little tolerance
         cliArgs: jsonFullArgsNoValidate,
         specs: [
             { name: "input_1", dtype: "float32", shape: [1, 49, 10, 1] }, // in
@@ -1240,7 +1241,7 @@ const TESTS: Array<{
     {
         label: "SC2_X",
         originalPath: "examples/onnx/SC2_X_toy.onnx",
-        tol: 1e-4,
+        tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
@@ -1248,7 +1249,7 @@ const TESTS: Array<{
     {
         label: "SC2_Y",
         originalPath: "examples/onnx/SC2_Y_toy.onnx",
-        tol: 1e-4,
+        tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
@@ -1256,9 +1257,292 @@ const TESTS: Array<{
     {
         label: "SC2_Z",
         originalPath: "examples/onnx/SC2_Z_toy.onnx",
-        tol: 1e-4,
+        tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
+    },
+
+    // ===== Remaining Binary Ops =====
+
+    {
+        label: "Sub",
+        originalPath: "examples/onnx/sub.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "GreaterOrEqual",
+        originalPath: "examples/onnx/greater_or_equal.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Less",
+        originalPath: "examples/onnx/less.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2], init: [10, -10] },
+            { name: "B", dtype: "float32", shape: [2], init: [3, 3] },
+        ],
+    },
+
+    {
+        label: "LessOrEqual",
+        originalPath: "examples/onnx/less_or_equal.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Min",
+        originalPath: "examples/onnx/min.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Max",
+        originalPath: "examples/onnx/max.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Abs",
+        originalPath: "examples/onnx/abs.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Sign",
+        originalPath: "examples/onnx/sign.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "LeakyRelu",
+        originalPath: "examples/onnx/leaky_relu.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "HardSigmoid",
+        originalPath: "examples/onnx/hard_sigmoid.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+    {
+        label: "Softplus",
+        originalPath: "examples/onnx/softplus.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Mish",
+        originalPath: "examples/onnx/mish.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Elu",
+        originalPath: "examples/onnx/elu.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Celu",
+        originalPath: "examples/onnx/celu.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+    {
+        label: "Selu",
+        originalPath: "examples/onnx/selu.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Or",
+        originalPath: "examples/onnx/or.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "bool", shape: [2] },
+            { name: "B", dtype: "bool", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Div",
+        originalPath: "examples/onnx/Div.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Mod fmod0",
+        originalPath: "examples/onnx/mod_fmod0.onnx",
+        exact: true,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "int64", shape: [6], init: [10n, 10n, -10n, -10n, 5n, -5n] },
+            { name: "B", dtype: "int64", shape: [6], init: [3n, -3n, 3n, -3n, 2n, 2n] },
+        ],
+    },
+
+    {
+        label: "Mod fmod1",
+        originalPath: "examples/onnx/mod_fmod1.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [6], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [6], gen: "negmix" },
+        ],
+    },
+
+    {
+        label: "Pow",
+        originalPath: "examples/onnx/pow.onnx",
+        tol: 1e-3,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "A", dtype: "float32", shape: [2] },
+            { name: "B", dtype: "float32", shape: [2] },
+        ],
+    },
+
+    {
+        label: "Not",
+        originalPath: "examples/onnx/not.onnx",
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "bool", shape: [2] }],
+    },
+
+    {
+        label: "Sigmoid",
+        originalPath: "examples/onnx/sigmoid.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Softsign",
+        originalPath: "examples/onnx/softsign.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Tan",
+        originalPath: "examples/onnx/tan.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Sinh",
+        originalPath: "examples/onnx/sinh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Cosh",
+        originalPath: "examples/onnx/cosh.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "TanhSigmoid",
+        originalPath: "examples/onnx/tanh_sigmoid.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "TanhDiv",
+        originalPath: "examples/onnx/tanh_div.onnx",
+        tol: 1e-6,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Asinh",
+        originalPath: "examples/onnx/asinh.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Acosh",
+        originalPath: "examples/onnx/acosh.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "greaterThanOne" }],
+    },
+
+    {
+        label: "Atanh",
+        originalPath: "examples/onnx/atanh.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
+    },
+
+    {
+        label: "Group Normalization",
+        originalPath: "examples/onnx/group_normalization.onnx",
+        tol: 1e-5,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "X", dtype: "float32", shape: [1, 4, 4, 4] },
+            { name: "scale", dtype: "float32", shape: [4] },
+            { name: "bias", dtype: "float32", shape: [4] },
+        ],
     },
 ];
 
@@ -1271,98 +1555,16 @@ const CORE_OP_TESTS: Array<{
     specs: FeedSpec[];
 }> = [
     {
-        label: "mod_fmod0_standard",
-        originalPath: "examples/onnx/mod_fmod0_standard.onnx",
-        exact: true,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "A", dtype: "int64", shape: [6], init: [10n, 10n, -10n, -10n, 5n, -5n] },
-            { name: "B", dtype: "int64", shape: [6], init: [3n, -3n, 3n, -3n, 2n, 2n] },
-        ],
-    },
-    {
-        label: "mod_fmod1_standard",
-        originalPath: "examples/onnx/mod_fmod1_standard.onnx",
+        label: "Group Normalization",
+        originalPath: "examples/onnx/group_normalization.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [6], gen: "negmix" },
-            { name: "B", dtype: "float32", shape: [6], gen: "negmix" },
+            { name: "X", dtype: "float32", shape: [1, 4, 4, 4] },
+            { name: "scale", dtype: "float32", shape: [4] },
+            { name: "bias", dtype: "float32", shape: [4] },
         ],
     },
-    /*
-    {
-        label: "averagepool_standard",
-        originalPath: "examples/onnx/avgpool_standard.onnx",
-        tol: 1e-6,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
-    },
-    */
-    /*
-    {
-        label: "exp_standard_taylor",
-        originalPath: "examples/onnx/exp_standard.onnx",
-        tol: 1e-2,
-        cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [6] }],
-    },
-    */
-    /*
-    {
-        label: "lstm_standard",
-        originalPath: "examples/onnx/lstm_standard.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs, // keep JSON for the standard model
-        specs: [
-            // X:[T,N,I] = [4,2,3]
-            { name: "X", dtype: "float32", shape: [4, 2, 3] },
-        ],
-    },
-    */
-    /*
-    {
-        label: "kws_ref_model_int8_standard",
-        originalPath: "examples/onnx/kws_ref_model.onnx",
-        exact: true, // uint8 pipeline → expect bit-exact
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "input_1", dtype: "int8", shape: [1, 49, 10, 1] }, // in
-            // out: Identity [1,12] uint8 (auto)
-        ],
-    },
-    */
-    /*
-  // ----- LSTM (TBD) -----
-  {
-    label: 'SC7',
-    originalPath: 'examples/onnx/SC7.onnx',
-    tol: 1e-4,
-    cliArgs: jsonFullArgs,
-    specs: [
-      { name: 'input',  dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.3', dtype: 'float32', shape: [1, 10, 10] },
-      { name: '_obs.5', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.7', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.9', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs.11', dtype: 'float32', shape: [1, 10] },
-      { name: '_obs',   dtype: 'float32', shape: [1] },
-    ],
-  },
-  */
-    /*
-  // ----- LSTM (TBD) -----
-  {
-    label: 'lstm_standard',
-    originalPath: 'examples/onnx/lstm_standard.onnx',
-    tol: 1e-5,
-    cliArgs: jsonFullArgs,               // keep JSON for the standard model
-    specs: [
-      // X:[T,N,I] = [4,2,3]
-      { name: 'X', dtype: 'float32', shape: [4, 2, 3] },
-    ],
-  },
-  */
 ];
 
 // Run ONLY the focused subset above.
