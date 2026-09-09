@@ -21,6 +21,7 @@
     "main": "./out/src/index.js",
     "files": [
         "out/",
+        "src/Onnx/onnx.proto",
         "package.json",
         "README.md"
     ],
@@ -57,9 +58,13 @@
     "dependencies": {
         "@specs-feup/flow": "^1.0.3",
         "express": "^4.21.1",
+        "link": "^2.1.2",
         "node-graphviz": "^0.1.1",
+        "npm": "^12.0.1",
         "onnxruntime-web": "^1.20.1",
         "protobufjs": "^7.4.0",
+        "tsx": "^4.23.1",
+        "vite": "^8.1.5",
         "yargs": "^17.7.2"
     },
     "type": "module",
@@ -99,12 +104,25 @@
         ]
     },
     "exports": {
+        ".": {
+            "types": "./out/src/api.d.ts",
+            "default": "./out/src/api.js"
+        },
+        "./recipes": {
+            "types": "./out/src/recipes.d.ts",
+            "default": "./out/src/recipes.js"
+        },
+        "./test": {
+            "types": "./out/test/compatibility_test.d.ts",
+            "default": "./out/test/compatibility_test.js"
+        },
         "./*": {
             "types": "./out/src/*.d.ts",
             "default": "./out/src/*.js"
         }
     },
     "allowScripts": {
-        "protobufjs@7.4.0": true
+        "protobufjs": true,
+        "esbuild@0.28.2": true
     }
 }
