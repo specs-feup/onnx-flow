@@ -13,13 +13,16 @@ export class AddGridDecompositionRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Gather", "Add", "Unsqueeze", "Concat"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         const inputs = op.getInputs();
         if (!inputs || inputs.length !== 2) return false;
 
         const [in1, in2] = inputs as ConcreteValueNode[];
         // Only apply if inputs are 2D and exactly match
-        return shapesEqual(in1, in2) && in1.shape.length === 2;
+        if (shapesEqual(in1, in2) && in1.shape.length === 2) {
+            return true;
+        }
+        return false;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

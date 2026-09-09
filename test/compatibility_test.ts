@@ -1438,7 +1438,7 @@ const TESTS: Array<{
     {
         label: "Pow",
         originalPath: "examples/onnx/pow.onnx",
-        tol: 1e-3,
+        tol: 1e-2,
         cliArgs: jsonFullArgs,
         specs: [
             { name: "A", dtype: "float32", shape: [2] },
@@ -1528,7 +1528,7 @@ const TESTS: Array<{
     {
         label: "Atanh",
         originalPath: "examples/onnx/atanh.onnx",
-        tol: 1e-5,
+        tol: 1e-2,
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },

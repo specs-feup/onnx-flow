@@ -12,7 +12,7 @@ export class LowerIsInfRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Equal", "Abs"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "IsInf";
     }
 

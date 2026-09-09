@@ -12,7 +12,7 @@ export class LowerEluRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["GreaterOrEqual", "Exp", "Sub", "Mul"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Elu";
     }
 

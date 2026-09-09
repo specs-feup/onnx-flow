@@ -12,7 +12,6 @@ import { LowerConcatRecipe } from "./recipes/LowerConcatRecipe.js";
 import { LowerClipRecipe } from "./recipes/LowerClipRecipe.js";
 import { LowerAveragePoolRecipe } from "./recipes/LowerAveragePoolRecipe.js";
 import type { DecompositionRecipe } from "../Recipe.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
 import { topologicalSortOperationNodes } from "../../Utils.js";
 import { LowerReluRecipe } from "./recipes/LowerReluRecipe.js";
 import { LowerSubRecipe } from "./recipes/LowerSubRecipe.js";
@@ -61,6 +60,10 @@ import { LowerErfRecipe } from "./recipes/LowerErfRecipe.js";
 import { LowerBatchNormalizationRecipe } from "./recipes/LowerBatchNormalizationRecipe.js";
 import { LowerLayerNormalizationRecipe } from "./recipes/LowerLayerNormalizationRecipe.js";
 import { LowerInstanceNormalizationRecipe } from "./recipes/LowerInstanceNormalizationRecipe.js";
+import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
+import type { HistoryManager } from "../tracking/HistoryManager.js";
+import { TransformationOpportunity } from "../TransformationOpportunity.js";
+import { LowerGroupNormalizationRecipe } from "./recipes/LowerGroupNormalizationRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -129,10 +132,10 @@ export class CanonicalizationPass implements GraphPass {
         ["BatchNormalization", new LowerBatchNormalizationRecipe()],
         ["LayerNormalization", new LowerLayerNormalizationRecipe()],
         ["InstanceNormalization", new LowerInstanceNormalizationRecipe()],
-        //["GroupNormalization", new LowerGroupNormalizationRecipe()],
+        ["GroupNormalization", new LowerGroupNormalizationRecipe()],
     ]);
 
-    public run(graph: OnnxGraph.Class): boolean {
+    public run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean {
         let globalChanged = false;
         let localChanged = true;
 
@@ -146,12 +149,35 @@ export class CanonicalizationPass implements GraphPass {
 
                 const recipe = this.registry.get(op.type);
 
-                if (recipe && recipe.canApply(op)) {
-                    const builder = new GraphBuilder(graph, `lowering_${op.id}`);
-                    recipe.apply(op, builder);
+                if (recipe) {
+                    // Ask the recipe for an opportunity
+                    const opportunity = recipe.match(op)
+                        ? new TransformationOpportunity(
+                              recipe.name,
+                              op.id,
+                              `Apply ${recipe.name} to ${op.type}`,
+                              (builder) => recipe.apply(op, builder),
+                          )
+                        : null;
 
-                    localChanged = true;
-                    globalChanged = true;
+                    if (opportunity) {
+                        //const builder = new GraphBuilder(graph, `lowering_${op.id}`);
+                        const builder = new TrackedGraphBuilder(
+                            graph,
+                            opportunity.id,
+                            opportunity.description,
+                            "canonicalization",
+                        );
+
+                        // Execute the opportunity
+                        opportunity.apply(builder);
+
+                        localChanged = true;
+                        globalChanged = true;
+
+                        const patch = builder.commitPatch();
+                        historyManager.pushPatch(patch);
+                    }
                 }
             }
         }

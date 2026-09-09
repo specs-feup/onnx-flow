@@ -11,7 +11,7 @@ export class LowerTanhDivRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Sinh", "Cosh", "Div"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "TanhDiv";
     }
 

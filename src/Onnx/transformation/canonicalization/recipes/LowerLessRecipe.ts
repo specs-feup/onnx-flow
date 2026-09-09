@@ -11,7 +11,7 @@ export class LowerLessRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Greater"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Less") return false;
 
         const ins = op.getInputs();

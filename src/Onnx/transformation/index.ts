@@ -8,6 +8,7 @@ import { CanonicalizationPass } from "./canonicalization/CanonicalizationPass.js
 import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
+import { HistoryManager } from "./tracking/HistoryManager.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -59,9 +60,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         }
     }
 
-    apply(graph: OnnxGraph.Class): OnnxGraph.Class {
+    apply(graph: OnnxGraph.Class, printSummary: boolean = true): OnnxGraph.Class {
         initializeSchemaRegistry();
         const pm = new PassManager();
+        const historyManager = new HistoryManager(graph);
 
         if (this.decomposeForCgra) {
             // =========================================================================
@@ -75,7 +77,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     return false; // Return false so the PassManager doesn't loop it infinitely
                 },
             });
-            pm.run(graph);
+            pm.run(graph, historyManager);
             return graph;
         }
 
@@ -115,7 +117,47 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         pm.addPass(new InferShapesPass());
 
         // Execute the pipeline!
-        pm.run(graph);
+        pm.run(graph, historyManager);
+        if (printSummary) {
+            historyManager.printSummary();
+        }
+
+        // =========================================================
+        // TEMPORARY DEBUG HACK: Test Undo/Redo tracking
+        // =========================================================
+        /*
+        const debugFormatter = new OnnxDotFormatter();
+
+        console.log("\n--- RUNNING HISTORY DEBUG TEST ---");
+
+        // 1. Save the fully compiled state
+        fs.writeFileSync("debug_0_fully_compiled.dot", graph.toString(debugFormatter));
+        console.log("Saved: debug_0_fully_compiled.dot");
+
+        // 2. Undo the last transformation
+        const undone1 = historyManager.undo();
+        if (undone1) {
+            fs.writeFileSync("debug_1_undo_1.dot", graph.toString(debugFormatter));
+            console.log(`Undid: ${undone1.description}. Saved: debug_1_undo_1.dot`);
+        }
+
+        // 3. Undo one more time
+        const undone2 = historyManager.undo();
+        if (undone2) {
+            fs.writeFileSync("debug_2_undo_2.dot", graph.toString(debugFormatter));
+            console.log(`Undid: ${undone2.description}. Saved: debug_2_undo_2.dot`);
+        }
+
+        // 4. Redo the last undone transformation
+        const redone1 = historyManager.redo();
+        if (redone1) {
+            fs.writeFileSync("debug_3_redo_1.dot", graph.toString(debugFormatter));
+            console.log(`Redid: ${redone1.description}. Saved: debug_3_redo_1.dot`);
+        }
+        console.log("----------------------------------\n");
+        // =========================================================
+        */
+
         return graph;
     }
 }

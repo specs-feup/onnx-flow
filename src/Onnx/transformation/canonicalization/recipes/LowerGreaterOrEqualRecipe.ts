@@ -11,7 +11,7 @@ export class LowerGreaterOrEqualRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Greater", "Equal", "Or"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "GreaterOrEqual") return false;
 
         const ins = op.getInputs();

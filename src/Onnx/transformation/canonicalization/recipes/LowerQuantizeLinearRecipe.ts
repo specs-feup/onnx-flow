@@ -21,8 +21,9 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
         "Clip",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "QuantizeLinear";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "QuantizeLinear") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -116,6 +117,6 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
         const finalY = builder.createOp("Cast", [clipOp], { to: targetType }, expectedY)[0];
 
         builder.replaceAllUsesWith(Y, finalY);
-        op.remove();
+        builder.removeNode(op);
     }
 }

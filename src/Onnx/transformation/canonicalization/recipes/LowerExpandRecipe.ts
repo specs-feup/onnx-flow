@@ -11,8 +11,9 @@ export class LowerExpandRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["ConstantOfShape", "Cast", "Add"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "Expand";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Expand") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -42,6 +43,6 @@ export class LowerExpandRecipe implements DecompositionRecipe {
         const addOp = builder.createOp("Add", [X, zeros], {}, expectedAdd)[0];
 
         builder.replaceAllUsesWith(Y, addOp);
-        op.remove();
+        builder.removeNode(op);
     }
 }

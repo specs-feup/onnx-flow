@@ -50,9 +50,9 @@ digraph {
     loop0_axes0 -> loop0_0 [label="{1}"];
     loop0_i -> loop0_1 [label=sc];
     loop0_const_N -> loop0_1 [label=sc];
-    loop0_12 -> loop0_carry_out [label="{4}"];
     loop0_i -> loop0_2 [label=sc];
     loop0_const_N -> loop0_2 [label=sc];
+    loop0_12 -> loop0_carry_out [label="{4}"];
     loop0_axes0 -> loop0_3 [label="{1}"];
     loop0_axes0 -> loop0_4 [label="{1}"];
     loop0_capture_A -> loop0_5 [label="{2,2}"];
@@ -69,7 +69,7 @@ digraph {
     graph [color=gray];
   }
 
-  loop0_0 -> 1 [label=sc ltail=cluster_loop_0];
+  loop0_0 -> 1 [label="{4}" ltail=cluster_loop_0];
   1 [label=Reshape shape=box color=blue];
   trip_count -> loop0_0 [label=sc lhead=cluster_loop_0];
   cond -> loop0_0 [label=sc lhead=cluster_loop_0];

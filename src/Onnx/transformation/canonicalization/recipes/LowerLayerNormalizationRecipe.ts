@@ -12,7 +12,7 @@ export class LowerLayerNormalizationRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["ReduceMean", "Sub", "Mul", "Add", "Sqrt", "Div"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "LayerNormalization";
     }
 

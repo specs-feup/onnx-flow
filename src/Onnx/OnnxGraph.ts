@@ -59,6 +59,13 @@ namespace OnnxGraph {
                 .find((edge) => edge.target === target);
         }
 
+        getOnnxEdgeById(edgeId: string): OnnxEdge.Class | undefined {
+            return this.edges
+                .filterIs(OnnxEdge)
+                .toArray()
+                .find((edge) => edge.id === edgeId);
+        }
+
         /**
          * Resolves a node by its type and instance number (e.g., "MatMul", 2).
          * Instance is 1-based (first occurrence is 1).

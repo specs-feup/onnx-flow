@@ -23,7 +23,7 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
         "Concat",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "GroupNormalization";
     }
 
@@ -39,9 +39,8 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
             (Y.literalType as DataType | undefined) ??
             DataType.FLOAT;
 
-        const outShape = (Y.shape as KnownShape).length
-            ? (Y.shape as KnownShape)
-            : (X.shape as KnownShape);
+        const Yshape: KnownShape | undefined = Y.shape as KnownShape | undefined;
+        const outShape = Yshape ? (Y.shape as KnownShape) : (X.shape as KnownShape);
         const rank = outShape.length;
 
         const numGroups = getIntAttr(

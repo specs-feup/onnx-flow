@@ -18,9 +18,9 @@ export class LowerExpRecipe implements DecompositionRecipe {
     // The constant defining the number of approximation iterations
     private readonly ITERATIONS = 100;
 
-    canApply(op: OperationNode.Class): boolean {
-        // Only apply this to Exp nodes
-        return op.type === "Exp";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Exp") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -69,6 +69,6 @@ export class LowerExpRecipe implements DecompositionRecipe {
         builder.replaceAllUsesWith(Y, currentSum);
 
         // 4. Remove the original Exp operation from the graph
-        op.remove();
+        builder.removeNode(op);
     }
 }

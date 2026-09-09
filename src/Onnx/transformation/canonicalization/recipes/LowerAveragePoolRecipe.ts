@@ -18,7 +18,7 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Conv", "Div", "Shape", "Expand"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "AveragePool") return false;
         if (op.getInputs() === undefined) return false;
         const X = op.getInputs()![0] as ConcreteValueNode;
@@ -159,6 +159,6 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const finalY = builder.createOp("Div", [sumOut, divisor], {}, expectedY)[0];
 
         builder.replaceAllUsesWith(Y, finalY);
-        op.remove();
+        builder.removeNode(op);
     }
 }

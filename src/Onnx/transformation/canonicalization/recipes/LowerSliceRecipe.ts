@@ -14,7 +14,7 @@ export class LowerSliceRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = true;
     public readonly producedOps = ["Range", "Gather", "Identity"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Slice") return false;
         const ins = op.getInputs() ?? [];
         if (ins.length < 3) return false;
@@ -27,7 +27,8 @@ export class LowerSliceRecipe implements DecompositionRecipe {
         };
         const starts = readVec(ins[1]);
         const ends = readVec(ins[2]);
-        return starts !== undefined && ends !== undefined;
+        if (starts === undefined || ends === undefined) return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -113,6 +114,6 @@ export class LowerSliceRecipe implements DecompositionRecipe {
             builder.replaceAllUsesWith(Y, curT);
         }
 
-        op.remove();
+        builder.removeNode(op);
     }
 }

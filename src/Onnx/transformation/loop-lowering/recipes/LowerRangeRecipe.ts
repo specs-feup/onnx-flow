@@ -9,7 +9,25 @@ import { int64Vec, scalarInt64, readScalarFromTensorNode } from "../../../Utils.
 import ConstantNode from "../../../ConstantNode.js";
 
 export class LowerRangeRecipe implements LoopLoweringRecipe {
-    canApply(op: OperationNode.Class): boolean {
+    public readonly name = "LowerRange";
+    public readonly targetOp = "Range";
+    public readonly exposesControlFlow = true;
+    public readonly exposesDataAccess = true;
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "Mod",
+    ];
+
+    match(op: OperationNode.Class): boolean {
         return op.type === "Range";
     }
 

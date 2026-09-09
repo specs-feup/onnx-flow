@@ -13,7 +13,25 @@ import {
 import { GraphBuilder } from "../../../GraphBuilder.js";
 
 export class LowerTransposeRecipe implements LoopLoweringRecipe {
-    canApply(op: OperationNode.Class): boolean {
+    public readonly name = "LowerTranspose";
+    public readonly targetOp = "Transpose";
+    public readonly exposesControlFlow = true;
+    public readonly exposesDataAccess = true;
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "Mod",
+    ];
+
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Transpose") return false;
         const inputs = op.getInputs();
         return !!inputs && inputs.length > 0;

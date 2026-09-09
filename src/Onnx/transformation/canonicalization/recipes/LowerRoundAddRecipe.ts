@@ -12,7 +12,7 @@ export class LowerRoundAddRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Floor", "Sub", "Equal", "Greater", "Mod", "Where", "Add"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Round";
     }
 

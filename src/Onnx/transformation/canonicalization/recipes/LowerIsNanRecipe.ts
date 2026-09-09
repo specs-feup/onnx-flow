@@ -11,7 +11,7 @@ export class LowerIsNanRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Equal", "Not"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "IsNaN";
     }
 

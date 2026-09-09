@@ -12,8 +12,9 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "Softmax";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Softmax") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -50,6 +51,6 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
 
         // Safely replace Y and clean up
         builder.replaceAllUsesWith(Y, finalY);
-        op.remove();
+        builder.removeNode(op);
     }
 }

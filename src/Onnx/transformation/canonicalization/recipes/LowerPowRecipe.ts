@@ -11,7 +11,7 @@ export class LowerPowRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Mul", "Exp", "Log"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Pow";
     }
 

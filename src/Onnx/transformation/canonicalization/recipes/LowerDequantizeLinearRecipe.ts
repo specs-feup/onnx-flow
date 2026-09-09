@@ -17,8 +17,9 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Cast", "Shape", "Unsqueeze", "Expand", "Sub", "Mul"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "DequantizeLinear";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "DequantizeLinear") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -110,6 +111,6 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
         const mul = builder.createOp("Mul", [sub, Sx], {}, expectedBroadcast)[0];
 
         builder.replaceAllUsesWith(Y, mul);
-        op.remove();
+        builder.removeNode(op);
     }
 }

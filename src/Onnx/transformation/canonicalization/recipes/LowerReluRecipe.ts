@@ -12,8 +12,9 @@ export class LowerReluRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Greater", "Where"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "Relu";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Relu") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -47,6 +48,6 @@ export class LowerReluRecipe implements DecompositionRecipe {
 
         // 4. Safely replace the original Y with the new Where output
         builder.replaceAllUsesWith(Y, whereOut);
-        op.remove();
+        builder.removeNode(op);
     }
 }

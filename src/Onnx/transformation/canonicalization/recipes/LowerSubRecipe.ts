@@ -11,7 +11,7 @@ export class LowerSubRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Neg", "Add"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Sub") return false;
 
         const ins = op.getInputs();
@@ -58,6 +58,6 @@ export class LowerSubRecipe implements DecompositionRecipe {
 
         // 3. Safely replace original output with the new Add output
         builder.replaceAllUsesWith(Y, AddOut);
-        op.remove();
+        builder.removeNode(op);
     }
 }

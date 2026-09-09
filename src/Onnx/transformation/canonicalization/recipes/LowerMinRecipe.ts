@@ -11,7 +11,7 @@ export class LowerMinRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Where", "Less"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Min") return false;
 
         const ins = op.getInputs();

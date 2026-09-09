@@ -11,7 +11,7 @@ export class LowerMaxRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Where", "Greater"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Max") return false;
 
         const ins = op.getInputs();

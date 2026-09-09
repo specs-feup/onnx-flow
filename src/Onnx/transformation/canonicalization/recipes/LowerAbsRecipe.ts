@@ -12,7 +12,7 @@ export class LowerAbsRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Where", "Greater", "Neg"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Abs") return false;
 
         const ins = op.getInputs();

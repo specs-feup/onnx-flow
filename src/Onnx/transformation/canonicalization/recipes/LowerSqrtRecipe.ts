@@ -14,7 +14,7 @@ export class LowerSqrtRecipe implements DecompositionRecipe {
 
     private readonly ITERATIONS = 50;
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Sqrt";
     }
 

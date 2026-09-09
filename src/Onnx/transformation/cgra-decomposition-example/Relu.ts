@@ -13,11 +13,14 @@ export class ReluGridDecompositionRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Gather", "Greater", "Where", "Unsqueeze", "Concat"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         const inputs = op.getInputs();
         if (!inputs || inputs.length !== 1) return false;
         // Restrict to 2D for this specific grid decomposition
-        return inputs[0].shape.length === 2;
+        if (inputs[0].shape.length === 2) {
+            return true;
+        }
+        return false;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

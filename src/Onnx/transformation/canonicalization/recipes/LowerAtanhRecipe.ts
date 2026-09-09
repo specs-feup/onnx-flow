@@ -12,7 +12,7 @@ export class LowerAtanhRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Mul", "Log", "Div", "Add", "Sub"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Atanh";
     }
 

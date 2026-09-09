@@ -1,6 +1,7 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
 import type { DataType, Shape } from "./OnnxTypes.js";
+import type { EdgeSnapshot } from "./transformation/tracking/GraphActions.js";
 
 namespace OnnxEdge {
     export const TAG = "__specs-onnx__onnx_edge";
@@ -16,6 +17,13 @@ namespace OnnxEdge {
 
         get shape(): Shape {
             return this.data[TAG].shape;
+        }
+
+        public toSnapshot(): EdgeSnapshot {
+            return {
+                literalType: this.literalType,
+                shape: this.shape,
+            };
         }
     }
 

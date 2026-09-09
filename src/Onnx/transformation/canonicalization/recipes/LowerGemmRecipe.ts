@@ -12,8 +12,9 @@ export class LowerGemmRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Transpose", "MatMul", "Mul", "Add"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "Gemm";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Gemm") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -68,6 +69,6 @@ export class LowerGemmRecipe implements DecompositionRecipe {
 
         // Safely replace Y and clean up
         builder.replaceAllUsesWith(Y, left);
-        op.remove();
+        builder.removeNode(op);
     }
 }

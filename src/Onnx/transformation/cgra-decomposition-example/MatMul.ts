@@ -13,11 +13,14 @@ export class MatMulGridDecompositionRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Gather", "Mul", "ReduceSum", "Concat", "Unsqueeze"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         const inputs = op.getInputs();
         if (!inputs || inputs.length !== 2) return false;
         // Only apply if inputs are 2D (basic matrix multiplication)
-        return inputs[0].shape.length === 2 && inputs[1].shape.length === 2;
+        if (inputs[0].shape.length === 2 && inputs[1].shape.length === 2) {
+            return true;
+        }
+        return false;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

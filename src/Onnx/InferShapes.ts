@@ -5,15 +5,11 @@ import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
 import type { Shape, ValueNode } from "./OnnxTypes.js";
 import { DataType } from "./OnnxTypes.js";
-import {
-    decodeIntegerVectorFromTensorProto,
-    readTensorData,
-    topologicalSortOperationNodes,
-    UNKNOWN_SHAPE,
-} from "./Utils.js";
+import { readTensorData, topologicalSortOperationNodes } from "./Utils.js";
 import OnnxEdge from "./OnnxEdge.js";
 import type OperationNode from "./OperationNode.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
+import type { TensorInfo } from "./Schema/OpSchema.js";
 
 /** Helper: resolve a tensor's shape from its node or incoming edge */
 function resolveTensorShape(t: BaseNode.Class): Shape {
@@ -46,7 +42,7 @@ function resolveLiteralType(t: BaseNode.Class): DataType {
 /** * Recursive Propagator for Subgraphs
  * This pushes outer variable info into the inner graph's RegionArgumentNodes.
  */
-function propagateToRegion(outerGraph: OnnxGraph.Class, region: OnnxGraph.Class) {
+export function propagateToRegion(outerGraph: OnnxGraph.Class, region: OnnxGraph.Class): void {
     const regionNodes = region.getNodes();
     for (const node of regionNodes) {
         if (node.is(RegionArgumentNode)) {
@@ -102,105 +98,43 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
         return { shape, dtype, constantValue };
     });
 
-    let outShape: Shape = [];
-    let outDtype = infos[0]?.dtype ?? DataType.UNDEFINED;
-
-    // --- 1. Subgraph / Control Flow Interception ---
-    // (We must handle these here because schemas cannot easily traverse inner regions)
-    if (node.type === "Loop") {
-        const body = node.regions[0];
-        propagateToRegion(graph, body);
-
-        const loopInputs = inputs;
-        const bodyInputs = body.getInputTensorNodes().toArray();
-
-        for (let i = 0; i < loopInputs.length - 2; i++) {
-            const vInit = loopInputs[i + 2];
-            const vBody = bodyInputs[i + 2];
-            if (vInit !== undefined) vBody.setShape(resolveTensorShape(vInit));
-            if (vInit !== undefined) vBody.setLiteralType(resolveLiteralType(vInit));
-        }
-
-        inferShapes(body);
-
-        const bodyOutputs = body.getOutputTensorNodes().toArray();
-        const loopOutputs = node.getOutgoers.targets.filterIs(TensorNode).toArray();
-
-        for (let i = 0; i < loopOutputs.length; i++) {
-            const bOut = bodyOutputs[i + 1];
-            const lOut = loopOutputs[i];
-
-            if (i < loopInputs.length - 2) {
-                lOut.setShape(bOut.shape);
-                lOut.setLiteralType(bOut.literalType);
-            } else {
-                const tripCnt =
-                    inputs[0] !== undefined && inputs[0].is(ConstantNode)
-                        ? decodeIntegerVectorFromTensorProto(
-                              inputs[0].as(ConstantNode).constantValue,
-                          )![0]
-                        : undefined;
-                const dim0 = tripCnt !== undefined ? tripCnt : UNKNOWN_SHAPE[0];
-                lOut.setShape([dim0, ...bOut.shape]);
-                lOut.setLiteralType(bOut.literalType);
-            }
-        }
-        return;
-    }
-
-    if (node.type === "If") {
-        for (const region of node.regions) {
-            propagateToRegion(graph, region);
-            inferShapes(region);
-        }
-
-        const thenGraph = node.regions[0];
-        const thenOutputs = thenGraph.getOutputTensorNodes().toArray();
-        const ifOutputs = node.getOutgoers.targets.filterIs(TensorNode).toArray();
-
-        for (let i = 0; i < ifOutputs.length; i++) {
-            ifOutputs[i].setShape(thenOutputs[i].shape);
-            ifOutputs[i].setLiteralType(thenOutputs[i].literalType);
-        }
-        return;
-    }
-
-    // --- 2. Delegate to the Schema ---
+    // --- Delegate to the Schema ---
     const registry = OpRegistry.getInstance();
-    // Defaulting to opset 19: ideally, we should pass the model's actual opset version here if tracked
     const schema = registry.get(node.type, 19);
 
+    let results: TensorInfo[] = [];
+
     if (schema && schema.inferShape) {
-        const results = schema.inferShape(infos, node.getAttributes());
-        if (results.length > 0) {
-            outShape = results[0].shape;
-            outDtype = results[0].dtype;
-        }
+        // Pass the context and the inferShapes callback to handle subgraphs dynamically!
+        results = schema.inferShape(infos, node.getAttributes(), node, graph, inferShapes);
     } else {
         // Fallback for completely unknown/custom ops
         const first = infos.find((i) => typeof i.shape !== "undefined");
         if (first) {
-            outShape = first.shape;
-            outDtype = first.dtype;
+            results = [{ shape: first.shape, dtype: first.dtype }];
         }
     }
 
-    // --- 3. Apply the results to the graph ---
-    const outputs = node.getOutgoers.targets;
-    const outputTensors = outputs.filter((t) => t.is(TensorNode));
-
+    // --- Apply the results to the graph ---
+    const outputs = node.getOutgoers.targets.toArray();
     node.getOutgoers.forEach((e) => graph.getEdgeById(e.id)?.remove());
 
-    for (const output of outputs) {
-        graph.addEdge(node, output).init(new OnnxEdge.Builder(outDtype, outShape));
-    }
+    for (let i = 0; i < outputs.length; i++) {
+        const output = outputs[i];
+        // Safely map each result to its corresponding output port, fallback to [0] if missing
+        let res: TensorInfo = { shape: [], dtype: DataType.UNDEFINED };
+        if (i in results) {
+            res = results[i];
+        } else if (results.length > 0) {
+            res = results[0];
+        }
 
-    if (Array.isArray(outShape) && outShape.length > 0) {
-        for (const out of outputTensors) {
-            const tn = out.tryAs(TensorNode);
-            if (!tn) continue;
-            tn.setShape(outShape);
-            tn.setLiteralType(outDtype);
+        graph.addEdge(node, output).init(new OnnxEdge.Builder(res.dtype, res.shape));
+
+        if (output.is(TensorNode)) {
+            const tn = output.as(TensorNode);
+            if (Array.isArray(res.shape) && res.shape.length > 0) tn.setShape(res.shape);
+            if (res.dtype !== DataType.UNDEFINED) tn.setLiteralType(res.dtype);
         }
     }
 }

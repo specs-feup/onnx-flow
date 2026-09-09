@@ -3,6 +3,7 @@ import Node from "@specs-feup/flow/graph/Node";
 import type { DataType, Shape } from "./OnnxTypes.js";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
+import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
 
 namespace RegionArgumentNode {
     export const TAG = "__specs-onnx__region_argument_node";
@@ -46,6 +47,17 @@ namespace RegionArgumentNode {
 
         get getOutgoers(): EdgeCollection<OnnxEdge.Class> {
             return this.outgoers.filterIs(OnnxEdge);
+        }
+
+        public toSnapshot(): NodeSnapshot {
+            return {
+                kind: "RegionArgumentNode",
+                id: this.id,
+                index: this.index,
+                originalName: this.originalName,
+                literalType: this.literalType,
+                shape: this.shape,
+            };
         }
     }
 

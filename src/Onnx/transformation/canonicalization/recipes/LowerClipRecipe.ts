@@ -10,8 +10,9 @@ export class LowerClipRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Max", "Min", "Identity"];
 
-    canApply(op: OperationNode.Class): boolean {
-        return op.type === "Clip";
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Clip") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -40,6 +41,6 @@ export class LowerClipRecipe implements DecompositionRecipe {
 
         // Safely replace Y and clean up
         builder.replaceAllUsesWith(Y, cur);
-        op.remove();
+        builder.removeNode(op);
     }
 }

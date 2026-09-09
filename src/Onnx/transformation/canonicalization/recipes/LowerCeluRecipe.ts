@@ -12,7 +12,7 @@ export class LowerCeluRecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Max", "Min", "Exp", "Sub", "Mul", "Div", "Add"];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         return op.type === "Celu";
     }
 

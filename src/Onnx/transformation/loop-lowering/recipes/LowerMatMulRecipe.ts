@@ -24,7 +24,23 @@ import {
 import { GraphBuilder } from "../../../GraphBuilder.js";
 
 export class LowerMatMulRecipe implements LoopLoweringRecipe {
-    canApply(op: OperationNode.Class): boolean {
+    public readonly name = "LowerMatMul";
+    public readonly targetOp = "MatMul";
+    public readonly exposesControlFlow = true;
+    public readonly exposesDataAccess = true;
+    public readonly producedOps = [
+        "Loop",
+        "Shape",
+        "Size",
+        "Gather",
+        "Unsqueeze",
+        "Squeeze",
+        "Mul",
+        "Div",
+        "Mod",
+    ];
+
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "MatMul") return false;
         const inputs = op.getInputs();
         return (

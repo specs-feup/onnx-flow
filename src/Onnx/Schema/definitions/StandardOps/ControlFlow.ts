@@ -1,6 +1,8 @@
 import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-import type { OpSchema } from "../../OpSchema.js";
+import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
+import { propagateToRegion } from "@specs-feup/onnx-flow/Onnx/InferShapes";
+import { UNKNOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 export const Loop: OpSchema = {
     opType: "Loop",
@@ -18,19 +20,36 @@ export const Loop: OpSchema = {
         body: { name: "body", type: AttributeType.GRAPH, required: true },
     },
 
-    inferShape: (inputs) => {
-        // Base schema fallback. Actual shape inference for Loop is intercepted
-        // by InferShapes.ts because it requires recursive subgraph traversal.
-        if (inputs.length < 3) {
-            return [{ shape: [], dtype: DataType.UNDEFINED }];
+    inferShape: (inputs, attrs, node, graph, inferSubgraphs) => {
+        const body = node!.regions[0];
+        propagateToRegion(graph!, body);
+
+        const bodyInputs = body.getInputTensorNodes().toArray();
+
+        // Push outer resolved info into the body's boundary tensors
+        for (let i = 0; i < inputs.length - 2; i++) {
+            const vInitInfo = inputs[i + 2];
+            const vBody = bodyInputs[i + 2];
+            vBody.setShape(vInitInfo.shape);
+            vBody.setLiteralType(vInitInfo.dtype);
         }
-        const initState = inputs[2];
-        return [
-            {
-                shape: initState.shape.slice(),
-                dtype: initState.dtype,
-            },
-        ];
+
+        // Trigger inner shape inference using the injected callback
+        inferSubgraphs!(body);
+
+        const bodyOutputs = body.getOutputTensorNodes().toArray();
+        const results: TensorInfo[] = [];
+
+        for (let i = 0; i < bodyOutputs.length - 1; i++) {
+            const bOut = bodyOutputs[i + 1];
+            if (i < inputs.length - 2) {
+                results.push({ shape: bOut.shape, dtype: bOut.literalType });
+            } else {
+                const tripCnt = inputs[0]?.constantValue?.[0] ?? UNKNOWN_SHAPE[0];
+                results.push({ shape: [tripCnt, ...bOut.shape], dtype: bOut.literalType });
+            }
+        }
+        return results;
     },
 };
 
@@ -49,9 +68,18 @@ export const If: OpSchema = {
         else_branch: { name: "else_branch", type: AttributeType.GRAPH, required: true },
     },
 
-    // Base schema fallback. Actual shape inference for If is intercepted
-    // by InferShapes.ts because it requires recursive subgraph traversal.
-    inferShape: () => [{ shape: [], dtype: DataType.UNDEFINED }],
+    inferShape: (inputs, attrs, node, graph, inferSubgraphs) => {
+        for (const region of node!.regions) {
+            propagateToRegion(graph!, region);
+            inferSubgraphs!(region);
+        }
+
+        const thenGraph = node!.regions[0];
+        const thenOutputs = thenGraph.getOutputTensorNodes().toArray();
+
+        // Output shapes match the 'then' branch
+        return thenOutputs.map((out) => ({ shape: out.shape, dtype: out.literalType }));
+    },
 };
 
 export const Scan: OpSchema = {

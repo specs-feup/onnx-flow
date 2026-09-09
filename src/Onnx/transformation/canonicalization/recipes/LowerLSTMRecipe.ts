@@ -30,9 +30,10 @@ export class LowerLSTMRecipe implements DecompositionRecipe {
         "Gather",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "LSTM") return false;
-        return getStringAttr(op, "direction", "forward") === "forward";
+        if (getStringAttr(op, "direction", "forward") !== "forward") return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -260,6 +261,6 @@ export class LowerLSTMRecipe implements DecompositionRecipe {
         if (outs.length > 1) builder.replaceAllUsesWith(outs[1], Y_h_final);
         if (outs.length > 2) builder.replaceAllUsesWith(outs[2], Y_c_final);
 
-        op.remove();
+        builder.removeNode(op);
     }
 }

@@ -23,7 +23,7 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         "Cast",
     ];
 
-    canApply(op: OperationNode.Class): boolean {
+    match(op: OperationNode.Class): boolean {
         if (op.type !== "Concat") return false;
         const inputs = op.getInputs() as ConcreteValueNode[];
         if (inputs.length < 2) return false;
@@ -186,6 +186,6 @@ export class LowerConcatRecipe implements DecompositionRecipe {
             { type: dtype, shape: Yshape },
         ])[0];
         builder.replaceAllUsesWith(Y, finalId);
-        op.remove();
+        builder.removeNode(op);
     }
 }
