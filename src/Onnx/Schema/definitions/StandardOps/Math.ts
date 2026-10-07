@@ -1,5 +1,5 @@
-import { DataType, AttributeType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-import { toStaticShape, broadcastShapes } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { DataType, AttributeType } from "../../../OnnxTypes.js";
+import { toStaticShape, broadcastShapes } from "../../../Utils.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_FLOAT, T_INT, T_BOOL } from "../../OpSchema.js";
 

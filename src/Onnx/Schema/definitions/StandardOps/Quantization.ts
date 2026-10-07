@@ -1,7 +1,7 @@
-import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { AttributeType, DataType } from "../../../OnnxTypes.js";
+import { toStaticShape, inferPoolDim } from "../../../Utils.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
-import { toStaticShape, inferPoolDim } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 export const QuantizeLinear: OpSchema = {
     opType: "QuantizeLinear",

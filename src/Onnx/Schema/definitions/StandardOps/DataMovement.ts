@@ -1,7 +1,7 @@
-import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { AttributeType, DataType } from "../../../../Onnx/OnnxTypes.js";
+import { toStaticShape, broadcastShapes } from "../../../../Onnx/Utils.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";
-import { toStaticShape, broadcastShapes } from "@specs-feup/onnx-flow/Onnx/Utils";
 
 export const Reshape: OpSchema = {
     opType: "Reshape",

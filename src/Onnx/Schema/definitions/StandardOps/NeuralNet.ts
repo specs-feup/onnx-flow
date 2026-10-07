@@ -1,6 +1,5 @@
-import type { AttributeValue } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-import { toStaticShape, inferPoolDim } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { AttributeValue, DataType, AttributeType } from "../../../OnnxTypes.js";
+import { toStaticShape, inferPoolDim } from "../../../Utils.js";
 import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";
 

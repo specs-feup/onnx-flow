@@ -1,5 +1,4 @@
-import type { TensorProto } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
-import { DataType, AttributeType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { DataType, AttributeType, TensorProto } from "../../../OnnxTypes.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";
 
