@@ -8,7 +8,7 @@ import { performance } from "perf_hooks";
 import { fileURLToPath } from "url";
 import { onnx2json } from "../src/onnx2json.js";
 import { createGraph } from "../src/initGraph.js";
-import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "../src/Onnx/OnnxGraph.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

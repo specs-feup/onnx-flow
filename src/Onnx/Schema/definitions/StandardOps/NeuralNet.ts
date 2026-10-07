@@ -1,4 +1,5 @@
-import { AttributeValue, DataType, AttributeType } from "../../../OnnxTypes.js";
+import type { AttributeValue } from "../../../OnnxTypes.js";
+import { DataType, AttributeType } from "../../../OnnxTypes.js";
 import { toStaticShape, inferPoolDim } from "../../../Utils.js";
 import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";

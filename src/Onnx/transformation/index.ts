@@ -7,7 +7,8 @@ import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
-import { DecompositionOptions, defaultDecompositionOptions } from "../../DecompositionOptions.js";
+import type { DecompositionOptions } from "../../DecompositionOptions.js";
+import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
