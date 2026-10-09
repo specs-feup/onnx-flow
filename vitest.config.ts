@@ -19,7 +19,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "html"],
       include: ["src/**/*.ts"],
-      exclude: ["src/index.ts", "src/ExplorerAPI/**"],
+      exclude: ["src/index.ts", "src/ExplorerAPI/**", "**/cgra-decomposition-example/**"],
     },
     benchmark: {
       include: ["test/benchmark/**/*.bench.ts"],
