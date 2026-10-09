@@ -75,7 +75,7 @@ export class GraphBuilder {
         type: string,
         inputs: ValueNode[],
         attributes: AttributeMap = {},
-        expectedOutputs?: { type: DataType; shape: KnownShape }[],
+        expectedOutputs?: { type: DataType; shape?: KnownShape }[],
         regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
         // 1. Build Operation Node
@@ -111,7 +111,7 @@ export class GraphBuilder {
 
             if (expectedOutputs !== undefined && i in expectedOutputs) {
                 inferredType = expectedOutputs[i].type;
-                inferredShape = expectedOutputs[i].shape;
+                inferredShape = expectedOutputs[i].shape ?? [];
             } else if (inputs.length > 0) {
                 inferredType = inputs[0].literalType;
 
@@ -152,8 +152,9 @@ export class GraphBuilder {
         // 5. Explicitly specified expectedOutputs take ultimate precedence
         if (expectedOutputs) {
             for (let i = 0; i < expectedOutputs.length; i++) {
-                if (i in outputs && expectedOutputs[i].shape.length > 0) {
-                    outputs[i].setShape(expectedOutputs[i].shape);
+                const expectedShape = expectedOutputs[i].shape;
+                if (i in outputs && expectedShape !== undefined && expectedShape.length > 0) {
+                    outputs[i].setShape(expectedShape);
                 }
                 if (i in outputs && expectedOutputs[i].type !== DataType.UNDEFINED) {
                     outputs[i].setLiteralType(expectedOutputs[i].type);
@@ -182,7 +183,7 @@ export class GraphBuilder {
         inputs: ValueNode[],
         outputIds: string[],
         attributes: AttributeMap = {},
-        expectedOutputs?: { type: DataType; shape: KnownShape }[],
+        expectedOutputs?: { type: DataType; shape?: KnownShape }[],
         regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
         // 1. Build Operation Node with exact ID
@@ -206,7 +207,7 @@ export class GraphBuilder {
 
             if (expectedOutputs !== undefined && i in expectedOutputs) {
                 inferredType = expectedOutputs[i].type;
-                inferredShape = expectedOutputs[i].shape;
+                inferredShape = expectedOutputs[i].shape ?? [];
             } else if (inputs.length > 0) {
                 inferredType = inputs[0].literalType;
 

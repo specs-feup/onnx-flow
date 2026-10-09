@@ -13,7 +13,7 @@ export class LowerNotRecipe implements DecompositionRecipe {
     public readonly producedOps = ["Xor"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "Not ";
+        return op.type === "Not";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
