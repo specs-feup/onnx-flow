@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -9,33 +9,14 @@ import { createGraph } from "../../../src/initGraph.js";
 import { convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import { ensureProtoExists } from "../../setup.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe("json2onnx, onnx2json & Public API", () => {
-    let createdProto = false;
-    const targetProto = path.resolve(__dirname, "../../../../out/src/Onnx/onnx.proto");
-
     beforeAll(() => {
-        if (!fs.existsSync(targetProto)) {
-            const sourceProto = path.resolve(__dirname, "../../../src/Onnx/onnx.proto");
-            if (fs.existsSync(sourceProto)) {
-                fs.mkdirSync(path.dirname(targetProto), { recursive: true });
-                fs.copyFileSync(sourceProto, targetProto);
-                createdProto = true;
-            }
-        }
-    });
-
-    afterAll(() => {
-        if (createdProto && fs.existsSync(targetProto)) {
-            try {
-                fs.unlinkSync(targetProto);
-            } catch {
-                /* ignore */
-            }
-        }
+        ensureProtoExists();
     });
 
     it("coerces numeric fields and normalizes string-encoded arrays in coerceNumericFields", () => {

@@ -1,7 +1,7 @@
 import type { PartitionTestCase } from "./partitioning_test_utils.js";
 import { runPartitionTest } from "./partitioning_test_utils.js";
 
-const tests: PartitionTestCase[] = [
+export const TESTS: PartitionTestCase[] = [
     {
         label: "vector_add_standard",
         originalPath: "examples/onnx/vector_add_standard.onnx",
@@ -554,7 +554,7 @@ async function runAll() {
     let passed = 0;
     let failed = 0;
 
-    for (const t of tests) {
+    for (const t of TESTS) {
         try {
             await runPartitionTest(t);
             passed++;
@@ -580,4 +580,11 @@ async function runAll() {
     if (failed > 0) process.exit(1);
 }
 
-runAll();
+const isMain =
+    typeof process !== "undefined" &&
+    Array.isArray(process.argv) &&
+    process.argv[1]?.includes("partition_test");
+
+if (isMain) {
+    runAll();
+}

@@ -13,13 +13,20 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    testTimeout: 30000, // 30s timeout for ORT WASM & CLI runs
+    hookTimeout: 30000,
+    setupFiles: ["test/setup.ts"], // Global proto resolution hook
     include: ["test/unit/**/*.test.ts", "test/integration/**/*.test.ts"],
     exclude: [...configDefaults.exclude, "out/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
       include: ["src/**/*.ts"],
-      exclude: ["src/index.ts", "src/ExplorerAPI/**", "**/cgra-decomposition-example/**"],
+      exclude: [
+        "src/index.ts",
+        "src/ExplorerAPI/**",
+        "**/cgra-decomposition-example/**",
+      ],
     },
     benchmark: {
       include: ["test/benchmark/**/*.bench.ts"],
