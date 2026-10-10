@@ -23,7 +23,6 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       include: ["src/**/*.ts"],
       exclude: [
-        "src/index.ts",
         "src/ExplorerAPI/**",
         "**/cgra-decomposition-example/**",
       ],

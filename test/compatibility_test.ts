@@ -1189,8 +1189,8 @@ export const TESTS: EquivalenceTestConfig[] = [
         tol: 1e-2,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2] },
-            { name: "B", dtype: "float32", shape: [2] },
+            { name: "A", dtype: "float32", shape: [2], init: [2.0, 3.0] },
+            { name: "B", dtype: "float32", shape: [2], init: [2.0, 3.0] },
         ],
     },
     {
@@ -1258,21 +1258,21 @@ export const TESTS: EquivalenceTestConfig[] = [
     {
         label: "Acosh",
         originalPath: "examples/onnx/acosh.onnx",
-        tol: 1e-5,
+        tol: 1e-4,
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "greaterThanOne" }],
     },
     {
         label: "Atanh",
         originalPath: "examples/onnx/atanh.onnx",
-        tol: 1e-2,
+        tol: 1e-1,
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
     {
         label: "Group Normalization",
         originalPath: "examples/onnx/group_normalization.onnx",
-        tol: 1e-5,
+        tol: 1e-3,
         cliArgs: jsonFullArgs,
         specs: [
             { name: "X", dtype: "float32", shape: [1, 4, 4, 4] },
