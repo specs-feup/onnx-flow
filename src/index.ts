@@ -4,7 +4,7 @@ import fs from "fs";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, resolve } from "path";
 import type { Request, Response } from "express";
 import express from "express";
 import { graphviz } from "node-graphviz";
@@ -26,6 +26,7 @@ import type { RawOnnxModel } from "./Onnx/OnnxTypes.js";
 import OnnxGraphTransformer from "./Onnx/transformation/index.js";
 import { startExplorerServer } from "./ExplorerAPI/ExplorerServer.js";
 import { ExplorerSession } from "./ExplorerAPI/ExplorerSession.js";
+import inferShapes from "./Onnx/InferShapes.js";
 
 export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
@@ -33,6 +34,12 @@ export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel
 
 export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string): Promise<void> {
     return await json2onnx(jsonFilePath, outputFilePath);
+}
+
+// Helper to derive base paths safely without extension loss
+function getBasePath(filePath: string): string {
+    const extIndex = filePath.lastIndexOf(".");
+    return extIndex === -1 ? filePath : filePath.slice(0, extIndex);
 }
 
 export function loadGraph(
@@ -78,7 +85,7 @@ export function loadGraph(
     }
 
     if (dotOutput) {
-        return graph.toString(dotFormatter);
+        return graph.toString(decomposeForCgra ? new CgraDotFormatter() : new OnnxDotFormatter());
     }
     return graph;
 }
@@ -97,207 +104,217 @@ export function generateGraphCode(_graph: OnnxGraph.Class): string {
     return "TODO";
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise<void> {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
 
-let version = "unknown";
-try {
-    const packageJson = JSON.parse(
-        fs.readFileSync(join(__dirname, "..", "..", "package.json"), "utf8"),
-    );
-    version = packageJson.version;
-} catch (error) {
-    console.warn("Warning: Unable to read package.json for version info.", error);
-}
-
-const argv = await yargs(hideBin(process.argv))
-    .usage("Usage: onnx-flow <input_file> [options]")
-    .version(version)
-    .parserConfiguration({
-        "short-option-groups": false,
-        "camel-case-expansion": true,
-        "boolean-negation": true,
-        "duplicate-arguments-array": false,
-    })
-    .strictOptions()
-    .demandCommand(1, "You need to provide an input file (ONNX or JSON)")
-    .group(["partition"], "Partitioning Options (overrides Transformation Options):")
-    .group(
-        [
-            "fuse",
-            "coalesce",
-            "recurse",
-            "loopLowering",
-            "decomposeForCgra",
-            "noLowLevel",
-            "noOptimize",
-        ],
-        "Transformation Options:",
-    )
-    .group(
-        ["output", "format", "visualization", "formatter", "interactive"],
-        "Output & Visualization Options:",
-    )
-    .group(
-        ["checkEquivalence", "verbosity", "noCodegen", "noReconversion"],
-        "Development & Testing Options:",
-    )
-    .option("output", {
-        alias: "o",
-        describe: "Output resulting graph to a file",
-        type: "string",
-    })
-    .option("format", {
-        alias: "fm",
-        describe: "Output format (json or dot)",
-        type: "string",
-        choices: ["json", "dot"],
-        default: "json",
-    })
-    .option("verbosity", {
-        alias: "v",
-        describe: "Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)",
-        type: "number",
-        default: 1,
-    })
-    .option("noLowLevel", {
-        alias: "nl",
-        describe: "Disable the low-level conversion",
-        type: "boolean",
-        default: false,
-    })
-    .option("noOptimize", {
-        alias: "no",
-        describe: "Disable optimization steps",
-        type: "boolean",
-        default: false,
-    })
-    .option("noCodegen", {
-        alias: "nc",
-        describe: "Disable code generation step",
-        type: "boolean",
-        default: false,
-    })
-    .option("noReconversion", {
-        alias: "nr",
-        describe: "Skip ONNX reconversion",
-        type: "boolean",
-        default: false,
-    })
-    .option("visualization", {
-        alias: "vz",
-        describe:
-            "Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)",
-        type: "number",
-        default: 2,
-    })
-    .option("interactive", {
-        alias: "i",
-        describe: "Start the ONNX-Flow Explorer interactive REST API server",
-        type: "boolean",
-        default: false,
-    })
-    .option("fuse", {
-        alias: "f",
-        describe: "Fuse supported ops into a single Loop when possible",
-        type: "boolean",
-        default: defaultDecompositionOptions.fuse,
-    })
-    .option("coalesce", {
-        alias: "c",
-        describe: "Use coalesced scalar MAC for MatMul inside Loop bodies",
-        type: "boolean",
-        default: defaultDecompositionOptions.coalesce,
-    })
-    .option("recurse", {
-        alias: "r",
-        describe: "Recursively decompose inside generated Loop bodies",
-        type: "boolean",
-        default: defaultDecompositionOptions.recurse,
-    })
-    .option("canonicalize", {
-        alias: "can",
-        describe:
-            "Canonicalize complex operations into simpler primitives (use --no-canonicalize to disable)",
-        type: "boolean",
-        default: defaultDecompositionOptions.canonicalize,
-    })
-    .option("loopLowering", {
-        alias: "ll",
-        describe: "Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable",
-        type: "boolean",
-        default: defaultDecompositionOptions.loopLowering,
-    })
-    .option("formatter", {
-        alias: "fmtr",
-        describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
-        type: "string",
-        choices: ["default", "cgra"],
-        default: "default",
-    })
-    .option("decomposeForCgra", {
-        alias: "dgc",
-        describe: "Decompose the graph for CGRA mapping",
-        type: "boolean",
-        default: false,
-    })
-    .option("checkEquivalence", {
-        alias: "qe",
-        describe: "Run ONNXRuntime equivalence check using test inputs (when available)",
-        type: "boolean",
-        default: false,
-    })
-    .option("partition", {
-        alias: "pt",
-        describe: "Partition graph into head/tail. Provide <nodeId> or <OpType> <Instance>",
-        type: "string",
-        array: true,
-    })
-    .option("validate", {
-        alias: "val",
-        describe: "Run structural validation after graph loading and transformations",
-        type: "boolean",
-        default: true, // Recommended: Always strictly validate by default
-    })
-    // Enforce mutual exclusion at the CLI level
-    .check((argv) => {
-        if (argv.partition !== undefined) {
-            if (argv.partition.length < 1 || argv.partition.length > 2) {
-                throw new Error(
-                    'Argument check failed: --partition requires either 1 argument "<nodeId>" or 2 arguments "<OpType> <Instance>")',
-                );
-            }
-        }
-        return true;
-    })
-    .help().argv;
-
-const inputFilePath = argv._[0]; // Positional argument for input file
-
-if (typeof inputFilePath !== "string") {
-    throw new Error("The input file path must be a string.");
-}
-
-const verbosity = argv.verbosity;
-const outputFilePath = argv.output;
-const outputFormat = argv.format;
-const visualizationOption = argv.visualization;
-const dotFormatter = argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
-const validate = argv.validate;
-
-// --- Transformation Control ---
-// If partitioning is active, we override and disable other transformations
-// to ensure the split point remains stable and recognizable.
-const isPartitioning = argv.partition && argv.partition.length > 0;
-
-if (isPartitioning === true) {
-    argv.noLowLevel = true;
-    argv.noOptimize = true;
-    argv.noCodegen = true;
-}
-
-(async function main() {
+    let version = "unknown";
     try {
+        const packageJson = JSON.parse(
+            fs.readFileSync(join(__dirname, "..", "..", "package.json"), "utf8"),
+        );
+        version = packageJson.version;
+    } catch (error) {
+        console.warn("Warning: Unable to read package.json for version info.", error);
+    }
+
+    const argv = await yargs(rawArgs)
+        .exitProcess(false)
+        .fail((msg: string, err: Error | undefined) => {
+            if (err !== undefined) {
+                throw err;
+            }
+            throw new Error(msg);
+        })
+        .usage("Usage: onnx-flow <input_file> [options]")
+        .version(version)
+        .parserConfiguration({
+            "short-option-groups": false,
+            "camel-case-expansion": true,
+            "boolean-negation": true,
+            "duplicate-arguments-array": false,
+        })
+        .strictOptions()
+        .demandCommand(1, "You need to provide an input file (ONNX or JSON)")
+        .group(["partition"], "Partitioning Options (overrides Transformation Options):")
+        .group(
+            [
+                "fuse",
+                "coalesce",
+                "recurse",
+                "loopLowering",
+                "decomposeForCgra",
+                "noLowLevel",
+                "noOptimize",
+            ],
+            "Transformation Options:",
+        )
+        .group(
+            ["output", "format", "visualization", "formatter", "interactive"],
+            "Output & Visualization Options:",
+        )
+        .group(
+            ["checkEquivalence", "verbosity", "noCodegen", "noReconversion"],
+            "Development & Testing Options:",
+        )
+        .option("output", {
+            alias: "o",
+            describe: "Output resulting graph to a file",
+            type: "string",
+        })
+        .option("format", {
+            alias: "fm",
+            describe: "Output format (json or dot)",
+            type: "string",
+            choices: ["json", "dot"],
+            default: "json",
+        })
+        .option("verbosity", {
+            alias: "v",
+            describe: "Control verbosity (0 = silent, 1 = normal/outputs, 2 = verbose)",
+            type: "number",
+            default: 1,
+        })
+        .option("noLowLevel", {
+            alias: "nl",
+            describe: "Disable the low-level conversion",
+            type: "boolean",
+            default: false,
+        })
+        .option("noOptimize", {
+            alias: "no",
+            describe: "Disable optimization steps",
+            type: "boolean",
+            default: false,
+        })
+        .option("noCodegen", {
+            alias: "nc",
+            describe: "Disable code generation step",
+            type: "boolean",
+            default: false,
+        })
+        .option("noReconversion", {
+            alias: "nr",
+            describe: "Skip ONNX reconversion",
+            type: "boolean",
+            default: false,
+        })
+        .option("visualization", {
+            alias: "vz",
+            describe:
+                "Choose visualization option (0 = none, 1 = Graphviz online link, 2 = Graphviz server)",
+            type: "number",
+            default: 2,
+        })
+        .option("interactive", {
+            alias: "i",
+            describe: "Start the ONNX-Flow Explorer interactive REST API server",
+            type: "boolean",
+            default: false,
+        })
+        .option("fuse", {
+            alias: "f",
+            describe: "Fuse supported ops into a single Loop when possible",
+            type: "boolean",
+            default: defaultDecompositionOptions.fuse,
+        })
+        .option("coalesce", {
+            alias: "c",
+            describe: "Use coalesced scalar MAC for MatMul inside Loop bodies",
+            type: "boolean",
+            default: defaultDecompositionOptions.coalesce,
+        })
+        .option("recurse", {
+            alias: "r",
+            describe: "Recursively decompose inside generated Loop bodies",
+            type: "boolean",
+            default: defaultDecompositionOptions.recurse,
+        })
+        .option("canonicalize", {
+            alias: "can",
+            describe:
+                "Canonicalize complex operations into simpler primitives (use --no-canonicalize to disable)",
+            type: "boolean",
+            default: defaultDecompositionOptions.canonicalize,
+        })
+        .option("loopLowering", {
+            alias: "ll",
+            describe:
+                "Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable",
+            type: "boolean",
+            default: defaultDecompositionOptions.loopLowering,
+        })
+        .option("formatter", {
+            alias: "fmtr",
+            describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
+            type: "string",
+            choices: ["default", "cgra"],
+            default: "default",
+        })
+        .option("decomposeForCgra", {
+            alias: "dgc",
+            describe: "Decompose the graph for CGRA mapping",
+            type: "boolean",
+            default: false,
+        })
+        .option("checkEquivalence", {
+            alias: "qe",
+            describe: "Run ONNXRuntime equivalence check using test inputs (when available)",
+            type: "boolean",
+            default: false,
+        })
+        .option("partition", {
+            alias: "pt",
+            describe: "Partition graph into head/tail. Provide <nodeId> or <OpType> <Instance>",
+            type: "string",
+            array: true,
+        })
+        .option("validate", {
+            alias: "val",
+            describe: "Run structural validation after graph loading and transformations",
+            type: "boolean",
+            default: true, // Recommended: Always strictly validate by default
+        })
+        // Enforce mutual exclusion at the CLI level
+        .check((argv) => {
+            if (argv.partition !== undefined) {
+                if (argv.partition.length < 1 || argv.partition.length > 2) {
+                    throw new Error(
+                        'Argument check failed: --partition requires either 1 argument "<nodeId>" or 2 arguments "<OpType> <Instance>")',
+                    );
+                }
+            }
+            return true;
+        })
+        .help()
+        .parseAsync(rawArgs);
+
+    const inputFilePath = argv._[0]; // Positional argument for input file
+
+    if (typeof inputFilePath !== "string") {
+        throw new Error("The input file path must be a string.");
+    }
+
+    const verbosity = argv.verbosity;
+    const outputFilePath = argv.output;
+    const outputFormat = argv.format;
+    const visualizationOption = argv.visualization;
+    const dotFormatter =
+        argv.formatter === "cgra" ? new CgraDotFormatter() : new OnnxDotFormatter();
+    const validate = argv.validate;
+
+    // --- Transformation Control ---
+    // If partitioning is active, we override and disable other transformations
+    // to ensure the split point remains stable and recognizable.
+    const isPartitioning = argv.partition && argv.partition.length > 0;
+
+    if (isPartitioning === true) {
+        argv.noLowLevel = true;
+        argv.noOptimize = true;
+        argv.noCodegen = true;
+    }
+
+    await (async function main() {
         let onnxObject;
 
         // Step 1: Load the input (either ONNX or pre-existing JSON graph)
@@ -398,9 +415,11 @@ if (isPartitioning === true) {
         // --- Partitioning Logic ---
         if (argv.partition && argv.partition.length > 0) {
             let targetNodeId: string | undefined;
-
             if (argv.partition.length === 1) {
                 targetNodeId = argv.partition[0];
+                if (!graph.hasNode(targetNodeId)) {
+                    throw new Error(`Could not find node with id '${targetNodeId}' in graph.`);
+                }
             } else if (argv.partition.length === 2) {
                 const opType = argv.partition[0];
                 const instance = parseInt(argv.partition[1], BASE_TEN);
@@ -420,26 +439,23 @@ if (isPartitioning === true) {
                 partitions = partitionGraph(graph, sets);
 
                 const exportPartition = async (g: OnnxGraph.Class, suffix: string) => {
-                    const base =
-                        outputFilePath !== undefined
-                            ? outputFilePath.split(".").slice(0, -1).join(".")
-                            : inputFilePath.split(".").slice(0, -1).join(".");
+                    const base = getBasePath(outputFilePath ?? inputFilePath);
                     const fileName = `${base}_${suffix}`;
 
-                    // Always generate ONNX/JSON if reconversion is enabled
+                    inferShapes(g);
+
+                    // 1. Generate valid ONNX binary and raw ONNX JSON
                     if (!argv.noReconversion) {
                         const onnxJson = convertFlowGraphToOnnxJson(g, `${suffix}_graph`);
-                        safeWriteJson(`${fileName}.json`, onnxJson);
-                        await jsonToOnnx(`${fileName}.json`, `${fileName}.onnx`);
+                        safeWriteJson(`${fileName}.onnx.json`, onnxJson);
+                        await jsonToOnnx(`${fileName}.onnx.json`, `${fileName}.onnx`);
                         if (verbosity > 0) console.log(`Created ONNX partition: ${fileName}.onnx`);
                     }
 
-                    // Respect the --format flag for the partition files
+                    // 2. Output explorer/visualization formats separately
                     if (outputFormat === "json") {
-                        fs.writeFileSync(
-                            `${fileName}.json`,
-                            JSON.stringify(g.toCy().json(), null, 2),
-                        );
+                        const unifiedJson = generateUnifiedExplorerJson(g);
+                        fs.writeFileSync(`${fileName}.json`, JSON.stringify(unifiedJson, null, 2));
                     } else if (outputFormat === "dot") {
                         fs.writeFileSync(`${fileName}.dot`, g.toString(dotFormatter));
                     }
@@ -450,7 +466,8 @@ if (isPartitioning === true) {
             }
         }
 
-        if (outputFilePath !== undefined) {
+        // Suppress unpartitioned file writing if partitioning took place
+        if (outputFilePath !== undefined && isPartitioning !== true) {
             if (outputFormat === "json") {
                 const unifiedJson = generateUnifiedExplorerJson(graph);
                 fs.writeFileSync(outputFilePath, JSON.stringify(unifiedJson, null, 2));
@@ -577,21 +594,21 @@ if (isPartitioning === true) {
                     };
 
                     return `digraph G {
-              rankdir=LR;
-              compound=true;
-              subgraph cluster_head { 
-                  label="HEAD PARTITION"; 
-                  color=blue; 
-                  style=dashed;
-                  ${stripWrapper(partitions.head)} 
-              }
-              subgraph cluster_tail { 
-                  label="TAIL PARTITION"; 
-                  color=red; 
-                  style=dashed;
-                  ${stripWrapper(partitions.tail)} 
-              }
-            }`;
+                rankdir=LR;
+                compound=true;
+                subgraph cluster_head { 
+                    label="HEAD PARTITION"; 
+                    color=blue; 
+                    style=dashed;
+                    ${stripWrapper(partitions.head)} 
+                }
+                subgraph cluster_tail { 
+                    label="TAIL PARTITION"; 
+                    color=red; 
+                    style=dashed;
+                    ${stripWrapper(partitions.tail)} 
+                }
+                }`;
                 }
                 return graph.toString(dotFormatter);
             };
@@ -609,56 +626,56 @@ if (isPartitioning === true) {
 
                         // Create an HTML page with the embedded SVG
                         const htmlContent = `
-              <!DOCTYPE html>
-              <html lang="en">
-              <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>onnx-flow Graphviz Visualization</title>
-                <style>
-                  /* General Reset */
-                  body, html {
-                    margin: 0;
-                    padding: 0;
-                    height: 100vh; /* Set height to 100% of the viewport */
-                    overflow: hidden; /* Remove page scroll bar */
-                    font-family: Arial, sans-serif;
-                    background-color: #f9f9f9; /* Light background */
-                    text-align: center;
-                  }
-                  /* Title Styling */
-                  h1 {
-                    margin: 20px 0; /* Top margin */
-                    font-size: 2.5em;
-                    color: #333;
-                  }
-                  /* Container for the graph */
-                  .graph-container {
-                    max-width: 90%; /* Prevent horizontal overflow */
-                    height: calc(100vh - 160px); /* Subtract title height from viewport height */
-                    margin: 0 auto; /* Center horizontally */
-                    overflow: auto; /* Enable scrolling inside the container */
-                    border: 1px solid #ddd;
-                    padding: 10px;
-                    background-color: #fff;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                    border-radius: 8px;
-                  }
-                  /* SVG Responsiveness */
-                  svg {
-                    max-width: 100%; /* Scale the graph to fit the container */
-                    height: auto;
-                  }
-                </style>
-              </head>
-              <body>
-                <h1>onnx-flow Graphviz Visualization</h1>
-                <div class="graph-container">
-                  ${svgContent}
-                </div>
-              </body>
-              </html>
-            `;
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>onnx-flow Graphviz Visualization</title>
+                    <style>
+                    /* General Reset */
+                    body, html {
+                        margin: 0;
+                        padding: 0;
+                        height: 100vh; /* Set height to 100% of the viewport */
+                        overflow: hidden; /* Remove page scroll bar */
+                        font-family: Arial, sans-serif;
+                        background-color: #f9f9f9; /* Light background */
+                        text-align: center;
+                    }
+                    /* Title Styling */
+                    h1 {
+                        margin: 20px 0; /* Top margin */
+                        font-size: 2.5em;
+                        color: #333;
+                    }
+                    /* Container for the graph */
+                    .graph-container {
+                        max-width: 90%; /* Prevent horizontal overflow */
+                        height: calc(100vh - 160px); /* Subtract title height from viewport height */
+                        margin: 0 auto; /* Center horizontally */
+                        overflow: auto; /* Enable scrolling inside the container */
+                        border: 1px solid #ddd;
+                        padding: 10px;
+                        background-color: #fff;
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                        border-radius: 8px;
+                    }
+                    /* SVG Responsiveness */
+                    svg {
+                        max-width: 100%; /* Scale the graph to fit the container */
+                        height: auto;
+                    }
+                    </style>
+                </head>
+                <body>
+                    <h1>onnx-flow Graphviz Visualization</h1>
+                    <div class="graph-container">
+                    ${svgContent}
+                    </div>
+                </body>
+                </html>
+                `;
 
                         // Send the HTML response
                         res.setHeader("Content-Type", "text/html");
@@ -677,7 +694,26 @@ if (isPartitioning === true) {
                 });
             }
         }
-    } catch (error) {
-        console.error("Error:", error);
+    })();
+}
+
+// ---------------------------------------------------------------------
+// Direct Execution Guard (ESM)
+// ---------------------------------------------------------------------
+function isDirectExecution(): boolean {
+    if (!process.argv[1]) return false;
+    try {
+        const entry = fs.realpathSync(resolve(process.argv[1])).toLowerCase();
+        const current = fs.realpathSync(fileURLToPath(import.meta.url)).toLowerCase();
+        return entry === current;
+    } catch {
+        return false;
     }
-})();
+}
+
+if (isDirectExecution()) {
+    runCli().catch((error) => {
+        console.error(error instanceof Error ? error.message : error);
+        process.exit(1);
+    });
+}
