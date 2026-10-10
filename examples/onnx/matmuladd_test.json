@@ -1,0 +1,110 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "X",
+          "A"
+        ],
+        "output": [
+          "XA"
+        ],
+        "op_type": "MatMul"
+      },
+      {
+        "input": [
+          "B",
+          "XA"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "Add"
+      }
+    ],
+    "name": "MatMulAddStandard",
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "A",
+        "type": {
+          "tensor_type": {
+            "elem_type": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensor_type": {
+            "elem_type": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 6,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "3"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

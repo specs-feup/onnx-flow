@@ -16,7 +16,7 @@ export class LowerAbsRecipe implements DecompositionRecipe {
         if (op.type !== "Abs") return false;
 
         const ins = op.getInputs();
-        if (!ins || ins.length < 2) return false;
+        if (!ins || ins.length < 1) return false;
 
         return true;
     }

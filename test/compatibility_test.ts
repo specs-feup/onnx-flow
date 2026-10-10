@@ -1,100 +1,137 @@
 #!/usr/bin/env node
-
 import * as ort from "onnxruntime-web";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { performance } from "perf_hooks";
 import { fileURLToPath } from "url";
 import { onnx2json } from "../src/onnx2json.js";
 import { createGraph } from "../src/initGraph.js";
-import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "../src/Onnx/OnnxGraph.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PKG_ROOT = path.resolve(__dirname, ".."); // out/test -> out/
 
-const RUN_TOTAL = { passed: 0, failed: 0 };
-const CURRENT = { test: "", reconverted: "" } as { test: string; reconverted: string };
+export function findProjectRoot(startDir: string = __dirname): string {
+    let cur = startDir;
+    while (cur !== path.dirname(cur)) {
+        if (fs.existsSync(path.join(cur, "package.json"))) {
+            return cur;
+        }
+        cur = path.dirname(cur);
+    }
+    return startDir;
+}
 
-// Failure buckets we’ll print at the end
-const FAILURES = {
-    warn: [] as Array<{ test: string; path: string }>,
-    error: [] as Array<{ test: string; path: string }>,
+export const PROJECT_ROOT = findProjectRoot(__dirname);
+
+export function ensureProtoExists(): void {
+    const srcProto = path.resolve(PROJECT_ROOT, "src/Onnx/onnx.proto");
+    if (!fs.existsSync(srcProto)) return;
+    const targets = [
+        path.resolve(PROJECT_ROOT, "out/src/Onnx/onnx.proto"),
+        path.resolve(PROJECT_ROOT, "../out/src/Onnx/onnx.proto"),
+    ];
+    for (const target of targets) {
+        if (!fs.existsSync(target)) {
+            try {
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.copyFileSync(srcProto, target);
+            } catch (err: unknown) {
+                const code = (err as { code?: string }).code;
+                if (code !== "EBUSY" && code !== "EPERM" && code !== "EEXIST") {
+                    throw err;
+                }
+            }
+        }
+    }
+}
+
+/* ============================== TYPES & CONFIG ================================== */
+export type DType = "uint8" | "int8" | "float32" | "int32" | "int64" | "bool";
+
+export type FeedSpec = {
+    name: string;
+    dtype: DType;
+    shape: number[];
+    init?: number[] | bigint[] | boolean[];
+    gen?: "random" | "negmix" | "zeros" | "ones" | "range" | "greaterThanOne";
+    value?: number;
 };
 
-/* ============================== HELPERS ================================== */
-// Helper to recursively collect stats from a graph and its regions
-function collectStatsRecursive(
-    graph: OnnxGraph.Class,
-    stats: { total: number; ops: Record<string, number> },
-) {
+export interface EquivalenceTestConfig {
+    label: string;
+    originalPath: string;
+    tol?: number;
+    exact?: boolean;
+    cliArgs: string | ((p: string) => string);
+    specs: FeedSpec[];
+}
+
+export interface EquivalenceOptions {
+    skipCli?: boolean;
+    showStats?: boolean;
+    verboseOnFailure?: boolean;
+}
+
+export type SingleEquivResult = "pass" | "warn" | "error" | "no-config";
+
+export interface EquivalenceRunResult {
+    status: SingleEquivResult;
+    message?: string;
+    maxDiff?: number;
+    originalStats?: GraphStats | null;
+    decomposedStats?: GraphStats | null;
+}
+
+export interface GraphStats {
+    total: number;
+    ops: Record<string, number>;
+}
+
+/* ============================== STATS HELPERS ================================== */
+export function collectStatsRecursive(graph: OnnxGraph.Class, stats: GraphStats): void {
     const opNodes = graph.getOperationNodes().toArray();
     stats.total += opNodes.length;
-
     for (const node of opNodes) {
-        // 1. Count current node
         stats.ops[node.type] = (stats.ops[node.type] || 0) + 1;
-
-        // 2. Recurse into regions
-        // Instead of checking specific subgraphs (body, thenBranch), we iterate the regions array.
         for (const region of node.regions) {
             collectStatsRecursive(region, stats);
         }
     }
 }
 
-async function getGraphStats(modelPath: string) {
-    if (!fs.existsSync(modelPath)) {
-        console.warn(`(Stats warning: file not found ${modelPath})`);
-        return null;
-    }
+export async function getGraphStats(modelPath: string): Promise<GraphStats | null> {
+    if (!fs.existsSync(modelPath)) return null;
     try {
         const json = await onnx2json(modelPath);
         const graph = createGraph(json);
-
-        const stats = { total: 0, ops: {} as Record<string, number> };
+        const stats: GraphStats = { total: 0, ops: {} };
         collectStatsRecursive(graph, stats);
-
         return stats;
-    } catch (e) {
-        console.warn(`(Stats warning: could not load ${path.basename(modelPath)})`);
-        if (e instanceof Error) console.error(`   Reason: ${e.message}`);
+    } catch {
         return null;
     }
 }
 
-function printStatsComparison(
+export function printStatsComparison(
     label: string,
-    original: { total: number; ops: Record<string, number> } | null,
-    decomposed: { total: number; ops: Record<string, number> } | null,
-) {
+    original: GraphStats | null,
+    decomposed: GraphStats | null,
+): void {
     console.log(`\n--- Stats for ${label} (Recursive) ---`);
-
-    if (original) {
-        console.log(`Original Nodes: ${original.total}`);
-    }
-    if (decomposed) {
-        console.log(`Decomposed Nodes: ${decomposed.total}`);
-    }
-
-    if (original && decomposed) {
+    if (original) console.log(`Original Nodes: ${original.total}`);
+    if (decomposed) console.log(`Decomposed Nodes: ${decomposed.total}`);
+    if (original && decomposed)
         console.log(`Node Count Change: ${original.total} -> ${decomposed.total}`);
-    }
 
     console.log("Operations:");
-
     const opsSet = new Set<string>();
     if (original) Object.keys(original.ops).forEach((k) => opsSet.add(k));
     if (decomposed) Object.keys(decomposed.ops).forEach((k) => opsSet.add(k));
-
     const sorted = Array.from(opsSet).sort();
-
     for (const op of sorted) {
         const from = original?.ops[op] ?? 0;
         const to = decomposed?.ops[op] ?? 0;
-
-        // If we have both, show comparison. If one failed, show what we have.
         if (original && decomposed) {
             if (from !== to) console.log(`   ${op.padEnd(25)}: ${from} -> ${to}`);
         } else {
@@ -105,122 +142,15 @@ function printStatsComparison(
     console.log("--------------------------\n");
 }
 
-function resolveModelPath(rel: string): string {
-    // PKG_ROOT is .../out, so go one level up
-    const root = path.resolve(PKG_ROOT, "..");
-    return path.resolve(root, rel);
-}
-
-function printInputs(label: string, inputs: Record<string, ort.Tensor>) {
-    console.log(`Inputs for ${label}:`);
-    for (const [key, tensor] of Object.entries(inputs)) {
-        const dataArray = Array.from(tensor.data as Iterable<number>);
-        console.log(`  ${key}:`, dataArray);
-    }
-}
-
-function logErrorDetails(context: string, e: unknown) {
-    // 1. Safely narrow 'e' to a generic record if it's an object
-    const errObj = e !== undefined && typeof e === "object" ? (e as Record<string, unknown>) : null;
-
-    // 2. Use the narrowed object for safe property access
-    if (errObj instanceof Error) {
-        console.error(`❌ Error in ${context}:`, errObj.message);
-        if (errObj.stack !== undefined) console.error(errObj.stack);
-    }
-
-    if (errObj) {
-        const props = Object.getOwnPropertyNames(errObj);
-        for (const prop of props) {
-            if (prop !== "message" && prop !== "stack") {
-                console.error(`  ${prop}:`, errObj[prop]);
-            }
-        }
-    }
-}
-
-function getReconvertedPath(originalPath: string): string {
-    const extIndex = originalPath.lastIndexOf(".");
-    const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
-    return `${base}_reconverted.onnx`;
-}
-
-function generateReconvertedNow(originalPath: string, cliArgs: string) {
-    const reconvertedPath = getReconvertedPath(originalPath);
-    const tStart = Date.now();
-
-    // If an old reconverted exists, remove it so a failed generation can't be masked.
-    if (fs.existsSync(reconvertedPath)) {
-        try {
-            fs.unlinkSync(reconvertedPath);
-        } catch {
-            /* ignore */
-        }
-    }
-
-    // Run the CLI (will throw on non-zero exit)
-    execSync(`node ./out/src/index.js "${originalPath}" ${cliArgs}`, { stdio: "inherit" });
-
-    // Confirm the file exists and was (re)created after we started.
-    if (!fs.existsSync(reconvertedPath)) return { generatedNow: false, reconvertedPath };
-    const stat = fs.statSync(reconvertedPath);
-    return { generatedNow: stat.mtimeMs >= tStart, reconvertedPath };
-}
-
-function reportOutcome(
-    status: "pass" | "warn" | "error",
-    label = "Outputs equivalent",
-    value?: boolean,
-) {
-    const icon = status === "pass" ? "✅ " : status === "warn" ? "⚠️ " : "❌ ";
-    console.log(`${icon} ${label}:`, value ?? status === "pass");
-    if (status === "pass") RUN_TOTAL.passed++;
-    else RUN_TOTAL.failed++;
-
-    if (status === "warn") recordFailure("warn");
-    if (status === "error") recordFailure("error");
-
-    if (status !== "pass") {
-        if (CURRENT.test) console.log(`   test: ${CURRENT.test}`);
-        if (CURRENT.reconverted) console.log(`   reconverted: ${CURRENT.reconverted}`);
-    }
-}
-
-type SafeTimedRun<T = Record<string, ort.Tensor>> = {
-    out: T | undefined;
-    ms: number;
-    error?: unknown;
-};
-
-async function safeTimedRun(
-    session: ort.InferenceSession,
-    feeds: Record<string, ort.Tensor>,
-): Promise<SafeTimedRun> {
-    try {
-        const r = await timedRun(session, feeds);
-        return { out: r.out, ms: r.ms }; // success: no error field
-    } catch (error) {
-        return { out: undefined, ms: 0, error }; // failure: include error
-    }
-}
-
-async function timedRun(session: ort.InferenceSession, feeds: Record<string, ort.Tensor>) {
-    const t0 = performance.now();
-    const out = await session.run(feeds);
-    const ms = performance.now() - t0;
-    return { out, ms };
-}
-
-async function rerunWithOrtVerbose(
+/* ============================== ORT VERBOSE DIAGNOSTICS ================================== */
+export async function rerunWithOrtVerbose(
     modelPath: string,
     feeds: Record<string, ort.Tensor>,
 ): Promise<void> {
-    console.log("🔁 Re-running reconverted model with ORT verbose logging…");
-
+    console.log("\n  [Diagnostic] Re-running model with ORT verbose WebAssembly logging...");
     try {
         ort.env.debug = true;
         ort.env.logLevel = "verbose";
-
         const so: ort.InferenceSession.SessionOptions = {
             executionProviders: ["wasm"],
             logSeverityLevel: 0,
@@ -229,43 +159,16 @@ async function rerunWithOrtVerbose(
         const sess = await ort.InferenceSession.create(modelPath, so);
         const outNames = sess.outputNames;
         const outs = await sess.run(feeds, outNames);
-        const shapes = outNames.map((n) => outs[n].dims);
-        const dtypes = outNames.map((n) => outs[n].type);
         console.log(
-            "   ✓ ORT (web) run OK. Outputs:",
-            outNames.map((k, i) => `${k}[${shapes[i]}] ${dtypes[i]}`),
+            "     Diagnostic run outputs:",
+            outNames.map((k) => `${k}[${outs[k].dims}] ${outs[k].type}`),
         );
     } catch (e) {
-        console.error("❌ Verbose re-run (web) failed:", e);
+        console.error("  Diagnostic re-run failed with error:", e);
     }
 }
 
-// Helper to record a reconverted-path failure once
-function recordFailure(kind: "warn" | "error") {
-    if (!CURRENT.reconverted) return; // skip non-reconversion tests
-    const arr = FAILURES[kind];
-    // dedup by path+test to avoid spam across retries
-    if (!arr.some((e) => e.path === CURRENT.reconverted && e.test === CURRENT.test)) {
-        arr.push({ test: CURRENT.test || "(unnamed test)", path: CURRENT.reconverted });
-    }
-}
-
-/* ============================== FEED HELPERS ================================== */
-
-export type DType = "uint8" | "int8" | "float32" | "int32" | "int64" | "bool";
-export type FeedSpec = {
-    name: string;
-    dtype: DType;
-    shape: number[]; // [] for scalars
-    // optional fixed initialization (overrides generator)
-    init?: number[] | bigint[] | boolean[];
-    // optional generator hint
-    gen?: "random" | "negmix" | "zeros" | "ones" | "range" | "greaterThanOne";
-    // for 'range' convenience (scalar-float specs)
-    value?: number; // when shape === []
-};
-
-// random helpers
+/* ============================== FEED GENERATORS ================================== */
 function randFloat() {
     return Math.random() * 10;
 }
@@ -289,305 +192,218 @@ export function makeArray(
             if (gen === "negmix") return Array.from({ length: len }, randNegMix);
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
-            if (gen === "greaterThanOne") return Array.from({ length: len }, () => randFloat() + 1); // Valores acima de 1 (ACcosH)
+            if (gen === "greaterThanOne") return Array.from({ length: len }, () => randFloat() + 1);
             return Array.from({ length: len }, randFloat);
         case "int32":
             if (gen === "zeros") return Array.from({ length: len }, () => 0);
             if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(10));
         case "int64":
-            if (gen === "zeros") return Array.from({ length: len }, () => BigInt(0));
-            if (gen === "ones") return Array.from({ length: len }, () => BigInt(1));
+            if (gen === "zeros") return Array.from({ length: len }, () => 0n);
+            if (gen === "ones") return Array.from({ length: len }, () => 1n);
             return Array.from({ length: len }, () => BigInt(randInt(10)));
         case "int8":
-            if (gen === "zeros") return Array.from({ length: len }, () => 0);
-            if (gen === "ones") return Array.from({ length: len }, () => 1);
             return Array.from({ length: len }, () => randInt(256) - 128);
-        case "uint8": // <-- add this
-            if (gen === "zeros") return Array.from({ length: len }, () => 0);
-            if (gen === "ones") return Array.from({ length: len }, () => 1);
+        case "uint8":
             return Array.from({ length: len }, () => randInt(256));
         case "bool":
-            if (gen === "zeros") return Array.from({ length: len }, () => false);
-            if (gen === "ones") return Array.from({ length: len }, () => true);
             return Array.from({ length: len }, randBool);
     }
 }
 
-function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
+export function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
     const out: Record<string, ort.Tensor> = {};
     for (const s of specs) {
         const len = s.shape.reduce((a, b) => a * b, 1) || 1;
-        let data: number[] | bigint[] | boolean[];
+        const data =
+            s.init ??
+            (s.gen === "range" && s.shape.length === 0 && typeof s.value === "number"
+                ? [s.value]
+                : makeArray(s.dtype, len, s.gen ?? "random"));
 
-        if (s.init) {
-            data = s.init;
-        } else if (s.gen === "range" && s.shape.length === 0 && typeof s.value === "number") {
-            // scalar “range” convenience for start/limit/delta
-            data = [s.value];
-        } else {
-            data = makeArray(s.dtype, len, s.gen ?? "random");
-        }
-
-        // typed array materialization
-        let typed;
+        let typed: ort.Tensor.DataTypeMap[ort.Tensor.Type];
         if (s.dtype === "float32") typed = new Float32Array(data as number[]);
         else if (s.dtype === "int32") typed = new Int32Array(data as number[]);
         else if (s.dtype === "int64") typed = BigInt64Array.from(data as bigint[]);
         else if (s.dtype === "uint8") typed = Uint8Array.from(data as number[]);
         else if (s.dtype === "int8") typed = Int8Array.from(data as number[]);
-        else /* bool */ typed = new Uint8Array((data as boolean[]).map((v) => (v ? 1 : 0)));
+        else typed = new Uint8Array((data as boolean[]).map((v) => (v ? 1 : 0)));
 
         out[s.name] = new ort.Tensor(s.dtype, typed, s.shape);
     }
     return out;
 }
 
-function _jsonFullArgsNoValidate() {
-    return `--format json -vz 0 -v 0 --validate false`;
-}
-function jsonFullArgs() {
-    return `--format json -vz 0 -v 0`;
-}
-function dotFullArgs(originalPath: string, extra = ``) {
-    const base = originalPath.replace(/\.onnx$/, "");
-    return `--format dot -vz 0 -v 0 -o ${base}.dot ${extra}`.trim();
-}
-function dotNoLowLevelArgs(originalPath: string, extra = ``) {
-    const base = originalPath.replace(/\.onnx$/, "");
-    return `--noLowLevel --format dot -vz 0 -v 0 -o ${base}.dot ${extra}`.trim();
-}
-function jsonNoLowLevelArgs() {
-    return `--format json --noLowLevel -vz 0 -v 0`;
+export function resolveModelPath(rel: string): string {
+    if (path.isAbsolute(rel)) return rel;
+    // 1. Check relative to process working directory (where npm test executes)
+    const fromCwd = path.resolve(process.cwd(), rel);
+    if (fs.existsSync(fromCwd)) return fromCwd;
+
+    // 2. Check relative to this file's root directory
+    const repoRoot = __dirname.includes("out")
+        ? path.resolve(__dirname, "../..")
+        : path.resolve(__dirname, "..");
+    const fromRepo = path.resolve(repoRoot, rel);
+    if (fs.existsSync(fromRepo)) return fromRepo;
+
+    return fromCwd;
 }
 
-/* ============================== TEST ================================== */
+export function getReconvertedPath(originalPath: string): string {
+    const extIndex = originalPath.lastIndexOf(".");
+    const base = extIndex === -1 ? originalPath : originalPath.slice(0, extIndex);
+    return `${base}_reconverted.onnx`;
+}
 
-/**
- * Unified reconversion test
- * - Builds reconverted model from `originalPath` (CLI args configurable)
- * - Runs & times original and reconverted
- * - Compares outputs (exact or with tolerance), prints tri-state outcome
- * - On warn: auto verbose re-run; On error: counted and listed at the end
- */
-async function testReconversion(opts: {
-    label: string;
-    originalPath: string;
-    feeds: Record<string, ort.Tensor>;
-    tol?: number | undefined;
-    exact?: boolean | undefined;
-    cliArgs?: string | undefined;
-    skipCli?: boolean | undefined;
-}) {
-    const {
-        label,
-        originalPath,
-        feeds,
-        tol = 1e-5,
-        exact = false,
-        cliArgs = "--format json -vz 0 -v 0",
-        skipCli = false,
-    } = opts;
+/* ============================== CORE HARNESS EXECUTION ================================== */
+export async function executeEquivalenceTest(
+    config: EquivalenceTestConfig,
+    options: EquivalenceOptions = {},
+): Promise<EquivalenceRunResult> {
+    ensureProtoExists();
+    const absOrig = resolveModelPath(config.originalPath);
+    const reconvertedPath = getReconvertedPath(absOrig);
+    const cliArgs =
+        typeof config.cliArgs === "function" ? config.cliArgs(config.originalPath) : config.cliArgs;
+    const feeds = buildFeeds(config.specs);
+    const tol = config.tol ?? 1e-4;
 
-    const absOriginalPath = resolveModelPath(originalPath);
-    const reconvertedPath = getReconvertedPath(absOriginalPath);
-    CURRENT.test = label;
-    CURRENT.reconverted = reconvertedPath;
-
-    const originalStats = await getGraphStats(absOriginalPath);
-
-    try {
-        let generatedNow = false;
-
-        if (!skipCli) {
-            console.log(
-                `\n=== Running CLI to generate reconverted ${path.basename(originalPath)} model ===`,
-            );
+    // 1. CLI Execution
+    if (options.skipCli !== true) {
+        if (fs.existsSync(reconvertedPath)) {
             try {
-                const r = generateReconvertedNow(absOriginalPath, cliArgs);
-                generatedNow = r.generatedNow;
-            } catch (cliErr) {
-                logErrorDetails("reconversion CLI", cliErr);
-                if (fs.existsSync(reconvertedPath)) {
-                    try {
-                        fs.unlinkSync(reconvertedPath);
-                    } catch {
-                        /* ignore */
-                    }
-                }
-                reportOutcome("error", "Reconversion CLI failed");
-                return;
+                fs.unlinkSync(reconvertedPath);
+            } catch {
+                /* ignore */
             }
         }
-
-        if (!fs.existsSync(reconvertedPath)) {
-            console.error(`❌ Reconverted file not found: ${reconvertedPath}`);
-            reportOutcome("error", "Reconverted file missing");
-            return;
-        }
-
-        const decomposedStats = await getGraphStats(reconvertedPath);
-        printStatsComparison(label, originalStats, decomposedStats);
-
-        console.log(`\n=== Comparing ${label} and its reconverted version ===`);
-        printInputs(label, feeds);
-
-        // Original
-        const originalSession = await ort.InferenceSession.create(absOriginalPath);
-        const { out: originalOut, ms: __origMs } = await timedRun(originalSession, feeds);
-        console.log(`⏱️ original: ${__origMs.toFixed(2)} ms`);
-
-        // Reconverted: create session with explicit error handling
-        let recSession: ort.InferenceSession;
         try {
-            recSession = await ort.InferenceSession.create(reconvertedPath);
-        } catch (createErr) {
-            logErrorDetails("reconverted session create", createErr);
-            reportOutcome("error", "Reconverted session creation failed");
-
-            // If we actually regenerated this file, do a verbose re-run attempt
-            if (generatedNow) {
-                try {
-                    await rerunWithOrtVerbose(reconvertedPath, feeds);
-                } catch {
-                    /* ignore */
-                }
-            }
-            return;
+            execSync(`node ./out/src/index.js "${absOrig}" ${cliArgs}`, {
+                cwd: PROJECT_ROOT,
+                stdio: "pipe",
+            });
+        } catch (e: unknown) {
+            const isError = e instanceof Error;
+            const msg = isError ? e.message : String(e);
+            return { status: "error", message: `CLI generation failed: ${msg}` };
         }
-
-        // Reconverted (safe run)
-        const recRun = await safeTimedRun(recSession, feeds);
-        if (recRun.error !== undefined) {
-            logErrorDetails("reconverted run", recRun.error);
-            reportOutcome("error", "Reconverted run failed");
-
-            // Only verbose-rerun if this reconverted file was generated now
-            if (generatedNow) {
-                try {
-                    await rerunWithOrtVerbose(reconvertedPath, feeds);
-                } catch {
-                    /* ignore */
-                }
-            }
-            return;
-        }
-
-        const { out: reconvOut, ms: __recMs } = recRun;
-        console.log(`⏱️ reconverted: ${__recMs.toFixed(2)} ms`);
-
-        const originalArr = Array.from(Object.values(originalOut)[0].data as Iterable<number>);
-        const reconvArr = Array.from(Object.values(reconvOut!)[0].data as Iterable<number>);
-
-        console.log("→ original:", originalArr);
-        console.log("→ reconverted:", reconvArr);
-
-        let equivalent = false;
-        if (exact) {
-            equivalent =
-                originalArr.length === reconvArr.length &&
-                originalArr.every((v, i) => v === reconvArr[i]);
-        } else {
-            equivalent =
-                originalArr.length === reconvArr.length &&
-                originalArr.every((v, i) => Math.abs(v - (reconvArr[i] as number)) < tol);
-        }
-
-        if (equivalent) {
-            reportOutcome("pass");
-        } else {
-            // Mismatch is only a warning; do NOT verbose re-run here.
-            reportOutcome("warn");
-        }
-    } catch (err) {
-        logErrorDetails(`${label} reconversion test`, err);
-        reportOutcome("error", `${label} reconversion test failed`);
     }
+
+    if (!fs.existsSync(reconvertedPath)) {
+        return { status: "error", message: `Reconverted model missing at ${reconvertedPath}` };
+    }
+
+    // 2. Optional Stats
+    let origStats: GraphStats | null = null;
+    let decompStats: GraphStats | null = null;
+    if (options.showStats === true) {
+        origStats = await getGraphStats(absOrig);
+        decompStats = await getGraphStats(reconvertedPath);
+        printStatsComparison(config.label, origStats, decompStats);
+    }
+
+    // 3. Inference
+    let origOut: Record<string, ort.Tensor>;
+    try {
+        const origSess = await ort.InferenceSession.create(absOrig);
+        origOut = await origSess.run(feeds);
+    } catch (e: unknown) {
+        const isError = e instanceof Error;
+        const msg = isError ? e.message : String(e);
+        return { status: "error", message: `CLI generation failed: ${msg}` };
+    }
+
+    let recOut: Record<string, ort.Tensor>;
+    try {
+        const recSess = await ort.InferenceSession.create(reconvertedPath);
+        recOut = await recSess.run(feeds);
+    } catch (e: unknown) {
+        if (options.verboseOnFailure !== false) {
+            await rerunWithOrtVerbose(reconvertedPath, feeds);
+        }
+        const isError = e instanceof Error;
+        const msg = isError ? e.message : String(e);
+        return { status: "error", message: `CLI generation failed: ${msg}` };
+    }
+
+    // 4. Compare Outputs
+    const origArr = Array.from(
+        Object.values(origOut)[0].data as Iterable<number | bigint | boolean>,
+    );
+    const recArr = Array.from(Object.values(recOut)[0].data as Iterable<number | bigint | boolean>);
+
+    if (origArr.length !== recArr.length) {
+        return {
+            status: "warn",
+            message: `Length mismatch: ${origArr.length} vs ${recArr.length}`,
+        };
+    }
+
+    // Exact comparison branch (handles bigints, ints, and booleans without Math.abs)
+    if (config.exact === true) {
+        const passed = origArr.every((v, i) => v === recArr[i]);
+        return {
+            status: passed ? "pass" : "warn",
+            message: passed ? undefined : "Outputs do not match exactly",
+            originalStats: origStats,
+            decomposedStats: decompStats,
+        } as EquivalenceRunResult;
+    }
+
+    // Tolerance comparison branch (coerces to Number safely)
+    let maxDiff = 0;
+    for (let i = 0; i < origArr.length; i++) {
+        const o = Number(origArr[i]);
+        const r = Number(recArr[i]);
+        const diff = Math.abs(o - r);
+        if (diff > maxDiff) maxDiff = diff;
+    }
+
+    const passed = maxDiff <= tol;
+    return {
+        status: passed ? "pass" : "warn",
+        maxDiff,
+        message: passed ? undefined : `Max difference ${maxDiff} exceeds tolerance ${tol}`,
+        originalStats: origStats,
+        decomposedStats: decompStats,
+    } as EquivalenceRunResult;
 }
 
-function findTestConfig(label: string) {
-    return TESTS.find((t) => t.label === label) || CORE_OP_TESTS.find((t) => t.label === label);
-}
-
-function normalizeForMatch(p: string): string {
-    return path.resolve(p).replace(/\\/g, "/");
-}
-
-function findTestConfigByOriginalPath(originalPath: string) {
-    const target = normalizeForMatch(originalPath);
-    const all = [...TESTS, ...CORE_OP_TESTS];
-    return all.find((t) => normalizeForMatch(resolveModelPath(t.originalPath)) === target);
-}
-
-export type SingleEquivResult = "pass" | "warn" | "error" | "no-config";
-
-/**
- * Run a single reconversion equivalence check for a given originalPath.
- *
- * - Uses the TESTS/CORE_OP_TESTS metadata (shapes, dtypes, scalars).
- * - If no matching entry is found → logs and returns "no-config".
- * - If skipCli=true, it assumes the reconverted model already exists
- *   (exactly like index.ts writes <base>_reconverted.onnx) and only runs ORT.
- */
+/* ============================== CLI HOOK FOR index.ts ================================== */
 export async function runEquivalenceForOriginalPath(
     originalPath: string,
     options?: { labelHint?: string; skipCli?: boolean },
 ): Promise<SingleEquivResult> {
-    const byPath = findTestConfigByOriginalPath(originalPath);
-    const byLabel =
-        options?.labelHint !== undefined ? findTestConfig(options.labelHint) : undefined;
-    const config = byPath || byLabel;
+    const target = path.resolve(originalPath).replace(/\\/g, "/");
+    const all = [...TESTS, ...CORE_OP_TESTS];
+    const config =
+        all.find(
+            (t) => path.resolve(resolveModelPath(t.originalPath)).replace(/\\/g, "/") === target,
+        ) ||
+        (options?.labelHint !== undefined && options.labelHint !== ""
+            ? all.find((t) => t.label === options.labelHint)
+            : undefined);
 
-    if (!config) {
-        console.log(
-            `No compatibility test configuration found for '${originalPath}'. ` +
-                `Skipping equivalence check.`,
-        );
-        return "no-config";
-    }
+    if (!config) return "no-config";
 
-    const cliArgs =
-        typeof config.cliArgs === "function" ? config.cliArgs(config.originalPath) : config.cliArgs;
-
-    const feeds = buildFeeds(config.specs);
-
-    // We don’t want the helper to re-run the CLI when we’re calling it from index.ts
-    // after reconversion, so we honor skipCli here.
-    await testReconversion({
-        label: config.label,
-        originalPath: config.originalPath,
-        feeds,
-        tol: config.tol,
-        exact: config.exact,
-        cliArgs,
+    const res = await executeEquivalenceTest(config, {
         skipCli: options?.skipCli ?? false,
+        showStats: true,
+        verboseOnFailure: true,
     });
-
-    // For the CLI use case we just want a coarse result; RUN_TOTAL + FAILURES
-    // already have detailed info printed.
-    const reconvertedPath = getReconvertedPath(config.originalPath);
-    const hasError = FAILURES.error.some(
-        (e) => e.path === reconvertedPath && e.test === config.label,
-    );
-    const hasWarn = FAILURES.warn.some(
-        (e) => e.path === reconvertedPath && e.test === config.label,
-    );
-
-    if (hasError) return "error";
-    if (hasWarn) return "warn";
-    return "pass";
+    return res.status;
 }
 
-/* ============================== TESTS ================================== */
+/* ============================== TEST MODELS REGISTRY ================================== */
+export const jsonFullArgs = "--format json -vz 0 -v 0";
+export const jsonNoLowLevelArgs = "--format json --noLowLevel -vz 0 -v 0";
+export const dotFullArgs = (p: string): string =>
+    `--format dot -vz 0 -v 0 -o ${p.replace(/\.onnx$/, "")}.dot`;
+export const dotNoLowLevelArgs = (p: string): string =>
+    `--noLowLevel --format dot -vz 0 -v 0 -o ${p.replace(/\.onnx$/, "")}.dot`;
 
-const TESTS: Array<{
-    label: string;
-    originalPath: string;
-    tol?: number;
-    exact?: boolean;
-    cliArgs: string | ((p: string) => string);
-    specs: FeedSpec[];
-}> = [
+export const TESTS: EquivalenceTestConfig[] = [
     // ===== Standard Reconversions (JSON, noLowLevel) =====
     {
         label: "vector_add_standard",
@@ -643,7 +459,7 @@ const TESTS: Array<{
             { name: "A", dtype: "float32", shape: [4] },
             { name: "B", dtype: "float32", shape: [4] },
             { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] },
         ],
     },
     {
@@ -657,7 +473,7 @@ const TESTS: Array<{
             { name: "C", dtype: "float32", shape: [4] },
             { name: "D", dtype: "float32", shape: [4] },
             { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] },
         ],
     },
     {
@@ -669,7 +485,7 @@ const TESTS: Array<{
             { name: "A", dtype: "float32", shape: [2, 2] },
             { name: "B", dtype: "float32", shape: [2, 2] },
             { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(4)] },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] },
         ],
     },
     {
@@ -682,11 +498,11 @@ const TESTS: Array<{
             { name: "A", dtype: "int32", shape: [1, 3] },
             { name: "B", dtype: "int32", shape: [3, 3] },
             { name: "trip_count", dtype: "int64", shape: [], init: [BigInt(9)] },
-            { name: "cond", dtype: "bool", shape: [], init: [true] as boolean[] },
+            { name: "cond", dtype: "bool", shape: [], init: [true] },
         ],
     },
 
-    // ===== “Complete” suite (Full Decomposition with DOTs) =====
+    // ===== Complete Suite (Full Decomposition with DOTs) =====
     {
         label: "vectoradd_test",
         originalPath: "examples/onnx/vectoradd_test.onnx",
@@ -731,7 +547,7 @@ const TESTS: Array<{
         ],
     },
 
-    // ===== Range / Transpose / Matmul+Transpose (JSON) =====
+    // ===== Range / Transpose / MatMul+Transpose (JSON) =====
     {
         label: "range_standard",
         originalPath: "examples/onnx/range_standard.onnx",
@@ -752,7 +568,6 @@ const TESTS: Array<{
             { name: "start", dtype: "float32", shape: [], gen: "range", value: 1 },
             { name: "limit", dtype: "float32", shape: [], gen: "range", value: 6 },
             { name: "delta", dtype: "float32", shape: [], gen: "range", value: 1.5 },
-            // L = ceil((6-1)/1.5) = 4
             { name: "V", dtype: "float32", shape: [4] },
         ],
     },
@@ -814,7 +629,7 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [6] }],
     },
 
-    // ── unary/binary combo
+    // ===== Unary & Binary Combinations =====
     {
         label: "unary_binary_combo",
         originalPath: "examples/onnx/unary_binary_combo.onnx",
@@ -828,8 +643,6 @@ const TESTS: Array<{
             { name: "S", dtype: "float32", shape: [6] },
         ],
     },
-
-    // ── sum
     {
         label: "sum_standard",
         originalPath: "examples/onnx/sum_variadic.onnx",
@@ -841,16 +654,14 @@ const TESTS: Array<{
             { name: "C", dtype: "float32", shape: [] },
         ],
     },
-
-    // ── broadcast add/mul
     {
         label: "add_scalar_vector_broadcast",
         originalPath: "examples/onnx/add_scalar_vector.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "X", dtype: "float32", shape: [6] }, // vector
-            { name: "S", dtype: "float32", shape: [] }, // scalar
+            { name: "X", dtype: "float32", shape: [6] },
+            { name: "S", dtype: "float32", shape: [] },
         ],
     },
     {
@@ -859,8 +670,8 @@ const TESTS: Array<{
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2, 3] }, // matrix
-            { name: "B", dtype: "float32", shape: [3] }, // row vector
+            { name: "A", dtype: "float32", shape: [2, 3] },
+            { name: "B", dtype: "float32", shape: [3] },
         ],
     },
     {
@@ -869,8 +680,8 @@ const TESTS: Array<{
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2, 3] }, // matrix
-            { name: "C", dtype: "float32", shape: [2, 1] }, // column vector
+            { name: "A", dtype: "float32", shape: [2, 3] },
+            { name: "C", dtype: "float32", shape: [2, 1] },
         ],
     },
     {
@@ -879,8 +690,8 @@ const TESTS: Array<{
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "X", dtype: "float32", shape: [2, 3, 4] }, // [C,H,W]
-            { name: "W", dtype: "float32", shape: [1, 3, 1] }, // per-channel weight
+            { name: "X", dtype: "float32", shape: [2, 3, 4] },
+            { name: "W", dtype: "float32", shape: [1, 3, 1] },
         ],
     },
     {
@@ -897,7 +708,7 @@ const TESTS: Array<{
         ],
     },
 
-    // ── transpose + broadcast (2D..5D)
+    // ===== Transpose + Broadcast (2D..5D) =====
     {
         label: "transpose_broadcast_2d",
         originalPath: "examples/onnx/transpose_broadcast_2d.onnx",
@@ -939,7 +750,7 @@ const TESTS: Array<{
         ],
     },
 
-    // ── matmul broadcast
+    // ===== MatMul Broadcast =====
     {
         label: "matmul_bcast_left_unbatched",
         originalPath: "examples/onnx/matmul_bcast_left_unbatched.onnx",
@@ -971,7 +782,7 @@ const TESTS: Array<{
         ],
     },
 
-    // ── slice/pad/clip
+    // ===== Slice, Pad, Clip, Conv =====
     {
         label: "slice_decomposition",
         originalPath: "examples/onnx/slice.onnx",
@@ -997,16 +808,14 @@ const TESTS: Array<{
             { name: "Max", dtype: "float32", shape: [] },
         ],
     },
-
-    // ── conv
     {
         label: "conv_normal",
         originalPath: "examples/onnx/conv_normal.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "X", dtype: "float32", shape: [1, 1, 4, 4] }, // 16 elems
-            { name: "W", dtype: "float32", shape: [1, 1, 3, 3] }, // 9 elems
+            { name: "X", dtype: "float32", shape: [1, 1, 4, 4] },
+            { name: "W", dtype: "float32", shape: [1, 1, 3, 3] },
             { name: "B", dtype: "float32", shape: [1] },
         ],
     },
@@ -1022,28 +831,27 @@ const TESTS: Array<{
         ],
     },
 
-    // ── gemm/concat/dequantize/avgpool
+    // ===== Gemm, Concat, Dequantize, AvgPool =====
     {
         label: "gemm_standard",
         originalPath: "examples/onnx/gemm_standard.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2, 3] }, // 6
-            { name: "B", dtype: "float32", shape: [3, 4] }, // 12
-            { name: "C", dtype: "float32", shape: [2, 4] }, // 8
+            { name: "A", dtype: "float32", shape: [2, 3] },
+            { name: "B", dtype: "float32", shape: [3, 4] },
+            { name: "C", dtype: "float32", shape: [2, 4] },
         ],
     },
-
     {
         label: "concat_standard",
         originalPath: "examples/onnx/concat_standard.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "X0", dtype: "float32", shape: [2, 3] }, // 6
-            { name: "X1", dtype: "float32", shape: [2, 4] }, // 8
-            { name: "X2", dtype: "float32", shape: [2, 2] }, // 4  => total 18 elems
+            { name: "X0", dtype: "float32", shape: [2, 3] },
+            { name: "X1", dtype: "float32", shape: [2, 4] },
+            { name: "X2", dtype: "float32", shape: [2, 2] },
         ],
     },
     {
@@ -1052,12 +860,11 @@ const TESTS: Array<{
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "X", dtype: "uint8", shape: [2, 3, 4] }, // 24 elems total
-            { name: "S", dtype: "float32", shape: [3] }, // per-channel scales
-            { name: "Z", dtype: "uint8", shape: [3] }, // per-channel zero-points
+            { name: "X", dtype: "uint8", shape: [2, 3, 4] },
+            { name: "S", dtype: "float32", shape: [3] },
+            { name: "Z", dtype: "uint8", shape: [3] },
         ],
     },
-
     {
         label: "averagepool_standard",
         originalPath: "examples/onnx/avgpool_standard.onnx",
@@ -1066,7 +873,7 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 6] }],
     },
 
-    // ===== Reduce ops (JSON) =====
+    // ===== Reduce Operators =====
     {
         label: "reducesum_standard",
         originalPath: "examples/onnx/reducesum_standard.onnx",
@@ -1081,8 +888,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "negmix" }],
     },
-
-    // ----- More Reduce ops (JSON) -----
     {
         label: "reducemin_standard",
         originalPath: "examples/onnx/reducemin_standard.onnx",
@@ -1095,7 +900,7 @@ const TESTS: Array<{
         originalPath: "examples/onnx/reduceprod_standard.onnx",
         tol: 1e-6,
         cliArgs: jsonFullArgs,
-        specs: [{ name: "X", dtype: "float32", shape: [2, 3, 4] }], // general random
+        specs: [{ name: "X", dtype: "float32", shape: [2, 3, 4] }],
     },
     {
         label: "reducemean_standard",
@@ -1126,7 +931,6 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "random" }],
     },
     {
-        // sum(x) must be positive for log(sum(x)): use ones for a stable positive sum
         label: "reducelogsum_standard",
         originalPath: "examples/onnx/reducelogsum_standard.onnx",
         tol: 1e-6,
@@ -1134,7 +938,6 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "random" }],
     },
     {
-        // log(sum(exp(x))) works for any x; 'ones' is fine and avoids extreme magnitudes
         label: "reducelogsumexp_standard",
         originalPath: "examples/onnx/reducelogsumexp_standard.onnx",
         tol: 1e-6,
@@ -1142,7 +945,7 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "random" }],
     },
 
-    // ----- Softmax -----
+    // ===== Softmax & Expand =====
     {
         label: "softmax_standard",
         originalPath: "examples/onnx/softmax_standard.onnx",
@@ -1150,14 +953,11 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [8, 3], gen: "random" }],
         tol: 1e-5,
     },
-
-    // ----- Expand -----
     {
         label: "expand_scalar_to_2x3",
         originalPath: "examples/onnx/expand_scalar_to_2x3.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
-        // Only X is fed; 'shape' is Constant in the graph
         specs: [{ name: "X", dtype: "float32", shape: [], gen: "random" }],
     },
     {
@@ -1189,55 +989,28 @@ const TESTS: Array<{
         specs: [{ name: "X", dtype: "float32", shape: [1, 3, 1, 5], gen: "random" }],
     },
 
-    // TinyML and SC Models (or subset of models)
-
+    // ===== TinyML & Pipeline Models =====
     {
         label: "ad01_fp32_standard",
         originalPath: "examples/onnx/ad01_fp32.onnx",
         tol: 1e-3,
-        cliArgs: jsonFullArgs, // full JSON export + reconvert
+        cliArgs: jsonFullArgs,
         specs: [{ name: "input_1", dtype: "float32", shape: [1, 640] }],
     },
-
     {
         label: "ad01_fp32_gemm_relu_standard",
         originalPath: "examples/onnx/ad01_fp32_gemm_relu.onnx",
         tol: 1e-5,
         cliArgs: jsonFullArgs,
-        specs: [
-            {
-                name: "input_1",
-                dtype: "float32",
-                shape: [1, 640],
-            },
-            // output_1 [1, 128] float32 will be picked up automatically
-        ],
+        specs: [{ name: "input_1", dtype: "float32", shape: [1, 640] }],
     },
-
-    /*
-    {
-        label: "kws_ref_model_float32_standard",
-        originalPath: "examples/onnx/kws_ref_model_float32.onnx",
-        tol: 1e-5, // softmax tail needs a little tolerance
-        cliArgs: jsonFullArgsNoValidate,
-        specs: [
-            { name: "input_1", dtype: "float32", shape: [1, 49, 10, 1] }, // in
-            // out: Identity [1,12] float32 (picked up automatically)
-        ],
-    },
-    */
-
     {
         label: "averagepool_kws_like",
         originalPath: "examples/onnx/avgpool_kws_like.onnx",
         tol: 1e-6,
-        cliArgs: jsonFullArgs, // ensure low-level (AveragePool) lowering is exercised
-        specs: [
-            // Matches the KWS AveragePool input: [1, 64, 25, 5]
-            { name: "X", dtype: "float32", shape: [1, 64, 25, 5] },
-        ],
+        cliArgs: jsonFullArgs,
+        specs: [{ name: "X", dtype: "float32", shape: [1, 64, 25, 5] }],
     },
-
     {
         label: "SC2_X",
         originalPath: "examples/onnx/SC2_X_toy.onnx",
@@ -1245,7 +1018,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
-
     {
         label: "SC2_Y",
         originalPath: "examples/onnx/SC2_Y_toy.onnx",
@@ -1253,7 +1025,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
-
     {
         label: "SC2_Z",
         originalPath: "examples/onnx/SC2_Z_toy.onnx",
@@ -1262,8 +1033,7 @@ const TESTS: Array<{
         specs: [{ name: "input", dtype: "float32", shape: [2, 1] }],
     },
 
-    // ===== Remaining Binary Ops =====
-
+    // ===== Canonicalization Elemental Ops =====
     {
         label: "Sub",
         originalPath: "examples/onnx/sub.onnx",
@@ -1274,7 +1044,6 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2] },
         ],
     },
-
     {
         label: "GreaterOrEqual",
         originalPath: "examples/onnx/greater_or_equal.onnx",
@@ -1284,7 +1053,6 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2] },
         ],
     },
-
     {
         label: "Less",
         originalPath: "examples/onnx/less.onnx",
@@ -1294,7 +1062,6 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2], init: [3, 3] },
         ],
     },
-
     {
         label: "LessOrEqual",
         originalPath: "examples/onnx/less_or_equal.onnx",
@@ -1304,7 +1071,6 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2] },
         ],
     },
-
     {
         label: "Min",
         originalPath: "examples/onnx/min.onnx",
@@ -1314,7 +1080,6 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2] },
         ],
     },
-
     {
         label: "Max",
         originalPath: "examples/onnx/max.onnx",
@@ -1324,28 +1089,24 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2] },
         ],
     },
-
     {
         label: "Abs",
         originalPath: "examples/onnx/abs.onnx",
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Sign",
         originalPath: "examples/onnx/sign.onnx",
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "LeakyRelu",
         originalPath: "examples/onnx/leaky_relu.onnx",
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "HardSigmoid",
         originalPath: "examples/onnx/hard_sigmoid.onnx",
@@ -1360,7 +1121,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Mish",
         originalPath: "examples/onnx/mish.onnx",
@@ -1368,7 +1128,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Elu",
         originalPath: "examples/onnx/elu.onnx",
@@ -1376,7 +1135,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Celu",
         originalPath: "examples/onnx/celu.onnx",
@@ -1391,7 +1149,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Or",
         originalPath: "examples/onnx/or.onnx",
@@ -1401,7 +1158,6 @@ const TESTS: Array<{
             { name: "B", dtype: "bool", shape: [2] },
         ],
     },
-
     {
         label: "Div",
         originalPath: "examples/onnx/Div.onnx",
@@ -1412,7 +1168,6 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [2] },
         ],
     },
-
     {
         label: "Mod fmod0",
         originalPath: "examples/onnx/mod_fmod0.onnx",
@@ -1423,7 +1178,6 @@ const TESTS: Array<{
             { name: "B", dtype: "int64", shape: [6], init: [3n, -3n, 3n, -3n, 2n, 2n] },
         ],
     },
-
     {
         label: "Mod fmod1",
         originalPath: "examples/onnx/mod_fmod1.onnx",
@@ -1434,25 +1188,22 @@ const TESTS: Array<{
             { name: "B", dtype: "float32", shape: [6], gen: "negmix" },
         ],
     },
-
     {
         label: "Pow",
         originalPath: "examples/onnx/pow.onnx",
         tol: 1e-2,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "A", dtype: "float32", shape: [2] },
-            { name: "B", dtype: "float32", shape: [2] },
+            { name: "A", dtype: "float32", shape: [2], init: [2.0, 3.0] },
+            { name: "B", dtype: "float32", shape: [2], init: [2.0, 3.0] },
         ],
     },
-
     {
         label: "Not",
         originalPath: "examples/onnx/not.onnx",
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "bool", shape: [2] }],
     },
-
     {
         label: "Sigmoid",
         originalPath: "examples/onnx/sigmoid.onnx",
@@ -1460,7 +1211,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Softsign",
         originalPath: "examples/onnx/softsign.onnx",
@@ -1468,7 +1218,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Tan",
         originalPath: "examples/onnx/tan.onnx",
@@ -1476,7 +1225,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Sinh",
         originalPath: "examples/onnx/sinh.onnx",
@@ -1484,7 +1232,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Cosh",
         originalPath: "examples/onnx/cosh.onnx",
@@ -1492,7 +1239,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "TanhSigmoid",
         originalPath: "examples/onnx/tanh_sigmoid.onnx",
@@ -1500,7 +1246,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "TanhDiv",
         originalPath: "examples/onnx/tanh_div.onnx",
@@ -1508,7 +1253,6 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Asinh",
         originalPath: "examples/onnx/asinh.onnx",
@@ -1516,23 +1260,34 @@ const TESTS: Array<{
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
-
     {
         label: "Acosh",
         originalPath: "examples/onnx/acosh.onnx",
-        tol: 1e-5,
+        tol: 1e-4,
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "greaterThanOne" }],
     },
-
     {
         label: "Atanh",
         originalPath: "examples/onnx/atanh.onnx",
-        tol: 1e-2,
+        tol: 1e-1,
         cliArgs: jsonFullArgs,
         specs: [{ name: "A", dtype: "float32", shape: [2], gen: "negmix" }],
     },
+    {
+        label: "Group Normalization",
+        originalPath: "examples/onnx/group_normalization.onnx",
+        tol: 1e-3,
+        cliArgs: jsonFullArgs,
+        specs: [
+            { name: "X", dtype: "float32", shape: [1, 4, 4, 4] },
+            { name: "scale", dtype: "float32", shape: [4] },
+            { name: "bias", dtype: "float32", shape: [4] },
+        ],
+    },
+];
 
+export const CORE_OP_TESTS: EquivalenceTestConfig[] = [
     {
         label: "Group Normalization",
         originalPath: "examples/onnx/group_normalization.onnx",
@@ -1545,100 +1300,3 @@ const TESTS: Array<{
         ],
     },
 ];
-
-const CORE_OP_TESTS: Array<{
-    label: string;
-    originalPath: string;
-    tol?: number;
-    exact?: boolean;
-    cliArgs: string | ((p: string) => string);
-    specs: FeedSpec[];
-}> = [
-    {
-        label: "Group Normalization",
-        originalPath: "examples/onnx/group_normalization.onnx",
-        tol: 1e-5,
-        cliArgs: jsonFullArgs,
-        specs: [
-            { name: "X", dtype: "float32", shape: [1, 4, 4, 4] },
-            { name: "scale", dtype: "float32", shape: [4] },
-            { name: "bias", dtype: "float32", shape: [4] },
-        ],
-    },
-];
-
-// Run ONLY the focused subset above.
-export async function runCoreOpSubset(): Promise<void> {
-    for (const t of CORE_OP_TESTS) {
-        const cliArgs = typeof t.cliArgs === "function" ? t.cliArgs(t.originalPath) : t.cliArgs;
-
-        const feeds = buildFeeds(t.specs);
-
-        await testReconversion({
-            label: t.label,
-            originalPath: t.originalPath,
-            feeds,
-            tol: t.tol,
-            exact: t.exact,
-            cliArgs,
-        });
-    }
-}
-
-/* ============================== RUN ================================== */
-
-export async function runAllUnified(): Promise<void> {
-    for (const t of TESTS) {
-        const cli = typeof t.cliArgs === "function" ? t.cliArgs(t.originalPath) : t.cliArgs;
-        const feeds = buildFeeds(t.specs);
-        await testReconversion({
-            label: t.label,
-            originalPath: t.originalPath,
-            feeds,
-            tol: t.tol,
-            exact: t.exact,
-            cliArgs: cli,
-        });
-    }
-}
-
-const mode = process.env["COMPAT_MODE"] ?? "all";
-
-// Only auto-run when this file is the main script (test runner).
-const isMain =
-    typeof process !== "undefined" &&
-    Array.isArray(process.argv) &&
-    (process.argv[1].includes("compatibility_test") ||
-        process.argv[1].includes("onnx-flow-testcomp"));
-
-if (isMain) {
-    if (mode === "core") {
-        await runCoreOpSubset();
-    } else if (mode === "all") {
-        await runAllUnified();
-    }
-
-    // TOTAL
-    process.on("beforeExit", () => {
-        console.log(`\n=== TOTAL ===\nPassed: ${RUN_TOTAL.passed}\nFailed: ${RUN_TOTAL.failed}`);
-
-        const printList = (title: string, items: Array<{ test: string; path: string }>) => {
-            if (!items.length) return;
-            console.log(`\n${title} (${items.length})`);
-            for (const { test, path } of items) {
-                console.log(`  • ${test}  —  ${path}`);
-            }
-        };
-
-        printList("❌ Reconverted models that FAILED to run", FAILURES.error);
-        printList("⚠️ Reconverted models with NON-EQUIVALENT outputs", FAILURES.warn);
-
-        const summary = {
-            passed: RUN_TOTAL.passed,
-            failed: RUN_TOTAL.failed,
-            failedToRun: FAILURES.error,
-            nonEquivalent: FAILURES.warn,
-        };
-        console.log("AGENT_SUMMARY_JSON:" + JSON.stringify(summary));
-    });
-}

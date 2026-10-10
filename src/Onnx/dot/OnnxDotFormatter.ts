@@ -54,7 +54,10 @@ export default class OnnxDotFormatter<
         return attrs;
     }
 
-    static shapeToLabel(shape: Shape): string {
+    static shapeToLabel(shape?: Shape): string {
+        if (!shape || !Array.isArray(shape)) {
+            return "";
+        }
         const shapeString = `{${shape.join(",")}}`;
         return shapeString === "{}" ? "sc" : shapeString;
     }

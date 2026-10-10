@@ -1,4 +1,4 @@
-import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { AttributeType, DataType } from "../../../OnnxTypes.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
 

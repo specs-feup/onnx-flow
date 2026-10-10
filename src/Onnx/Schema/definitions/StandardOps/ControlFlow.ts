@@ -1,8 +1,8 @@
-import { AttributeType, DataType } from "@specs-feup/onnx-flow/Onnx/OnnxTypes";
+import { AttributeType, DataType } from "../../../../Onnx/OnnxTypes.js";
 import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
-import { propagateToRegion } from "@specs-feup/onnx-flow/Onnx/InferShapes";
-import { UNKNOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { propagateToRegion } from "../../../../Onnx/InferShapes.js";
+import { UNKNOWN_SHAPE } from "../../../../Onnx/Utils.js";
 
 export const Loop: OpSchema = {
     opType: "Loop",

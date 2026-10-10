@@ -1,6 +1,6 @@
 {
     "name": "@specs-feup/onnx-flow",
-    "version": "1.0.7-demo.0",
+    "version": "1.0.7",
     "engines": {
         "node": ">=16"
     },
@@ -34,13 +34,19 @@
         "format": "prettier --write \"{src,test}/**/*.{ts,js,json}\" package.json",
         "lint": "eslint \"{src,test}/**/*.{ts,js}\" --fix",
         "lint:check": "eslint \"{src,test}/**/*.{ts,js}\"",
-        "pretest": "npm run build",
-        "pretestcomp": "npm run build",
-        "pretestpartition": "npm run build",
-        "test": "node ./out/test/compatibility_test.js",
-        "test:ci": "npm run testpartition",
-        "testcomp": "node ./out/test/compatibility_test.js",
-        "testpartition": "node ./out/test/partition_test.js",
+        "test": "vitest run",
+        "test:unit": "vitest run test/unit",
+        "pretest:integration": "npm run build",
+        "test:integration": "vitest run test/integration",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "test:e2e": "vitest run --config vitest.e2e.config.ts",
+        "test:all": "npm run test:unit && npm run test:integration",
+        "test:unit:coverage": "vitest run test/unit --coverage",
+        "test:integration:coverage": "vitest run test/integration --coverage",
+        "test:ci": "vitest run --coverage",
+        "testcomp": "vitest run test/integration/compatibility.test.ts",
+        "testpartition": "vitest run test/integration/partitioning.test.ts",
         "dev": "npm-run-all --parallel build:watch dev:testcomp",
         "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
         "prepare": "npm run build && husky install",
@@ -73,6 +79,7 @@
         "@types/yargs": "^17.0.33",
         "@typescript-eslint/eslint-plugin": "^8.54.0",
         "@typescript-eslint/parser": "^8.54.0",
+        "@vitest/coverage-v8": "^5.0.3",
         "cpx2": "^8.0.0",
         "eslint": "^9.39.2",
         "eslint-config-prettier": "^10.1.8",
@@ -84,7 +91,8 @@
         "prettier": "^3.8.1",
         "rimraf": "^6.0.1",
         "typescript": "^5.7.2",
-        "typescript-eslint": "^8.54.0"
+        "typescript-eslint": "^8.54.0",
+        "vitest": "^5.0.3"
     },
     "lint-staged": {
         "{src,test}/**/*.{ts,js}": [

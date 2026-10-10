@@ -1,0 +1,75 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "output": [
+          "shape"
+        ],
+        "op_type": "Constant",
+        "attribute": [
+          {
+            "name": "value",
+            "t": {
+              "dims": [
+                "2"
+              ],
+              "data_type": 7,
+              "name": "shape",
+              "raw_data": "AgAAAAAAAAADAAAAAAAAAA=="
+            },
+            "type": "TENSOR"
+          }
+        ]
+      },
+      {
+        "input": [
+          "X",
+          "shape"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "Expand"
+      }
+    ],
+    "name": "expand_scalar_to_2x3",
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {}
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "2"
+                },
+                {
+                  "dim_value": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

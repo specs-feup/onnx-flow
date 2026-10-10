@@ -1,0 +1,74 @@
+{
+  "ir_version": "13",
+  "producer_name": "onnx-sub-example",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "A",
+          "B"
+        ],
+        "output": [
+          "C"
+        ],
+        "name": "SubNode",
+        "op_type": "Sub"
+      }
+    ],
+    "name": "SubGraph",
+    "input": [
+      {
+        "name": "A",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "B",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "2"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "C",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "2"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "version": "25"
+    }
+  ]
+}

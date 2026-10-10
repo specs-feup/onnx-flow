@@ -1,0 +1,96 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "start",
+          "limit",
+          "delta"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "Range"
+      },
+      {
+        "input": [
+          "Y",
+          "V"
+        ],
+        "output": [
+          "Z"
+        ],
+        "op_type": "Add"
+      }
+    ],
+    "name": "range_add_standard",
+    "input": [
+      {
+        "name": "start",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {}
+          }
+        }
+      },
+      {
+        "name": "limit",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {}
+          }
+        }
+      },
+      {
+        "name": "delta",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {}
+          }
+        }
+      },
+      {
+        "name": "V",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "-1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Z",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "-1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

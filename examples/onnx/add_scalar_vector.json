@@ -1,0 +1,67 @@
+{
+  "ir_version": "9",
+  "graph": {
+    "node": [
+      {
+        "input": [
+          "X",
+          "S"
+        ],
+        "output": [
+          "Y"
+        ],
+        "op_type": "Add"
+      }
+    ],
+    "name": "add_scalar_vector",
+    "input": [
+      {
+        "name": "X",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "6"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "S",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {}
+          }
+        }
+      }
+    ],
+    "output": [
+      {
+        "name": "Y",
+        "type": {
+          "tensor_type": {
+            "elem_type": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dim_value": "6"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "opset_import": [
+    {
+      "domain": "",
+      "version": "13"
+    }
+  ]
+}

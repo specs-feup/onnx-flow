@@ -7,7 +7,7 @@ import { convertFlowGraphToOnnxJson } from "../src/flow2json.js";
 import { json2onnx } from "../src/json2onnx.js";
 import { splitByAncestor } from "../src/Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../src/Onnx/partitioning/Partition.js";
-import type OnnxGraph from "@specs-feup/onnx-flow/Onnx/OnnxGraph";
+import type OnnxGraph from "../src/Onnx/OnnxGraph.js";
 
 export interface InputSpec {
     name: string;
@@ -24,10 +24,9 @@ export interface PartitionTestCase {
     tol?: number;
 }
 
-function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
+export function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
     const size = spec.shape.reduce((a, b) => a * b, 1);
     let data;
-
     if (spec.data !== undefined) {
         if (spec.data.length !== size) {
             throw new Error(`Provided data length does not match shape size for '${spec.name}'.`);
@@ -58,18 +57,25 @@ function generateTensorFromSpec(spec: InputSpec): ort.Tensor {
             throw new Error(`Unsupported dtype: ${spec.dtype}`);
         }
     }
-
     return new ort.Tensor(spec.dtype, data, spec.shape);
 }
 
+// Generates unique temporary files to prevent parallel test collisions
 async function saveGraphToTempOnnx(graph: OnnxGraph.Class, prefix: string): Promise<string> {
     const json = convertFlowGraphToOnnxJson(graph);
-    const tmpJson = path.resolve(`temp_${prefix}.json`);
-    const tmpOnnx = path.resolve(`temp_${prefix}.onnx`);
+    const uniqueToken = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const tmpJson = path.resolve(`temp_${prefix}_${uniqueToken}.json`);
+    const tmpOnnx = path.resolve(`temp_${prefix}_${uniqueToken}.onnx`);
 
     fs.writeFileSync(tmpJson, JSON.stringify(json, null, 2));
     await json2onnx(tmpJson, tmpOnnx);
-    fs.unlinkSync(tmpJson);
+    if (fs.existsSync(tmpJson)) {
+        try {
+            fs.unlinkSync(tmpJson);
+        } catch {
+            /* ignore */
+        }
+    }
     return tmpOnnx;
 }
 
@@ -99,60 +105,51 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
         if (eligibleOps.length === 0) throw new Error(`No eligible operation nodes found.`);
         const randomOp = eligibleOps[Math.floor(Math.random() * eligibleOps.length)];
         splitId = randomOp.id;
-        console.log(`   🎲 Randomly selected split node: '${splitId}' (${randomOp.type})`);
+        console.log(`     Randomly selected split node: '${splitId}' (${randomOp.type})`);
     } else {
-        console.log(`   📍 Using specified split node: '${splitId}'`);
+        console.log(`     Using specified split node: '${splitId}'`);
     }
 
     // A. Determine Sets
     const sets = splitByAncestor(irGraph, splitId);
-    const headCount = sets.head.size;
-    const tailCount = sets.tail.size;
-    console.log(`   Split stats: Head=${headCount} nodes, Tail=${tailCount} nodes.`);
+    console.log(`   Split stats: Head=${sets.head.size} nodes, Tail=${sets.tail.size} nodes.`);
 
     // B. Construct Graphs
     const { head, tail } = partitionGraph(irGraph, sets);
-
-    const headPath = path.resolve(`temp_head_${testCase.label}.onnx`);
-    const tailPath = path.resolve(`temp_tail_${testCase.label}.onnx`);
+    let headPath = "";
+    let tailPath = "";
 
     try {
         let resultsHead: Record<string, ort.Tensor> = {};
 
-        // --- 5. Run Head (Only if not empty) ---
+        // --- 5. Run Head ---
         if (head.nodes.length > 0) {
-            await saveGraphToTempOnnx(head, `head_${testCase.label}`);
+            headPath = await saveGraphToTempOnnx(head, `head_${testCase.label}`);
             const sessionHead = await ort.InferenceSession.create(headPath);
-
             const headFeeds: Record<string, ort.Tensor> = {};
             sessionHead.inputNames.forEach((name) => {
                 if (name in feeds) headFeeds[name] = feeds[name];
                 else throw new Error(`Head model input '${name}' missing from specs.`);
             });
-
             resultsHead = await sessionHead.run(headFeeds);
         } else {
-            console.warn("   ⚠️ Head partition is empty. Skipping execution.");
+            console.warn("     Head partition is empty. Skipping execution.");
         }
 
-        // --- 6. Run Tail (Only if not empty) ---
+        // --- 6. Run Tail ---
         let resultsTail: Record<string, ort.Tensor> = {};
-
         if (tail.nodes.length > 0) {
-            await saveGraphToTempOnnx(tail, `tail_${testCase.label}`);
+            tailPath = await saveGraphToTempOnnx(tail, `tail_${testCase.label}`);
             const sessionTail = await ort.InferenceSession.create(tailPath);
-
             const tailFeeds: Record<string, ort.Tensor> = {};
             sessionTail.inputNames.forEach((name) => {
                 if (name in resultsHead) tailFeeds[name] = resultsHead[name];
                 else if (name in feeds) tailFeeds[name] = feeds[name];
                 else throw new Error(`Tail model input '${name}' missing.`);
             });
-
             resultsTail = await sessionTail.run(tailFeeds);
         } else {
-            console.warn("   ⚠️ Tail partition is empty. Using Head results as final.");
-            // If Tail is empty, Head outputs MUST match Original outputs
+            console.warn("     Tail partition is empty. Using Head results as final.");
             resultsTail = resultsHead;
         }
 
@@ -160,37 +157,37 @@ export async function runPartitionTest(testCase: PartitionTestCase): Promise<voi
         for (const outName of sessionOrig.outputNames) {
             const valOrig = resultsOrig[outName];
             const valTail = resultsTail[outName];
-
             const d1 = valOrig.data as Float32Array;
             const d2 = valTail.data as Float32Array;
-
             if (d1.length !== d2.length) {
                 throw new Error(`Shape mismatch for '${outName}'`);
             }
-
             let maxDiff = 0;
             for (let i = 0; i < d1.length; i++) {
                 const diff = Math.abs(d1[i] - d2[i]);
                 if (diff > maxDiff) maxDiff = diff;
             }
-
             if (maxDiff > tol) {
                 throw new Error(
                     `Value mismatch for '${outName}': max diff ${maxDiff} exceeds tolerance ${tol}`,
                 );
             }
         }
-
-        console.log(`   ✅ Success! Max diff: ${0} (or within ${tol})`);
-    } catch (e: unknown) {
-        const isError = e instanceof Error;
-        const msg = isError ? e.message : String(e);
-
-        console.error(`   ❌ Failed: ${msg}`);
-        if (isError && e.stack !== undefined) console.error(e.stack);
-        throw e;
+        console.log(`     Success! Max diff within tolerance ${tol}`);
     } finally {
-        if (fs.existsSync(headPath)) fs.unlinkSync(headPath);
-        if (fs.existsSync(tailPath)) fs.unlinkSync(tailPath);
+        if (headPath && fs.existsSync(headPath)) {
+            try {
+                fs.unlinkSync(headPath);
+            } catch {
+                /* ignore */
+            }
+        }
+        if (tailPath && fs.existsSync(tailPath)) {
+            try {
+                fs.unlinkSync(tailPath);
+            } catch {
+                /* ignore */
+            }
+        }
     }
 }

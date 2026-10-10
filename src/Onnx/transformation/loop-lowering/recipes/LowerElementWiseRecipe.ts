@@ -11,7 +11,7 @@ import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
-import { asStaticDims, int64Vec, UNKNOWN_SHAPE } from "@specs-feup/onnx-flow/Onnx/Utils";
+import { asStaticDims, int64Vec, UNKNOWN_SHAPE } from "../../../Utils.js";
 
 export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerElementWise";
