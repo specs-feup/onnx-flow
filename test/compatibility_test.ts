@@ -27,16 +27,21 @@ export const PROJECT_ROOT = findProjectRoot(__dirname);
 export function ensureProtoExists(): void {
     const srcProto = path.resolve(PROJECT_ROOT, "src/Onnx/onnx.proto");
     if (!fs.existsSync(srcProto)) return;
-
     const targets = [
         path.resolve(PROJECT_ROOT, "out/src/Onnx/onnx.proto"),
         path.resolve(PROJECT_ROOT, "../out/src/Onnx/onnx.proto"),
     ];
-
     for (const target of targets) {
         if (!fs.existsSync(target)) {
-            fs.mkdirSync(path.dirname(target), { recursive: true });
-            fs.copyFileSync(srcProto, target);
+            try {
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.copyFileSync(srcProto, target);
+            } catch (err: unknown) {
+                const code = (err as { code?: string }).code;
+                if (code !== "EBUSY" && code !== "EPERM" && code !== "EEXIST") {
+                    throw err;
+                }
+            }
         }
     }
 }

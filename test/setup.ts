@@ -30,8 +30,16 @@ export function ensureProtoExists(): void {
 
     for (const target of targets) {
         if (!fs.existsSync(target)) {
-            fs.mkdirSync(path.dirname(target), { recursive: true });
-            fs.copyFileSync(srcProto, target);
+            try {
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.copyFileSync(srcProto, target);
+            } catch (err: unknown) {
+                // If another worker thread created or locked the file concurrently, ignore race condition
+                const code = (err as { code?: string }).code;
+                if (code !== "EBUSY" && code !== "EPERM" && code !== "EEXIST") {
+                    throw err;
+                }
+            }
         }
     }
 }
