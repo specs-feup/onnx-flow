@@ -44,6 +44,7 @@
         "test:all": "npm run test:unit && npm run test:integration",
         "test:unit:coverage": "vitest run test/unit --coverage",
         "test:integration:coverage": "vitest run test/integration --coverage",
+        "test:ci": "vitest run --coverage",
         "testcomp": "vitest run test/integration/compatibility.test.ts",
         "testpartition": "vitest run test/integration/partitioning.test.ts",
         "dev": "npm-run-all --parallel build:watch dev:testcomp",
