@@ -9,6 +9,7 @@ import { LoopLoweringPass } from "../../../src/Onnx/transformation/loop-lowering
 import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
 import { scalarFloat } from "../../../src/Onnx/utils/TensorData.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import { IndexingMode } from "../../../src/DecompositionOptions.js";
 
 describe("Loop Lowering - Multi-Operation Passes", () => {
     initializeSchemaRegistry();
@@ -26,10 +27,11 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             .as(TensorNode);
 
         builder.createOp("MatMul", [a, b]);
-        new LoopLoweringPass({ coalesce: false, fuse: false }).run(
-            graph,
-            new HistoryManager(graph),
-        );
+        new LoopLoweringPass({
+            coalesce: false,
+            fuse: false,
+            indexingMode: IndexingMode.Radix,
+        }).run(graph, new HistoryManager(graph));
 
         expect(
             graph
@@ -52,7 +54,10 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             .as(TensorNode);
 
         builder.createOp("MatMul", [a, b]);
-        new LoopLoweringPass({ coalesce: true, fuse: false }).run(graph, new HistoryManager(graph));
+        new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: IndexingMode.Radix }).run(
+            graph,
+            new HistoryManager(graph),
+        );
 
         expect(
             graph
@@ -75,10 +80,11 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             .as(TensorNode);
 
         builder.createOp("Add", [a, b]);
-        new LoopLoweringPass({ coalesce: false, fuse: false }).run(
-            graph,
-            new HistoryManager(graph),
-        );
+        new LoopLoweringPass({
+            coalesce: false,
+            fuse: false,
+            indexingMode: IndexingMode.Radix,
+        }).run(graph, new HistoryManager(graph));
 
         expect(
             graph
@@ -105,10 +111,11 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             strides: [1, 1],
             pads: [0, 0, 0, 0],
         });
-        new LoopLoweringPass({ coalesce: false, fuse: false }).run(
-            graph,
-            new HistoryManager(graph),
-        );
+        new LoopLoweringPass({
+            coalesce: false,
+            fuse: false,
+            indexingMode: IndexingMode.Radix,
+        }).run(graph, new HistoryManager(graph));
 
         expect(
             graph

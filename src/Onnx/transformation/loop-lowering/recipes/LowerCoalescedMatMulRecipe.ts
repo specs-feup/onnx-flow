@@ -12,16 +12,23 @@ import {
     broadcastShapes,
     int64Vec,
     UNKNOWN_SHAPE,
+    computeStrides,
 } from "../../../Utils.js";
-import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import type {
+    LoopCarryContext,
+    LoopLoweringRecipe,
+    RecipeApplyResult,
+} from "../LoopLoweringRecipe.js";
 import {
     resolveRecipeInput,
     squeezeIfLen1,
     ensureFlatInput,
     buildLinearIndex,
     decodeMixedRadix,
+    buildAguPointer,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
+import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerCoalescedMatMul";
@@ -130,19 +137,45 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         axes: ConcreteValueNode,
         outShape: KnownShape,
         carryNode: ConcreteValueNode,
-        targetShapeNode: ValueNode,
+        targetShapeNode?: ValueNode,
+        loopCtx?: LoopCarryContext,
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `coal_mm_${op.id}`);
         const inputs = op.getInputs()!;
+
+        // 1. Resolve and capture inputs inside the loop body first
+        const rawInnerA = resolveRecipeInput(
+            builder,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+            targetShapeNode,
+            loopCtx,
+        );
+        const rawInnerB = resolveRecipeInput(
+            builder,
+            inputs[1],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            false,
+            targetShapeNode,
+            loopCtx,
+        );
 
         let sA = asStaticDims(inputs[0].shape),
             sB = asStaticDims(inputs[1].shape);
         if (sA.length === 1) sA = [1, sA[0]];
         if (sB.length === 1) sB = [sB[0], 1];
 
-        // --- DYNAMIC SUPPORT: Extract M, K, N ---
+        // 2. Extract M, K, N (statically or dynamically from captured inner nodes)
         let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
-
         const isDynamicA = inputs[0].shape.includes(-1) || inputs[0].shape.length === 0;
         const isDynamicB = inputs[1].shape.includes(-1) || inputs[1].shape.length === 0;
 
@@ -167,12 +200,12 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
                 return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
             };
 
-            const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [inputs[0]])[0]]);
-            const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [inputs[1]])[0]]);
+            const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [rawInnerA])[0]]);
+            const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [rawInnerB])[0]]);
 
-            M = isDynamicA ? getDimNode(inputs[0], rankA, -2, "M") : sA[sA.length - 2];
-            K = isDynamicA ? getDimNode(inputs[0], rankA, -1, "K") : sA[sA.length - 1];
-            N = isDynamicB ? getDimNode(inputs[1], rankB, -1, "N") : sB[sB.length - 1];
+            M = isDynamicA ? getDimNode(rawInnerA, rankA, -2, "M") : sA[sA.length - 2];
+            K = isDynamicA ? getDimNode(rawInnerA, rankA, -1, "K") : sA[sA.length - 1];
+            N = isDynamicB ? getDimNode(rawInnerB, rankB, -1, "N") : sB[sB.length - 1];
         } else {
             M = sA[sA.length - 2];
             K = sA[sA.length - 1];
@@ -183,142 +216,175 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const bB = sB.slice(0, -2);
         const batchOut = broadcastShapes(...[bA as number[], bB as number[]]);
 
-        // 1. Decode multi-index: Batch, I, J, K
-        const mNode =
-            typeof M === "number"
-                ? builder.createConstant(`M_const`, scalarInt64(M))
-                : (M as ValueNode);
-        const kNode =
-            typeof K === "number"
-                ? builder.createConstant(`K_const`, scalarInt64(K))
-                : (K as ValueNode);
-        const nNode =
-            typeof N === "number"
-                ? builder.createConstant(`N_const`, scalarInt64(N))
-                : (N as ValueNode);
+        let idxA: ConcreteValueNode;
+        let idxB: ConcreteValueNode;
+        let flatOutIdx: ConcreteValueNode;
 
-        const [nkNode] = builder.createOp("Mul", [nNode, kNode]);
-        const [mnkNode] = builder.createOp("Mul", [mNode, nkNode]);
+        // 3. Address Generation: Pointer Mode (AGU) vs Radix Mode (Div/Mod)
+        if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+            const iterDims: (number | ValueNode)[] = [...batchOut, M, N, K];
 
-        const [batchIter] = builder.createOp("Div", [iter, mnkNode]);
-        const [remMNK] = builder.createOp("Mod", [iter, mnkNode]);
-        const [iIdx] = builder.createOp("Div", [remMNK, nkNode]);
-        const [remNK] = builder.createOp("Mod", [remMNK, nkNode]);
-        const [jIdx] = builder.createOp("Div", [remNK, kNode]);
-        const [kIdx] = builder.createOp("Mod", [remNK, kNode]);
+            const mulVal = (
+                a: number | ValueNode,
+                b: number | ValueNode,
+                tag: string,
+            ): number | ValueNode => {
+                if (typeof a === "number" && typeof b === "number") return a * b;
+                const aNode =
+                    typeof a === "number" ? builder.createConstant(`${tag}_a`, scalarInt64(a)) : a;
+                const bNode =
+                    typeof b === "number" ? builder.createConstant(`${tag}_b`, scalarInt64(b)) : b;
+                return builder.createOp("Mul", [aNode, bNode])[0];
+            };
 
-        // 2. Map coordinates to flat input indices for A and B
-        const getFlatIdx = (
-            targetBatch: (number | ValueNode)[],
-            rowIdx: ValueNode,
-            colIdx: ValueNode,
-            rows: number | ValueNode,
-            cols: number | ValueNode,
-            tag: string,
-        ) => {
-            let batchOffset: ValueNode = builder.createConstant(
-                `${tag}_batch_zero`,
-                scalarInt64(0),
-            );
-
-            if (targetBatch.length > 0) {
-                const batchIndices = decodeMixedRadix(
-                    builder,
-                    batchIter,
-                    batchOut,
-                    `${tag}_decode`,
-                );
-                const actualIndices = targetBatch.map((dim, i) => {
-                    const outPos = batchOut.length - targetBatch.length + i;
-                    return dim === 1
-                        ? builder.createConstant(`${tag}_dim_${i}_zero`, scalarInt64(0))
-                        : batchIndices[outPos];
+            const buildBatchStrides = (
+                targetBatch: number[],
+                matrixSize: number | ValueNode,
+                tag: string,
+            ): (number | ValueNode)[] => {
+                if (batchOut.length === 0) return [];
+                const rawStrides = targetBatch.length > 0 ? computeStrides(targetBatch) : [];
+                return batchOut.map((_, outPos) => {
+                    const inPos = outPos - (batchOut.length - targetBatch.length);
+                    if (inPos < 0 || targetBatch[inPos] === 1) return 0;
+                    return mulVal(rawStrides[inPos], matrixSize, `${tag}_bs_${outPos}`);
                 });
+            };
 
-                // --- DYNAMIC STRIDE COMPUTATION ---
-                const strides: (number | ValueNode)[] = new Array(targetBatch.length).fill(1);
-                let currentStride: ValueNode | number = 1;
-                for (let i = targetBatch.length - 1; i >= 0; i--) {
-                    strides[i] = currentStride;
-                    if (i > 0) {
-                        const dim = targetBatch[i];
-                        if (typeof currentStride === "number" && typeof dim === "number") {
-                            currentStride = currentStride * dim;
-                        } else {
-                            const cNode =
-                                typeof currentStride === "number"
-                                    ? builder.createConstant(
-                                          `${tag}_cs_${i}`,
-                                          scalarInt64(currentStride),
-                                      )
-                                    : currentStride;
-                            const dNode =
-                                typeof dim === "number"
-                                    ? builder.createConstant(`${tag}_cd_${i}`, scalarInt64(dim))
-                                    : (dim as ValueNode);
-                            [currentStride] = builder.createOp("Mul", [cNode, dNode]);
+            const mkSize = mulVal(M, K, "MK");
+            const knSize = mulVal(K, N, "KN");
+            const mnSize = mulVal(M, N, "MN");
+
+            // Strides across [...batchOut, M, N, K]
+            const stridesA = [...buildBatchStrides(bA, mkSize, "A"), K, 0, 1];
+            const stridesB = [...buildBatchStrides(bB, knSize, "B"), 0, 1, N];
+            const stridesOut = [...buildBatchStrides(batchOut, mnSize, "C"), N, 1, 0];
+
+            idxA = buildAguPointer(builder, loopCtx, valueMap, iterDims, stridesA, `mm_A_${op.id}`);
+            idxB = buildAguPointer(builder, loopCtx, valueMap, iterDims, stridesB, `mm_B_${op.id}`);
+            flatOutIdx = buildAguPointer(
+                builder,
+                loopCtx,
+                valueMap,
+                iterDims,
+                stridesOut,
+                `mm_C_${op.id}`,
+            );
+        } else {
+            // Radix Mode: Decode multi-index Batch, I, J, K via Div and Mod
+            const mNode =
+                typeof M === "number"
+                    ? builder.createConstant(`M_const`, scalarInt64(M))
+                    : (M as ValueNode);
+            const kNode =
+                typeof K === "number"
+                    ? builder.createConstant(`K_const`, scalarInt64(K))
+                    : (K as ValueNode);
+            const nNode =
+                typeof N === "number"
+                    ? builder.createConstant(`N_const`, scalarInt64(N))
+                    : (N as ValueNode);
+
+            const [nkNode] = builder.createOp("Mul", [nNode, kNode]);
+            const [mnkNode] = builder.createOp("Mul", [mNode, nkNode]);
+
+            const [batchIter] = builder.createOp("Div", [iter, mnkNode]);
+            const [remMNK] = builder.createOp("Mod", [iter, mnkNode]);
+            const [iIdx] = builder.createOp("Div", [remMNK, nkNode]);
+            const [remNK] = builder.createOp("Mod", [remMNK, nkNode]);
+            const [jIdx] = builder.createOp("Div", [remNK, kNode]);
+            const [kIdx] = builder.createOp("Mod", [remNK, kNode]);
+
+            const getFlatIdx = (
+                targetBatch: (number | ValueNode)[],
+                rowIdx: ValueNode,
+                colIdx: ValueNode,
+                rows: number | ValueNode,
+                cols: number | ValueNode,
+                tag: string,
+            ) => {
+                let batchOffset: ValueNode = builder.createConstant(
+                    `${tag}_batch_zero`,
+                    scalarInt64(0),
+                );
+                if (targetBatch.length > 0) {
+                    const batchIndices = decodeMixedRadix(
+                        builder,
+                        batchIter,
+                        batchOut,
+                        `${tag}_decode`,
+                    );
+                    const actualIndices = targetBatch.map((dim, i) => {
+                        const outPos = batchOut.length - targetBatch.length + i;
+                        return dim === 1
+                            ? builder.createConstant(`${tag}_dim_${i}_zero`, scalarInt64(0))
+                            : batchIndices[outPos];
+                    });
+
+                    const strides: (number | ValueNode)[] = new Array(targetBatch.length).fill(1);
+                    let currentStride: ValueNode | number = 1;
+                    for (let i = targetBatch.length - 1; i >= 0; i--) {
+                        strides[i] = currentStride;
+                        if (i > 0) {
+                            const dim = targetBatch[i];
+                            if (typeof currentStride === "number" && typeof dim === "number") {
+                                currentStride = currentStride * dim;
+                            } else {
+                                const cNode =
+                                    typeof currentStride === "number"
+                                        ? builder.createConstant(
+                                              `${tag}_cs_${i}`,
+                                              scalarInt64(currentStride),
+                                          )
+                                        : currentStride;
+                                const dNode =
+                                    typeof dim === "number"
+                                        ? builder.createConstant(`${tag}_cd_${i}`, scalarInt64(dim))
+                                        : (dim as ValueNode);
+                                [currentStride] = builder.createOp("Mul", [cNode, dNode]);
+                            }
                         }
                     }
+
+                    batchOffset = buildLinearIndex(
+                        builder,
+                        actualIndices,
+                        strides,
+                        `${tag}_batch_offset`,
+                    );
                 }
-                // --------------------------------------
 
-                batchOffset = buildLinearIndex(
-                    builder,
-                    actualIndices,
-                    strides,
-                    `${tag}_batch_offset`,
-                );
-            }
+                const rowsNode =
+                    typeof rows === "number"
+                        ? builder.createConstant(`${tag}_rows`, scalarInt64(rows))
+                        : (rows as ValueNode);
+                const colsNode =
+                    typeof cols === "number"
+                        ? builder.createConstant(`${tag}_cols`, scalarInt64(cols))
+                        : (cols as ValueNode);
 
-            const rowsNode =
-                typeof rows === "number"
-                    ? builder.createConstant(`${tag}_rows`, scalarInt64(rows))
-                    : (rows as ValueNode);
-            const colsNode =
-                typeof cols === "number"
-                    ? builder.createConstant(`${tag}_cols`, scalarInt64(cols))
-                    : (cols as ValueNode);
+                const [rcMul] = builder.createOp("Mul", [rowsNode, colsNode]);
+                const [offset] = builder.createOp("Mul", [batchOffset, rcMul]);
+                const [rowOff] = builder.createOp("Mul", [rowIdx, colsNode]);
+                const [base] = builder.createOp("Add", [offset, rowOff]);
+                return builder.createOp("Add", [base, colIdx])[0];
+            };
 
-            const [rcMul] = builder.createOp("Mul", [rowsNode, colsNode]);
-            const [offset] = builder.createOp("Mul", [batchOffset, rcMul]);
-            const [rowOff] = builder.createOp("Mul", [rowIdx, colsNode]);
+            idxA = getFlatIdx(bA, iIdx, kIdx, M, K, "A");
+            idxB = getFlatIdx(bB, kIdx, jIdx, K, N, "B");
 
-            const [base] = builder.createOp("Add", [offset, rowOff]);
-            return builder.createOp("Add", [base, colIdx])[0];
-        };
-
-        const idxA = getFlatIdx(bA, iIdx, kIdx, M, K, "A");
-        const idxB = getFlatIdx(bB, kIdx, jIdx, K, N, "B");
-
-        // 3. Gather elements and compute partial product
-        const flatA = ensureFlatInput(
-            builder,
-            resolveRecipeInput(
+            const [mnNode] = builder.createOp("Mul", [mNode, nNode]);
+            flatOutIdx = buildLinearIndex(
                 builder,
-                inputs[0],
-                valueMap,
-                iter,
-                axes,
-                outShape,
-                false,
-                false,
-                targetShapeNode,
-            ),
-        );
-        const flatB = ensureFlatInput(
-            builder,
-            resolveRecipeInput(
-                builder,
-                inputs[1],
-                valueMap,
-                iter,
-                axes,
-                outShape,
-                false,
-                false,
-                targetShapeNode,
-            ),
-        );
+                [batchIter, iIdx, jIdx],
+                [mnNode, nNode, 1],
+                `out_idx`,
+            );
+        }
+
+        // 4. Gather elements and compute partial product
+        const flatA = ensureFlatInput(builder, rawInnerA);
+        const flatB = ensureFlatInput(builder, rawInnerB);
 
         const [gAOut] = builder.createOp(
             "Gather",
@@ -335,16 +401,8 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const valB = squeezeIfLen1(builder, gBOut, axes, `sqB`);
         const [prod] = builder.createOp("Mul", [valA, valB]);
 
-        // 4. Update the accumulator (Carry state)
-        const [mnNode] = builder.createOp("Mul", [mNode, nNode]);
-        const flatOutIdx = buildLinearIndex(
-            builder,
-            [batchIter, iIdx, jIdx],
-            [mnNode, nNode, 1], // Dynamically built strides
-            `out_idx`,
-        );
+        // 5. Update the accumulator (Carry state)
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-
         const [gAccOut] = builder.createOp("Gather", [carryNode, flatOutIdxUnsq], { axis: 0 });
         const currentAcc = squeezeIfLen1(builder, gAccOut, axes, `sqAcc`);
 

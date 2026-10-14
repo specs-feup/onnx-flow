@@ -14,14 +14,21 @@ import {
     int64Vec,
     UNKNOWN_SHAPE,
 } from "../../../Utils.js";
-import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import type {
+    LoopCarryContext,
+    LoopLoweringRecipe,
+    RecipeApplyResult,
+} from "../LoopLoweringRecipe.js";
 import {
     resolveRecipeInput,
     buildLinearIndex,
     decodeMixedRadix,
     squeezeIfLen1,
+    buildAguPointer,
+    getOrCreateIterationSpaceCounters,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
+import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerMatMulRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerMatMul";
@@ -113,119 +120,13 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         axes: ConcreteValueNode,
         outShape: KnownShape,
         _carryNode: ConcreteValueNode,
-        targetShapeNode: ValueNode,
+        targetShapeNode?: ValueNode,
+        loopCtx?: LoopCarryContext,
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `matmul_${op.id}`);
         const inputs = op.getInputs()!;
 
-        let staticShapeA = asStaticDims(inputs[0].shape);
-        let staticShapeB = asStaticDims(inputs[1].shape);
-
-        // Normalize 1D vectors to 2D for static checks
-        if (staticShapeA.length === 1) staticShapeA = [1, staticShapeA[0]];
-        if (staticShapeB.length === 1) staticShapeB = [staticShapeB[0], 1];
-
-        // --- DYNAMIC SUPPORT: Extract M, K, N ---
-        let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
-
-        const isDynamicA = inputs[0].shape.includes(-1) || inputs[0].shape.length === 0;
-        const isDynamicB = inputs[1].shape.includes(-1) || inputs[1].shape.length === 0;
-
-        if (isDynamicA || isDynamicB) {
-            // Helper to gather a dimension from the back (e.g., -1 is last, -2 is second to last)
-            const getDimNode = (
-                tensor: ValueNode,
-                rankNode: ValueNode,
-                offsetFromEnd: number,
-                tag: string,
-            ) => {
-                const [shapeNode] = builder.createOp("Shape", [tensor]);
-                const offsetNode = builder.createConstant(
-                    `${tag}_offset`,
-                    scalarInt64(offsetFromEnd),
-                );
-                const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]); // rank + (-offset)
-                const [dimRaw] = builder.createOp(
-                    "Gather",
-                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
-                    { axis: 0 },
-                );
-                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
-            };
-
-            const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [inputs[0]])[0]]);
-            const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [inputs[1]])[0]]);
-
-            M = isDynamicA
-                ? getDimNode(inputs[0], rankA, -2, "M")
-                : staticShapeA[staticShapeA.length - 2];
-            K = isDynamicA
-                ? getDimNode(inputs[0], rankA, -1, "K")
-                : staticShapeA[staticShapeA.length - 1];
-            N = isDynamicB
-                ? getDimNode(inputs[1], rankB, -1, "N")
-                : staticShapeB[staticShapeB.length - 1];
-        } else {
-            M = staticShapeA[staticShapeA.length - 2];
-            K = staticShapeA[staticShapeA.length - 1];
-            N = staticShapeB[staticShapeB.length - 1];
-        }
-
-        // For fully dynamic batches, we rely on the pass's Shape inference to populate outShape.
-        // We slice the broadcasted shapes out of the statically known bounds for now.
-        const batchA = staticShapeA.slice(0, -2);
-        const batchB = staticShapeB.slice(0, -2);
-        const batchOut = broadcastShapes(...[batchA as number[], batchB as number[]]); // Needs dynamic broadcast support if batches vary
-
-        // 1. Decode global loop iteration into Batch, I, and J indices
-        let MNConst: ValueNode, NConst: ValueNode;
-
-        if (typeof M === "number" && typeof N === "number") {
-            MNConst = builder.createConstant(`MN`, scalarInt64(M * N));
-            NConst = builder.createConstant(`N`, scalarInt64(N));
-        } else {
-            const mNode =
-                typeof M === "number"
-                    ? builder.createConstant(`M_const`, scalarInt64(M))
-                    : (M as ValueNode);
-            NConst =
-                typeof N === "number"
-                    ? builder.createConstant(`N_const`, scalarInt64(N))
-                    : (N as ValueNode);
-            [MNConst] = builder.createOp("Mul", [mNode, NConst]);
-        }
-
-        const [batchIter] = builder.createOp("Div", [iter, MNConst]);
-        const [remMN] = builder.createOp("Mod", [iter, MNConst]);
-        const [iIdx] = builder.createOp("Div", [remMN, NConst]);
-        const [jIdx] = builder.createOp("Mod", [remMN, NConst]);
-
-        // 2. Resolve batch offsets for inputs
-        const getBatchOffset = (targetBatch: number[], tag: string) => {
-            if (targetBatch.length === 0)
-                return builder.createConstant(`${tag}_zero`, scalarInt64(0));
-            const batchIndices = decodeMixedRadix(builder, batchIter, batchOut, `${tag}_decode`);
-
-            // Handle broadcasting for the batch dimensions
-            const actualIndices = targetBatch.map((dim, i) => {
-                const outPos = batchOut.length - targetBatch.length + i;
-                return dim === 1
-                    ? builder.createConstant(`${tag}_dim_${i}_zero`, scalarInt64(0))
-                    : batchIndices[outPos];
-            });
-
-            return buildLinearIndex(
-                builder,
-                actualIndices,
-                computeStrides(targetBatch),
-                `${tag}_offset`,
-            );
-        };
-
-        const bOffsetA = getBatchOffset(batchA, "bA");
-        const bOffsetB = getBatchOffset(batchB, "bB");
-
-        // 3. Capture and Reshape inputs to 3D [Batch, Dim1, Dim2] for easier gathering
+        // 1. Capture inputs into the loop body first so dynamic Shape ops stay in scope
         const tInnerA = resolveRecipeInput(
             builder,
             inputs[0],
@@ -236,6 +137,7 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
             false,
             false,
             targetShapeNode,
+            loopCtx,
         );
         const tInnerB = resolveRecipeInput(
             builder,
@@ -247,9 +149,155 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
             false,
             false,
             targetShapeNode,
+            loopCtx,
         );
 
-        // Build dynamic 3D shapes [-1, M, K] and [-1, K, N] using Concat
+        let staticShapeA = asStaticDims(inputs[0].shape);
+        let staticShapeB = asStaticDims(inputs[1].shape);
+
+        if (staticShapeA.length === 1) staticShapeA = [1, staticShapeA[0]];
+        if (staticShapeB.length === 1) staticShapeB = [staticShapeB[0], 1];
+
+        // 2. Extract M, K, N (statically or dynamically)
+        let M: number | ValueNode, K: number | ValueNode, N: number | ValueNode;
+        const isDynamicA = inputs[0].shape.includes(-1) || inputs[0].shape.length === 0;
+        const isDynamicB = inputs[1].shape.includes(-1) || inputs[1].shape.length === 0;
+
+        if (isDynamicA || isDynamicB) {
+            const getDimNode = (
+                tensor: ValueNode,
+                rankNode: ValueNode,
+                offsetFromEnd: number,
+                tag: string,
+            ) => {
+                const [shapeNode] = builder.createOp("Shape", [tensor]);
+                const offsetNode = builder.createConstant(
+                    `${tag}_offset`,
+                    scalarInt64(offsetFromEnd),
+                );
+                const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]);
+                const [dimRaw] = builder.createOp(
+                    "Gather",
+                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
+                    { axis: 0 },
+                );
+                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+            };
+
+            const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [tInnerA])[0]]);
+            const [rankB] = builder.createOp("Size", [builder.createOp("Shape", [tInnerB])[0]]);
+
+            M = isDynamicA
+                ? getDimNode(tInnerA, rankA, -2, "M")
+                : staticShapeA[staticShapeA.length - 2];
+            K = isDynamicA
+                ? getDimNode(tInnerA, rankA, -1, "K")
+                : staticShapeA[staticShapeA.length - 1];
+            N = isDynamicB
+                ? getDimNode(tInnerB, rankB, -1, "N")
+                : staticShapeB[staticShapeB.length - 1];
+        } else {
+            M = staticShapeA[staticShapeA.length - 2];
+            K = staticShapeA[staticShapeA.length - 1];
+            N = staticShapeB[staticShapeB.length - 1];
+        }
+
+        const batchA = staticShapeA.slice(0, -2);
+        const batchB = staticShapeB.slice(0, -2);
+        const batchOut = broadcastShapes(...[batchA as number[], batchB as number[]]);
+
+        let iIdx: ConcreteValueNode;
+        let jIdx: ConcreteValueNode;
+        let bOffsetA: ConcreteValueNode;
+        let bOffsetB: ConcreteValueNode;
+
+        // 3. Address Generation: Pointer Mode (AGU) vs Radix Mode (Div/Mod)
+        if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+            const iterDims: (number | ValueNode)[] = [...batchOut, M, N];
+            const { counters } = getOrCreateIterationSpaceCounters(
+                builder,
+                loopCtx,
+                valueMap,
+                iterDims,
+                `mm_space_${op.id}`,
+            );
+
+            iIdx = counters[counters.length - 2];
+            jIdx = counters[counters.length - 1];
+
+            const buildBatchAgu = (targetBatch: number[], tag: string): ConcreteValueNode => {
+                if (targetBatch.length === 0) {
+                    return builder.createConstant(`${tag}_zero`, scalarInt64(0));
+                }
+                const rawStrides = computeStrides(targetBatch);
+                const alignedBatchStrides = batchOut.map((_, outPos) => {
+                    const inPos = outPos - (batchOut.length - targetBatch.length);
+                    if (inPos < 0 || targetBatch[inPos] === 1) return 0;
+                    return rawStrides[inPos];
+                });
+                // Stride 0 on M and N so batch index only increments when an M x N tile wraps
+                return buildAguPointer(
+                    builder,
+                    loopCtx,
+                    valueMap,
+                    iterDims,
+                    [...alignedBatchStrides, 0, 0],
+                    `${tag}_${op.id}`,
+                );
+            };
+
+            bOffsetA = buildBatchAgu(batchA, "bA");
+            bOffsetB = buildBatchAgu(batchB, "bB");
+        } else {
+            let MNConst: ValueNode, NConst: ValueNode;
+            if (typeof M === "number" && typeof N === "number") {
+                MNConst = builder.createConstant(`MN`, scalarInt64(M * N));
+                NConst = builder.createConstant(`N`, scalarInt64(N));
+            } else {
+                const mNode =
+                    typeof M === "number"
+                        ? builder.createConstant(`M_const`, scalarInt64(M))
+                        : (M as ValueNode);
+                NConst =
+                    typeof N === "number"
+                        ? builder.createConstant(`N_const`, scalarInt64(N))
+                        : (N as ValueNode);
+                [MNConst] = builder.createOp("Mul", [mNode, NConst]);
+            }
+
+            const [batchIter] = builder.createOp("Div", [iter, MNConst]);
+            const [remMN] = builder.createOp("Mod", [iter, MNConst]);
+            [iIdx] = builder.createOp("Div", [remMN, NConst]);
+            [jIdx] = builder.createOp("Mod", [remMN, NConst]);
+
+            const getBatchOffset = (targetBatch: number[], tag: string) => {
+                if (targetBatch.length === 0)
+                    return builder.createConstant(`${tag}_zero`, scalarInt64(0));
+                const batchIndices = decodeMixedRadix(
+                    builder,
+                    batchIter,
+                    batchOut,
+                    `${tag}_decode`,
+                );
+                const actualIndices = targetBatch.map((dim, i) => {
+                    const outPos = batchOut.length - targetBatch.length + i;
+                    return dim === 1
+                        ? builder.createConstant(`${tag}_dim_${i}_zero`, scalarInt64(0))
+                        : batchIndices[outPos];
+                });
+                return buildLinearIndex(
+                    builder,
+                    actualIndices,
+                    computeStrides(targetBatch),
+                    `${tag}_offset`,
+                );
+            };
+
+            bOffsetA = getBatchOffset(batchA, "bA");
+            bOffsetB = getBatchOffset(batchB, "bB");
+        }
+
+        // 4. Reshape inputs to 3D [-1, M, K] and [-1, K, N]
         const build3DShape = (dim1: number | ValueNode, dim2: number | ValueNode, tag: string) => {
             const minusOne = builder.createConstant(`${tag}_m1`, int64Vec([-1]));
             const d1 =
@@ -266,10 +314,9 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         const [A3D] = builder.createOp("Reshape", [tInnerA, build3DShape(M, K, "A")]);
         const [B3D] = builder.createOp("Reshape", [tInnerB, build3DShape(K, N, "B")]);
 
-        // 4. Gather the specific Matrix, Row, and Column for this iteration
+        // 5. Gather the Matrix, Row, and Column for this iteration
         const [bA_unsq] = builder.createOp("Unsqueeze", [bOffsetA, axes]);
         const [AMatrix] = builder.createOp("Gather", [A3D, bA_unsq], { axis: 0 });
-
         const [bB_unsq] = builder.createOp("Unsqueeze", [bOffsetB, axes]);
         const [BMatrix] = builder.createOp("Gather", [B3D, bB_unsq], { axis: 0 });
 
@@ -279,7 +326,6 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         const [jIdx_unsq] = builder.createOp("Unsqueeze", [jIdx, axes]);
         const [colB] = builder.createOp("Gather", [BMatrix, jIdx_unsq], { axis: 2 });
 
-        // Reshape both vectors to 1D [-1] so they align for element-wise multiplication
         const [rowA_flat] = builder.createOp("Reshape", [
             rowA,
             builder.createConstant("K_flat_A", int64Vec([-1])),
@@ -289,7 +335,7 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
             builder.createConstant("K_flat_B", int64Vec([-1])),
         ]);
 
-        // 5. Mul computes [A_ik * B_kj] for k=0..K-1
+        // 6. Compute dot product
         const [mulOp] = builder.createOp("Mul", [rowA_flat, colB_flat]);
         const [sumOut] = builder.createOp("ReduceSum", [mulOp], { keepdims: 0 });
 
