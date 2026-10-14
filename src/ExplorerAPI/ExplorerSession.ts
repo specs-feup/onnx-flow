@@ -87,6 +87,7 @@ export class ExplorerSession {
         const singleOpMatcher = new LoopFusionMatcher({
             coalesce: this.options.coalesce,
             fuse: false,
+            indexingMode: this.options.indexingMode,
         });
         opportunities.push(...singleOpMatcher.findOpportunities(this.graph));
 
@@ -95,6 +96,7 @@ export class ExplorerSession {
             const fusionMatcher = new LoopFusionMatcher({
                 coalesce: this.options.coalesce,
                 fuse: true,
+                indexingMode: this.options.indexingMode,
             });
             const fusedOpps = fusionMatcher
                 .findOpportunities(this.graph)

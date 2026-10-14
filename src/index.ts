@@ -16,7 +16,7 @@ import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
 import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "./flow2json.js";
 import { BASE_TEN, safeWriteJson } from "./Onnx/Utils.js";
-import type { DecompositionOptions } from "./DecompositionOptions.js";
+import type { DecompositionOptions, IndexingMode } from "./DecompositionOptions.js";
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
 import { splitByAncestor } from "./Onnx/partitioning/Strategies.js";
 import { partitionGraph } from "./Onnx/partitioning/Partition.js";
@@ -53,6 +53,7 @@ export function loadGraph(
     coalesce: boolean = defaultDecompositionOptions.coalesce,
     loopLowering: boolean = defaultDecompositionOptions.loopLowering,
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
+    indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
     validate: boolean = true,
 ): string | OnnxGraph.Class {
     let graph = createGraph(onnxObject);
@@ -70,6 +71,7 @@ export function loadGraph(
             coalesce,
             loopLowering,
             decomposeForCgra,
+            indexingMode,
         };
         graph = graph.apply(new OnnxGraphTransformer(decompOptions));
 
@@ -144,6 +146,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 "recurse",
                 "loopLowering",
                 "decomposeForCgra",
+                "indexingMode",
                 "noLowLevel",
                 "noOptimize",
             ],
@@ -243,6 +246,14 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 "Enable loop lowering (explicit Loop nodes); use --no-loop-lowering to disable",
             type: "boolean",
             default: defaultDecompositionOptions.loopLowering,
+        })
+        .option("indexingMode", {
+            alias: "im",
+            describe:
+                "Loop indexing mode: 'pointer' (AGU-style math) or 'radix' (div/mod decoding)",
+            type: "string",
+            choices: ["pointer", "radix"],
+            default: defaultDecompositionOptions.indexingMode,
         })
         .option("formatter", {
             alias: "fmtr",
@@ -354,6 +365,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 coalesce: argv.coalesce,
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
+                indexingMode: argv.indexingMode as IndexingMode,
             };
 
             console.log("\nStarting Interactive Mode. Automatic passes bypassed.");
@@ -371,6 +383,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 coalesce: argv.coalesce,
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
+                indexingMode: argv.indexingMode as IndexingMode,
             };
             graph.apply(new OnnxGraphTransformer(decompOptions));
 
