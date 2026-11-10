@@ -255,6 +255,12 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             choices: ["pointer", "radix"],
             default: defaultDecompositionOptions.indexingMode,
         })
+        .option("tileSize", {
+            alias: "ts",
+            describe: "Tile size for loop strip-mining (disabled if <= 1)",
+            type: "number",
+            default: defaultDecompositionOptions.tileSize,
+        })
         .option("formatter", {
             alias: "fmtr",
             describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",

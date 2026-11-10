@@ -24,6 +24,9 @@ export interface DecompositionOptions {
 
     /** Addressing mode inside lowered Loop bodies: 'pointer' (AGU math) or 'radix' (div/mod) */
     indexingMode: IndexingMode;
+
+    /** Optional loop tiling (strip-mining) factor; disabled when <= 1 or undefined */
+    tileSize?: number;
 }
 
 /**
@@ -44,4 +47,5 @@ export const defaultDecompositionOptions: DecompositionOptions = {
     loopLowering: true,
     decomposeForCgra: false,
     indexingMode: IndexingMode.Pointer,
+    tileSize: 0,
 };

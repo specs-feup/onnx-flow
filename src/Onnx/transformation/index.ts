@@ -9,6 +9,7 @@ import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
 import type { DecompositionOptions, IndexingMode } from "../../DecompositionOptions.js";
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
+import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -21,6 +22,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     private loopLowering: boolean;
     private decomposeForCgra: boolean;
     private indexingMode: IndexingMode;
+    private tileSize?: number | undefined;
 
     // Overload signatures (for TypeScript type checking)
     constructor();
@@ -33,6 +35,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         decomposeForCgra: boolean,
         loopLowering?: boolean,
         indexingMode?: IndexingMode,
+        tileSize?: number,
     );
 
     constructor(
@@ -43,6 +46,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         loopLowering: boolean = defaultDecompositionOptions.loopLowering,
         decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
         indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
+        tileSize?: number,
     ) {
         if (typeof fuseOrOptions === "boolean") {
             this.canonicalize = canonicalize;
@@ -52,6 +56,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.loopLowering = loopLowering;
             this.decomposeForCgra = decomposeForCgra;
             this.indexingMode = indexingMode;
+            this.tileSize = tileSize;
         } else {
             this.canonicalize =
                 fuseOrOptions.canonicalize ?? defaultDecompositionOptions.canonicalize;
@@ -64,6 +69,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                 fuseOrOptions.decomposeForCgra ?? defaultDecompositionOptions.decomposeForCgra;
             this.indexingMode =
                 fuseOrOptions.indexingMode ?? defaultDecompositionOptions.indexingMode;
+            this.tileSize = fuseOrOptions.tileSize ?? defaultDecompositionOptions.tileSize;
         }
     }
 
@@ -117,6 +123,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     indexingMode: this.indexingMode,
                 }),
             );
+
+            if (this.tileSize !== undefined && this.tileSize > 1) {
+                pm.addPass(new LoopTilingPass({ tileSize: this.tileSize }));
+            }
         }
 
         // =========================================================================
