@@ -1,0 +1,216 @@
+{
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "A",
+          "onnxData": {
+            "kind": "TensorNode",
+            "id": "A",
+            "tensorType": "input",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "B",
+          "onnxData": {
+            "kind": "TensorNode",
+            "id": "B",
+            "tensorType": "input",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "0",
+          "onnxData": {
+            "kind": "OperationNode",
+            "id": "0",
+            "opType": "Add",
+            "attributes": {},
+            "inputs": [
+              "A",
+              "B"
+            ],
+            "regions": [],
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "AB",
+          "onnxData": {
+            "kind": "TensorNode",
+            "id": "AB",
+            "tensorType": "output",
+            "literalType": 1,
+            "shape": [
+              4
+            ],
+            "metadata": {}
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "nodes",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": false,
+        "classes": ""
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "id": "35017a94-4f80-4fb6-8a22-697e21f03975",
+          "source": "A",
+          "target": "0",
+          "isCrossGraph": false,
+          "onnxData": {
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "ba18acee-40d9-4fbd-9891-fbe02f5182d9",
+          "source": "B",
+          "target": "0",
+          "isCrossGraph": false,
+          "onnxData": {
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      },
+      {
+        "data": {
+          "id": "d5b740c1-6779-48cb-97a2-e55db197d8df",
+          "source": "0",
+          "target": "AB",
+          "isCrossGraph": false,
+          "onnxData": {
+            "literalType": 1,
+            "shape": [
+              4
+            ]
+          }
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "group": "edges",
+        "removed": false,
+        "selected": false,
+        "selectable": true,
+        "locked": false,
+        "grabbable": true,
+        "pannable": true,
+        "classes": ""
+      }
+    ]
+  },
+  "data": {
+    "__specs-onnx__onnx_graph": {
+      "version": "1"
+    }
+  },
+  "zoomingEnabled": true,
+  "userZoomingEnabled": true,
+  "zoom": 1,
+  "minZoom": 1e-50,
+  "maxZoom": 1e+50,
+  "panningEnabled": true,
+  "userPanningEnabled": true,
+  "pan": {
+    "x": 0,
+    "y": 0
+  },
+  "boxSelectionEnabled": true,
+  "renderer": {
+    "name": "null"
+  }
+}
