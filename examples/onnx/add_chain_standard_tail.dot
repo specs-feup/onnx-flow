@@ -1,0 +1,14 @@
+digraph {
+  graph [compound=true rankdir=LR];
+  C [label=C shape=ellipse color=lime];
+  D [label=D shape=ellipse color=lime];
+  Y [label=Y shape=ellipse color=red];
+  1 [label=Add shape=box color=blue];
+  1 -> 2 [label="{4}"];
+  2 [label=Add shape=box color=blue];
+  AB [label=AB shape=ellipse color=lime];
+  C -> 1 [label="{4}"];
+  D -> 1 [label="{4}"];
+  AB -> 2 [label="{4}"];
+  2 -> Y [label="{4}"];
+}

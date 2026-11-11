@@ -3,12 +3,17 @@ import type { GraphPass } from "../../PassManager.js";
 import { LoopFusionMatcher } from "./LoopFusionMatcher.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
+import { IndexingMode } from "../../../DecompositionOptions.js";
 
 export class LoopLoweringPass implements GraphPass {
     public readonly name = "LoopLoweringV2";
 
     constructor(
-        private options: { coalesce: boolean; fuse: boolean } = { coalesce: true, fuse: true },
+        private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode } = {
+            coalesce: true,
+            fuse: true,
+            indexingMode: IndexingMode.Pointer,
+        },
     ) {}
 
     public run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean {

@@ -2,11 +2,16 @@ import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
 import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import type {
+    LoopCarryContext,
+    LoopLoweringRecipe,
+    RecipeApplyResult,
+} from "../LoopLoweringRecipe.js";
 import { resolveRecipeInput } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { int64Vec, scalarInt64, readScalarFromTensorNode } from "../../../Utils.js";
 import ConstantNode from "../../../ConstantNode.js";
+import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerRangeRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerRange";
@@ -105,21 +110,12 @@ export class LowerRangeRecipe implements LoopLoweringRecipe {
         outShape: KnownShape,
         _carryNode: ConcreteValueNode,
         targetShapeNode: ValueNode,
+        loopCtx?: LoopCarryContext,
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `range_${op.id}`);
         const inputs = op.getInputs()!;
+        const dtype = inputs[0].literalType || DataType.FLOAT;
 
-        let start = resolveRecipeInput(
-            builder,
-            inputs[0],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            true,
-            targetShapeNode,
-        );
         let delta = resolveRecipeInput(
             builder,
             inputs[2],
@@ -130,25 +126,51 @@ export class LowerRangeRecipe implements LoopLoweringRecipe {
             false,
             true,
             targetShapeNode,
+            loopCtx,
         );
-
-        const dtype = start.literalType || DataType.FLOAT;
-
-        // Create an empty 1D tensor to represent a scalar shape target
         const scalarShape = builder.createConstant(`scalar_shape_range_${op.id}`, int64Vec([]));
+        delta = builder.createOp("Reshape", [delta, scalarShape], {}, [
+            { type: dtype, shape: [] },
+        ])[0];
 
-        // UNCONDITIONALLY force them to scalars at runtime, ignoring compile-time shapes
+        // --- POINTER / INDUCTION MODE ---
+        if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+            const outerScalarShape = loopCtx.outerBuilder.createConstant(
+                `outer_scalar_shape_${op.id}`,
+                int64Vec([]),
+            );
+            const [initStart] = loopCtx.outerBuilder.createOp(
+                "Reshape",
+                [inputs[0], outerScalarShape],
+                {},
+                [{ type: dtype, shape: [] }],
+            );
+            const currVal = loopCtx.addCarry(`range_val_${op.id}`, initStart, dtype, []);
+            const [nextVal] = builder.createOp("Add", [currVal, delta], {}, [
+                { type: dtype, shape: [] },
+            ]);
+            loopCtx.setNextState(currVal, nextVal);
+            return currVal;
+        }
+
+        // --- RADIX FALLBACK MODE ---
+        let start = resolveRecipeInput(
+            builder,
+            inputs[0],
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            false,
+            true,
+            targetShapeNode,
+            loopCtx,
+        );
         start = builder.createOp("Reshape", [start, scalarShape])[0];
-        delta = builder.createOp("Reshape", [delta, scalarShape])[0];
 
-        // 2. Cast current iteration index to the target data type
         const [iterCast] = builder.createOp("Cast", [iter], { to: dtype });
-
-        // 3. Compute current value: start + (iter * delta)
         const [iterStep] = builder.createOp("Mul", [iterCast, delta]);
         const [currentVal] = builder.createOp("Add", [start, iterStep]);
-
-        // UNCONDITIONALLY force the output to a 0D scalar
         const [currentValScalar] = builder.createOp("Reshape", [currentVal, scalarShape], {}, [
             { type: dtype, shape: [] },
         ]);

@@ -7,8 +7,9 @@ import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
-import type { DecompositionOptions } from "../../DecompositionOptions.js";
+import type { DecompositionOptions, IndexingMode } from "../../DecompositionOptions.js";
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
+import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -20,6 +21,8 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     private coalesce: boolean;
     private loopLowering: boolean;
     private decomposeForCgra: boolean;
+    private indexingMode: IndexingMode;
+    private tileSize?: number | undefined;
 
     // Overload signatures (for TypeScript type checking)
     constructor();
@@ -30,6 +33,9 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         recurse: boolean,
         coalesce: boolean,
         decomposeForCgra: boolean,
+        loopLowering?: boolean,
+        indexingMode?: IndexingMode,
+        tileSize?: number,
     );
 
     constructor(
@@ -39,6 +45,8 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         coalesce: boolean = defaultDecompositionOptions.coalesce,
         loopLowering: boolean = defaultDecompositionOptions.loopLowering,
         decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
+        indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
+        tileSize?: number,
     ) {
         if (typeof fuseOrOptions === "boolean") {
             this.canonicalize = canonicalize;
@@ -47,6 +55,8 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.coalesce = coalesce;
             this.loopLowering = loopLowering;
             this.decomposeForCgra = decomposeForCgra;
+            this.indexingMode = indexingMode;
+            this.tileSize = tileSize;
         } else {
             this.canonicalize =
                 fuseOrOptions.canonicalize ?? defaultDecompositionOptions.canonicalize;
@@ -57,6 +67,9 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                 fuseOrOptions.loopLowering ?? defaultDecompositionOptions.loopLowering;
             this.decomposeForCgra =
                 fuseOrOptions.decomposeForCgra ?? defaultDecompositionOptions.decomposeForCgra;
+            this.indexingMode =
+                fuseOrOptions.indexingMode ?? defaultDecompositionOptions.indexingMode;
+            this.tileSize = fuseOrOptions.tileSize ?? defaultDecompositionOptions.tileSize;
         }
     }
 
@@ -103,7 +116,17 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             // =========================================================================
             // This looks at our clean, primitive graph and finds chains (Transpose -> Add)
             // and lowers them directly into single, highly optimized ONNX Loops.
-            pm.addPass(new LoopLoweringPass({ coalesce: this.coalesce, fuse: this.fuse }));
+            pm.addPass(
+                new LoopLoweringPass({
+                    coalesce: this.coalesce,
+                    fuse: this.fuse,
+                    indexingMode: this.indexingMode,
+                }),
+            );
+
+            if (this.tileSize !== undefined && this.tileSize > 1) {
+                pm.addPass(new LoopTilingPass({ tileSize: this.tileSize }));
+            }
         }
 
         // =========================================================================

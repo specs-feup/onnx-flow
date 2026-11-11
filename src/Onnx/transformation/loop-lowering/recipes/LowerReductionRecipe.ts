@@ -11,7 +11,11 @@ import {
     int64Vec,
     UNKNOWN_SHAPE,
 } from "../../../Utils.js";
-import type { LoopLoweringRecipe, RecipeApplyResult } from "../LoopLoweringRecipe.js";
+import type {
+    LoopCarryContext,
+    LoopLoweringRecipe,
+    RecipeApplyResult,
+} from "../LoopLoweringRecipe.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
 import {
@@ -20,9 +24,12 @@ import {
     ensureFlatInput,
     decodeMixedRadix,
     buildLinearIndex,
+    buildAguPointer,
+    getOrCreateIterationSpaceCounters,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import ConstantNode from "../../../ConstantNode.js";
+import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerReductionRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerReduction";
@@ -123,6 +130,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         outShape: KnownShape,
         carryNode: ConcreteValueNode,
         targetShapeNode: ValueNode,
+        loopCtx?: LoopCarryContext,
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `red_${op.id}`);
         const inputs = op.getInputs()! as ConcreteValueNode[];
@@ -139,10 +147,24 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             true,
             false,
             targetShapeNode,
+            loopCtx,
         );
         const flatInput = ensureFlatInput(builder, tInner);
-        const [iterUnsq] = builder.createOp("Unsqueeze", [iter, axes]);
-        const [gatheredOut] = builder.createOp("Gather", [flatInput, iterUnsq], { axis: 0 });
+
+        let readIdx: ConcreteValueNode = iter;
+        if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+            readIdx = buildAguPointer(
+                builder,
+                loopCtx,
+                valueMap,
+                inShape,
+                computeStrides(inShape),
+                `red_in_${op.id}`,
+            );
+        }
+
+        const [readIdxUnsq] = builder.createOp("Unsqueeze", [readIdx, axes]);
+        const [gatheredOut] = builder.createOp("Gather", [flatInput, readIdxUnsq], { axis: 0 });
         let val = squeezeIfLen1(builder, gatheredOut, axes, `sq_in`) as ConcreteValueNode;
 
         // 2. Pre-processing for specific reductions
@@ -151,9 +173,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             [val] = builder.createOp("Mul", [val, val]);
         else if (op.type === "ReduceL1") [val] = builder.createOp("Abs", [val]);
 
-        // 3. Coordinate decoding for indexing
-        const inCoords = decodeMixedRadix(builder, iter, inShape, `coords`);
-
+        // 3. Determine reduced axes
         let axesList: number[] = [];
         if (inputs.length > 1 && inputs[1].is(ConstantNode)) {
             axesList = readConstIntegerVectorFromTensorNode(inputs[1].as(ConstantNode)) ?? [];
@@ -168,15 +188,37 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
 
         const accShapeRaw = inShape.slice();
         for (const ax of axesList) accShapeRaw[ax] = 1;
-
+        const accStrides = computeStrides(accShapeRaw);
         const zeroConst = builder.createConstant(`zero`, scalarInt64(0));
-        const outCoords = inCoords.map((c, i) => (axesList.includes(i) ? zeroConst : c));
-        const flatOutIdx = buildLinearIndex(
-            builder,
-            outCoords,
-            computeStrides(accShapeRaw),
-            `out_idx`,
-        );
+
+        let inCoords: ConcreteValueNode[];
+        let flatOutIdx: ConcreteValueNode;
+
+        if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+            const { counters } = getOrCreateIterationSpaceCounters(
+                builder,
+                loopCtx,
+                valueMap,
+                inShape,
+                `red_space_${op.id}`,
+            );
+            inCoords = counters;
+            // Reduced axes have stride 0 in the output accumulator
+            const outAguStrides = accStrides.map((s, i) => (axesList.includes(i) ? 0 : s));
+            flatOutIdx = buildAguPointer(
+                builder,
+                loopCtx,
+                valueMap,
+                inShape,
+                outAguStrides,
+                `red_out_${op.id}`,
+            );
+        } else {
+            inCoords = decodeMixedRadix(builder, iter, inShape, `coords`);
+            const outCoords = inCoords.map((c, i) => (axesList.includes(i) ? zeroConst : c));
+            flatOutIdx = buildLinearIndex(builder, outCoords, accStrides, `out_idx`);
+        }
+
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
         // 4. Accumulate
@@ -187,10 +229,9 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         if (op.type === "ReduceMax") mathOpType = "Max";
         else if (op.type === "ReduceMin") mathOpType = "Min";
         else if (op.type === "ReduceProd") mathOpType = "Mul";
-
         const [mathOut] = builder.createOp(mathOpType, [currentAcc, val]);
 
-        // 5. First-hit logic (Initializes slots with the first element they encounter)
+        // 5. First-hit logic
         let isFirstHit: ConcreteValueNode | undefined;
         for (const ax of axesList) {
             const [isZero] = builder.createOp("Equal", [inCoords[ax], zeroConst]);

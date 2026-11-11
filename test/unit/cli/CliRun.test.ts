@@ -179,4 +179,38 @@ describe("CLI in-process execution & partition verification", () => {
 
         expect(fs.existsSync(outJson)).toBe(true);
     });
+
+    it("supports --indexingMode pointer and radix flags via CLI", async () => {
+        const outPointer = path.resolve(PROJECT_ROOT, "temp_unit_im_pointer.json");
+        const outRadix = path.resolve(PROJECT_ROOT, "temp_unit_im_radix.json");
+        cleanupFiles.push(outPointer, outRadix);
+
+        await runCli([
+            testModel,
+            "--indexingMode",
+            "pointer",
+            "-o",
+            outPointer,
+            "-vz",
+            "0",
+            "-v",
+            "0",
+            "--noReconversion",
+        ]);
+        await runCli([
+            testModel,
+            "-im",
+            "radix",
+            "-o",
+            outRadix,
+            "-vz",
+            "0",
+            "-v",
+            "0",
+            "--noReconversion",
+        ]);
+
+        expect(fs.existsSync(outPointer)).toBe(true);
+        expect(fs.existsSync(outRadix)).toBe(true);
+    });
 });

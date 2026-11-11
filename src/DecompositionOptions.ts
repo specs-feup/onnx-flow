@@ -1,3 +1,8 @@
+export enum IndexingMode {
+    Pointer = "pointer",
+    Radix = "radix",
+}
+
 export interface DecompositionOptions {
     /** Break down complex operations into simpler primitives before lowering */
     canonicalize: boolean;
@@ -16,6 +21,12 @@ export interface DecompositionOptions {
 
     /** Apply example CGRA decomposition of MatMuls/Relus */
     decomposeForCgra: boolean;
+
+    /** Addressing mode inside lowered Loop bodies: 'pointer' (AGU math) or 'radix' (div/mod) */
+    indexingMode: IndexingMode;
+
+    /** Optional loop tiling (strip-mining) factor; disabled when <= 1 or undefined */
+    tileSize?: number;
 }
 
 /**
@@ -26,6 +37,7 @@ export interface DecompositionOptions {
  *  - coalesce: true
  *  - loopLowering: true
  *  - decomposeForCgra: false
+ *  - indexingMode: "pointer"
  */
 export const defaultDecompositionOptions: DecompositionOptions = {
     canonicalize: true,
@@ -34,4 +46,6 @@ export const defaultDecompositionOptions: DecompositionOptions = {
     coalesce: true,
     loopLowering: true,
     decomposeForCgra: false,
+    indexingMode: IndexingMode.Pointer,
+    tileSize: 0,
 };

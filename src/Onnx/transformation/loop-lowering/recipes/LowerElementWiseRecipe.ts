@@ -6,7 +6,7 @@ import {
     type KnownShape,
     DataType,
 } from "../../../OnnxTypes.js";
-import type { LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
+import type { LoopCarryContext, LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
 import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
@@ -105,6 +105,7 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         outShape: KnownShape,
         _carryNode: ConcreteValueNode,
         targetShapeNode: ValueNode,
+        loopCtx?: LoopCarryContext,
     ): ValueNode {
         const builder = new GraphBuilder(body, `ew_${op.id}`);
 
@@ -122,6 +123,7 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
                     true,
                     true,
                     targetShapeNode,
+                    loopCtx,
                 ),
             );
 

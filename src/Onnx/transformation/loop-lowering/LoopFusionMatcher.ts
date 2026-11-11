@@ -9,6 +9,7 @@ import {
     UNKNOWN_SHAPE,
     topologicalSortOperationNodes,
     int64Vec,
+    scalarInt64,
 } from "../../Utils.js";
 import { buildForLoopRegion } from "./LoopBuilder.js";
 import { OpCategory } from "../../Schema/OpSchema.js";
@@ -24,6 +25,7 @@ import { LowerReductionRecipe } from "./recipes/LowerReductionRecipe.js";
 import { LowerMatMulRecipe } from "./recipes/LowerMatMulRecipe.js";
 import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
 import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
+import { IndexingMode } from "../../../DecompositionOptions.js";
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -32,7 +34,7 @@ export class LoopFusionMatcher {
     >();
     private recipes: LoopLoweringRecipe[];
 
-    constructor(private options: { coalesce: boolean; fuse: boolean }) {
+    constructor(private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode }) {
         this.recipes = [
             new LowerElementWiseRecipe(),
             new LowerReductionRecipe(),
@@ -87,16 +89,17 @@ export class LoopFusionMatcher {
         const carryShape = bounds.carryShape as StaticShape;
 
         // 1. Initialize Loop Region via GraphBuilder helper
-        const { innerBuilder, trip, vInitial, loopOutput, finalize } = buildForLoopRegion(
+        const { innerBuilder, trip, vInitial, loopOutput, loopCtx, finalize } = buildForLoopRegion(
             outerBuilder,
             totalIters,
             elemTy,
             carryShape,
             `Loop_${rootOp.id}`,
             `lowering_${rootOp.id}`,
+            this.options.indexingMode,
         );
-
         const body = innerBuilder.graph;
+
         const axes = innerBuilder.createConstant("axes", int64Vec([0]));
         const valueMap = new Map<string, ValueNode>();
         let finalNextCarry: ValueNode | null = null;
@@ -113,6 +116,7 @@ export class LoopFusionMatcher {
                 originalOutShape,
                 vInitial,
                 bounds.targetShape as ValueNode | undefined,
+                loopCtx,
             );
 
             let scalarOut: ValueNode;
@@ -130,20 +134,41 @@ export class LoopFusionMatcher {
         }
 
         // 3. Finalize Loop Body result
-        let carryOutNode;
+        let carryOutNode: ValueNode;
         if (finalNextCarry) {
             carryOutNode = finalNextCarry;
         } else {
             const finalScalar = valueMap.get(rootOutNodeRaw.id)!;
             const oneShape = innerBuilder.createConstant("one_shape", int64Vec([1]));
-            const [iterUnsq] = innerBuilder.createOp("Reshape", [trip, oneShape]);
+
+            let storeIdx: ConcreteValueNode = trip;
+            if (this.options.indexingMode === IndexingMode.Pointer) {
+                const initOutPtr = outerBuilder.createConstant(
+                    `init_out_ptr_${rootOp.id}`,
+                    scalarInt64(0),
+                );
+                const outPtrIn = loopCtx.addCarry(
+                    `out_ptr_${rootOp.id}`,
+                    initOutPtr,
+                    DataType.INT64,
+                    [],
+                );
+                const oneConst = innerBuilder.createConstant(`out_step_1`, scalarInt64(1));
+                const [nextOutPtr] = innerBuilder.createOp("Add", [outPtrIn, oneConst]);
+                loopCtx.setNextState(outPtrIn, nextOutPtr);
+                storeIdx = outPtrIn;
+            }
+
+            const [iterUnsq] = innerBuilder.createOp("Reshape", [storeIdx, oneShape]);
             const [finalUnsq] = innerBuilder.createOp("Reshape", [finalScalar, oneShape]);
+
             [carryOutNode] = innerBuilder.createOp(
                 "ScatterElements",
                 [vInitial, iterUnsq, finalUnsq],
                 { axis: 0 },
             );
         }
+
         finalize([carryOutNode as ConcreteValueNode]);
 
         // 4. Post-processing (Outer Graph)
