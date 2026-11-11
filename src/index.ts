@@ -303,7 +303,9 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             }
             return true;
         })
-        .help()
+        .help("help")
+        .alias("help", "h")
+        .describe("help", "Show help and usage instructions")
         .parseAsync(rawArgs);
 
     const inputFilePath = argv._[0]; // Positional argument for input file
