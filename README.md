@@ -13,6 +13,10 @@
 * **Graph Partitioning**: Supports splitting graphs into partitions to facilitate distributed workloads, automatically managing boundary tensors.
 * **Multi-Format Output**: Generates processed graphs in ONNX, JSON, and DOT formats to suit various integration needs.
 * **Visualization**: Provides multiple visualization options, including static SVG rendering and interactive Graphviz Online links.
+* **Addressing & Pointer Indexing**: Generates efficient AGU (Address Generation Unit) pointer arithmetic and induction variables inside loop bodies (`pointer` mode), eliminating costly runtime division and modulo instructions (`radix` mode).
+* **Operation Decomposition & Canonicalization**: Breaks down high-level neural network operations (such as `Gemm`, `Softmax`, `LayerNormalization`, activations, and poolings) into lower-level primitives before loop scheduling.
+* **Optimizations**: Applies advanced transformations, such as loop fusion, scalar MAC coalescing, static shape folding, and loop strip-mining/tiling.
+* **Interactive Explorer**: Built-in interactive REST server to inspect, step through, undo, and redo graph transformations visually.
 
 ---
 
@@ -39,11 +43,18 @@ onnx-flow <input_file> [options]
 * `--partition, --pt <nodeId | OpType Instance>`: Partition the graph into head/tail at a specific node (e.g., `--pt 12` or `--pt MatMul 2`).
 
 ### 2. Transformation & Optimization
+* `-im, --indexingMode <pointer|radix>`: Addressing mode inside lowered Loop bodies (Default: `pointer`).
+  * `pointer`: Emits AGU-style stepped pointers and wrap cascades (Add/Where, zero Div/Mod).
+  * `radix`: Decodes multi-dimensional tensor indices from the linear loop iteration counter using Div/Mod.
+* `-ts, --tileSize <number>`: Tile size factor for loop strip-mining/tiling (Disabled when `<= 1` or `0`).
+* `-can, --canonicalize`: Canonicalize complex operations into simpler primitives before lowering (Default: `true`; use `--no-canonicalize` to disable).
 * `-f, --fuse`: Fuse supported operators into a single Loop (Default: `true`).
 * `-c, --coalesce`: Use coalesced scalar MAC for `MatMul` inside Loop bodies (Default: `true`).
 * `-r, --recurse`: Recursively decompose generated loop bodies (Default: `false`).
-* `--ll, --loopLowering`: Enable explicit Loop node generation (Default: `true`).
+* `--ll, --loopLowering`: Enable explicit Loop node generation (Default: `true`; use `--no-loop-lowering` to disable).
 * `--dgc, --decomposeForCgra`: Apply CGRA-specific decomposition logic.
+* `--nl, --noLowLevel`: Disable low-level transformations completely.
+* `--noOptimize`: Disable optimization passes.
 
 ### 3. Output & Visualization
 * `-o, --output <path>`: Save the resulting graph to a specific file.
@@ -53,7 +64,7 @@ onnx-flow <input_file> [options]
 
 ### 4. Other
 * `--version`: Show version number.
-* `--help`: Show detailed usage.
+* `-h, --help`: Show detailed usage.
 
 ---
 
