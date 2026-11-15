@@ -2,9 +2,10 @@ import type OnnxGraph from "../OnnxGraph.js";
 import type { GraphPass } from "../PassManager.js";
 import type { DecompositionRecipe } from "./Recipe.js";
 import { topologicalSortOperationNodes } from "../Utils.js";
-import { GraphBuilder } from "../GraphBuilder.js";
 import { OpRegistry } from "../Schema/OpRegistry.js";
 import { TransformationOpportunity } from "./TransformationOpportunity.js";
+import { TrackedGraphBuilder } from "./tracking/TrackedGraphBuilder.js";
+import type { HistoryManager } from "./tracking/HistoryManager.js";
 
 export class OrchestratorPass implements GraphPass {
     public readonly name: string;
@@ -15,17 +16,15 @@ export class OrchestratorPass implements GraphPass {
         this.recipes = recipes;
     }
 
-    run(graph: OnnxGraph.Class): boolean {
+    run(graph: OnnxGraph.Class, historyManager?: HistoryManager): boolean {
         let globalChanged = false;
         let localChanged = true;
         let passCount = 0;
-        const builder = new GraphBuilder(graph);
         const registry = OpRegistry.getInstance();
 
         while (localChanged && passCount < 10) {
             localChanged = false;
             passCount++;
-
             const ops = topologicalSortOperationNodes(graph);
 
             for (const op of ops) {
@@ -39,26 +38,29 @@ export class OrchestratorPass implements GraphPass {
                     (r) => r.targetOp === op.type || r.targetOp === category,
                 );
 
-                if (recipe) {
-                    // Get the opportunity
-                    const opp = recipe.match(op)
-                        ? new TransformationOpportunity(
-                              recipe.name,
-                              op.id,
-                              `Apply ${recipe.name} to ${op.type}`,
-                              (builder) => recipe.apply(op, builder),
-                          )
-                        : null;
+                if (recipe && recipe.match(op)) {
+                    const opp = new TransformationOpportunity(
+                        recipe.name,
+                        op.id,
+                        `Apply ${recipe.name} to ${op.type}`,
+                        (builder) => recipe.apply(op, builder),
+                    );
 
-                    if (opp) {
-                        console.log(`[${this.name}] Applying opportunity '${opp.id}'`);
+                    console.log(`[${this.name}] Applying opportunity '${opp.id}'`);
+                    const trackedBuilder = new TrackedGraphBuilder(
+                        graph,
+                        opp.id,
+                        opp.description,
+                        `trans_${recipe.name}_${op.id}`,
+                    );
+                    opp.apply(trackedBuilder);
 
-                        // Apply the opportunity
-                        opp.apply(builder);
-
-                        localChanged = true;
-                        globalChanged = true;
+                    if (historyManager) {
+                        historyManager.pushPatch(trackedBuilder.commitPatch());
                     }
+
+                    localChanged = true;
+                    globalChanged = true;
                 }
             }
         }

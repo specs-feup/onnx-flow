@@ -1,5 +1,5 @@
 import type OnnxGraph from "./OnnxGraph.js";
-import type { HistoryManager } from "./transformation/tracking/HistoryManager.js";
+import { HistoryManager } from "./transformation/tracking/HistoryManager.js";
 
 export interface GraphPass {
     readonly name: string;
@@ -13,29 +13,36 @@ export interface GraphPass {
 export class PassManager {
     private passes: GraphPass[] = [];
 
-    public addPass(pass: GraphPass): void {
+    public addPass(pass: GraphPass): this {
         this.passes.push(pass);
+        return this; // Fluent chaining: pm.addPass(...).addPass(...)
+    }
+
+    public getPasses(): readonly GraphPass[] {
+        return this.passes;
     }
 
     public run(
         graph: OnnxGraph.Class,
-        historyManager: HistoryManager,
+        historyManager: HistoryManager = new HistoryManager(graph),
         maxIterations: number = 1,
-    ): void {
+        verbose: boolean = true,
+    ): HistoryManager {
         for (let i = 0; i < maxIterations; i++) {
             let changed = false;
-
             for (const pass of this.passes) {
-                console.log(`[PassManager] Running ${pass.name}...`);
+                if (verbose) console.log(`[PassManager] Running ${pass.name}...`);
                 if (pass.run(graph, historyManager)) {
                     changed = true;
                 }
             }
-
             if (!changed) {
-                console.log(`[PassManager] Reached fixed point after ${i + 1} iterations.`);
+                if (verbose && maxIterations > 1) {
+                    console.log(`[PassManager] Reached fixed point after ${i + 1} iterations.`);
+                }
                 break;
             }
         }
+        return historyManager;
     }
 }
