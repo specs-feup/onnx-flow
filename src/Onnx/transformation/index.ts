@@ -10,6 +10,8 @@ import { HistoryManager } from "./tracking/HistoryManager.js";
 import type { DecompositionOptions, IndexingMode } from "../../DecompositionOptions.js";
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
 import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
+import { ShapeOptimizationPass } from "./optimization/ShapeOptimizationPass.js";
+import { DeadCodeEliminationPass } from "./optimization/DeadCodeEliminationPass.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -20,6 +22,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     private recurse: boolean;
     private coalesce: boolean;
     private loopLowering: boolean;
+    private optimize: boolean;
     private decomposeForCgra: boolean;
     private indexingMode: IndexingMode;
     private tileSize?: number | undefined;
@@ -32,6 +35,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         fuse: boolean,
         recurse: boolean,
         coalesce: boolean,
+        optimize: boolean,
         decomposeForCgra: boolean,
         loopLowering?: boolean,
         indexingMode?: IndexingMode,
@@ -43,6 +47,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         canonicalize: boolean = defaultDecompositionOptions.canonicalize,
         recurse: boolean = defaultDecompositionOptions.recurse,
         coalesce: boolean = defaultDecompositionOptions.coalesce,
+        optimize: boolean = defaultDecompositionOptions.optimize,
         loopLowering: boolean = defaultDecompositionOptions.loopLowering,
         decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
         indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
@@ -54,6 +59,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.recurse = recurse;
             this.coalesce = coalesce;
             this.loopLowering = loopLowering;
+            this.optimize = optimize;
             this.decomposeForCgra = decomposeForCgra;
             this.indexingMode = indexingMode;
             this.tileSize = tileSize;
@@ -65,6 +71,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.coalesce = fuseOrOptions.coalesce ?? defaultDecompositionOptions.coalesce;
             this.loopLowering =
                 fuseOrOptions.loopLowering ?? defaultDecompositionOptions.loopLowering;
+            this.optimize = fuseOrOptions.optimize ?? defaultDecompositionOptions.optimize;
             this.decomposeForCgra =
                 fuseOrOptions.decomposeForCgra ?? defaultDecompositionOptions.decomposeForCgra;
             this.indexingMode =
@@ -135,7 +142,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         // The LoopLoweringPass leaves the original, un-looped operations (like the
         // outer Transpose and Add nodes) dangling in the graph. A final DCE sweeps
         // them away, leaving only the beautifully fused Loop!
-        //pm.addPass(new DeadCodeEliminationPass());
+        if (this.optimize) {
+            pm.addPass(new DeadCodeEliminationPass());
+            pm.addPass(new ShapeOptimizationPass());
+        }
 
         pm.addPass(new InferShapesPass());
 
@@ -144,42 +154,6 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         if (printSummary) {
             historyManager.printSummary();
         }
-
-        // =========================================================
-        // TEMPORARY DEBUG HACK: Test Undo/Redo tracking
-        // =========================================================
-        /*
-        const debugFormatter = new OnnxDotFormatter();
-
-        console.log("\n--- RUNNING HISTORY DEBUG TEST ---");
-
-        // 1. Save the fully compiled state
-        fs.writeFileSync("debug_0_fully_compiled.dot", graph.toString(debugFormatter));
-        console.log("Saved: debug_0_fully_compiled.dot");
-
-        // 2. Undo the last transformation
-        const undone1 = historyManager.undo();
-        if (undone1) {
-            fs.writeFileSync("debug_1_undo_1.dot", graph.toString(debugFormatter));
-            console.log(`Undid: ${undone1.description}. Saved: debug_1_undo_1.dot`);
-        }
-
-        // 3. Undo one more time
-        const undone2 = historyManager.undo();
-        if (undone2) {
-            fs.writeFileSync("debug_2_undo_2.dot", graph.toString(debugFormatter));
-            console.log(`Undid: ${undone2.description}. Saved: debug_2_undo_2.dot`);
-        }
-
-        // 4. Redo the last undone transformation
-        const redone1 = historyManager.redo();
-        if (redone1) {
-            fs.writeFileSync("debug_3_redo_1.dot", graph.toString(debugFormatter));
-            console.log(`Redid: ${redone1.description}. Saved: debug_3_redo_1.dot`);
-        }
-        console.log("----------------------------------\n");
-        // =========================================================
-        */
 
         return graph;
     }

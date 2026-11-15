@@ -52,6 +52,7 @@ export function loadGraph(
     recurse: boolean = defaultDecompositionOptions.recurse,
     coalesce: boolean = defaultDecompositionOptions.coalesce,
     loopLowering: boolean = defaultDecompositionOptions.loopLowering,
+    optimize: boolean = defaultDecompositionOptions.optimize,
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
     indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
     validate: boolean = true,
@@ -70,6 +71,7 @@ export function loadGraph(
             recurse,
             coalesce,
             loopLowering,
+            optimize,
             decomposeForCgra,
             indexingMode,
         };
@@ -247,6 +249,12 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             type: "boolean",
             default: defaultDecompositionOptions.loopLowering,
         })
+        .option("optimize", {
+            alias: "opt",
+            describe: "Run optimization passes (DeadCodeElimination, ShapeOptimization, etc.)",
+            type: "boolean",
+            default: defaultDecompositionOptions.optimize,
+        })
         .option("indexingMode", {
             alias: "im",
             describe:
@@ -371,6 +379,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 fuse: argv.fuse,
                 recurse: argv.recurse,
                 coalesce: argv.coalesce,
+                optimize: argv.optimize,
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
@@ -389,6 +398,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 fuse: argv.fuse,
                 recurse: argv.recurse,
                 coalesce: argv.coalesce,
+                optimize: argv.optimize,
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
