@@ -267,6 +267,21 @@ export class GraphBuilder {
     }
 
     /**
+     * Creates a TensorNode safely, ensuring unique IDs and automatic wiring.
+     */
+    public createTensor(
+        id: string,
+        literalType: DataType,
+        shape: KnownShape,
+        type: TensorNode.TensorKind = "intermediate",
+    ): TensorNode.Class {
+        return this.addNode(
+            uniq(this.graph, `${this.scopeTag}_${id}`),
+            new TensorNode.Builder(literalType, shape, type),
+        ).as(TensorNode);
+    }
+
+    /**
      * Rewires all downstream consumers of `oldNode` to point to `newNode`.
      * Automatically deletes `oldNode` if it becomes orphaned and is purely intermediate.
      */
