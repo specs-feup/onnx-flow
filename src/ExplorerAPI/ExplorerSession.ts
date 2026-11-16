@@ -21,9 +21,10 @@ import { TrackedGraphBuilder } from "../Onnx/transformation/tracking/TrackedGrap
 import type { TransformationOpportunity } from "../Onnx/transformation/TransformationOpportunity.js";
 import { TransformationRegistry } from "../Onnx/transformation/TransformationRegistry.js";
 import { parseOnnxFile } from "../index.js";
-import type { UnifiedExplorerJson } from "../flow2json.js";
-import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "../flow2json.js";
 import type { RawOnnxModel } from "../Onnx/OnnxTypes.js";
+import { convertFlowGraphToOnnxJson } from "../flow2json.js";
+import type { UnifiedExplorerJson } from "./ExplorerSerializer.js";
+import { generateUnifiedExplorerJson } from "./ExplorerSerializer.js";
 
 export class ExplorerSession {
     public history: HistoryManager;

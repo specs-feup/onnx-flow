@@ -1,7 +1,7 @@
 import express from "express";
 import type { Request, Response } from "express";
 import type { ExplorerSession } from "./ExplorerSession.js";
-import { generateUnifiedExplorerJson } from "../flow2json.js";
+import { generateUnifiedExplorerJson } from "./ExplorerSerializer.js";
 
 export function startExplorerServer(session: ExplorerSession, port: number = 3000): void {
     const app = express();

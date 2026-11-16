@@ -14,7 +14,7 @@ import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 //import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
-import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "./flow2json.js";
+import { convertFlowGraphToOnnxJson } from "./flow2json.js";
 import { BASE_TEN, safeWriteJson } from "./Onnx/Utils.js";
 import type { DecompositionOptions, IndexingMode } from "./DecompositionOptions.js";
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
@@ -27,6 +27,7 @@ import OnnxGraphTransformer from "./Onnx/transformation/index.js";
 import { startExplorerServer } from "./ExplorerAPI/ExplorerServer.js";
 import { ExplorerSession } from "./ExplorerAPI/ExplorerSession.js";
 import inferShapes from "./Onnx/InferShapes.js";
+import { generateUnifiedExplorerJson } from "./ExplorerAPI/ExplorerSerializer.js";
 
 export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
