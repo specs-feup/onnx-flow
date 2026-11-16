@@ -7,7 +7,7 @@ import { makeTensorProto } from "../../../Utils.js";
 
 export class LowerRoundAddRecipe implements DecompositionRecipe {
     public readonly name = "LowerRoundAdd";
-    public readonly targetOp = "RoundAdd";
+    public readonly targetOp = "Round";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Floor", "Sub", "Equal", "Greater", "Mod", "Where", "Add"];
