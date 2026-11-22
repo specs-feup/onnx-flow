@@ -13,8 +13,7 @@ export class LowerReluRecipe implements DecompositionRecipe {
     public readonly producedOps = ["Greater", "Where"];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "Relu") return false;
-        return true;
+        return op.type === "Relu";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

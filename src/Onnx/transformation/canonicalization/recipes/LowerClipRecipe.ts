@@ -11,8 +11,7 @@ export class LowerClipRecipe implements DecompositionRecipe {
     public readonly producedOps = ["Max", "Min", "Identity"];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "Clip") return false;
-        return true;
+        return op.type === "Clip";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

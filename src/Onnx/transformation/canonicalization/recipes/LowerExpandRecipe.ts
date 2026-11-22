@@ -12,8 +12,7 @@ export class LowerExpandRecipe implements DecompositionRecipe {
     public readonly producedOps = ["ConstantOfShape", "Cast", "Add"];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "Expand") return false;
-        return true;
+        return op.type === "Expand";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

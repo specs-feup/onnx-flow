@@ -6,13 +6,13 @@ import { DataType } from "../../../OnnxTypes.js";
 
 export class LowerTanhDivRecipe implements DecompositionRecipe {
     public readonly name = "LowerTanhDiv";
-    public readonly targetOp = "TanhDiv";
+    public readonly targetOp = "Tanh";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Sinh", "Cosh", "Div"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "TanhDiv";
+        return op.type === "Tanh";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

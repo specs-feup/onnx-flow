@@ -18,8 +18,7 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
     public readonly producedOps = ["Cast", "Shape", "Unsqueeze", "Expand", "Sub", "Mul"];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "DequantizeLinear") return false;
-        return true;
+        return op.type === "DequantizeLinear";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

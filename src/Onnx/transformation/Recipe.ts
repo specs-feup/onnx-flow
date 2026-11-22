@@ -42,18 +42,13 @@ const KNOWN_APPROXIMATION_RECIPES = new Set<string>([
     "LowerErf",
     "LowerSin",
     "LowerCos",
-    "LowerTan",
     "LowerAsin",
-    "LowerAcos",
     "LowerAtan",
-    "LowerSinh",
-    "LowerCosh",
-    "LowerAsinh",
-    "LowerAcosh",
-    "LowerAtanh",
     "LowerLog",
     "LowerSqrt",
     "LowerPow",
+    "LowerReciprocal",
+    "LowerExp",
 ]);
 
 /**
