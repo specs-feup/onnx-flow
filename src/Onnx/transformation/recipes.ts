@@ -66,6 +66,14 @@ import { LowerLessRecipe } from "./canonicalization/recipes/LowerLessRecipe.js";
 import { LowerLessOrEqualRecipe } from "./canonicalization/recipes/LowerLessOrEqualRecipe.js";
 import { LowerMinRecipe } from "./canonicalization/recipes/LowerMinRecipe.js";
 import { LowerMaxRecipe } from "./canonicalization/recipes/LowerMaxRecipe.js";
+import { LowerFloorRecipe } from "./canonicalization/recipes/LowerFloorRecipe.js";
+import { LowerNegRecipe } from "./canonicalization/recipes/LowerNegRecipe.js";
+import { LowerReciprocalRecipe } from "./canonicalization/recipes/LowerReciprocalRecipe.js";
+import { LowerExpRecipe } from "./canonicalization/recipes/LowerExpRecipe.js";
+import { LowerCosPCRecipe } from "./canonicalization/recipes/LowerCosPCRecipe.js";
+import { LowerSinPCRecipe } from "./canonicalization/recipes/LowerSinPCRecipe.js";
+import { LowerLogPCRecipe } from "./canonicalization/recipes/LowerLogPCRecipe.js";
+import { LowerSqrtPCRecipe } from "./canonicalization/recipes/LowerSqrtPCRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -128,6 +136,14 @@ export {
     LowerLessOrEqualRecipe,
     LowerMinRecipe,
     LowerMaxRecipe,
+    LowerFloorRecipe,
+    LowerNegRecipe,
+    LowerReciprocalRecipe,
+    LowerExpRecipe,
+    LowerCosPCRecipe,
+    LowerSinPCRecipe,
+    LowerLogPCRecipe,
+    LowerSqrtPCRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -200,6 +216,14 @@ export const Recipes = {
         LessOrEqual: LowerLessOrEqualRecipe,
         Min: LowerMinRecipe,
         Max: LowerMaxRecipe,
+        Exp: LowerExpRecipe,
+        Floor: LowerFloorRecipe,
+        Reciprocal: LowerReciprocalRecipe,
+        Neg: LowerNegRecipe,
+        SinPC: LowerSinPCRecipe,
+        CosPC: LowerCosPCRecipe,
+        LogPC: LowerLogPCRecipe,
+        SqrtPC: LowerSqrtPCRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,

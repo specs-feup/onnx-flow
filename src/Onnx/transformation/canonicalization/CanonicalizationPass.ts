@@ -40,19 +40,13 @@ import { LowerTanRecipe } from "./recipes/LowerTanRecipe.js";
 import { LowerSinhRecipe } from "./recipes/LowerSinhRecipe.js";
 import { LowerCoshRecipe } from "./recipes/LowerCoshRecipe.js";
 import { LowerTanhSigmoidRecipe } from "./recipes/LowerTanhSigmoidRecipe.js";
-import { LowerTanhDivRecipe } from "./recipes/LowerTanhDivRecipe.js";
 import { LowerAsinhRecipe } from "./recipes/LowerAsinhRecipe.js";
 import { LowerAcoshRecipe } from "./recipes/LowerAcoshRecipe.js";
 import { LowerAtanhRecipe } from "./recipes/LowerAtanhRecipe.js";
 import { LowerCeilRecipe } from "./recipes/LowerCeilRecipe.js";
 import { LowerRoundAddRecipe } from "./recipes/LowerRoundAddRecipe.js";
-import { LowerRoundStepRecipe } from "./recipes/LowerRoundStepRecipe.js";
 import { LowerIsNanRecipe } from "./recipes/LowerIsNanRecipe.js";
 import { LowerIsInfRecipe } from "./recipes/LowerIsInfRecipe.js";
-import { LowerSqrtRecipe } from "./recipes/LowerSqrtRecipe.js";
-import { LowerLogRecipe } from "./recipes/LowerLogRecipe.js";
-import { LowerSinRecipe } from "./recipes/LowerSinRecipe.js";
-import { LowerCosRecipe } from "./recipes/LowerCosRecipe.js";
 import { LowerAsinRecipe } from "./recipes/LowerAsinRecipe.js";
 import { LowerAcosRecipe } from "./recipes/LowerAcosRecipe.js";
 import { LowerAtanRecipe } from "./recipes/LowerAtanRecipe.js";
@@ -64,6 +58,14 @@ import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 import { LowerGroupNormalizationRecipe } from "./recipes/LowerGroupNormalizationRecipe.js";
+import { LowerFloorRecipe } from "./recipes/LowerFloorRecipe.js";
+import { LowerNegRecipe } from "./recipes/LowerNegRecipe.js";
+import { LowerCosPCRecipe } from "./recipes/LowerCosPCRecipe.js";
+import { LowerLogPCRecipe } from "./recipes/LowerLogPCRecipe.js";
+import { LowerSqrtPCRecipe } from "./recipes/LowerSqrtPCRecipe.js";
+import { LowerSinPCRecipe } from "./recipes/LowerSinPCRecipe.js";
+import { LowerReciprocalRecipe } from "./recipes/LowerReciprocalRecipe.js";
+import { LowerExpRecipe } from "./recipes/LowerExpRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -109,24 +111,31 @@ export class CanonicalizationPass implements GraphPass {
         ["Sinh", new LowerSinhRecipe()],
         ["Cosh", new LowerCoshRecipe()],
         ["Tanh", new LowerTanhSigmoidRecipe()],
-        ["Tanh", new LowerTanhDivRecipe()],
+        //["Tanh", new LowerTanhDivRecipe()],
         ["Asinh", new LowerAsinhRecipe()],
         ["Acosh", new LowerAcoshRecipe()],
         ["Atanh", new LowerAtanhRecipe()],
         ["Ceil", new LowerCeilRecipe()],
         ["Round", new LowerRoundAddRecipe()],
-        ["Round", new LowerRoundStepRecipe()],
+        //["Round", new LowerRoundStepRecipe()],
         ["IsNaN", new LowerIsNanRecipe()],
         ["IsInf", new LowerIsInfRecipe()],
-        ["Sqrt", new LowerSqrtRecipe()],
-        ["Log", new LowerLogRecipe()],
-        ["Sin", new LowerSinRecipe()],
-        ["Cos", new LowerCosRecipe()],
+        //["Sqrt", new LowerSqrtRecipe()],
+        //["Log", new LowerLogRecipe()],
+        //["Sin", new LowerSinRecipe()],
+        //["Cos", new LowerCosRecipe()],
+        ["Sqrt", new LowerSqrtPCRecipe()],
+        ["Log", new LowerLogPCRecipe()],
+        ["Sin", new LowerSinPCRecipe()],
+        ["Cos", new LowerCosPCRecipe()],
         ["Asin", new LowerAsinRecipe()],
         ["Acos", new LowerAcosRecipe()],
         ["Atan", new LowerAtanRecipe()],
         ["Erf", new LowerErfRecipe()],
-        //["Reciprocal", new LowerReciprocalRecipe()],
+        ["Exp", new LowerExpRecipe()],
+        ["Floor", new LowerFloorRecipe()],
+        ["Neg", new LowerNegRecipe()],
+        ["Reciprocal", new LowerReciprocalRecipe()],
 
         //Normalization Operations
         ["BatchNormalization", new LowerBatchNormalizationRecipe()],
