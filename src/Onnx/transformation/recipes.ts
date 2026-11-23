@@ -84,6 +84,22 @@ import { LowerHardSwishRecipe } from "./canonicalization/recipes/LowerHardSwishR
 import { LowerPReluRecipe } from "./canonicalization/recipes/LowerPReluRecipe.js";
 import { LowerShrinkRecipe } from "./canonicalization/recipes/LowerShrinkRecipe.js";
 import { LowerThresholdedReluRecipe } from "./canonicalization/recipes/LowerThresholdedReluRecipe.js";
+import { LowerConvIntegerRecipe } from "./canonicalization/recipes/LowerConvIntegerRecipe.js";
+import { LowerEyeLikeRecipe } from "./canonicalization/recipes/LowerEyeLikeRecipe.js";
+import { LowerFlattenRecipe } from "./canonicalization/recipes/LowerFlattenRecipe.js";
+import { LowerGlobalAveragePoolRecipe } from "./canonicalization/recipes/LowerGlobalAveragePoolRecipe.js";
+import { LowerGlobalLpPoolRecipe } from "./canonicalization/recipes/LowerGlobalLpPoolRecipe.js";
+import { LowerGlobalMaxPoolRecipe } from "./canonicalization/recipes/LowerGlobalMaxPoolRecipe.js";
+import { LowerHardmaxRecipe } from "./canonicalization/recipes/LowerHardmaxRecipe.js";
+import { LowerLogSoftmaxRecipe } from "./canonicalization/recipes/LowerLogSoftmaxRecipe.js";
+import { LowerLpNormalizationRecipe } from "./canonicalization/recipes/LowerLpNormalizationRecipe.js";
+import { LowerMatMulIntegerRecipe } from "./canonicalization/recipes/LowerMatMulIntegerRecipe.js";
+import { LowerOneHotRecipe } from "./canonicalization/recipes/LowerOneHotRecipe.js";
+import { LowerQLinearConvRecipe } from "./canonicalization/recipes/LowerQLinearConvRecipe.js";
+import { LowerQLinearMatMulRecipe } from "./canonicalization/recipes/LowerQLinearMatMulRecipe.js";
+import { LowerSplitRecipe } from "./canonicalization/recipes/LowerSplitRecipe.js";
+import { LowerTileRecipe } from "./canonicalization/recipes/LowerTileRecipe.js";
+import { LowerTriluRecipe } from "./canonicalization/recipes/LowerTriluRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -164,6 +180,22 @@ export {
     LowerPReluRecipe,
     LowerShrinkRecipe,
     LowerThresholdedReluRecipe,
+    LowerConvIntegerRecipe,
+    LowerEyeLikeRecipe,
+    LowerFlattenRecipe,
+    LowerGlobalAveragePoolRecipe,
+    LowerGlobalLpPoolRecipe,
+    LowerGlobalMaxPoolRecipe,
+    LowerHardmaxRecipe,
+    LowerLogSoftmaxRecipe,
+    LowerLpNormalizationRecipe,
+    LowerMatMulIntegerRecipe,
+    LowerOneHotRecipe,
+    LowerQLinearConvRecipe,
+    LowerQLinearMatMulRecipe,
+    LowerSplitRecipe,
+    LowerTileRecipe,
+    LowerTriluRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -254,6 +286,22 @@ export const Recipes = {
         PRelu: LowerPReluRecipe,
         Shrink: LowerShrinkRecipe,
         ThresholdedRelu: LowerThresholdedReluRecipe,
+        ConvInteger: LowerConvIntegerRecipe,
+        EyeLike: LowerEyeLikeRecipe,
+        Flatten: LowerFlattenRecipe,
+        GlobalAveragePool: LowerGlobalAveragePoolRecipe,
+        GlobalLpPool: LowerGlobalLpPoolRecipe,
+        GlobalMaxPool: LowerGlobalMaxPoolRecipe,
+        Hardmax: LowerHardmaxRecipe,
+        LogSoftmax: LowerLogSoftmaxRecipe,
+        LpNormalization: LowerLpNormalizationRecipe,
+        MatMulInteger: LowerMatMulIntegerRecipe,
+        OneHot: LowerOneHotRecipe,
+        QLinearConv: LowerQLinearConvRecipe,
+        QLinearMatMul: LowerQLinearMatMulRecipe,
+        Split: LowerSplitRecipe,
+        Tile: LowerTileRecipe,
+        Trilu: LowerTriluRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,

@@ -76,6 +76,22 @@ import { LowerHardSwishRecipe } from "./recipes/LowerHardSwishRecipe.js";
 import { LowerPReluRecipe } from "./recipes/LowerPReluRecipe.js";
 import { LowerShrinkRecipe } from "./recipes/LowerShrinkRecipe.js";
 import { LowerThresholdedReluRecipe } from "./recipes/LowerThresholdedReluRecipe.js";
+import { LowerConvIntegerRecipe } from "./recipes/LowerConvIntegerRecipe.js";
+import { LowerEyeLikeRecipe } from "./recipes/LowerEyeLikeRecipe.js";
+import { LowerFlattenRecipe } from "./recipes/LowerFlattenRecipe.js";
+import { LowerGlobalAveragePoolRecipe } from "./recipes/LowerGlobalAveragePoolRecipe.js";
+import { LowerGlobalLpPoolRecipe } from "./recipes/LowerGlobalLpPoolRecipe.js";
+import { LowerGlobalMaxPoolRecipe } from "./recipes/LowerGlobalMaxPoolRecipe.js";
+import { LowerHardmaxRecipe } from "./recipes/LowerHardmaxRecipe.js";
+import { LowerLogSoftmaxRecipe } from "./recipes/LowerLogSoftmaxRecipe.js";
+import { LowerLpNormalizationRecipe } from "./recipes/LowerLpNormalizationRecipe.js";
+import { LowerMatMulIntegerRecipe } from "./recipes/LowerMatMulIntegerRecipe.js";
+import { LowerOneHotRecipe } from "./recipes/LowerOneHotRecipe.js";
+import { LowerQLinearConvRecipe } from "./recipes/LowerQLinearConvRecipe.js";
+import { LowerQLinearMatMulRecipe } from "./recipes/LowerQLinearMatMulRecipe.js";
+import { LowerSplitRecipe } from "./recipes/LowerSplitRecipe.js";
+import { LowerTileRecipe } from "./recipes/LowerTileRecipe.js";
+import { LowerTriluRecipe } from "./recipes/LowerTriluRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -156,6 +172,22 @@ export class CanonicalizationPass implements GraphPass {
         ["PRelu", new LowerPReluRecipe()],
         ["Shrink", new LowerShrinkRecipe()],
         ["ThresholdedRelu", new LowerThresholdedReluRecipe()],
+        ["ConvInteger", new LowerConvIntegerRecipe()],
+        ["EyeLike", new LowerEyeLikeRecipe()],
+        ["Flatten", new LowerFlattenRecipe()],
+        ["GlobalAveragePool", new LowerGlobalAveragePoolRecipe()],
+        ["GlobalLpPool", new LowerGlobalLpPoolRecipe()],
+        ["GlobalMaxPool", new LowerGlobalMaxPoolRecipe()],
+        ["Hardmax", new LowerHardmaxRecipe()],
+        ["LogSoftmax", new LowerLogSoftmaxRecipe()],
+        ["LpNormalization", new LowerLpNormalizationRecipe()],
+        ["MatMulInteger", new LowerMatMulIntegerRecipe()],
+        ["OneHot", new LowerOneHotRecipe()],
+        ["QLinearConv", new LowerQLinearConvRecipe()],
+        ["QLinearMatMul", new LowerQLinearMatMulRecipe()],
+        ["Split", new LowerSplitRecipe()],
+        ["Tile", new LowerTileRecipe()],
+        ["Trilu", new LowerTriluRecipe()],
 
         //Normalization Operations
         ["BatchNormalization", new LowerBatchNormalizationRecipe()],
