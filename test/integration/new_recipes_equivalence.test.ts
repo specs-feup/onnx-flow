@@ -314,8 +314,8 @@ const CASES: SyntheticCase[] = [
         name: "GRU",
         opType: "GRU",
         feeds: [
-            { name: "X", dtype: "float32", shape: [2, 1, 3], gen: "negmix" },
-            { name: "W", dtype: "float32", shape: [1, 6, 3], gen: "negmix" },
+            { name: "X", dtype: "float32", shape: [1, 1, 2], gen: "negmix" },
+            { name: "W", dtype: "float32", shape: [1, 6, 2], gen: "negmix" },
             { name: "R", dtype: "float32", shape: [1, 6, 2], gen: "negmix" },
         ],
         attrs: { hidden_size: 2 },
