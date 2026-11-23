@@ -338,4 +338,22 @@ describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
             }).producedOps,
         ).not.toContain("ArgMin");
     });
+
+    it("decomposes TopK, Einsum, and Det", () => {
+        expect(
+            applyRecipe(
+                new Recipes.canonicalization.Einsum(),
+                "Einsum",
+                [
+                    [2, 3],
+                    [3, 4],
+                ],
+                { equation: "ij,jk->ik" },
+            ).producedOps,
+        ).not.toContain("Einsum");
+
+        expect(
+            applyRecipe(new Recipes.canonicalization.Det(), "Det", [[3, 3]], {}).producedOps,
+        ).not.toContain("Det");
+    });
 });

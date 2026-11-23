@@ -55,7 +55,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     ];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type === "ArgMax" || op.type === "ArgMin") return false;
+        if (op.type === "ArgMax" || op.type === "ArgMin" || op.type === "TopK") return false;
         const schema = OpRegistry.getInstance().get(op.type, 19);
         return schema?.category === OpCategory.Reduction;
     }

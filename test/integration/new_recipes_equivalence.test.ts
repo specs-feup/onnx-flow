@@ -472,6 +472,106 @@ const CASES: SyntheticCase[] = [
         outputSpecs: [{ type: DataType.INT64, shape: [4] }],
         exact: true,
     },
+
+    {
+        name: "TopK_largest",
+        opType: "TopK",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 5], init: [3, 1, 5, 5, 2, -1, -4, 0, 2, 2] },
+        ],
+        constInputs: [{ index: 1, proto: int64Vec([3]) }],
+        attrs: { axis: 1, largest: 1, sorted: 1 },
+        outputNames: ["Values", "Indices"],
+        outputSpecs: [
+            { type: DataType.FLOAT, shape: [2, 3] },
+            { type: DataType.INT64, shape: [2, 3] },
+        ],
+        exact: true,
+    },
+    {
+        name: "TopK_smallest",
+        opType: "TopK",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 5], init: [3, 1, 5, 1, 2, -1, -4, 0, -4, 2] },
+        ],
+        constInputs: [{ index: 1, proto: int64Vec([2]) }],
+        attrs: { axis: -1, largest: 0, sorted: 1 },
+        outputNames: ["Values", "Indices"],
+        outputSpecs: [
+            { type: DataType.FLOAT, shape: [2, 2] },
+            { type: DataType.INT64, shape: [2, 2] },
+        ],
+        exact: true,
+    },
+    {
+        name: "Einsum_matmul",
+        opType: "Einsum",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [2, 3], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [3, 4], gen: "negmix" },
+        ],
+        attrs: { equation: "ij,jk->ik" },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 4] }],
+        tol: 1e-4,
+    },
+    {
+        name: "Einsum_batched_attn",
+        opType: "Einsum",
+        feeds: [
+            { name: "Q", dtype: "float32", shape: [1, 2, 3, 4], gen: "negmix" },
+            { name: "K", dtype: "float32", shape: [1, 2, 3, 4], gen: "negmix" },
+        ],
+        attrs: { equation: "bhid,bhjd->bhij" },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 2, 3, 3] }],
+        tol: 1e-4,
+    },
+    {
+        name: "Einsum_trace",
+        opType: "Einsum",
+        feeds: [{ name: "X", dtype: "float32", shape: [3, 3], gen: "negmix" }],
+        attrs: { equation: "ii->" },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [] }],
+        tol: 1e-4,
+    },
+    {
+        name: "Einsum_outer",
+        opType: "Einsum",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [3], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [4], gen: "negmix" },
+        ],
+        attrs: { equation: "i,j->ij" },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [3, 4] }],
+        tol: 1e-4,
+    },
+    {
+        name: "Det_2x2",
+        opType: "Det",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 2], init: [3, 8, 4, 6] }],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [] }],
+        tol: 1e-4,
+    },
+    {
+        name: "Det_3x3_batched",
+        opType: "Det",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3, 3], gen: "negmix" }],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2] }],
+        tol: 1e-4,
+    },
+    {
+        name: "Det_4x4",
+        opType: "Det",
+        feeds: [
+            {
+                name: "X",
+                dtype: "float32",
+                shape: [4, 4],
+                init: [0, 2, 1, 3, 4, 1, 5, 2, 2, 3, 0, 1, 1, 0, 2, 4],
+            },
+        ],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [] }],
+        tol: 1e-3,
+    },
 ];
 
 const DTYPE_MAP: Record<FeedSpec["dtype"], DataType> = {

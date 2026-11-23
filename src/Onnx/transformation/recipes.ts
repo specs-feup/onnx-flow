@@ -120,6 +120,9 @@ import {
     LowerArgMaxRecipe,
     LowerArgMinRecipe,
 } from "./canonicalization/recipes/LowerArgMinMaxRecipe.js";
+import { LowerTopKRecipe } from "./canonicalization/recipes/LowerTopKRecipe.js";
+import { LowerEinsumRecipe } from "./canonicalization/recipes/LowerEinsumRecipe.js";
+import { LowerDetRecipe } from "./canonicalization/recipes/LowerDetRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -226,6 +229,9 @@ export {
     LowerScatterRecipe,
     LowerArgMaxRecipe,
     LowerArgMinRecipe,
+    LowerTopKRecipe,
+    LowerEinsumRecipe,
+    LowerDetRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -350,6 +356,9 @@ export const Recipes = {
         Scatter: LowerScatterRecipe,
         ArgMax: LowerArgMaxRecipe,
         ArgMin: LowerArgMinRecipe,
+        TopK: LowerTopKRecipe,
+        Einsum: LowerEinsumRecipe,
+        Det: LowerDetRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,

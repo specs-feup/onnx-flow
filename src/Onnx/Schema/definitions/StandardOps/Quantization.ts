@@ -231,7 +231,7 @@ export const MatMulInteger: OpSchema = {
 export const DynamicQuantizeLinear: OpSchema = {
     opType: "DynamicQuantizeLinear",
     sinceVersion: 11,
-    category: OpCategory.ElementWise,
+    category: OpCategory.Other,
     broadcastable: false,
     hasState: false,
     inputs: [{ name: "x", typeConstraint: T_ANY }],
