@@ -92,6 +92,13 @@ import { LowerQLinearMatMulRecipe } from "./recipes/LowerQLinearMatMulRecipe.js"
 import { LowerSplitRecipe } from "./recipes/LowerSplitRecipe.js";
 import { LowerTileRecipe } from "./recipes/LowerTileRecipe.js";
 import { LowerTriluRecipe } from "./recipes/LowerTriluRecipe.js";
+import { LowerLpPoolRecipe } from "./recipes/LowerLpPoolRecipe.js";
+import { LowerNegativeLogLikelihoodLossRecipe } from "./recipes/LowerNegativeLogLikelihoodLossRecipe.js";
+import { LowerSoftmaxCrossEntropyLossRecipe } from "./recipes/LowerSoftmaxCrossEntropyLossRecipe.js";
+import { LowerGRURecipe } from "./recipes/LowerGRURecipe.js";
+import { LowerLSTMRecipe } from "./recipes/LowerLSTMRecipe.js";
+import { LowerRNNRecipe } from "./recipes/LowerRNNRecipe.js";
+import { LowerScanRecipe } from "./recipes/LowerScanRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -188,6 +195,13 @@ export class CanonicalizationPass implements GraphPass {
         ["Split", new LowerSplitRecipe()],
         ["Tile", new LowerTileRecipe()],
         ["Trilu", new LowerTriluRecipe()],
+        ["LpPool", new LowerLpPoolRecipe()],
+        ["NegativeLogLikelihoodLoss", new LowerNegativeLogLikelihoodLossRecipe()],
+        ["SoftmaxCrossEntropyLoss", new LowerSoftmaxCrossEntropyLossRecipe()],
+        ["GRU", new LowerGRURecipe()],
+        ["LSTM", new LowerLSTMRecipe()],
+        ["RNN", new LowerRNNRecipe()],
+        ["Scan", new LowerScanRecipe()],
 
         //Normalization Operations
         ["BatchNormalization", new LowerBatchNormalizationRecipe()],

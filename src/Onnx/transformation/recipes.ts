@@ -100,6 +100,13 @@ import { LowerQLinearMatMulRecipe } from "./canonicalization/recipes/LowerQLinea
 import { LowerSplitRecipe } from "./canonicalization/recipes/LowerSplitRecipe.js";
 import { LowerTileRecipe } from "./canonicalization/recipes/LowerTileRecipe.js";
 import { LowerTriluRecipe } from "./canonicalization/recipes/LowerTriluRecipe.js";
+import { LowerLpPoolRecipe } from "./canonicalization/recipes/LowerLpPoolRecipe.js";
+import { LowerNegativeLogLikelihoodLossRecipe } from "./canonicalization/recipes/LowerNegativeLogLikelihoodLossRecipe.js";
+import { LowerSoftmaxCrossEntropyLossRecipe } from "./canonicalization/recipes/LowerSoftmaxCrossEntropyLossRecipe.js";
+import { LowerScanRecipe } from "./canonicalization/recipes/LowerScanRecipe.js";
+import { LowerRNNRecipe } from "./canonicalization/recipes/LowerRNNRecipe.js";
+import { LowerGRURecipe } from "./canonicalization/recipes/LowerGRURecipe.js";
+import { LowerLSTMRecipe } from "./canonicalization/recipes/LowerLSTMRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -196,6 +203,13 @@ export {
     LowerSplitRecipe,
     LowerTileRecipe,
     LowerTriluRecipe,
+    LowerLpPoolRecipe,
+    LowerNegativeLogLikelihoodLossRecipe,
+    LowerSoftmaxCrossEntropyLossRecipe,
+    LowerGRURecipe,
+    LowerLSTMRecipe,
+    LowerRNNRecipe,
+    LowerScanRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -302,6 +316,13 @@ export const Recipes = {
         Split: LowerSplitRecipe,
         Tile: LowerTileRecipe,
         Trilu: LowerTriluRecipe,
+        LpPool: LowerLpPoolRecipe,
+        NegativeLogLikelihoodLoss: LowerNegativeLogLikelihoodLossRecipe,
+        SoftmaxCrossEntropyLoss: LowerSoftmaxCrossEntropyLossRecipe,
+        GRU: LowerGRURecipe,
+        LSTM: LowerLSTMRecipe,
+        RNN: LowerRNNRecipe,
+        Scan: LowerScanRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,
