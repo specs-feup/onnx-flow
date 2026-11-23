@@ -1,5 +1,10 @@
 import type OnnxGraph from "../../OnnxGraph.js";
 import type { GraphPass } from "../../PassManager.js";
+import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
+import type { HistoryManager } from "../tracking/HistoryManager.js";
+import { TransformationOpportunity } from "../TransformationOpportunity.js";
+import type { DecompositionRecipe } from "../Recipe.js";
+import { topologicalSortOperationNodes } from "../../Utils.js";
 
 import { LowerSoftmaxRecipe } from "./recipes/LowerSoftmaxRecipe.js";
 import { LowerSliceRecipe } from "./recipes/LowerSliceRecipe.js";
@@ -11,8 +16,6 @@ import { LowerExpandRecipe } from "./recipes/LowerExpandRecipe.js";
 import { LowerConcatRecipe } from "./recipes/LowerConcatRecipe.js";
 import { LowerClipRecipe } from "./recipes/LowerClipRecipe.js";
 import { LowerAveragePoolRecipe } from "./recipes/LowerAveragePoolRecipe.js";
-import type { DecompositionRecipe } from "../Recipe.js";
-import { topologicalSortOperationNodes } from "../../Utils.js";
 import { LowerReluRecipe } from "./recipes/LowerReluRecipe.js";
 import { LowerSubRecipe } from "./recipes/LowerSubRecipe.js";
 import { LowerGreaterOrEqualRecipe } from "./recipes/LowerGreaterOrEqualRecipe.js";
@@ -54,9 +57,6 @@ import { LowerErfRecipe } from "./recipes/LowerErfRecipe.js";
 import { LowerBatchNormalizationRecipe } from "./recipes/LowerBatchNormalizationRecipe.js";
 import { LowerLayerNormalizationRecipe } from "./recipes/LowerLayerNormalizationRecipe.js";
 import { LowerInstanceNormalizationRecipe } from "./recipes/LowerInstanceNormalizationRecipe.js";
-import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
-import type { HistoryManager } from "../tracking/HistoryManager.js";
-import { TransformationOpportunity } from "../TransformationOpportunity.js";
 import { LowerGroupNormalizationRecipe } from "./recipes/LowerGroupNormalizationRecipe.js";
 import { LowerFloorRecipe } from "./recipes/LowerFloorRecipe.js";
 import { LowerNegRecipe } from "./recipes/LowerNegRecipe.js";
@@ -66,6 +66,16 @@ import { LowerSqrtPCRecipe } from "./recipes/LowerSqrtPCRecipe.js";
 import { LowerSinPCRecipe } from "./recipes/LowerSinPCRecipe.js";
 import { LowerReciprocalRecipe } from "./recipes/LowerReciprocalRecipe.js";
 import { LowerExpRecipe } from "./recipes/LowerExpRecipe.js";
+import { LowerCastLikeRecipe } from "./recipes/LowerCastLikeRecipe.js";
+import { LowerMeanRecipe } from "./recipes/LowerMeanRecipe.js";
+import { LowerSumRecipe } from "./recipes/LowerSumRecipe.js";
+import { LowerBinarizerRecipe } from "./recipes/LowerBinarizerRecipe.js";
+import { LowerDynamicQuantizeLinearRecipe } from "./recipes/LowerDynamicQuantizeLinearRecipe.js";
+import { LowerGeluRecipe } from "./recipes/LowerGeluRecipe.js";
+import { LowerHardSwishRecipe } from "./recipes/LowerHardSwishRecipe.js";
+import { LowerPReluRecipe } from "./recipes/LowerPReluRecipe.js";
+import { LowerShrinkRecipe } from "./recipes/LowerShrinkRecipe.js";
+import { LowerThresholdedReluRecipe } from "./recipes/LowerThresholdedReluRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -136,6 +146,16 @@ export class CanonicalizationPass implements GraphPass {
         ["Floor", new LowerFloorRecipe()],
         ["Neg", new LowerNegRecipe()],
         ["Reciprocal", new LowerReciprocalRecipe()],
+        ["CastLike", new LowerCastLikeRecipe()],
+        ["Mean", new LowerMeanRecipe()],
+        ["Sum", new LowerSumRecipe()],
+        ["Binarizer", new LowerBinarizerRecipe()],
+        ["DynamicQuantizeLinear", new LowerDynamicQuantizeLinearRecipe()],
+        ["Gelu", new LowerGeluRecipe()],
+        ["HardSwish", new LowerHardSwishRecipe()],
+        ["PRelu", new LowerPReluRecipe()],
+        ["Shrink", new LowerShrinkRecipe()],
+        ["ThresholdedRelu", new LowerThresholdedReluRecipe()],
 
         //Normalization Operations
         ["BatchNormalization", new LowerBatchNormalizationRecipe()],
