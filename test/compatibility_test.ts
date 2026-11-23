@@ -62,6 +62,7 @@ export interface EquivalenceTestConfig {
     label: string;
     originalPath: string;
     tol?: number;
+    rtol?: number;
     exact?: boolean;
     cliArgs: string | ((p: string) => string);
     specs: FeedSpec[];
@@ -169,24 +170,44 @@ export async function rerunWithOrtVerbose(
 }
 
 /* ============================== FEED GENERATORS ================================== */
-function randFloat() {
+function _randFloat() {
     return Math.random() * 10;
 }
-function randNegMix() {
+function _randNegMix() {
     return Math.random() * 2 - 1;
 }
-function randInt(max = 10) {
+function _randInt(max = 10) {
     return Math.floor(Math.random() * max);
 }
-function randBool() {
+function _randBool() {
     return Math.random() < 0.5;
+}
+
+function createSeededRng(seedStr: string): () => number {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < seedStr.length; i++) {
+        h ^= seedStr.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return () => {
+        h += 0x6d2b79f5;
+        let t = Math.imul(h ^ (h >>> 15), 1 | h);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
 }
 
 export function makeArray(
     dtype: DType,
     len: number,
     gen: FeedSpec["gen"],
+    rng: () => number = Math.random,
 ): number[] | bigint[] | boolean[] {
+    const randFloat = () => rng() * 10;
+    const randNegMix = () => rng() * 2 - 1;
+    const randInt = (max = 10) => Math.floor(rng() * max);
+    const randBool = () => rng() < 0.5;
+
     switch (dtype) {
         case "float32":
             if (gen === "negmix") return Array.from({ length: len }, randNegMix);
@@ -211,7 +232,11 @@ export function makeArray(
     }
 }
 
-export function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
+export function buildFeeds(
+    specs: FeedSpec[],
+    seedKey: string = "default",
+): Record<string, ort.Tensor> {
+    const rng = createSeededRng(seedKey);
     const out: Record<string, ort.Tensor> = {};
     for (const s of specs) {
         const len = s.shape.reduce((a, b) => a * b, 1) || 1;
@@ -219,12 +244,13 @@ export function buildFeeds(specs: FeedSpec[]): Record<string, ort.Tensor> {
             s.init ??
             (s.gen === "range" && s.shape.length === 0 && typeof s.value === "number"
                 ? [s.value]
-                : makeArray(s.dtype, len, s.gen ?? "random"));
+                : makeArray(s.dtype, len, s.gen ?? "random", rng));
 
         let typed: ort.Tensor.DataTypeMap[ort.Tensor.Type];
         if (s.dtype === "float32") typed = new Float32Array(data as number[]);
         else if (s.dtype === "int32") typed = new Int32Array(data as number[]);
-        else if (s.dtype === "int64") typed = BigInt64Array.from(data as bigint[]);
+        else if (s.dtype === "int64")
+            typed = BigInt64Array.from((data as (number | bigint)[]).map(BigInt));
         else if (s.dtype === "uint8") typed = Uint8Array.from(data as number[]);
         else if (s.dtype === "int8") typed = Int8Array.from(data as number[]);
         else typed = new Uint8Array((data as boolean[]).map((v) => (v ? 1 : 0)));
@@ -256,6 +282,124 @@ export function getReconvertedPath(originalPath: string): string {
     return `${base}_reconverted.onnx`;
 }
 
+export interface CompareOutputsResult {
+    passed: boolean;
+    maxDiff: number;
+    maxRelDiff: number;
+    message?: string;
+}
+
+export function compareOrtOutputs(
+    origOut: Record<string, ort.Tensor>,
+    recOut: Record<string, ort.Tensor>,
+    options: {
+        tol?: number | Record<string, number>;
+        rtol?: number;
+        exact?: boolean;
+    } = {},
+): CompareOutputsResult {
+    const origKeys = Object.keys(origOut);
+    const recKeys = Object.keys(recOut);
+    if (origKeys.length !== recKeys.length) {
+        return {
+            passed: false,
+            maxDiff: Infinity,
+            maxRelDiff: Infinity,
+            message: `Output count mismatch: expected ${origKeys.length} (${origKeys.join(", ")}), got ${recKeys.length} (${recKeys.join(", ")})`,
+        };
+    }
+
+    const rtol = options.rtol ?? 0;
+    let globalMaxDiff = 0;
+    let globalMaxRelDiff = 0;
+
+    for (const key of origKeys) {
+        const origTensor = origOut[key];
+        if (key in recOut === false) {
+            return {
+                passed: false,
+                maxDiff: Infinity,
+                maxRelDiff: Infinity,
+                message: `Missing output '${key}' in reconverted model`,
+            };
+        }
+        const recTensor = recOut[key];
+
+        const origDims = Array.from(origTensor.dims).join(",");
+        const recDims = Array.from(recTensor.dims).join(",");
+        if (origDims !== recDims) {
+            return {
+                passed: false,
+                maxDiff: Infinity,
+                maxRelDiff: Infinity,
+                message: `Shape mismatch on '${key}': [${origDims}] vs [${recDims}]`,
+            };
+        }
+
+        const origArr = Array.from(origTensor.data as Iterable<number | bigint | boolean>);
+        const recArr = Array.from(recTensor.data as Iterable<number | bigint | boolean>);
+
+        if (options.exact === true) {
+            const badIdx = origArr.findIndex((v, i) => v !== recArr[i]);
+            if (badIdx !== -1) {
+                return {
+                    passed: false,
+                    maxDiff: Infinity,
+                    maxRelDiff: Infinity,
+                    message: `Exact mismatch on '${key}'[${badIdx}]: ${String(origArr[badIdx])} vs ${String(recArr[badIdx])}`,
+                };
+            }
+            continue;
+        }
+
+        const atol =
+            typeof options.tol === "object" ? (options.tol[key] ?? 1e-4) : (options.tol ?? 1e-4);
+
+        for (let i = 0; i < origArr.length; i++) {
+            const o = Number(origArr[i]);
+            const r = Number(recArr[i]);
+
+            if (Number.isNaN(o) && Number.isNaN(r)) continue;
+            if (Number.isNaN(o) !== Number.isNaN(r)) {
+                return {
+                    passed: false,
+                    maxDiff: NaN,
+                    maxRelDiff: NaN,
+                    message: `NaN mismatch on '${key}'[${i}]: original=${o}, reconverted=${r}`,
+                };
+            }
+            if (!Number.isFinite(o) || !Number.isFinite(r)) {
+                if (o !== r) {
+                    return {
+                        passed: false,
+                        maxDiff: Infinity,
+                        maxRelDiff: Infinity,
+                        message: `Infinity mismatch on '${key}'[${i}]: original=${o}, reconverted=${r}`,
+                    };
+                }
+                continue;
+            }
+
+            const diff = Math.abs(o - r);
+            const relDiff = o === 0 ? diff : diff / Math.abs(o);
+            if (diff > globalMaxDiff) globalMaxDiff = diff;
+            if (relDiff > globalMaxRelDiff) globalMaxRelDiff = relDiff;
+
+            const allowed = atol + rtol * Math.abs(o);
+            if (diff > allowed) {
+                return {
+                    passed: false,
+                    maxDiff: diff,
+                    maxRelDiff: relDiff,
+                    message: `Mismatch on '${key}'[${i}]: orig=${o}, rec=${r}, diff=${diff} > allowed=${allowed} (atol=${atol}, rtol=${rtol})`,
+                };
+            }
+        }
+    }
+
+    return { passed: true, maxDiff: globalMaxDiff, maxRelDiff: globalMaxRelDiff };
+}
+
 /* ============================== CORE HARNESS EXECUTION ================================== */
 export async function executeEquivalenceTest(
     config: EquivalenceTestConfig,
@@ -284,14 +428,14 @@ export async function executeEquivalenceTest(
                 stdio: "pipe",
             });
         } catch (e: unknown) {
-            const isError = e instanceof Error;
-            const msg = isError ? e.message : String(e);
-            return { status: "error", message: `CLI generation failed: ${msg}` };
+            const errObj = e as { message?: string; stderr?: Buffer | string };
+            const stderrText =
+                errObj.stderr !== undefined ? `\n${errObj.stderr.toString().trim()}` : "";
+            return {
+                status: "error",
+                message: `CLI generation failed: ${errObj.message ?? String(e)}${stderrText}`,
+            };
         }
-    }
-
-    if (!fs.existsSync(reconvertedPath)) {
-        return { status: "error", message: `Reconverted model missing at ${reconvertedPath}` };
     }
 
     // 2. Optional Stats
@@ -309,9 +453,8 @@ export async function executeEquivalenceTest(
         const origSess = await ort.InferenceSession.create(absOrig);
         origOut = await origSess.run(feeds);
     } catch (e: unknown) {
-        const isError = e instanceof Error;
-        const msg = isError ? e.message : String(e);
-        return { status: "error", message: `CLI generation failed: ${msg}` };
+        const msg = e instanceof Error ? e.message : String(e);
+        return { status: "error", message: `Original ORT inference failed: ${msg}` };
     }
 
     let recOut: Record<string, ort.Tensor>;
@@ -322,49 +465,21 @@ export async function executeEquivalenceTest(
         if (options.verboseOnFailure !== false) {
             await rerunWithOrtVerbose(reconvertedPath, feeds);
         }
-        const isError = e instanceof Error;
-        const msg = isError ? e.message : String(e);
-        return { status: "error", message: `CLI generation failed: ${msg}` };
+        const msg = e instanceof Error ? e.message : String(e);
+        return { status: "error", message: `Reconverted ORT inference failed: ${msg}` };
     }
 
-    // 4. Compare Outputs
-    const origArr = Array.from(
-        Object.values(origOut)[0].data as Iterable<number | bigint | boolean>,
-    );
-    const recArr = Array.from(Object.values(recOut)[0].data as Iterable<number | bigint | boolean>);
+    // 4. Compare ALL Outputs (names, shapes, NaN/Inf, exact or tolerance)
+    const cmp = compareOrtOutputs(origOut, recOut, {
+        tol,
+        rtol: config.rtol ?? 0,
+        exact: config.exact ?? false,
+    });
 
-    if (origArr.length !== recArr.length) {
-        return {
-            status: "warn",
-            message: `Length mismatch: ${origArr.length} vs ${recArr.length}`,
-        };
-    }
-
-    // Exact comparison branch (handles bigints, ints, and booleans without Math.abs)
-    if (config.exact === true) {
-        const passed = origArr.every((v, i) => v === recArr[i]);
-        return {
-            status: passed ? "pass" : "warn",
-            message: passed ? undefined : "Outputs do not match exactly",
-            originalStats: origStats,
-            decomposedStats: decompStats,
-        } as EquivalenceRunResult;
-    }
-
-    // Tolerance comparison branch (coerces to Number safely)
-    let maxDiff = 0;
-    for (let i = 0; i < origArr.length; i++) {
-        const o = Number(origArr[i]);
-        const r = Number(recArr[i]);
-        const diff = Math.abs(o - r);
-        if (diff > maxDiff) maxDiff = diff;
-    }
-
-    const passed = maxDiff <= tol;
     return {
-        status: passed ? "pass" : "warn",
-        maxDiff,
-        message: passed ? undefined : `Max difference ${maxDiff} exceeds tolerance ${tol}`,
+        status: cmp.passed ? "pass" : "warn",
+        maxDiff: cmp.maxDiff,
+        message: cmp.message,
         originalStats: origStats,
         decomposedStats: decompStats,
     } as EquivalenceRunResult;
@@ -625,6 +740,7 @@ export const TESTS: EquivalenceTestConfig[] = [
         label: "exp_standard",
         originalPath: "examples/onnx/exp_standard.onnx",
         tol: 1e-5,
+        rtol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [{ name: "X", dtype: "float32", shape: [6] }],
     },

@@ -10,8 +10,21 @@ import { HistoryManager } from "../../../src/Onnx/transformation/tracking/Histor
 import { scalarFloat } from "../../../src/Onnx/utils/TensorData.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
+import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
 
 describe("Loop Lowering - Multi-Operation Passes", () => {
+    function assertLoweredToLoop(graph: OnnxGraph.Class, originalOpType: string): void {
+        expect(() => validateGraph(graph)).not.toThrow();
+        const ops = graph.getOperationNodes().toArray();
+        const opTypes = ops.map((o) => o.type);
+        expect(opTypes).toContain("Loop");
+        expect(opTypes).not.toContain(originalOpType);
+
+        const loopOp = ops.find((o) => o.type === "Loop")!;
+        expect(loopOp.regions.length).toBe(1);
+        expect(loopOp.regions[0].getOperationNodes().toArray().length).toBeGreaterThan(0);
+    }
+
     initializeSchemaRegistry();
 
     it("lowers MatMul (Standard) into a Loop", () => {
@@ -33,12 +46,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             indexingMode: IndexingMode.Radix,
         }).run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "MatMul");
     });
 
     it("lowers MatMul with coalesced scalar MAC into a Loop", () => {
@@ -59,12 +67,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             new HistoryManager(graph),
         );
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "MatMul");
     });
 
     it("lowers ElementWise (Add) into a Loop", () => {
@@ -86,12 +89,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             indexingMode: IndexingMode.Radix,
         }).run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Add");
     });
 
     it("lowers Conv into a Loop", () => {
@@ -117,12 +115,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             indexingMode: IndexingMode.Radix,
         }).run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Conv");
     });
 
     it("lowers Transpose into a Loop", () => {
@@ -136,12 +129,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         builder.createOp("Transpose", [x], { perm: [1, 0] });
         new LoopLoweringPass().run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Transpose");
     });
 
     it("lowers Reductions (ReduceMean) into a Loop", () => {
@@ -155,12 +143,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         builder.createOp("ReduceMean", [x], { axes: [1] });
         new LoopLoweringPass().run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "ReduceMean");
     });
 
     it("lowers static Range into a Loop", () => {
@@ -182,11 +165,6 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         builder.createOp("Range", [start, limit, delta]);
         new LoopLoweringPass().run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Range");
     });
 });

@@ -510,5 +510,185 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
             }).run(gTp, new HistoryManager(gTp));
             expect(() => validateGraph(gTp)).not.toThrow();
         });
+
+        describe("Tier 3 Loop Lowering Recipes (Pointer & Radix + Fusion)", () => {
+            it("lowers CumSum (inclusive, exclusive, reverse) and prevents downstream fusion", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const builder = new GraphBuilder(graph);
+                    const x = graph
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                        .as(TensorNode);
+                    const ax = builder.createConstant("ax", scalarInt64(1));
+                    const [cs] = builder.createOp("CumSum", [x, ax], { exclusive: 0, reverse: 1 });
+                    builder.createOp("Relu", [cs]);
+
+                    new LoopLoweringPass({ coalesce: true, fuse: true, indexingMode: mode }).run(
+                        graph,
+                        new HistoryManager(graph),
+                    );
+                    expect(() => validateGraph(graph)).not.toThrow();
+                    const loops = graph
+                        .getOperationNodes()
+                        .toArray()
+                        .filter((o) => o.type === "Loop");
+                    expect(loops.length).toBe(2); // CumSum must NOT fuse into downstream Relu
+                }
+            });
+
+            it("lowers ReverseSequence, GatherElements, and GatherND in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    // ReverseSequence
+                    const gRS = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bRS = new GraphBuilder(gRS);
+                    const xRS = gRS
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [4, 2], "input"))
+                        .as(TensorNode);
+                    const lens = bRS.createConstant("lens", int64Vec([2, 4]));
+                    bRS.createOp("ReverseSequence", [xRS, lens], { time_axis: 0, batch_axis: 1 });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gRS,
+                        new HistoryManager(gRS),
+                    );
+                    expect(() => validateGraph(gRS)).not.toThrow();
+
+                    // GatherElements
+                    const gGE = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bGE = new GraphBuilder(gGE);
+                    const dGE = gGE
+                        .addNode("D")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                        .as(TensorNode);
+                    const iGE = gGE
+                        .addNode("I")
+                        .init(new TensorNode.Builder(DataType.INT64, [2, 2], "input"))
+                        .as(TensorNode);
+                    bGE.createOp("GatherElements", [dGE, iGE], { axis: 1 });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gGE,
+                        new HistoryManager(gGE),
+                    );
+                    expect(() => validateGraph(gGE)).not.toThrow();
+
+                    // GatherND
+                    const gGN = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bGN = new GraphBuilder(gGN);
+                    const dGN = gGN
+                        .addNode("D")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 3, 4], "input"))
+                        .as(TensorNode);
+                    const iGN = gGN
+                        .addNode("I")
+                        .init(new TensorNode.Builder(DataType.INT64, [2, 2], "input"))
+                        .as(TensorNode);
+                    bGN.createOp("GatherND", [dGN, iGN], { batch_dims: 0 });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gGN,
+                        new HistoryManager(gGN),
+                    );
+                    expect(() => validateGraph(gGN)).not.toThrow();
+                }
+            });
+
+            it("lowers MaxPool, ScatterND, ConvTranspose, and Resize (nearest & linear, fused) in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    // MaxPool
+                    const gMP = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bMP = new GraphBuilder(gMP);
+                    const xMP = gMP
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4], "input"))
+                        .as(TensorNode);
+                    bMP.createOp("MaxPool", [xMP], {
+                        kernel_shape: [2, 2],
+                        strides: [2, 2],
+                        pads: [0, 0, 0, 0],
+                    });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gMP,
+                        new HistoryManager(gMP),
+                    );
+                    expect(() => validateGraph(gMP)).not.toThrow();
+
+                    // ScatterND
+                    const gSN = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bSN = new GraphBuilder(gSN);
+                    const dSN = gSN
+                        .addNode("D")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [4, 2], "input"))
+                        .as(TensorNode);
+                    const iSN = gSN
+                        .addNode("I")
+                        .init(new TensorNode.Builder(DataType.INT64, [2, 1], "input"))
+                        .as(TensorNode);
+                    const uSN = gSN
+                        .addNode("U")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 2], "input"))
+                        .as(TensorNode);
+                    bSN.createOp("ScatterND", [dSN, iSN, uSN], { reduction: "none" });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gSN,
+                        new HistoryManager(gSN),
+                    );
+                    expect(() => validateGraph(gSN)).not.toThrow();
+
+                    // ConvTranspose
+                    const gCT = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bCT = new GraphBuilder(gCT);
+                    const xCT = gCT
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 3, 3], "input"))
+                        .as(TensorNode);
+                    const wCT = gCT
+                        .addNode("W")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 2, 2], "input"))
+                        .as(TensorNode);
+                    bCT.createOp("ConvTranspose", [xCT, wCT], {
+                        kernel_shape: [2, 2],
+                        strides: [1, 1],
+                        pads: [0, 0, 0, 0],
+                    });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gCT,
+                        new HistoryManager(gCT),
+                    );
+                    expect(() => validateGraph(gCT)).not.toThrow();
+
+                    // Resize (linear) + Relu fusion check
+                    const gRZ = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bRZ = new GraphBuilder(gRZ);
+                    const xRZ = gRZ
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 2, 2], "input"))
+                        .as(TensorNode);
+                    const roi = bRZ.createConstant("roi", {
+                        dataType: DataType.FLOAT,
+                        dims: [0],
+                        floatData: [],
+                    });
+                    const scales = bRZ.createConstant("scales", {
+                        dataType: DataType.FLOAT,
+                        dims: [4],
+                        floatData: [1, 1, 2, 2],
+                    });
+                    const [rz] = bRZ.createOp("Resize", [xRZ, roi, scales], { mode: "linear" }, [
+                        { type: DataType.FLOAT, shape: [1, 1, 4, 4] },
+                    ]);
+                    bRZ.createOp("Relu", [rz], {}, [{ type: DataType.FLOAT, shape: [1, 1, 4, 4] }]);
+                    new LoopLoweringPass({ coalesce: true, fuse: true, indexingMode: mode }).run(
+                        gRZ,
+                        new HistoryManager(gRZ),
+                    );
+                    expect(() => validateGraph(gRZ)).not.toThrow();
+                    const rzLoops = gRZ
+                        .getOperationNodes()
+                        .toArray()
+                        .filter((o) => o.type === "Loop");
+                    expect(rzLoops.length).toBe(1); // Resize + Relu fuses cleanly into 1 loop
+                }
+            });
+        });
     });
 });

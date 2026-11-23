@@ -166,4 +166,48 @@ describe("Canonicalization - Unary & Activation Recipes", () => {
         const { producedOps } = applyRecipe(new LowerReciprocalRecipe(), "Reciprocal", [[2, 2]]);
         expect(producedOps).not.toContain("Reciprocal");
     });
+
+    it("decomposes Neg and Floor", () => {
+        expect(
+            applyRecipe(new Recipes.canonicalization.Neg(), "Neg", [[2, 2]]).producedOps,
+        ).not.toContain("Neg");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Floor(), "Floor", [[2, 2]]).producedOps,
+        ).not.toContain("Floor");
+    });
+
+    it("decomposes HardSwish, ThresholdedRelu, Shrink, Binarizer, and Gelu (none & tanh)", () => {
+        expect(
+            applyRecipe(new Recipes.canonicalization.HardSwish(), "HardSwish").producedOps,
+        ).not.toContain("HardSwish");
+        expect(
+            applyRecipe(
+                new Recipes.canonicalization.ThresholdedRelu(),
+                "ThresholdedRelu",
+                [[2, 2]],
+                { alpha: 0.5 },
+            ).producedOps,
+        ).not.toContain("ThresholdedRelu");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Shrink(), "Shrink", [[2, 2]], {
+                bias: 0.1,
+                lambd: 0.5,
+            }).producedOps,
+        ).not.toContain("Shrink");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Binarizer(), "Binarizer", [[2, 2]], {
+                threshold: 0.2,
+            }).producedOps,
+        ).not.toContain("Binarizer");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Gelu(), "Gelu", [[2, 2]], {
+                approximate: "none",
+            }).producedOps,
+        ).toContain("Erf");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Gelu(), "Gelu", [[2, 2]], {
+                approximate: "tanh",
+            }).producedOps,
+        ).toContain("Tanh");
+    });
 });
