@@ -6,6 +6,14 @@ import { LowerElementWiseRecipe } from "./loop-lowering/recipes/LowerElementWise
 import { LowerRangeRecipe } from "./loop-lowering/recipes/LowerRangeRecipe.js";
 import { LowerReductionRecipe } from "./loop-lowering/recipes/LowerReductionRecipe.js";
 import { LowerTransposeRecipe } from "./loop-lowering/recipes/LowerTransposeRecipe.js";
+import { LowerConvTransposeRecipe } from "./loop-lowering/recipes/LowerConvTransposeRecipe.js";
+import { LowerCumSumRecipe } from "./loop-lowering/recipes/LowerCumSumRecipe.js";
+import { LowerGatherElementsRecipe } from "./loop-lowering/recipes/LowerGatherElementsRecipe.js";
+import { LowerGatherNDRecipe } from "./loop-lowering/recipes/LowerGatherNDRecipe.js";
+import { LowerScatterNDRecipe } from "./loop-lowering/recipes/LowerScatterNDRecipe.js";
+import { LowerMaxPoolRecipe } from "./loop-lowering/recipes/LowerMaxPoolRecipe.js";
+import { LowerResizeRecipe } from "./loop-lowering/recipes/LowerResizeRecipe.js";
+import { LowerReverseSequenceRecipe } from "./loop-lowering/recipes/LowerReverseSequenceRecipe.js";
 
 // Canonicalization Recipes
 import { LowerSoftmaxRecipe } from "./canonicalization/recipes/LowerSoftmaxRecipe.js";
@@ -107,6 +115,7 @@ import { LowerScanRecipe } from "./canonicalization/recipes/LowerScanRecipe.js";
 import { LowerRNNRecipe } from "./canonicalization/recipes/LowerRNNRecipe.js";
 import { LowerGRURecipe } from "./canonicalization/recipes/LowerGRURecipe.js";
 import { LowerLSTMRecipe } from "./canonicalization/recipes/LowerLSTMRecipe.js";
+import { LowerScatterRecipe } from "./canonicalization/recipes/LowerScatterRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -210,6 +219,7 @@ export {
     LowerLSTMRecipe,
     LowerRNNRecipe,
     LowerScanRecipe,
+    LowerScatterRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -219,6 +229,14 @@ export {
     LowerRangeRecipe,
     LowerReductionRecipe,
     LowerTransposeRecipe,
+    LowerConvTransposeRecipe,
+    LowerCumSumRecipe,
+    LowerGatherElementsRecipe,
+    LowerGatherNDRecipe,
+    LowerScatterNDRecipe,
+    LowerMaxPoolRecipe,
+    LowerResizeRecipe,
+    LowerReverseSequenceRecipe,
 };
 
 // Export an organized catalog object for easy IDE discovery/autocomplete
@@ -323,6 +341,7 @@ export const Recipes = {
         LSTM: LowerLSTMRecipe,
         RNN: LowerRNNRecipe,
         Scan: LowerScanRecipe,
+        Scatter: LowerScatterRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,
@@ -332,5 +351,13 @@ export const Recipes = {
         Range: LowerRangeRecipe,
         Reduction: LowerReductionRecipe,
         Transpose: LowerTransposeRecipe,
+        ConvTranspose: LowerConvTransposeRecipe,
+        CumSum: LowerCumSumRecipe,
+        GatherElements: LowerGatherElementsRecipe,
+        GatherND: LowerGatherNDRecipe,
+        ScatterND: LowerScatterNDRecipe,
+        MaxPool: LowerMaxPoolRecipe,
+        Resize: LowerResizeRecipe,
+        ReverseSequence: LowerReverseSequenceRecipe,
     },
 };

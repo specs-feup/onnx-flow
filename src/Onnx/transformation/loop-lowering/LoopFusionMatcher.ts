@@ -16,7 +16,7 @@ import { OpCategory } from "../../Schema/OpSchema.js";
 import { OpRegistry } from "../../Schema/OpRegistry.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
-// Your Strategy Recipes
+// Loop Lowering Recipes
 import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
 import { LowerTransposeRecipe } from "./recipes/LowerTransposeRecipe.js";
 import { LowerElementWiseRecipe } from "./recipes/LowerElementWiseRecipe.js";
@@ -26,6 +26,16 @@ import { LowerMatMulRecipe } from "./recipes/LowerMatMulRecipe.js";
 import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
 import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
+import { LowerCumSumRecipe } from "./recipes/LowerCumSumRecipe.js";
+import { LowerReverseSequenceRecipe } from "./recipes/LowerReverseSequenceRecipe.js";
+import { LowerGatherElementsRecipe } from "./recipes/LowerGatherElementsRecipe.js";
+import { LowerGatherNDRecipe } from "./recipes/LowerGatherNDRecipe.js";
+import { LowerMaxPoolRecipe } from "./recipes/LowerMaxPoolRecipe.js";
+import { LowerScatterNDRecipe } from "./recipes/LowerScatterNDRecipe.js";
+import { LowerConvTransposeRecipe } from "./recipes/LowerConvTransposeRecipe.js";
+import { LowerResizeRecipe } from "./recipes/LowerResizeRecipe.js";
+
+const SELF_CARRY_OPS = new Set(["CumSum", "MaxPool", "ScatterND", "ConvTranspose", "MatMul"]);
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -42,6 +52,14 @@ export class LoopFusionMatcher {
             new LowerRangeRecipe(),
             this.options.coalesce ? new LowerCoalescedMatMulRecipe() : new LowerMatMulRecipe(),
             new LowerConvRecipe(),
+            new LowerCumSumRecipe(),
+            new LowerReverseSequenceRecipe(),
+            new LowerGatherElementsRecipe(),
+            new LowerGatherNDRecipe(),
+            new LowerMaxPoolRecipe(),
+            new LowerScatterNDRecipe(),
+            new LowerConvTransposeRecipe(),
+            new LowerResizeRecipe(),
         ];
     }
 
@@ -273,6 +291,11 @@ export class LoopFusionMatcher {
 
         const roots = ops.filter((op) => {
             if (!this.isSupported(op)) return false;
+            const opRecipe = this.getRecipeFor(op);
+            if (SELF_CARRY_OPS.has(op.type) || opRecipe?.postProcess !== undefined) {
+                return true;
+            }
+
             const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
             const goesToGraphOutput = outTensors.some((t) => t.type === "output");
 

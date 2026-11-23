@@ -99,6 +99,7 @@ import { LowerGRURecipe } from "./recipes/LowerGRURecipe.js";
 import { LowerLSTMRecipe } from "./recipes/LowerLSTMRecipe.js";
 import { LowerRNNRecipe } from "./recipes/LowerRNNRecipe.js";
 import { LowerScanRecipe } from "./recipes/LowerScanRecipe.js";
+import { LowerScatterRecipe } from "./recipes/LowerScatterRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -202,6 +203,7 @@ export class CanonicalizationPass implements GraphPass {
         ["LSTM", new LowerLSTMRecipe()],
         ["RNN", new LowerRNNRecipe()],
         ["Scan", new LowerScanRecipe()],
+        ["Scatter", new LowerScatterRecipe()],
 
         //Normalization Operations
         ["BatchNormalization", new LowerBatchNormalizationRecipe()],
