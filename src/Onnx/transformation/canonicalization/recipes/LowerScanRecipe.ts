@@ -9,6 +9,7 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape, ValueNode } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import {
+    asConcreteValueNode,
     bool,
     getIntAttr,
     getIntsAttr,
@@ -256,16 +257,17 @@ export class LowerScanRecipe implements DecompositionRecipe {
 
         // 4. Wire Loop outputs back to Scan outputs (with optional axis transpose / reverse)
         for (let i = 0; i < outs.length; i++) {
-            const origOut = outs[i];
+            const origOut = asConcreteValueNode(outs[i]);
+            const origShape = Array.isArray(origOut.shape) ? origOut.shape : [];
             const isScanOut = i >= numStates;
             const scanIdx = i - numStates;
             const outAxis = isScanOut
-                ? normalizeAxis(outAxesRaw[scanIdx] ?? 0, origOut.shape.length)
+                ? normalizeAxis(outAxesRaw[scanIdx] ?? 0, origShape.length)
                 : 0;
             const isRevOut = isScanOut && (outDirsRaw[scanIdx] ?? 0) === 1;
 
             // Loop always stacks scan outputs along axis 0
-            const rawShape = [...toStaticShape(origOut.shape)];
+            const rawShape = [...toStaticShape(origShape)];
             if (isScanOut && outAxis !== 0 && rawShape.length > outAxis) {
                 const seqDim = rawShape.splice(outAxis, 1)[0];
                 rawShape.unshift(seqDim);

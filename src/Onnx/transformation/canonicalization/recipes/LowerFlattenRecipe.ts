@@ -43,7 +43,9 @@ export class LowerFlattenRecipe implements DecompositionRecipe {
             `flatten_shape_${op.id}`,
             int64Vec([dim0, dim1]),
         );
-        const outShape = (Y.shape.length === 2 ? Y.shape : [dim0, dim1]) as KnownShape;
+        const outShape = (
+            Array.isArray(Y.shape) && Y.shape.length === 2 ? Y.shape : [dim0, dim1]
+        ) as KnownShape;
         const [out] = builder.createOp("Reshape", [X, targetShape], {}, [
             { type: dtype, shape: outShape },
         ]);

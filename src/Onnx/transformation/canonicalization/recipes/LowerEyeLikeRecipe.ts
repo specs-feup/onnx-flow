@@ -1,9 +1,16 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
+import type { KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { getIntAttr, int64Vec, scalarInt64, toStaticShape } from "../../../Utils.js";
+import {
+    asConcreteValueNode,
+    getIntAttr,
+    int64Vec,
+    makeTensorProto,
+    scalarInt64,
+    toStaticShape,
+} from "../../../Utils.js";
 
 export class LowerEyeLikeRecipe implements DecompositionRecipe {
     public readonly name = "LowerEyeLike";
@@ -11,7 +18,7 @@ export class LowerEyeLikeRecipe implements DecompositionRecipe {
     public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
-    public readonly producedOps = ["Range", "Reshape", "Add", "Equal", "Cast"];
+    public readonly producedOps = ["Range", "Reshape", "Add", "Equal", "Where"];
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "EyeLike") return false;
@@ -22,12 +29,14 @@ export class LowerEyeLikeRecipe implements DecompositionRecipe {
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
-        const X = op.getInputs()![0] as ConcreteValueNode;
+        const X = asConcreteValueNode(op.getInputs()![0]);
         const Y = op.getOutputs()[0];
+        const attrDtype = getIntAttr(op, "dtype", 0);
+        const xDtype = X.literalType !== DataType.UNDEFINED ? X.literalType : DataType.FLOAT;
+        const outDtype: DataType = attrDtype > 0 ? (attrDtype as DataType) : xDtype;
 
         const [M, N] = toStaticShape(X.shape);
         const k = getIntAttr(op, "k", 0);
-        const outDtype = getIntAttr(op, "dtype", Y.literalType as number) as DataType;
 
         const zero = builder.createConstant(`eye_zero_${op.id}`, scalarInt64(0));
         const one = builder.createConstant(`eye_one_${op.id}`, scalarInt64(1));
@@ -62,7 +71,15 @@ export class LowerEyeLikeRecipe implements DecompositionRecipe {
         const [mask] = builder.createOp("Equal", [rows2D, cols2D], {}, [
             { type: DataType.BOOL, shape: outShape },
         ]);
-        const [out] = builder.createOp("Cast", [mask], { to: outDtype }, [
+        const oneVal = builder.createConstant(
+            `eye_one_val_${op.id}`,
+            makeTensorProto(outDtype, [], [1]),
+        );
+        const zeroVal = builder.createConstant(
+            `eye_zero_val_${op.id}`,
+            makeTensorProto(outDtype, [], [0]),
+        );
+        const [out] = builder.createOp("Where", [mask, oneVal, zeroVal], {}, [
             { type: outDtype, shape: outShape },
         ]);
 

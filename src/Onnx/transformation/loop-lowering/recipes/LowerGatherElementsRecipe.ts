@@ -73,7 +73,7 @@ export class LowerGatherElementsRecipe implements LoopLoweringRecipe {
     ): { totalIters: number; carryShape: number[] } {
         const idxDims = toStaticShape(op.getInputs()![1].shape);
         const total = idxDims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: [total] };
+        return { totalIters: total, carryShape: idxDims };
     }
 
     apply(

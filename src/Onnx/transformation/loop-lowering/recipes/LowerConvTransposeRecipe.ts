@@ -111,7 +111,7 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
         const outTotal = outDims.reduce((a, b) => a * b, 1);
         const cInPerGroup = xDims[1] / group;
         const kTotal = wDims.slice(2).reduce((a, b) => a * b, 1);
-        return { totalIters: outTotal * cInPerGroup * kTotal, carryShape: [outTotal] };
+        return { totalIters: outTotal * cInPerGroup * kTotal, carryShape: outDims };
     }
 
     postProcess(op: OperationNode.Class, builder: GraphBuilder, loopOut: ValueNode): ValueNode {

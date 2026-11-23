@@ -197,7 +197,12 @@ export class LoopFusionMatcher {
         }
 
         // 5. Final Reshape to target shape
-        const originalIsDynamic = originalOutShape.includes(-1) || originalOutShape.length === 0;
+        const staticCarryTotal = Array.isArray(carryShape)
+            ? (carryShape as number[]).reduce((a, b) => a * b, 1)
+            : -1;
+        const isScalarOutput = originalOutShape.length === 0 && staticCarryTotal === 1;
+        const originalIsDynamic =
+            originalOutShape.includes(-1) || (originalOutShape.length === 0 && !isScalarOutput);
         let targetShapeNode: ValueNode;
 
         if (bounds.targetShape) {
@@ -212,12 +217,27 @@ export class LoopFusionMatcher {
             targetShapeNode = carryShape as ValueNode;
         }
 
-        const [reshaped] = outerBuilder.createOp("Reshape", [processedOut, targetShapeNode], {}, [
-            { type: elemTy, shape: originalOutShape },
-        ]);
+        let finalOutput: ValueNode;
+        if (isScalarOutput) {
+            const squeezeAxis = outerBuilder.createConstant(
+                `squeeze_scalar_axis_${rootOp.id}`,
+                int64Vec([0]),
+            );
+            [finalOutput] = outerBuilder.createOp("Squeeze", [processedOut, squeezeAxis], {}, [
+                { type: elemTy, shape: [] },
+            ]);
+        } else {
+            const [reshaped] = outerBuilder.createOp(
+                "Reshape",
+                [processedOut, targetShapeNode],
+                {},
+                [{ type: elemTy, shape: originalOutShape }],
+            );
+            finalOutput = reshaped;
+        }
 
         // 6. Integrate results back into the main graph
-        outerBuilder.replaceAllUsesWith(rootOutNodeRaw, reshaped);
+        outerBuilder.replaceAllUsesWith(rootOutNodeRaw, finalOutput);
         chain.forEach((op) => outerBuilder.removeNode(op));
     }
 

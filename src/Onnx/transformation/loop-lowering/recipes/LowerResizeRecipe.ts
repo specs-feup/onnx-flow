@@ -103,7 +103,7 @@ export class LowerResizeRecipe implements LoopLoweringRecipe {
         const inDims = toStaticShape(op.getInputs()![0].shape);
         const outDims = this.resolveOutDims(op, inDims)!;
         const total = outDims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: [total] };
+        return { totalIters: total, carryShape: outDims };
     }
 
     apply(

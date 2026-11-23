@@ -67,7 +67,7 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
     ): { totalIters: number; carryShape: number[] } {
         const dims = toStaticShape(op.getInputs()![0].shape);
         const total = dims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: [total] };
+        return { totalIters: total, carryShape: dims };
     }
 
     apply(

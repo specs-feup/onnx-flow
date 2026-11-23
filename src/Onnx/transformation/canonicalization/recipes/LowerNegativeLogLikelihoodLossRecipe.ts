@@ -27,7 +27,6 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
         "Reshape",
         "Mul",
         "ReduceSum",
-        "ReduceMean",
         "Neg",
         "Div",
     ];
@@ -174,12 +173,18 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
             );
             [finalOut] = builder.createOp("Div", [totalLoss, totalWeight], {}, scalarMeta);
         } else {
-            [finalOut] = builder.createOp(
-                "ReduceMean",
+            const [totalLoss] = builder.createOp(
+                "ReduceSum",
                 [loss, allAxes],
                 { keepdims: 0 },
                 scalarMeta,
             );
+            const totalElems = targetShape.reduce((a, b) => a * b, 1);
+            const invN = builder.createConstant(
+                `nll_inv_n_${op.id}`,
+                makeTensorProto(dtype, [], [1.0 / totalElems]),
+            );
+            [finalOut] = builder.createOp("Mul", [totalLoss, invN], {}, scalarMeta);
         }
 
         builder.replaceAllUsesWith(Y, finalOut);

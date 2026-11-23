@@ -73,9 +73,10 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
         _outShape: KnownShape,
     ): { totalIters: number; carryShape: number[] } {
         const ins = op.getInputs()!;
-        const dataTotal = toStaticShape(ins[0].shape).reduce((a, b) => a * b, 1);
+        const dataDims = toStaticShape(ins[0].shape);
+        const dataTotal = dataDims.reduce((a, b) => a * b, 1);
         const updTotal = toStaticShape(ins[2].shape).reduce((a, b) => a * b, 1);
-        return { totalIters: dataTotal + updTotal, carryShape: [dataTotal] };
+        return { totalIters: dataTotal + updTotal, carryShape: dataDims };
     }
 
     apply(

@@ -104,7 +104,7 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         const outSpatial = this.computeOutSpatial(op, inDims);
         const outTotal = inDims[0] * inDims[1] * outSpatial.reduce((a, b) => a * b, 1);
         const kTotal = kernel.reduce((a, b) => a * b, 1);
-        return { totalIters: outTotal * kTotal, carryShape: [outTotal] };
+        return { totalIters: outTotal * kTotal, carryShape: [inDims[0], inDims[1], ...outSpatial] };
     }
 
     apply(

@@ -3,7 +3,14 @@ import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
-import { getIntAttr, int64Vec, normalizeAxis, scalarInt64, toStaticShape } from "../../../Utils.js";
+import {
+    getIntAttr,
+    int64Vec,
+    makeTensorProto,
+    normalizeAxis,
+    scalarInt64,
+    toStaticShape,
+} from "../../../Utils.js";
 
 export class LowerHardmaxRecipe implements DecompositionRecipe {
     public readonly name = "LowerHardmax";
@@ -11,7 +18,7 @@ export class LowerHardmaxRecipe implements DecompositionRecipe {
     public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
-    public readonly producedOps = ["ArgMax", "Range", "Reshape", "Equal", "Cast"];
+    public readonly producedOps = ["ArgMax", "Range", "Reshape", "Equal", "Where"];
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "Hardmax") return false;
@@ -58,7 +65,12 @@ export class LowerHardmaxRecipe implements DecompositionRecipe {
         const [mask] = builder.createOp("Equal", [rangeND, argMax], {}, [
             { type: DataType.BOOL, shape: inShape as KnownShape },
         ]);
-        const [out] = builder.createOp("Cast", [mask], { to: dtype }, [
+        const oneVal = builder.createConstant(`hmax_one_${op.id}`, makeTensorProto(dtype, [], [1]));
+        const zeroVal = builder.createConstant(
+            `hmax_zero_${op.id}`,
+            makeTensorProto(dtype, [], [0]),
+        );
+        const [out] = builder.createOp("Where", [mask, oneVal, zeroVal], {}, [
             { type: dtype, shape: inShape as KnownShape },
         ]);
 

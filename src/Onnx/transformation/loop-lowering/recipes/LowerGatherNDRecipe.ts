@@ -71,7 +71,7 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
         const k = idxDims[idxDims.length - 1];
         const outDims = [...idxDims.slice(0, -1), ...dataDims.slice(batchDims + k)];
         const total = outDims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: [total] };
+        return { totalIters: total, carryShape: outDims };
     }
 
     apply(
