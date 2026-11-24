@@ -40,6 +40,7 @@ export class LowerScanRecipe implements DecompositionRecipe {
         "Identity",
         "Transpose",
         "Slice",
+        "Add",
     ];
 
     match(op: OperationNode.Class): boolean {

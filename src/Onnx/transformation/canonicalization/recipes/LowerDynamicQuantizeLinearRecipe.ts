@@ -28,6 +28,7 @@ export class LowerDynamicQuantizeLinearRecipe implements DecompositionRecipe {
         "Clip",
         "Cast",
         "QuantizeLinear",
+        "Identity",
     ];
 
     match(op: OperationNode.Class): boolean {

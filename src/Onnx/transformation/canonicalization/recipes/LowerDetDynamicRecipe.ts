@@ -24,7 +24,7 @@ export class LowerDetDynamicRecipe implements DecompositionRecipe {
         "Add",
         "Sub",
         "Mul",
-        "Div",
+        "Reciprocal",
         "Neg",
         "Equal",
         "Not",

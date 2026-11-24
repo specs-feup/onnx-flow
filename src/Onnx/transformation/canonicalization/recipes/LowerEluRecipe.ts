@@ -14,7 +14,7 @@ export class LowerEluRecipe implements DecompositionRecipe {
     public readonly precision = "exact" as const;
     public readonly priority = 50;
     public readonly shapeSupport = "dynamic" as const;
-    public readonly producedOps = ["GreaterOrEqual", "Exp", "Sub", "Mul"];
+    public readonly producedOps = ["GreaterOrEqual", "Exp", "Sub", "Mul", "Where"];
 
     match(op: OperationNode.Class): boolean {
         return op.type === "Elu";

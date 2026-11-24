@@ -51,6 +51,7 @@ export class LowerOneHotLoopRecipe implements LoopLoweringRecipe {
         "And",
         "Where",
         "Cast",
+        "ReduceProd",
     ];
 
     match(op: OperationNode.Class): boolean {
