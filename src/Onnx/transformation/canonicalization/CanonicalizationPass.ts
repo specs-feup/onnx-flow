@@ -108,118 +108,134 @@ import { LowerTopKRecipe } from "./recipes/LowerTopKRecipe.js";
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
 
-    // Map ONNX OpTypes to their respective canonicalization recipes
-    private registry = new Map<string, DecompositionRecipe>([
-        ["Softmax", new LowerSoftmaxRecipe()],
-        ["Slice", new LowerSliceRecipe()],
-        ["Gemm", new LowerGemmRecipe()],
-        ["QuantizeLinear", new LowerQuantizeLinearRecipe()],
-        ["DequantizeLinear", new LowerDequantizeLinearRecipe()],
-        ["Pad", new LowerPadRecipe()],
-        ["Expand", new LowerExpandRecipe()],
-        ["Concat", new LowerConcatRecipe()],
-        ["Clip", new LowerClipRecipe()],
-        ["AveragePool", new LowerAveragePoolRecipe()],
+    // Map ONNX OpTypes to ordered lists of candidate canonicalization recipes (first match wins)
+    private registry = new Map<string, DecompositionRecipe[]>();
 
-        // ElementWise Operations
-        ["Relu", new LowerReluRecipe()],
-        ["Sub", new LowerSubRecipe()],
-        ["GreaterOrEqual", new LowerGreaterOrEqualRecipe()],
-        ["Less", new LowerLessRecipe()],
-        ["LessOrEqual", new LowerLessOrEqualRecipe()],
-        ["Min", new LowerMinRecipe()],
-        ["Max", new LowerMaxRecipe()],
-        ["Abs", new LowerAbsRecipe()],
-        ["Sign", new LowerSignRecipe()],
-        ["LeakyRelu", new LowerLeakyReluRecipe()],
-        ["HardSigmoid", new LowerHardSigmoidRecipe()],
-        ["Softplus", new LowerSoftplusRecipe()],
-        ["Mish", new LowerMishRecipe()],
-        ["Elu", new LowerEluRecipe()],
-        ["Celu", new LowerCeluRecipe()],
-        ["Selu", new LowerSeluRecipe()],
-        ["Or", new LowerOrRecipe()],
-        ["Div", new LowerDivRecipe()],
-        ["Mod", new LowerModRecipe()],
-        ["Pow", new LowerPowRecipe()],
-        ["Not", new LowerNotRecipe()],
-        ["Sigmoid", new LowerSigmoidRecipe()],
-        ["Softsign", new LowerSoftsignRecipe()],
-        ["Tan", new LowerTanRecipe()],
-        ["Sinh", new LowerSinhRecipe()],
-        ["Cosh", new LowerCoshRecipe()],
-        ["Tanh", new LowerTanhSigmoidRecipe()],
-        //["Tanh", new LowerTanhDivRecipe()],
-        ["Asinh", new LowerAsinhRecipe()],
-        ["Acosh", new LowerAcoshRecipe()],
-        ["Atanh", new LowerAtanhRecipe()],
-        ["Ceil", new LowerCeilRecipe()],
-        ["Round", new LowerRoundAddRecipe()],
-        //["Round", new LowerRoundStepRecipe()],
-        ["IsNaN", new LowerIsNanRecipe()],
-        ["IsInf", new LowerIsInfRecipe()],
-        //["Sqrt", new LowerSqrtRecipe()],
-        //["Log", new LowerLogRecipe()],
-        //["Sin", new LowerSinRecipe()],
-        //["Cos", new LowerCosRecipe()],
-        ["Sqrt", new LowerSqrtPCRecipe()],
-        ["Log", new LowerLogPCRecipe()],
-        ["Sin", new LowerSinPCRecipe()],
-        ["Cos", new LowerCosPCRecipe()],
-        ["Asin", new LowerAsinRecipe()],
-        ["Acos", new LowerAcosRecipe()],
-        ["Atan", new LowerAtanRecipe()],
-        ["Erf", new LowerErfRecipe()],
-        ["Exp", new LowerExpRecipe()],
-        ["Floor", new LowerFloorRecipe()],
-        ["Neg", new LowerNegRecipe()],
-        ["Reciprocal", new LowerReciprocalRecipe()],
-        ["CastLike", new LowerCastLikeRecipe()],
-        ["Mean", new LowerMeanRecipe()],
-        ["Sum", new LowerSumRecipe()],
-        ["Binarizer", new LowerBinarizerRecipe()],
-        ["DynamicQuantizeLinear", new LowerDynamicQuantizeLinearRecipe()],
-        ["Gelu", new LowerGeluRecipe()],
-        ["HardSwish", new LowerHardSwishRecipe()],
-        ["PRelu", new LowerPReluRecipe()],
-        ["Shrink", new LowerShrinkRecipe()],
-        ["ThresholdedRelu", new LowerThresholdedReluRecipe()],
-        ["ConvInteger", new LowerConvIntegerRecipe()],
-        ["EyeLike", new LowerEyeLikeRecipe()],
-        ["Flatten", new LowerFlattenRecipe()],
-        ["GlobalAveragePool", new LowerGlobalAveragePoolRecipe()],
-        ["GlobalLpPool", new LowerGlobalLpPoolRecipe()],
-        ["GlobalMaxPool", new LowerGlobalMaxPoolRecipe()],
-        ["Hardmax", new LowerHardmaxRecipe()],
-        ["LogSoftmax", new LowerLogSoftmaxRecipe()],
-        ["LpNormalization", new LowerLpNormalizationRecipe()],
-        ["MatMulInteger", new LowerMatMulIntegerRecipe()],
-        ["OneHot", new LowerOneHotRecipe()],
-        ["QLinearConv", new LowerQLinearConvRecipe()],
-        ["QLinearMatMul", new LowerQLinearMatMulRecipe()],
-        ["Split", new LowerSplitRecipe()],
-        ["Tile", new LowerTileRecipe()],
-        ["Trilu", new LowerTriluRecipe()],
-        ["LpPool", new LowerLpPoolRecipe()],
-        ["NegativeLogLikelihoodLoss", new LowerNegativeLogLikelihoodLossRecipe()],
-        ["SoftmaxCrossEntropyLoss", new LowerSoftmaxCrossEntropyLossRecipe()],
-        ["GRU", new LowerGRURecipe()],
-        ["LSTM", new LowerLSTMRecipe()],
-        ["RNN", new LowerRNNRecipe()],
-        ["Scan", new LowerScanRecipe()],
-        ["Scatter", new LowerScatterRecipe()],
-        ["ArgMax", new LowerArgMaxRecipe()],
-        ["ArgMin", new LowerArgMinRecipe()],
-        ["TopK", new LowerTopKRecipe()],
-        ["Einsum", new LowerEinsumRecipe()],
-        ["Det", new LowerDetRecipe()],
+    constructor(customRecipes?: DecompositionRecipe[]) {
+        const defaultRecipes: DecompositionRecipe[] = [
+            new LowerSoftmaxRecipe(),
+            new LowerSliceRecipe(),
+            new LowerGemmRecipe(),
+            new LowerQuantizeLinearRecipe(),
+            new LowerDequantizeLinearRecipe(),
+            new LowerPadRecipe(),
+            new LowerExpandRecipe(),
+            new LowerConcatRecipe(),
+            new LowerClipRecipe(),
+            new LowerAveragePoolRecipe(),
 
-        //Normalization Operations
-        ["BatchNormalization", new LowerBatchNormalizationRecipe()],
-        ["LayerNormalization", new LowerLayerNormalizationRecipe()],
-        ["InstanceNormalization", new LowerInstanceNormalizationRecipe()],
-        ["GroupNormalization", new LowerGroupNormalizationRecipe()],
-    ]);
+            // ElementWise Operations
+            new LowerReluRecipe(),
+            new LowerSubRecipe(),
+            new LowerGreaterOrEqualRecipe(),
+            new LowerLessRecipe(),
+            new LowerLessOrEqualRecipe(),
+            new LowerMinRecipe(),
+            new LowerMaxRecipe(),
+            new LowerAbsRecipe(),
+            new LowerSignRecipe(),
+            new LowerLeakyReluRecipe(),
+            new LowerHardSigmoidRecipe(),
+            new LowerSoftplusRecipe(),
+            new LowerMishRecipe(),
+            new LowerEluRecipe(),
+            new LowerCeluRecipe(),
+            new LowerSeluRecipe(),
+            new LowerOrRecipe(),
+            new LowerDivRecipe(),
+            new LowerModRecipe(),
+            new LowerPowRecipe(),
+            new LowerNotRecipe(),
+            new LowerSigmoidRecipe(),
+            new LowerSoftsignRecipe(),
+            new LowerTanRecipe(),
+            new LowerSinhRecipe(),
+            new LowerCoshRecipe(),
+            new LowerTanhSigmoidRecipe(),
+            new LowerAsinhRecipe(),
+            new LowerAcoshRecipe(),
+            new LowerAtanhRecipe(),
+            new LowerCeilRecipe(),
+            new LowerRoundAddRecipe(),
+            new LowerIsNanRecipe(),
+            new LowerIsInfRecipe(),
+            new LowerSqrtPCRecipe(),
+            new LowerLogPCRecipe(),
+            new LowerSinPCRecipe(),
+            new LowerCosPCRecipe(),
+            new LowerAsinRecipe(),
+            new LowerAcosRecipe(),
+            new LowerAtanRecipe(),
+            new LowerErfRecipe(),
+            new LowerExpRecipe(),
+            new LowerFloorRecipe(),
+            new LowerNegRecipe(),
+            new LowerReciprocalRecipe(),
+            new LowerCastLikeRecipe(),
+            new LowerMeanRecipe(),
+            new LowerSumRecipe(),
+            new LowerBinarizerRecipe(),
+            new LowerDynamicQuantizeLinearRecipe(),
+            new LowerGeluRecipe(),
+            new LowerHardSwishRecipe(),
+            new LowerPReluRecipe(),
+            new LowerShrinkRecipe(),
+            new LowerThresholdedReluRecipe(),
+            new LowerConvIntegerRecipe(),
+            new LowerEyeLikeRecipe(),
+            new LowerFlattenRecipe(),
+            new LowerGlobalAveragePoolRecipe(),
+            new LowerGlobalLpPoolRecipe(),
+            new LowerGlobalMaxPoolRecipe(),
+            new LowerHardmaxRecipe(),
+            new LowerLogSoftmaxRecipe(),
+            new LowerLpNormalizationRecipe(),
+            new LowerMatMulIntegerRecipe(),
+            new LowerOneHotRecipe(),
+            new LowerQLinearConvRecipe(),
+            new LowerQLinearMatMulRecipe(),
+            new LowerSplitRecipe(),
+            new LowerTileRecipe(),
+            new LowerTriluRecipe(),
+            new LowerLpPoolRecipe(),
+            new LowerNegativeLogLikelihoodLossRecipe(),
+            new LowerSoftmaxCrossEntropyLossRecipe(),
+            new LowerGRURecipe(),
+            new LowerLSTMRecipe(),
+            new LowerRNNRecipe(),
+            new LowerScanRecipe(),
+            new LowerScatterRecipe(),
+            new LowerArgMaxRecipe(),
+            new LowerArgMinRecipe(),
+            new LowerTopKRecipe(),
+            new LowerEinsumRecipe(),
+            new LowerDetRecipe(),
+
+            // Normalization Operations
+            new LowerBatchNormalizationRecipe(),
+            new LowerLayerNormalizationRecipe(),
+            new LowerInstanceNormalizationRecipe(),
+            new LowerGroupNormalizationRecipe(),
+        ];
+
+        for (const recipe of customRecipes ?? defaultRecipes) {
+            this.register(recipe);
+        }
+    }
+
+    public register(recipe: DecompositionRecipe): void {
+        const key = String(recipe.targetOp);
+        const existing = this.registry.get(key);
+        if (existing !== undefined) {
+            existing.push(recipe);
+        } else {
+            this.registry.set(key, [recipe]);
+        }
+    }
+
+    public getRecipesFor(opType: string): readonly DecompositionRecipe[] {
+        return this.registry.get(opType) ?? [];
+    }
 
     public run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean {
         let globalChanged = false;
@@ -233,38 +249,33 @@ export class CanonicalizationPass implements GraphPass {
             for (const op of ops) {
                 if (!graph.hasNode(op.id)) continue;
 
-                const recipe = this.registry.get(op.type);
+                const candidates = this.registry.get(op.type);
+                if (candidates === undefined) continue;
 
-                if (recipe) {
-                    // Ask the recipe for an opportunity
-                    const opportunity = recipe.match(op)
-                        ? new TransformationOpportunity(
-                              recipe.name,
-                              op.id,
-                              `Apply ${recipe.name} to ${op.type}`,
-                              (builder) => recipe.apply(op, builder),
-                          )
-                        : null;
+                const recipe = candidates.find((candidate) => candidate.match(op));
+                if (recipe === undefined) continue;
 
-                    if (opportunity) {
-                        //const builder = new GraphBuilder(graph, `lowering_${op.id}`);
-                        const builder = new TrackedGraphBuilder(
-                            graph,
-                            opportunity.id,
-                            opportunity.description,
-                            "canonicalization",
-                        );
+                const opportunity = new TransformationOpportunity(
+                    recipe.name,
+                    op.id,
+                    `Apply ${recipe.name} to ${op.type}`,
+                    (builder) => recipe.apply(op, builder),
+                );
 
-                        // Execute the opportunity
-                        opportunity.apply(builder);
+                const builder = new TrackedGraphBuilder(
+                    graph,
+                    opportunity.id,
+                    opportunity.description,
+                    "canonicalization",
+                );
 
-                        localChanged = true;
-                        globalChanged = true;
+                opportunity.apply(builder);
 
-                        const patch = builder.commitPatch();
-                        historyManager.pushPatch(patch);
-                    }
-                }
+                localChanged = true;
+                globalChanged = true;
+
+                const patch = builder.commitPatch();
+                historyManager.pushPatch(patch);
             }
         }
 

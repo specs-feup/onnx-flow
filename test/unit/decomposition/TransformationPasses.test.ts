@@ -12,6 +12,7 @@ import { TransformationRegistry } from "../../../src/Onnx/transformation/Transfo
 import OnnxGraphTransformer from "../../../src/Onnx/transformation/index.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import type { DecompositionRecipe } from "../../../src/Onnx/transformation/Recipe.js";
 
 describe("Transformation Pipeline & Passes", () => {
     initializeSchemaRegistry();
@@ -92,5 +93,44 @@ describe("Transformation Pipeline & Passes", () => {
         expect(transformedGraph).toBe(graph);
 
         logSpy.mockRestore();
+    });
+
+    it("falls back to secondary complementary recipes in CanonicalizationPass and OrchestratorPass", () => {
+        const neverMatchRelu: DecompositionRecipe = {
+            name: "NeverMatchRelu",
+            targetOp: "Relu",
+            exposesControlFlow: false,
+            exposesDataAccess: false,
+            producedOps: [],
+            match: () => false,
+            apply: () => {
+                throw new Error("Should not be called");
+            },
+        };
+        const fallbackRelu = new Recipes.canonicalization.Relu();
+
+        // 1. CanonicalizationPass fallback
+        const g1 = createSimpleReluGraph();
+        const h1 = new HistoryManager(g1);
+        const canonPass = new CanonicalizationPass([neverMatchRelu, fallbackRelu]);
+        expect(canonPass.run(g1, h1)).toBe(true);
+        expect(
+            g1
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).not.toContain("Relu");
+        expect(h1.getHistory()[0].opportunityId).toContain("LowerRelu");
+
+        // 2. OrchestratorPass fallback
+        const g2 = createSimpleReluGraph();
+        const orchPass = new OrchestratorPass("FallbackOrch", [neverMatchRelu, fallbackRelu]);
+        expect(orchPass.run(g2)).toBe(true);
+        expect(
+            g2
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).not.toContain("Relu");
     });
 });
