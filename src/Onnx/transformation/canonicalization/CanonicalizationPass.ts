@@ -118,6 +118,13 @@ import {
 } from "./recipes/LowerArgMinMaxLoopRecipe.js";
 import { LowerTopKLoopRecipe } from "./recipes/LowerTopKLoopRecipe.js";
 import { LowerMaxPoolWithIndicesRecipe } from "./recipes/LowerMaxPoolWithIndicesRecipe.js";
+import { LowerLpNormalizationGeneralRecipe } from "./recipes/LowerLpNormalizationGeneralRecipe.js";
+import { LowerQuantizeLinearExtendedRecipe } from "./recipes/LowerQuantizeLinearExtendedRecipe.js";
+import { LowerDequantizeLinearBlockedRecipe } from "./recipes/LowerDequantizeLinearBlockedRecipe.js";
+import { LowerHardmaxDynamicRecipe } from "./recipes/LowerHardmaxDynamicRecipe.js";
+import { LowerTriluDynamicRecipe } from "./recipes/LowerTriluDynamicRecipe.js";
+import { LowerEyeLikeDynamicRecipe } from "./recipes/LowerEyeLikeDynamicRecipe.js";
+import { LowerDetDynamicRecipe } from "./recipes/LowerDetDynamicRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -147,6 +154,13 @@ export class CanonicalizationPass implements GraphPass {
             new LowerArgMinLoopRecipe(),
             new LowerTopKLoopRecipe(),
             new LowerMaxPoolWithIndicesRecipe(),
+            new LowerLpNormalizationGeneralRecipe(),
+            new LowerQuantizeLinearExtendedRecipe(),
+            new LowerDequantizeLinearBlockedRecipe(),
+            new LowerHardmaxDynamicRecipe(),
+            new LowerTriluDynamicRecipe(),
+            new LowerEyeLikeDynamicRecipe(),
+            new LowerDetDynamicRecipe(),
 
             // ElementWise Operations
             new LowerReluRecipe(),

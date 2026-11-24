@@ -472,4 +472,89 @@ describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
             expect(res.producedOps).toContain("Loop");
         }
     });
+
+    it("decomposes general-p LpNormalization and Opset 21 extended/blocked QDQ", () => {
+        const lpRes = applyRecipe(
+            new Recipes.canonicalization.LpNormalizationGeneral(),
+            "LpNormalization",
+            [[2, 4]],
+            { axis: 1, p: 3 },
+        );
+        expect(lpRes.producedOps).not.toContain("LpNormalization");
+        expect(lpRes.producedOps).toContain("Pow");
+        expect(lpRes.producedOps).toContain("ReduceSum");
+
+        const qInt16 = applyRecipe(
+            new Recipes.canonicalization.QuantizeLinearExtended(),
+            "QuantizeLinear",
+            [[2, 4], [], { shape: [], dataType: DataType.INT16 }],
+            { axis: 1, block_size: 0 },
+            DataType.FLOAT,
+            ["Y"],
+        );
+        expect(qInt16.producedOps).not.toContain("QuantizeLinear");
+        expect(qInt16.producedOps).toContain("Clip");
+        expect(qInt16.producedOps).toContain("Round");
+
+        const qBlocked = applyRecipe(
+            new Recipes.canonicalization.QuantizeLinearExtended(),
+            "QuantizeLinear",
+            [[2, 6], [2, 3], { shape: [2, 3], dataType: DataType.INT8 }],
+            { axis: 1, block_size: 2 },
+            DataType.FLOAT,
+            ["Y"],
+        );
+        expect(qBlocked.producedOps).not.toContain("QuantizeLinear");
+        expect(qBlocked.producedOps).toContain("Reshape");
+        expect(qBlocked.producedOps).toContain("Unsqueeze");
+
+        const dqBlocked = applyRecipe(
+            new Recipes.canonicalization.DequantizeLinearBlocked(),
+            "DequantizeLinear",
+            [
+                { shape: [2, 6], dataType: DataType.INT8 },
+                [2, 3],
+                { shape: [2, 3], dataType: DataType.INT8 },
+            ],
+            { axis: 1, block_size: 2 },
+            DataType.FLOAT,
+            ["Y"],
+        );
+        expect(dqBlocked.producedOps).not.toContain("DequantizeLinear");
+        expect(dqBlocked.producedOps).toContain("Reshape");
+        expect(dqBlocked.producedOps).toContain("Mul");
+    });
+
+    it("decomposes dynamic Hardmax, Trilu, EyeLike, and dynamic-batch Det", () => {
+        const hm = applyRecipe(
+            new Recipes.canonicalization.HardmaxDynamic(),
+            "Hardmax",
+            [[2, -1]],
+            { axis: 1 },
+        );
+        expect(hm.producedOps).not.toContain("Hardmax");
+        expect(hm.producedOps).toContain("ArgMax");
+
+        const tr = applyRecipe(
+            new Recipes.canonicalization.TriluDynamic(),
+            "Trilu",
+            [[-1, -1, -1]],
+            { upper: 0 },
+        );
+        expect(tr.producedOps).not.toContain("Trilu");
+        expect(tr.producedOps).toContain("LessOrEqual");
+
+        const eye = applyRecipe(
+            new Recipes.canonicalization.EyeLikeDynamic(),
+            "EyeLike",
+            [[-1, -1]],
+            { k: 1 },
+        );
+        expect(eye.producedOps).not.toContain("EyeLike");
+        expect(eye.producedOps).toContain("Equal");
+
+        const det = applyRecipe(new Recipes.canonicalization.DetDynamic(), "Det", [[-1, 4, 4]]);
+        expect(det.producedOps).not.toContain("Det");
+        expect(det.producedOps).toContain("ConstantOfShape");
+    });
 });

@@ -974,5 +974,31 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
                 }
             });
         });
+        it("lowers dynamic-batch broadcast MatMul in Pointer & Radix modes", () => {
+            for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const a = g
+                    .addNode("A")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 1, 3, 4], "input"))
+                    .as(TensorNode);
+                const w = g
+                    .addNode("B")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [1, -1, 4, 2], "input"))
+                    .as(TensorNode);
+                b.createOp("MatMul", [a, w], {}, [{ type: DataType.FLOAT, shape: [-1, -1, 3, 2] }]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    g,
+                    new HistoryManager(g),
+                );
+                expect(() => validateGraph(g)).not.toThrow();
+                expect(
+                    g
+                        .getOperationNodes()
+                        .toArray()
+                        .map((o) => o.type),
+                ).toContain("Loop");
+            }
+        });
     });
 });

@@ -44,6 +44,10 @@ interface SyntheticCase {
     rtol?: number;
     exact?: boolean;
     indexingModes?: IndexingMode[];
+    /** Optional ORT graph optimization level override (defaults to ORT's default when omitted) */
+    graphOptimizationLevel?: ort.InferenceSession.SessionOptions["graphOptimizationLevel"];
+    /** Skip LoopLoweringPass and verify canonicalized graph directly in ORT (for very large unrolled canonicalizations) */
+    skipLoopLowering?: boolean;
 }
 
 const CASES: SyntheticCase[] = [
@@ -916,6 +920,83 @@ const CASES: SyntheticCase[] = [
         ],
         tol: { Y: 1e-6, Indices: 0 },
     },
+    {
+        name: "DynamicBatchedMatMul_4d_bcast",
+        opType: "MatMul",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [2, 1, 3, 4], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [1, 3, 4, 2], gen: "negmix" },
+        ],
+        inputShapes: [
+            [-1, 1, 3, 4],
+            [1, -1, 4, 2],
+        ],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1, -1, 3, 2] }],
+        tol: 1e-4,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "DynamicBatchedMatMul_3d_2d",
+        opType: "MatMul",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [3, 2, 4], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [4, 3], gen: "negmix" },
+        ],
+        inputShapes: [
+            [-1, -1, 4],
+            [4, -1],
+        ],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1, -1, -1] }],
+        tol: 1e-4,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "HardmaxDynamic_dyn_axis",
+        opType: "Hardmax",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 5], gen: "negmix" }],
+        inputShapes: [[2, -1]],
+        attrs: { axis: 1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, -1] }],
+        tol: 1e-6,
+    },
+    {
+        name: "TriluDynamic_lower_k1",
+        opType: "Trilu",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 3, 4], gen: "negmix" },
+            { name: "k", dtype: "int64", shape: [], init: [1n] },
+        ],
+        inputShapes: [[-1, -1, -1], []],
+        attrs: { upper: 0 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1, -1, -1] }],
+        tol: 1e-6,
+    },
+    {
+        name: "EyeLikeDynamic_k_neg1",
+        opType: "EyeLike",
+        feeds: [{ name: "X", dtype: "float32", shape: [3, 4], gen: "negmix" }],
+        inputShapes: [[-1, -1]],
+        attrs: { k: -1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1, -1] }],
+        tol: 1e-6,
+    },
+    {
+        name: "DetDynamic_batch_3x3",
+        opType: "Det",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3, 3], gen: "negmix" }],
+        inputShapes: [[-1, 3, 3]],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1] }],
+        tol: 1e-4,
+    },
+    {
+        name: "DetDynamic_batch_4x4",
+        opType: "Det",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4, 4], gen: "negmix" }],
+        inputShapes: [[-1, 4, 4]],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1] }],
+        tol: 1e-4,
+        skipLoopLowering: true,
+    },
 ];
 
 const DTYPE_MAP: Record<FeedSpec["dtype"], DataType> = {
@@ -1001,10 +1082,13 @@ async function runOrtChecked(
     stage: string,
     modelPath: string,
     feeds: Record<string, ort.Tensor>,
+    sessionOptions?: ort.InferenceSession.SessionOptions,
 ): Promise<Record<string, ort.Tensor>> {
     try {
-        const sess = await ort.InferenceSession.create(modelPath);
-        return await sess.run(feeds);
+        const session = sessionOptions
+            ? await ort.InferenceSession.create(modelPath, sessionOptions)
+            : await ort.InferenceSession.create(modelPath);
+        return await session.run(feeds);
     } catch (e) {
         const prevDebug = ort.env.debug;
         const prevLogLevel = ort.env.logLevel;
@@ -1093,11 +1177,14 @@ describe("Integration: Programmatic ORT Equivalence for New Recipes", () => {
                 const history = new HistoryManager(loweredGraph);
                 new CanonicalizationPass().run(loweredGraph, history);
                 inferShapes(loweredGraph);
-                new LoopLoweringPass({ coalesce: true, fuse: true, indexingMode: mode }).run(
-                    loweredGraph,
-                    history,
-                );
-                inferShapes(loweredGraph);
+
+                if (tc.skipLoopLowering === undefined || !tc.skipLoopLowering) {
+                    new LoopLoweringPass({ coalesce: true, fuse: true, indexingMode: mode }).run(
+                        loweredGraph,
+                        history,
+                    );
+                    inferShapes(loweredGraph);
+                }
 
                 const loweredPath = path.join(tmpDir, `${tc.name}_lowered_${mode}.onnx`);
                 await exportGraph(loweredGraph, loweredPath);
