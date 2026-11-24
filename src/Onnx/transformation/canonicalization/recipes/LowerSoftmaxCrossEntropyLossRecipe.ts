@@ -8,9 +8,13 @@ import { getAttr, getStringAttr } from "../../../Utils.js";
 export class LowerSoftmaxCrossEntropyLossRecipe implements DecompositionRecipe {
     public readonly name = "LowerSoftmaxCrossEntropyLoss";
     public readonly targetOp = "SoftmaxCrossEntropyLoss";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["loss"];
     public readonly producedOps = ["LogSoftmax", "NegativeLogLikelihoodLoss"];
 
     match(op: OperationNode.Class): boolean {

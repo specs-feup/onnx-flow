@@ -6,6 +6,7 @@ import {
     computeStrides,
     getIntAttr,
     getIntsAttr,
+    getStringAttr,
     int64Vec,
     makeTensorProto,
     scalarInt64,
@@ -35,6 +36,9 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
     public readonly precision = "exact" as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["conv", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
         "Reshape",
@@ -56,6 +60,8 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "ConvTranspose") return false;
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") return false;
         const ins = op.getInputs();
         if (!ins || ins.length < 2) return false;
         const xDims = toStaticShape(ins[0].shape);

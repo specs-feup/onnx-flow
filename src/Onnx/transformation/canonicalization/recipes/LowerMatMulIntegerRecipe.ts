@@ -8,9 +8,12 @@ import { int64Vec } from "../../../Utils.js";
 export class LowerMatMulIntegerRecipe implements DecompositionRecipe {
     public readonly name = "LowerMatMulInteger";
     public readonly targetOp = "MatMulInteger";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Cast", "Unsqueeze", "Sub", "MatMul"];
 
     match(op: OperationNode.Class): boolean {

@@ -8,10 +8,13 @@ import { getIntAttr, int64Vec, normalizeAxis, scalarInt64, toStaticShape } from 
 abstract class BaseLowerArgMinMaxRecipe implements DecompositionRecipe {
     public abstract readonly name: string;
     public abstract readonly targetOp: "ArgMax" | "ArgMin";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["mask-based"];
     public readonly producedOps = ["ReduceMax", "ReduceMin", "Equal", "Range", "Reshape", "Where"];
 
     match(op: OperationNode.Class): boolean {
@@ -19,7 +22,9 @@ abstract class BaseLowerArgMinMaxRecipe implements DecompositionRecipe {
         const X = op.getInputs()?.[0];
         if (!X || !Array.isArray(X.shape)) return false;
         const dims = toStaticShape(X.shape);
-        return dims.length > 0 && !dims.includes(-1);
+        if (dims.length === 0) return false;
+        const axis = normalizeAxis(getIntAttr(op, "axis", 0), dims.length);
+        return dims[axis] > 0;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

@@ -13,6 +13,7 @@ import {
     computeStrides,
     int64Vec,
     UNKNOWN_SHAPE,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -35,6 +36,11 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "MatMul";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 40;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["linear-algebra", "non-coalesced"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
@@ -50,12 +56,12 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
     match(op: OperationNode.Class): boolean {
         if (op.type !== "MatMul") return false;
         const inputs = op.getInputs();
-        return (
-            !!inputs &&
-            inputs.length >= 2 &&
-            inputs[0].shape.length > 0 &&
-            inputs[1].shape.length > 0
-        );
+        if (!inputs || inputs.length < 2) return false;
+        const sA = toStaticShape(inputs[0].shape);
+        const sB = toStaticShape(inputs[1].shape);
+        if (sA.length === 0 || sB.length === 0) return false;
+        if (sA.slice(0, -2).includes(-1) || sB.slice(0, -2).includes(-1)) return false;
+        return true;
     }
 
     getLoopBounds(

@@ -7,9 +7,12 @@ import { getIntAttr, int64Vec, normalizeAxis } from "../../../Utils.js";
 export class LowerLogSoftmaxRecipe implements DecompositionRecipe {
     public readonly name = "LowerLogSoftmax";
     public readonly targetOp = "LogSoftmax";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["ReduceMax", "Sub", "Exp", "ReduceSum", "Log"];
 
     match(op: OperationNode.Class): boolean {

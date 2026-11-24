@@ -8,15 +8,29 @@ import { getIntAttr, int64Vec, toStaticShape } from "../../../Utils.js";
 export class LowerFlattenRecipe implements DecompositionRecipe {
     public readonly name = "LowerFlatten";
     public readonly targetOp = "Flatten";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["reshape-based"];
     public readonly producedOps = ["Reshape"];
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "Flatten") return false;
         const X = op.getInputs()?.[0];
-        return !!X && Array.isArray(X.shape) && X.shape.length > 0;
+        if (!X || !Array.isArray(X.shape) || X.shape.length === 0) return false;
+
+        const inShape = toStaticShape(X.shape);
+        const rank = inShape.length;
+        let axis = getIntAttr(op, "axis", 1);
+        if (axis < 0) axis += rank;
+        axis = Math.max(0, Math.min(rank, axis));
+
+        const leftDynamic = inShape.slice(0, axis).includes(-1);
+        const rightDynamic = inShape.slice(axis).includes(-1);
+        return !(leftDynamic && rightDynamic);
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

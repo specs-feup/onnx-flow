@@ -32,10 +32,13 @@ function readSingleIntConstant(node: ConcreteValueNode): number | undefined {
 export class LowerTopKRecipe implements DecompositionRecipe {
     public readonly name = "LowerTopK";
     public readonly targetOp = "TopK";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["unrolled", "constant-k"];
     public readonly producedOps = [
         "ArgMax",
         "ArgMin",

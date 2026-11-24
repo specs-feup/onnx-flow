@@ -17,10 +17,13 @@ const isPresent = (n?: ValueNode): n is ValueNode => !!n && n.id !== "";
 export class LowerRNNRecipe implements DecompositionRecipe {
     public readonly name = "LowerRNN";
     public readonly targetOp = "RNN";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["unrolled"];
     public readonly producedOps = [
         "Slice",
         "Squeeze",
@@ -34,6 +37,10 @@ export class LowerRNNRecipe implements DecompositionRecipe {
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "RNN") return false;
+        if (getAttr(op, "clip") !== undefined) return false;
+        if (getAttr(op, "activation_alpha") !== undefined) return false;
+        if (getAttr(op, "activation_beta") !== undefined) return false;
+
         const ins = op.getInputs() as ConcreteValueNode[] | undefined;
         if (!ins || ins.length < 3) return false;
         if (isPresent(ins[4])) return false; // sequence_lens not supported in static unroll

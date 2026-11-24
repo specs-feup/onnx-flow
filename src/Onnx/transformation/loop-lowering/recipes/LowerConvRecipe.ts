@@ -10,6 +10,7 @@ import {
     scalarInt64,
     int64Vec,
     UNKNOWN_SHAPE,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -30,6 +31,11 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "Conv";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["conv", "2d", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
@@ -45,7 +51,17 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     ];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "Conv";
+        if (op.type !== "Conv") return false;
+        const inputs = op.getInputs();
+        if (!inputs || inputs.length < 2) return false;
+        if (inputs[0].shape.length !== 4 || inputs[1].shape.length !== 4) return false;
+
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
+            const xDims = toStaticShape(inputs[0].shape);
+            if (xDims[2] <= 0 || xDims[3] <= 0) return false;
+        }
+        return true;
     }
 
     getLoopBounds(

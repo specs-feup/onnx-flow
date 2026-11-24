@@ -8,9 +8,13 @@ import { int64Vec, readConstIntegerVectorFromTensorNode, toStaticShape } from ".
 export class LowerTileRecipe implements DecompositionRecipe {
     public readonly name = "LowerTile";
     public readonly targetOp = "Tile";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["constant-repeats"];
     public readonly producedOps = ["Reshape", "Expand", "Identity"];
 
     match(op: OperationNode.Class): boolean {

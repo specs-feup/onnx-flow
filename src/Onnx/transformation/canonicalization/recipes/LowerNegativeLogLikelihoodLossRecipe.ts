@@ -15,9 +15,13 @@ import {
 export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe {
     public readonly name = "LowerNegativeLogLikelihoodLoss";
     public readonly targetOp = "NegativeLogLikelihoodLoss";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["loss"];
     public readonly producedOps = [
         "Cast",
         "Equal",
@@ -38,7 +42,17 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
             return false;
         }
         const inShape = toStaticShape(ins[0].shape);
-        return inShape[1] > 0;
+        if (inShape[1] <= 0) return false;
+
+        const reduction = getStringAttr(op, "reduction", "mean");
+        const hasWeight = ins.length >= 3;
+        const hasIgnore = typeof getAttr(op, "ignore_index") === "number";
+        if (reduction === "mean" && !hasWeight && !hasIgnore) {
+            const targetShape = [inShape[0], ...inShape.slice(2)];
+            if (targetShape.includes(-1)) return false;
+        }
+
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

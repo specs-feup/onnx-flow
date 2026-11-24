@@ -12,6 +12,11 @@ export class LowerSliceRecipe implements DecompositionRecipe {
     public readonly targetOp = "Slice";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = true;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["constant-bounds"];
     public readonly producedOps = ["Range", "Gather", "Identity"];
 
     match(op: OperationNode.Class): boolean {

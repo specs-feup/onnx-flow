@@ -10,6 +10,10 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
     public readonly targetOp = "GroupNormalization";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = [
         "Reshape",
         "ReduceMean",
@@ -24,7 +28,9 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
     ];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "GroupNormalization";
+        if (op.type !== "GroupNormalization") return false;
+        const ins = op.getInputs();
+        return !!ins && ins.length >= 1 && ins[0].shape.length >= 2;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

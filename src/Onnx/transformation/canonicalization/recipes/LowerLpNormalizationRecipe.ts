@@ -7,9 +7,13 @@ import { getIntAttr, int64Vec, normalizeAxis } from "../../../Utils.js";
 export class LowerLpNormalizationRecipe implements DecompositionRecipe {
     public readonly name = "LowerLpNormalization";
     public readonly targetOp = "LpNormalization";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 60;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["p1-p2"];
     public readonly producedOps = ["ReduceL1", "ReduceL2", "Div"];
 
     match(op: OperationNode.Class): boolean {

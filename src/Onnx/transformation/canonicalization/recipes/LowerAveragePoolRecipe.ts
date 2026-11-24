@@ -16,6 +16,11 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
     public readonly targetOp = "AveragePool";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["conv-based"];
     public readonly producedOps = ["Conv", "Div", "Shape", "Expand"];
 
     match(op: OperationNode.Class): boolean {

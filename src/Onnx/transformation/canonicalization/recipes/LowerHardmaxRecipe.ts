@@ -15,9 +15,13 @@ import {
 export class LowerHardmaxRecipe implements DecompositionRecipe {
     public readonly name = "LowerHardmax";
     public readonly targetOp = "Hardmax";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["argmax-based"];
     public readonly producedOps = ["ArgMax", "Range", "Reshape", "Equal", "Where"];
 
     match(op: OperationNode.Class): boolean {

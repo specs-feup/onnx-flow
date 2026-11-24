@@ -8,9 +8,12 @@ import { getFloatAttr, makeTensorProto } from "../../../Utils.js";
 export class LowerBinarizerRecipe implements DecompositionRecipe {
     public readonly name = "LowerBinarizer";
     public readonly targetOp = "Binarizer";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Greater", "Where"];
 
     match(op: OperationNode.Class): boolean {

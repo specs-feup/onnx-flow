@@ -4,15 +4,30 @@ import type { DecompositionRecipe } from "../../Recipe.js";
 import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 
+const FLOAT_DTYPES = new Set<DataType>([
+    DataType.FLOAT,
+    DataType.DOUBLE,
+    DataType.FLOAT16,
+    DataType.BFLOAT16,
+]);
+
 export class LowerDivRecipe implements DecompositionRecipe {
     public readonly name = "LowerDiv";
     public readonly targetOp = "Div";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Mul", "Reciprocal"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "Div";
+        if (op.type !== "Div") return false;
+        const ins = op.getInputs();
+        if (!ins || ins.length < 2) return false;
+        const dtype = ins[0].literalType as DataType | undefined;
+        return dtype === undefined || dtype === DataType.UNDEFINED || FLOAT_DTYPES.has(dtype);
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

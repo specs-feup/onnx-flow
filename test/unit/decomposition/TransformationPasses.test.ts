@@ -101,6 +101,10 @@ describe("Transformation Pipeline & Passes", () => {
             targetOp: "Relu",
             exposesControlFlow: false,
             exposesDataAccess: false,
+            phase: "canonicalization" as const,
+            precision: "exact" as const,
+            priority: 50,
+            shapeSupport: "dynamic" as const,
             producedOps: [],
             match: () => false,
             apply: () => {

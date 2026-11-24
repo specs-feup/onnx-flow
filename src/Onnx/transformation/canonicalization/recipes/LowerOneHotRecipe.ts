@@ -15,9 +15,13 @@ import {
 export class LowerOneHotRecipe implements DecompositionRecipe {
     public readonly name = "LowerOneHot";
     public readonly targetOp = "OneHot";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["constant-depth"];
     public readonly producedOps = [
         "Cast",
         "Less",

@@ -51,7 +51,7 @@ describe("Canonicalization - Structural & Normalization Recipes", () => {
             applyRecipe(new Recipes.canonicalization.QuantizeLinear(), "QuantizeLinear", [
                 [2, 2],
                 [],
-                [],
+                { shape: [], dataType: DataType.UINT8 },
             ]).producedOps,
         ).not.toContain("QuantizeLinear");
 

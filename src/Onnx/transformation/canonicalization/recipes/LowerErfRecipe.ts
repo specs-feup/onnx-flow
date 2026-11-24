@@ -10,6 +10,11 @@ export class LowerErfRecipe implements DecompositionRecipe {
     public readonly targetOp = "Erf";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["taylor", "division-free"];
     public readonly producedOps = ["Add", "Sub", "Mul"];
 
     match(op: OperationNode.Class): boolean {

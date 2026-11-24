@@ -10,9 +10,12 @@ const CONV_ATTRS = ["auto_pad", "dilations", "group", "kernel_shape", "pads", "s
 export class LowerQLinearConvRecipe implements DecompositionRecipe {
     public readonly name = "LowerQLinearConv";
     public readonly targetOp = "QLinearConv";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["DequantizeLinear", "Cast", "Mul", "Conv", "QuantizeLinear"];
 
     match(op: OperationNode.Class): boolean {

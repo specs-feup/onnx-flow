@@ -7,9 +7,12 @@ import type { DataType } from "../../../OnnxTypes.js";
 export class LowerQLinearMatMulRecipe implements DecompositionRecipe {
     public readonly name = "LowerQLinearMatMul";
     public readonly targetOp = "QLinearMatMul";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["DequantizeLinear", "MatMul", "QuantizeLinear"];
 
     match(op: OperationNode.Class): boolean {

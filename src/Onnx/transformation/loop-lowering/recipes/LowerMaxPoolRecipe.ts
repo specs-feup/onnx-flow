@@ -10,6 +10,7 @@ import {
     computeStrides,
     getIntAttr,
     getIntsAttr,
+    getStringAttr,
     inferPoolDim,
     makeTensorProto,
     scalarInt64,
@@ -39,6 +40,9 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
     public readonly precision = "exact" as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["pooling", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
         "Reshape",
@@ -62,6 +66,8 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "MaxPool") return false;
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") return false;
         if (op.getOutputs().length > 1) return false; // optional Indices output not lowered here
         const X = op.getInputs()?.[0];
         if (!X || !Array.isArray(X.shape) || X.shape.length < 3) return false;

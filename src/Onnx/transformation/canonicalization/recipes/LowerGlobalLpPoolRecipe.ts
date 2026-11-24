@@ -8,9 +8,12 @@ import { getIntAttr, int64Vec, makeTensorProto } from "../../../Utils.js";
 export class LowerGlobalLpPoolRecipe implements DecompositionRecipe {
     public readonly name = "LowerGlobalLpPool";
     public readonly targetOp = "GlobalLpPool";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["ReduceL1", "ReduceL2", "Abs", "Pow", "ReduceSum"];
 
     match(op: OperationNode.Class): boolean {

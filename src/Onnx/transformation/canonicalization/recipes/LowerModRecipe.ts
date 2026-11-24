@@ -10,6 +10,11 @@ export class LowerModRecipe implements DecompositionRecipe {
     public readonly targetOp = "Mod";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["float-cast"];
     public readonly producedOps = ["Add", "Div", "Floor", "Neg", "Mul"];
 
     match(op: OperationNode.Class): boolean {

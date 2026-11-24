@@ -8,9 +8,12 @@ import { makeTensorProto } from "../../../Utils.js";
 export class LowerNegRecipe implements DecompositionRecipe {
     public readonly name = "LowerNeg";
     public readonly targetOp = "Neg";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Mul"];
 
     match(op: OperationNode.Class): boolean {

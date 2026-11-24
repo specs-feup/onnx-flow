@@ -10,6 +10,10 @@ export class LowerAbsRecipe implements DecompositionRecipe {
     public readonly targetOp = "Abs";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Where", "Greater", "Neg"];
 
     match(op: OperationNode.Class): boolean {

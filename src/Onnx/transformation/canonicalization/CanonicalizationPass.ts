@@ -228,6 +228,7 @@ export class CanonicalizationPass implements GraphPass {
         const existing = this.registry.get(key);
         if (existing !== undefined) {
             existing.push(recipe);
+            existing.sort((a, b) => b.priority - a.priority);
         } else {
             this.registry.set(key, [recipe]);
         }

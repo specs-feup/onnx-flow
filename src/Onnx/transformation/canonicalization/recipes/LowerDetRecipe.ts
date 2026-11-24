@@ -14,10 +14,13 @@ import {
 export class LowerDetRecipe implements DecompositionRecipe {
     public readonly name = "LowerDet";
     public readonly targetOp = "Det";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["linear-algebra"];
     public readonly producedOps = [
         "Slice",
         "Squeeze",
@@ -43,9 +46,12 @@ export class LowerDetRecipe implements DecompositionRecipe {
         const X = op.getInputs()?.[0];
         if (!X || !Array.isArray(X.shape)) return false;
         const dims = toStaticShape(X.shape);
-        if (dims.length < 2 || dims.includes(-1)) return false;
+        if (dims.length < 2) return false;
         const n = dims[dims.length - 1];
-        return n >= 1 && dims[dims.length - 2] === n;
+        if (n < 1 || dims[dims.length - 2] !== n) return false;
+        // General N >= 4 allocates static batch-sized sign/det constants
+        if (n >= 4 && dims.slice(0, -2).includes(-1)) return false;
+        return true;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

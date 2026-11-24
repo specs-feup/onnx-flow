@@ -29,6 +29,9 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
     public readonly precision = "exact" as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["indexing", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
         "Reshape",

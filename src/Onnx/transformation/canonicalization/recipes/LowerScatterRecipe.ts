@@ -8,10 +8,13 @@ import { getIntAttr } from "../../../Utils.js";
 export class LowerScatterRecipe implements DecompositionRecipe {
     public readonly name = "LowerScatter";
     public readonly targetOp = "Scatter";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["alias"];
     public readonly producedOps = ["ScatterElements"];
 
     match(op: OperationNode.Class): boolean {

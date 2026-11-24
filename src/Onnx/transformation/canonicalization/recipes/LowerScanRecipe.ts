@@ -25,10 +25,13 @@ import { createCapturedInput } from "../../loop-lowering/RecipeUtils.js";
 export class LowerScanRecipe implements DecompositionRecipe {
     public readonly name = "LowerScan";
     public readonly targetOp = "Scan";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["loop"];
     public readonly producedOps = [
         "Loop",
         "Shape",

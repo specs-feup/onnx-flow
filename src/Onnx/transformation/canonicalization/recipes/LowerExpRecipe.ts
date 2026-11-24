@@ -8,9 +8,13 @@ import { makeTensorProto } from "../../../Utils.js";
 export class LowerExpRecipe implements DecompositionRecipe {
     public readonly name = "LowerExp";
     public readonly targetOp = "Exp";
-    public readonly precision = "approximation" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["range-reduced", "horner", "division-free"];
     public readonly producedOps = ["Add", "Sub", "Mul", "Floor", "Less", "Greater", "Where"];
 
     match(op: OperationNode.Class): boolean {

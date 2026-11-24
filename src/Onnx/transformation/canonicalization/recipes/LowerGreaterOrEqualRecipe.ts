@@ -9,6 +9,10 @@ export class LowerGreaterOrEqualRecipe implements DecompositionRecipe {
     public readonly targetOp = "GreaterOrEqual";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Greater", "Equal", "Or"];
 
     match(op: OperationNode.Class): boolean {

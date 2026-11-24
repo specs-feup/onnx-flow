@@ -111,10 +111,13 @@ function parseEquation(equation: string, shapes: number[][]): ParsedEinsum | und
 export class LowerEinsumRecipe implements DecompositionRecipe {
     public readonly name = "LowerEinsum";
     public readonly targetOp = "Einsum";
-    public readonly phase = "canonicalization" as const;
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["contraction"];
     public readonly producedOps = [
         "Transpose",
         "Reshape",

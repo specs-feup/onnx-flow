@@ -10,6 +10,7 @@ import {
     computeStrides,
     int64Vec,
     UNKNOWN_SHAPE,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -36,6 +37,11 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     public readonly targetOp = OpCategory.Reduction;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["reduction", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
@@ -57,7 +63,11 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     match(op: OperationNode.Class): boolean {
         if (op.type === "ArgMax" || op.type === "ArgMin" || op.type === "TopK") return false;
         const schema = OpRegistry.getInstance().get(op.type, 19);
-        return schema?.category === OpCategory.Reduction;
+        if (schema?.category !== OpCategory.Reduction) return false;
+        const inputs = op.getInputs();
+        if (!inputs || inputs.length === 0) return false;
+        const dims = toStaticShape(inputs[0].shape);
+        return dims.length > 0 && !dims.includes(-1);
     }
 
     getLoopBounds(

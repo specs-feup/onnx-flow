@@ -10,6 +10,10 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
     public readonly targetOp = "QuantizeLinear";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = [
         "Cast",
         "Shape",
@@ -22,7 +26,12 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
     ];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "QuantizeLinear";
+        if (op.type !== "QuantizeLinear") return false;
+        const ins = op.getInputs();
+        if (!ins || ins.length < 2) return false;
+        if (getIntAttr(op, "block_size", 0) !== 0) return false;
+        const targetType = ins.length > 2 ? ins[2].literalType : op.getOutputs()[0]?.literalType;
+        return targetType === DataType.INT8 || targetType === DataType.UINT8;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

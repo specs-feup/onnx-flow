@@ -10,6 +10,10 @@ export class LowerConcatRecipe implements DecompositionRecipe {
     public readonly targetOp = "Concat";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = true;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = [
         "Shape",
         "Gather",
@@ -26,7 +30,7 @@ export class LowerConcatRecipe implements DecompositionRecipe {
     match(op: OperationNode.Class): boolean {
         if (op.type !== "Concat") return false;
         const inputs = op.getInputs() as ConcreteValueNode[];
-        if (inputs.length < 2) return false;
+        if (inputs.length < 1) return false;
 
         const rank = inputs[0].shape.length;
         if (!inputs.every((t) => t.shape.length === rank)) return false;
@@ -38,7 +42,7 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         const axis = axisAttr < 0 ? axisAttr + rank : axisAttr;
         if (axis < 0 || axis >= rank) return false;
 
-        return isNumeric(dtype);
+        return isNumeric(dtype) || dtype === DataType.BOOL;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -46,6 +50,15 @@ export class LowerConcatRecipe implements DecompositionRecipe {
         const Y = op.getOutputs()[0];
         const rank = inputs[0].shape.length;
         const dtype = inputs[0].literalType as DataType;
+
+        if (inputs.length === 1) {
+            const [idOut] = builder.createOp("Identity", [inputs[0]], {}, [
+                { type: dtype, shape: toStaticShape(Y.shape) },
+            ]);
+            builder.replaceAllUsesWith(Y, idOut);
+            builder.removeNode(op);
+            return;
+        }
 
         let axis = getIntAttr(op, "axis", 0);
         if (axis < 0) axis += rank;

@@ -10,6 +10,11 @@ export class LowerRoundStepRecipe implements DecompositionRecipe {
     public readonly targetOp = "Round";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 40;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["round-half-to-even"];
     public readonly producedOps = ["Floor", "Sub", "Equal", "Greater", "Mod", "Where", "Add"];
 
     match(op: OperationNode.Class): boolean {
@@ -87,9 +92,9 @@ export class LowerRoundStepRecipe implements DecompositionRecipe {
         )[0];
 
         // Add (floor(X), roundOut)
-        const _finalRoundOut = builder.createOp("Add", [floorOut, roundOut], {}, output)[0];
+        const finalRoundOut = builder.createOp("Add", [floorOut, roundOut], {}, output)[0];
 
-        builder.replaceAllUsesWith(Y, roundOut);
+        builder.replaceAllUsesWith(Y, finalRoundOut);
         op.remove();
     }
 }

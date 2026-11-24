@@ -8,9 +8,13 @@ import { makeTensorProto } from "../../../Utils.js";
 export class LowerReciprocalRecipe implements DecompositionRecipe {
     public readonly name = "LowerReciprocal";
     public readonly targetOp = "Reciprocal";
-    public readonly precision = "approximation" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["range-reduced", "newton-raphson", "division-free"];
     public readonly producedOps = ["Less", "Greater", "Where", "Mul", "Sub"];
 
     match(op: OperationNode.Class): boolean {

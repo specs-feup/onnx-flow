@@ -15,10 +15,16 @@ export class LowerDequantizeLinearRecipe implements DecompositionRecipe {
     public readonly targetOp = "DequantizeLinear";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Cast", "Shape", "Unsqueeze", "Expand", "Sub", "Mul"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "DequantizeLinear";
+        if (op.type !== "DequantizeLinear") return false;
+        const ins = op.getInputs();
+        return !!ins && ins.length >= 2 && getIntAttr(op, "block_size", 0) === 0;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

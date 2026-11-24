@@ -14,9 +14,13 @@ import {
 export class LowerSplitRecipe implements DecompositionRecipe {
     public readonly name = "LowerSplit";
     public readonly targetOp = "Split";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["slice-based"];
     public readonly producedOps = ["Slice"];
 
     match(op: OperationNode.Class): boolean {

@@ -8,6 +8,7 @@ import {
 } from "../../../OnnxTypes.js";
 import {
     computeStrides,
+    getIntAttr,
     getStringAttr,
     makeTensorProto,
     readConstIntegerVectorFromTensorNode,
@@ -32,6 +33,13 @@ import {
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
 
+const SUPPORTED_COORD_MODES = new Set([
+    "half_pixel",
+    "pytorch_half_pixel",
+    "align_corners",
+    "asymmetric",
+]);
+
 export class LowerResizeRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerResize";
     public readonly targetOp = "Resize";
@@ -39,6 +47,9 @@ export class LowerResizeRecipe implements LoopLoweringRecipe {
     public readonly precision = "exact" as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["imaging", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
         "Reshape",
@@ -75,6 +86,11 @@ export class LowerResizeRecipe implements LoopLoweringRecipe {
             const resizedAxes = inDims.filter((d, i) => d !== outDims[i]).length;
             return resizedAxes <= 2; // Supports 1D and 2D (bilinear) linear interpolation
         }
+
+        const coordMode = getStringAttr(op, "coordinate_transformation_mode", "half_pixel");
+        if (!SUPPORTED_COORD_MODES.has(coordMode)) return false;
+        if (getIntAttr(op, "antialias", 0) !== 0) return false;
+
         return true;
     }
 

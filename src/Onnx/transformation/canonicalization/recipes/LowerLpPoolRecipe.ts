@@ -16,9 +16,13 @@ const CONV_FORWARD_ATTRS = ["auto_pad", "dilations", "kernel_shape", "pads", "st
 export class LowerLpPoolRecipe implements DecompositionRecipe {
     public readonly name = "LowerLpPool";
     public readonly targetOp = "LpPool";
-    public readonly precision = "exact" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["conv-based"];
     public readonly producedOps = ["Abs", "Mul", "Pow", "Conv", "Sqrt"];
 
     match(op: OperationNode.Class): boolean {

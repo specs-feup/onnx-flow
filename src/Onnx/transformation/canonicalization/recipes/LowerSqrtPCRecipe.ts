@@ -8,9 +8,13 @@ import { makeTensorProto } from "../../../Utils.js";
 export class LowerSqrtPCRecipe implements DecompositionRecipe {
     public readonly name = "LowerSqrtPC";
     public readonly targetOp = "Sqrt";
-    public readonly precision = "approximation" as const;
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 60;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["range-reduced", "newton-raphson", "division-free"];
     public readonly producedOps = ["Sub", "Mul", "Less", "Greater", "Where"];
 
     match(op: OperationNode.Class): boolean {
