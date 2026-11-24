@@ -131,4 +131,17 @@ describe("Canonicalization - Binary & Comparison Recipes", () => {
             ).producedOps,
         ).toContain("ScatterElements");
     });
+
+    it("decomposes 1-input and 3-input variadic Min and Max", () => {
+        expect(
+            applyRecipe(new Recipes.canonicalization.VariadicMin(), "Min", [[2, 2]]).producedOps,
+        ).toContain("Identity");
+        expect(
+            applyRecipe(new Recipes.canonicalization.VariadicMax(), "Max", [
+                [2, 2],
+                [2, 2],
+                [2, 2],
+            ]).producedOps.filter((t) => t === "Max").length,
+        ).toBe(2);
+    });
 });

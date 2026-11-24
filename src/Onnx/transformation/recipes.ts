@@ -132,6 +132,19 @@ import { LowerSplitDynamicRecipe } from "./canonicalization/recipes/LowerSplitDy
 import { LowerSliceLoopRecipe } from "./loop-lowering/recipes/LowerSliceLoopRecipe.js";
 import { LowerPadLoopRecipe } from "./loop-lowering/recipes/LowerPadLoopRecipe.js";
 import { LowerTileLoopRecipe } from "./loop-lowering/recipes/LowerTileLoopRecipe.js";
+import {
+    LowerVariadicMaxRecipe,
+    LowerVariadicMinRecipe,
+} from "./canonicalization/recipes/LowerVariadicMinMaxRecipe.js";
+import { LowerOneHotLoopRecipe } from "./loop-lowering/recipes/LowerOneHotLoopRecipe.js";
+import { LowerDynamicReductionRecipe } from "./loop-lowering/recipes/LowerDynamicReductionRecipe.js";
+import {
+    LowerArgMaxLoopRecipe,
+    LowerArgMinLoopRecipe,
+} from "./canonicalization/recipes/LowerArgMinMaxLoopRecipe.js";
+import { LowerTopKLoopRecipe } from "./canonicalization/recipes/LowerTopKLoopRecipe.js";
+import { LowerMaxPoolWithIndicesRecipe } from "./canonicalization/recipes/LowerMaxPoolWithIndicesRecipe.js";
+import { LowerResizeCubicRecipe } from "./loop-lowering/recipes/LowerResizeCubicRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -245,6 +258,12 @@ export {
     LowerGRULoopRecipe,
     LowerLSTMLoopRecipe,
     LowerSplitDynamicRecipe,
+    LowerVariadicMinRecipe,
+    LowerVariadicMaxRecipe,
+    LowerArgMaxLoopRecipe,
+    LowerArgMinLoopRecipe,
+    LowerTopKLoopRecipe,
+    LowerMaxPoolWithIndicesRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -267,6 +286,9 @@ export {
     LowerSliceLoopRecipe,
     LowerPadLoopRecipe,
     LowerTileLoopRecipe,
+    LowerOneHotLoopRecipe,
+    LowerDynamicReductionRecipe,
+    LowerResizeCubicRecipe,
 };
 
 // Export an organized catalog object for easy IDE discovery/autocomplete
@@ -381,6 +403,12 @@ export const Recipes = {
         GRULoop: LowerGRULoopRecipe,
         LSTMLoop: LowerLSTMLoopRecipe,
         SplitDynamic: LowerSplitDynamicRecipe,
+        VariadicMin: LowerVariadicMinRecipe,
+        VariadicMax: LowerVariadicMaxRecipe,
+        ArgMaxLoop: LowerArgMaxLoopRecipe,
+        ArgMinLoop: LowerArgMinLoopRecipe,
+        TopKLoop: LowerTopKLoopRecipe,
+        MaxPoolWithIndices: LowerMaxPoolWithIndicesRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,
@@ -403,5 +431,8 @@ export const Recipes = {
         SliceLoop: LowerSliceLoopRecipe,
         PadLoop: LowerPadLoopRecipe,
         TileLoop: LowerTileLoopRecipe,
+        OneHotLoop: LowerOneHotLoopRecipe,
+        DynamicReduction: LowerDynamicReductionRecipe,
+        ResizeCubic: LowerResizeCubicRecipe,
     },
 };

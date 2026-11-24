@@ -7,6 +7,7 @@ import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
 import TensorNode from "../../src/Onnx/TensorNode.js";
 import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
+import type { KnownShape } from "../../src/Onnx/OnnxTypes.js";
 import { DataType, type AttributeMap, type TensorProto } from "../../src/Onnx/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../src/Onnx/Schema/index.js";
 import inferShapes from "../../src/Onnx/InferShapes.js";
@@ -35,9 +36,10 @@ interface SyntheticCase {
     opType: string;
     feeds: FeedSpec[];
     constInputs?: { index: number; proto: TensorProto }[];
+    inputShapes?: KnownShape[];
     attrs?: AttributeMap;
     outputNames?: string[];
-    outputSpecs?: { type: DataType; shape: number[] }[];
+    outputSpecs?: { type: DataType; shape: KnownShape }[];
     tol?: number | Record<string, number>;
     rtol?: number;
     exact?: boolean;
@@ -758,6 +760,162 @@ const CASES: SyntheticCase[] = [
         tol: 1e-6,
         indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
     },
+    {
+        name: "VariadicMin_3in",
+        opType: "Min",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [2, 3], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [2, 3], gen: "negmix" },
+            { name: "C", dtype: "float32", shape: [2, 3], gen: "negmix" },
+        ],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 3] }],
+        tol: 1e-6,
+    },
+    {
+        name: "VariadicMax_3in",
+        opType: "Max",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [2, 3], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [2, 3], gen: "negmix" },
+            { name: "C", dtype: "float32", shape: [2, 3], gen: "negmix" },
+        ],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 3] }],
+        tol: 1e-6,
+    },
+    {
+        name: "OneHotLoop_dynamic_depth",
+        opType: "OneHot",
+        feeds: [
+            { name: "I", dtype: "int64", shape: [2, 2], init: [0n, 2n, -1n, 1n] },
+            { name: "depth", dtype: "int64", shape: [], init: [4n] },
+            { name: "vals", dtype: "float32", shape: [2], init: [0.0, 1.0] },
+        ],
+        attrs: { axis: 1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 4, 2] }],
+        tol: 1e-6,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "DynamicReduceMean_keepdims1",
+        opType: "ReduceMean",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "negmix" }],
+        inputShapes: [[-1, 3, 4]],
+        constInputs: [{ index: 1, proto: int64Vec([1]) }],
+        attrs: { keepdims: 1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1, 1, 4] }],
+        tol: 1e-5,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "DynamicReduceMax_keepdims0",
+        opType: "ReduceMax",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "negmix" }],
+        inputShapes: [[-1, -1, 4]],
+        constInputs: [{ index: 1, proto: int64Vec([0, 2]) }],
+        attrs: { keepdims: 0 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [-1] }],
+        tol: 1e-6,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "ArgMaxLoop_dynamic_axis_first",
+        opType: "ArgMax",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], init: [1, 5, 5, 2, -3, -1, -1, -4] }],
+        inputShapes: [[2, -1]],
+        attrs: { axis: 1, keepdims: 1, select_last_index: 0 },
+        outputSpecs: [{ type: DataType.INT64, shape: [2, 1] }],
+        exact: true,
+    },
+    {
+        name: "ArgMinLoop_dynamic_axis_last_nokeep",
+        opType: "ArgMin",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], init: [4, 1, 1, 3, 2, -5, 0, -5] }],
+        inputShapes: [[-1, 4]],
+        attrs: { axis: 0, keepdims: 0, select_last_index: 1 },
+        outputSpecs: [{ type: DataType.INT64, shape: [4] }],
+        exact: true,
+    },
+    {
+        name: "TopKLoop_dynamic_k_largest",
+        opType: "TopK",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 5], init: [3, 1, 5, 5, 2, -1, -4, 0, 2, 2] },
+            { name: "K", dtype: "int64", shape: [1], init: [3n] },
+        ],
+        inputShapes: [[2, -1], [1]],
+        attrs: { axis: 1, largest: 1, sorted: 1 },
+        outputNames: ["Values", "Indices"],
+        outputSpecs: [
+            { type: DataType.FLOAT, shape: [2, -1] },
+            { type: DataType.INT64, shape: [2, -1] },
+        ],
+        exact: true,
+    },
+    {
+        name: "TopKLoop_dynamic_k_smallest_axis0",
+        opType: "TopK",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [4, 2], init: [3, 1, 5, -2, -1, 4, 0, -2] },
+            { name: "K", dtype: "int64", shape: [1], init: [2n] },
+        ],
+        attrs: { axis: 0, largest: 0, sorted: 1 },
+        outputNames: ["Values", "Indices"],
+        outputSpecs: [
+            { type: DataType.FLOAT, shape: [-1, 2] },
+            { type: DataType.INT64, shape: [-1, 2] },
+        ],
+        exact: true,
+    },
+    {
+        name: "ResizeCubic_2d",
+        opType: "Resize",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 1, 3, 3], gen: "negmix" }],
+        constInputs: [
+            { index: 1, proto: floatVec([]) },
+            { index: 2, proto: floatVec([1, 1, 2, 2]) },
+        ],
+        attrs: { mode: "cubic", cubic_coeff_a: -0.75, exclude_outside: 0 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 1, 6, 6] }],
+        tol: 1e-4,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "ResizeCubic_exclude_outside",
+        opType: "Resize",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 1, 3, 3], gen: "negmix" }],
+        constInputs: [
+            { index: 1, proto: floatVec([]) },
+            { index: 2, proto: floatVec([1, 1, 2, 2]) },
+        ],
+        attrs: { mode: "cubic", cubic_coeff_a: -0.75, exclude_outside: 1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 1, 6, 6] }],
+        tol: 1e-4,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+    },
+    {
+        name: "MaxPoolWithIndices_row_major_padded",
+        opType: "MaxPool",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+        attrs: { kernel_shape: [2, 2], strides: [2, 2], pads: [1, 1, 1, 1], storage_order: 0 },
+        outputNames: ["Y", "Indices"],
+        outputSpecs: [
+            { type: DataType.FLOAT, shape: [1, 2, 3, 3] },
+            { type: DataType.INT64, shape: [1, 2, 3, 3] },
+        ],
+        tol: { Y: 1e-6, Indices: 0 },
+    },
+    {
+        name: "MaxPoolWithIndices_col_major",
+        opType: "MaxPool",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+        attrs: { kernel_shape: [2, 2], strides: [2, 2], pads: [0, 0, 0, 0], storage_order: 1 },
+        outputNames: ["Y", "Indices"],
+        outputSpecs: [
+            { type: DataType.FLOAT, shape: [1, 2, 2, 2] },
+            { type: DataType.INT64, shape: [1, 2, 2, 2] },
+        ],
+        tol: { Y: 1e-6, Indices: 0 },
+    },
 ];
 
 const DTYPE_MAP: Record<FeedSpec["dtype"], DataType> = {
@@ -787,11 +945,13 @@ function buildSyntheticGraph(c: SyntheticCase): OnnxGraph.Class {
         if (constProto) {
             opInputs.push(builder.createConstant(`c_${i}`, constProto));
         } else {
-            const f = c.feeds[feedCursor++];
+            const feedIdx = feedCursor++;
+            const f = c.feeds[feedIdx];
+            const graphShape = c.inputShapes?.[feedIdx] ?? f.shape;
             opInputs.push(
                 graph
                     .addNode(f.name)
-                    .init(new TensorNode.Builder(DTYPE_MAP[f.dtype], f.shape, "input"))
+                    .init(new TensorNode.Builder(DTYPE_MAP[f.dtype], graphShape, "input"))
                     .as(TensorNode),
             );
         }

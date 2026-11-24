@@ -301,6 +301,30 @@ export const Resize: OpSchema = {
             required: false,
             defaultValue: "round_prefer_floor",
         },
+        cubic_coeff_a: {
+            name: "cubic_coeff_a",
+            type: AttributeType.FLOAT,
+            required: false,
+            defaultValue: -0.75,
+        },
+        exclude_outside: {
+            name: "exclude_outside",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        extrapolation_value: {
+            name: "extrapolation_value",
+            type: AttributeType.FLOAT,
+            required: false,
+            defaultValue: 0.0,
+        },
+        antialias: {
+            name: "antialias",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
     },
 
     inferShape: (inputs) => {

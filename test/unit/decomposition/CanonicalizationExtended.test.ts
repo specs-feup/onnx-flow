@@ -428,4 +428,48 @@ describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
         expect(res2.producedOps).not.toContain("Split");
         expect(res2.producedOps).toContain("Slice");
     });
+
+    it("decomposes dynamic ArgMax, ArgMin, and TopK via Loop recipes", () => {
+        const argMaxRes = applyRecipe(
+            new Recipes.canonicalization.ArgMaxLoop(),
+            "ArgMax",
+            [[2, -1]],
+            { axis: 1, keepdims: 1, select_last_index: 0 },
+        );
+        expect(argMaxRes.producedOps).not.toContain("ArgMax");
+        expect(argMaxRes.producedOps).toContain("Loop");
+
+        const argMinRes = applyRecipe(new Recipes.canonicalization.ArgMinLoop(), "ArgMin", [[-1]], {
+            axis: 0,
+            keepdims: 0,
+            select_last_index: 1,
+        });
+        expect(argMinRes.producedOps).not.toContain("ArgMin");
+        expect(argMinRes.producedOps).toContain("Loop");
+
+        const topKRes = applyRecipe(
+            new Recipes.canonicalization.TopKLoop(),
+            "TopK",
+            [[2, -1], { shape: [1], dataType: DataType.INT64 }],
+            { axis: 1, largest: 1, sorted: 1 },
+            DataType.FLOAT,
+            ["Values", "Indices"],
+        );
+        expect(topKRes.producedOps).not.toContain("TopK");
+        expect(topKRes.producedOps).toContain("Loop");
+    });
+    it("decomposes 2-output MaxPool (Y + Indices) with row-major and col-major storage_order", () => {
+        for (const storageOrder of [0, 1]) {
+            const res = applyRecipe(
+                new Recipes.canonicalization.MaxPoolWithIndices(),
+                "MaxPool",
+                [[1, 2, 4, 4]],
+                { kernel_shape: [2, 2], strides: [2, 2], storage_order: storageOrder },
+                DataType.FLOAT,
+                ["Y", "Indices"],
+            );
+            expect(res.producedOps).not.toContain("MaxPool");
+            expect(res.producedOps).toContain("Loop");
+        }
+    });
 });

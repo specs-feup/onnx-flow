@@ -168,7 +168,7 @@ export function convertFlowGraphToOnnxJson(
                     shape: {
                         dim: node.shape.map((d) => {
                             if (typeof d === "string") return { dimParam: d };
-                            return d == null ? {} : { dimValue: d };
+                            return d == null || d < 0 ? {} : { dimValue: d };
                         }),
                     },
                 },
@@ -205,7 +205,7 @@ export function convertFlowGraphToOnnxJson(
                     shape: {
                         dim: node.shape.map((d) => {
                             if (typeof d === "string") return { dimParam: d };
-                            return d == null ? {} : { dimValue: d };
+                            return d == null || d < 0 ? {} : { dimValue: d };
                         }),
                     },
                 },
@@ -267,8 +267,11 @@ export function convertFlowGraphToOnnxJson(
                     attr.type = AttributeType.INTS;
                 }
             } else if (typeof value === "number") {
-                // Distinguish between FLOAT and INT based on the schema
-                if (expectedType === AttributeType.FLOAT) {
+                // Distinguish between FLOAT and INT based on the schema (fallback to FLOAT for non-integers)
+                if (
+                    expectedType === AttributeType.FLOAT ||
+                    (expectedType === undefined && !Number.isInteger(value))
+                ) {
                     attr.f = value;
                     attr.type = AttributeType.FLOAT;
                 } else {

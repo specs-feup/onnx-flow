@@ -883,6 +883,96 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
                     ).toContain("Loop");
                 }
             });
+
+            it("lowers dynamic OneHot and dynamic Reductions in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    // Dynamic OneHot
+                    const gOH = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bOH = new GraphBuilder(gOH);
+                    const idxOH = gOH
+                        .addNode("I")
+                        .init(new TensorNode.Builder(DataType.INT64, [-1, 2], "input"))
+                        .as(TensorNode);
+                    const depthOH = gOH
+                        .addNode("D")
+                        .init(new TensorNode.Builder(DataType.INT64, [], "input"))
+                        .as(TensorNode);
+                    const valsOH = gOH
+                        .addNode("V")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2], "input"))
+                        .as(TensorNode);
+                    bOH.createOp("OneHot", [idxOH, depthOH, valsOH], { axis: -1 });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gOH,
+                        new HistoryManager(gOH),
+                    );
+                    expect(() => validateGraph(gOH)).not.toThrow();
+                    expect(
+                        gOH
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+
+                    // Dynamic ReduceMean
+                    const gRed = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bRed = new GraphBuilder(gRed);
+                    const xRed = gRed
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [-1, 4], "input"))
+                        .as(TensorNode);
+                    bRed.createOp("ReduceMean", [xRed], { axes: [1], keepdims: 1 });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gRed,
+                        new HistoryManager(gRed),
+                    );
+                    expect(() => validateGraph(gRed)).not.toThrow();
+                    expect(
+                        gRed
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+                }
+            });
+
+            it("lowers 1D/2D cubic Resize (with and without exclude_outside) in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const b = new GraphBuilder(g);
+                    const x = g
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 3, 3], "input"))
+                        .as(TensorNode);
+                    const roi = b.createConstant("roi", {
+                        dataType: DataType.FLOAT,
+                        dims: [0],
+                        floatData: [],
+                    });
+                    const scales = b.createConstant("scales", {
+                        dataType: DataType.FLOAT,
+                        dims: [4],
+                        floatData: [1, 1, 2, 2],
+                    });
+                    b.createOp(
+                        "Resize",
+                        [x, roi, scales],
+                        { mode: "cubic", cubic_coeff_a: -0.75, exclude_outside: 1 },
+                        [{ type: DataType.FLOAT, shape: [1, 1, 6, 6] }],
+                    );
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        g,
+                        new HistoryManager(g),
+                    );
+                    expect(() => validateGraph(g)).not.toThrow();
+                    expect(
+                        g
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+                }
+            });
         });
     });
 });

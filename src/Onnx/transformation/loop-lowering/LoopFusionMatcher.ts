@@ -39,6 +39,9 @@ import { LowerConvNDRecipe } from "./recipes/LowerConvNDRecipe.js";
 import { LowerSliceLoopRecipe } from "./recipes/LowerSliceLoopRecipe.js";
 import { LowerPadLoopRecipe } from "./recipes/LowerPadLoopRecipe.js";
 import { LowerTileLoopRecipe } from "./recipes/LowerTileLoopRecipe.js";
+import { LowerDynamicReductionRecipe } from "./recipes/LowerDynamicReductionRecipe.js";
+import { LowerOneHotLoopRecipe } from "./recipes/LowerOneHotLoopRecipe.js";
+import { LowerResizeCubicRecipe } from "./recipes/LowerResizeCubicRecipe.js";
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -76,6 +79,9 @@ export class LoopFusionMatcher {
                       new LowerSliceLoopRecipe(),
                       new LowerPadLoopRecipe(),
                       new LowerTileLoopRecipe(),
+                      new LowerOneHotLoopRecipe(),
+                      new LowerDynamicReductionRecipe(),
+                      new LowerResizeCubicRecipe(),
                   ];
 
         this.recipes.sort((a, b) => b.priority - a.priority);
