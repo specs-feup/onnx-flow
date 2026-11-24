@@ -40,15 +40,6 @@ import { LowerSliceLoopRecipe } from "./recipes/LowerSliceLoopRecipe.js";
 import { LowerPadLoopRecipe } from "./recipes/LowerPadLoopRecipe.js";
 import { LowerTileLoopRecipe } from "./recipes/LowerTileLoopRecipe.js";
 
-const SELF_CARRY_OPS = new Set([
-    "AveragePool",
-    "CumSum",
-    "MaxPool",
-    "ScatterND",
-    "ConvTranspose",
-    "MatMul",
-]);
-
 export class LoopFusionMatcher {
     private boundsCache = new Map<
         string,
@@ -56,28 +47,38 @@ export class LoopFusionMatcher {
     >();
     private recipes: LoopLoweringRecipe[];
 
-    constructor(private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode }) {
-        this.recipes = [
-            new LowerElementWiseRecipe(),
-            new LowerReductionRecipe(),
-            new LowerTransposeRecipe(),
-            new LowerRangeRecipe(),
-            this.options.coalesce ? new LowerCoalescedMatMulRecipe() : new LowerMatMulRecipe(),
-            new LowerConvRecipe(),
-            new LowerConvNDRecipe(),
-            new LowerAveragePoolLoopRecipe(),
-            new LowerCumSumRecipe(),
-            new LowerReverseSequenceRecipe(),
-            new LowerGatherElementsRecipe(),
-            new LowerGatherNDRecipe(),
-            new LowerMaxPoolRecipe(),
-            new LowerScatterNDRecipe(),
-            new LowerConvTransposeRecipe(),
-            new LowerResizeRecipe(),
-            new LowerSliceLoopRecipe(),
-            new LowerPadLoopRecipe(),
-            new LowerTileLoopRecipe(),
-        ];
+    constructor(
+        private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode },
+        customRecipes?: LoopLoweringRecipe[],
+    ) {
+        this.recipes =
+            customRecipes !== undefined
+                ? [...customRecipes]
+                : [
+                      new LowerElementWiseRecipe(),
+                      new LowerReductionRecipe(),
+                      new LowerTransposeRecipe(),
+                      new LowerRangeRecipe(),
+                      this.options.coalesce
+                          ? new LowerCoalescedMatMulRecipe()
+                          : new LowerMatMulRecipe(),
+                      new LowerConvRecipe(),
+                      new LowerConvNDRecipe(),
+                      new LowerAveragePoolLoopRecipe(),
+                      new LowerCumSumRecipe(),
+                      new LowerReverseSequenceRecipe(),
+                      new LowerGatherElementsRecipe(),
+                      new LowerGatherNDRecipe(),
+                      new LowerMaxPoolRecipe(),
+                      new LowerScatterNDRecipe(),
+                      new LowerConvTransposeRecipe(),
+                      new LowerResizeRecipe(),
+                      new LowerSliceLoopRecipe(),
+                      new LowerPadLoopRecipe(),
+                      new LowerTileLoopRecipe(),
+                  ];
+
+        this.recipes.sort((a, b) => b.priority - a.priority);
     }
 
     public findOpportunities(graph: OnnxGraph.Class): TransformationOpportunity[] {
@@ -327,9 +328,12 @@ export class LoopFusionMatcher {
         const registry = OpRegistry.getInstance();
 
         const roots = ops.filter((op) => {
-            if (!this.isSupported(op)) return false;
             const opRecipe = this.getRecipeFor(op);
-            if (SELF_CARRY_OPS.has(op.type) || opRecipe?.postProcess !== undefined) {
+            if (opRecipe === undefined) return false;
+            if (
+                opRecipe.tags?.includes("self-carry") === true ||
+                opRecipe.postProcess !== undefined
+            ) {
                 return true;
             }
 
