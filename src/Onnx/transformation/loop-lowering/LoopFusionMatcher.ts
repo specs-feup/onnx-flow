@@ -34,8 +34,20 @@ import { LowerMaxPoolRecipe } from "./recipes/LowerMaxPoolRecipe.js";
 import { LowerScatterNDRecipe } from "./recipes/LowerScatterNDRecipe.js";
 import { LowerConvTransposeRecipe } from "./recipes/LowerConvTransposeRecipe.js";
 import { LowerResizeRecipe } from "./recipes/LowerResizeRecipe.js";
+import { LowerAveragePoolLoopRecipe } from "./recipes/LowerAveragePoolLoopRecipe.js";
+import { LowerConvNDRecipe } from "./recipes/LowerConvNDRecipe.js";
+import { LowerSliceLoopRecipe } from "./recipes/LowerSliceLoopRecipe.js";
+import { LowerPadLoopRecipe } from "./recipes/LowerPadLoopRecipe.js";
+import { LowerTileLoopRecipe } from "./recipes/LowerTileLoopRecipe.js";
 
-const SELF_CARRY_OPS = new Set(["CumSum", "MaxPool", "ScatterND", "ConvTranspose", "MatMul"]);
+const SELF_CARRY_OPS = new Set([
+    "AveragePool",
+    "CumSum",
+    "MaxPool",
+    "ScatterND",
+    "ConvTranspose",
+    "MatMul",
+]);
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -52,6 +64,8 @@ export class LoopFusionMatcher {
             new LowerRangeRecipe(),
             this.options.coalesce ? new LowerCoalescedMatMulRecipe() : new LowerMatMulRecipe(),
             new LowerConvRecipe(),
+            new LowerConvNDRecipe(),
+            new LowerAveragePoolLoopRecipe(),
             new LowerCumSumRecipe(),
             new LowerReverseSequenceRecipe(),
             new LowerGatherElementsRecipe(),
@@ -60,6 +74,9 @@ export class LoopFusionMatcher {
             new LowerScatterNDRecipe(),
             new LowerConvTransposeRecipe(),
             new LowerResizeRecipe(),
+            new LowerSliceLoopRecipe(),
+            new LowerPadLoopRecipe(),
+            new LowerTileLoopRecipe(),
         ];
     }
 

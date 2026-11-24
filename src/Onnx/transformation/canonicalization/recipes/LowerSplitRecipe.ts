@@ -29,9 +29,9 @@ export class LowerSplitRecipe implements DecompositionRecipe {
         if (!ins || ins.length === 0 || !Array.isArray(ins[0].shape) || ins[0].shape.length === 0) {
             return false;
         }
-        const splitConst =
-            ins.length >= 2 ? readConstIntegerVectorFromTensorNode(ins[1]) : undefined;
-        if (splitConst) return true;
+        if (ins.length >= 2 && ins[1].id !== "") {
+            return readConstIntegerVectorFromTensorNode(ins[1]) !== undefined;
+        }
         const shape = toStaticShape(ins[0].shape);
         const axis = normalizeAxis(getIntAttr(op, "axis", 0), shape.length);
         return shape[axis] > 0;

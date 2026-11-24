@@ -104,6 +104,10 @@ import { LowerArgMaxRecipe, LowerArgMinRecipe } from "./recipes/LowerArgMinMaxRe
 import { LowerDetRecipe } from "./recipes/LowerDetRecipe.js";
 import { LowerEinsumRecipe } from "./recipes/LowerEinsumRecipe.js";
 import { LowerTopKRecipe } from "./recipes/LowerTopKRecipe.js";
+import { LowerRNNLoopRecipe } from "./recipes/LowerRNNLoopRecipe.js";
+import { LowerGRULoopRecipe } from "./recipes/LowerGRULoopRecipe.js";
+import { LowerLSTMLoopRecipe } from "./recipes/LowerLSTMLoopRecipe.js";
+import { LowerSplitDynamicRecipe } from "./recipes/LowerSplitDynamicRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -123,6 +127,10 @@ export class CanonicalizationPass implements GraphPass {
             new LowerConcatRecipe(),
             new LowerClipRecipe(),
             new LowerAveragePoolRecipe(),
+            new LowerRNNLoopRecipe(),
+            new LowerGRULoopRecipe(),
+            new LowerLSTMLoopRecipe(),
+            new LowerSplitDynamicRecipe(),
 
             // ElementWise Operations
             new LowerReluRecipe(),

@@ -334,6 +334,7 @@ export function convertFlowGraphToOnnxJson(
         }
 
         modelNodes.push({
+            name: opNode.id,
             opType,
             input: inputs,
             output: outputs,

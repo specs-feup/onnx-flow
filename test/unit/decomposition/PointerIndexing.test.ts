@@ -689,6 +689,200 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
                     expect(rzLoops.length).toBe(1); // Resize + Relu fuses cleanly into 1 loop
                 }
             });
+            it("lowers 1D/2D-non-overlapping/3D AveragePool via LowerAveragePoolLoopRecipe in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    // 1D AveragePool with padding and count_include_pad = 0
+                    const g1D = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const b1D = new GraphBuilder(g1D);
+                    const x1D = g1D
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 5], "input"))
+                        .as(TensorNode);
+                    b1D.createOp("AveragePool", [x1D], {
+                        kernel_shape: [3],
+                        strides: [2],
+                        pads: [1, 1],
+                        count_include_pad: 0,
+                    });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        g1D,
+                        new HistoryManager(g1D),
+                    );
+                    expect(() => validateGraph(g1D)).not.toThrow();
+                    expect(
+                        g1D
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+
+                    // 3D AveragePool
+                    const g3D = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const b3D = new GraphBuilder(g3D);
+                    const x3D = g3D
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4, 4], "input"))
+                        .as(TensorNode);
+                    b3D.createOp("AveragePool", [x3D], {
+                        kernel_shape: [2, 2, 2],
+                        strides: [2, 2, 2],
+                        pads: [0, 0, 0, 0, 0, 0],
+                    });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        g3D,
+                        new HistoryManager(g3D),
+                    );
+                    expect(() => validateGraph(g3D)).not.toThrow();
+                    expect(
+                        g3D
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+                }
+            });
+
+            it("lowers 1D and 3D Conv via LowerConvNDRecipe in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    // 1D Conv with bias & group = 2
+                    const g1D = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const b1D = new GraphBuilder(g1D);
+                    const x1D = g1D
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 4, 6], "input"))
+                        .as(TensorNode);
+                    const w1D = g1D
+                        .addNode("W")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [4, 2, 3], "input"))
+                        .as(TensorNode);
+                    const bias1D = g1D
+                        .addNode("B")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [4], "input"))
+                        .as(TensorNode);
+                    b1D.createOp("Conv", [x1D, w1D, bias1D], {
+                        group: 2,
+                        strides: [1],
+                        pads: [1, 1],
+                    });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        g1D,
+                        new HistoryManager(g1D),
+                    );
+                    expect(() => validateGraph(g1D)).not.toThrow();
+                    expect(
+                        g1D
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+
+                    // 3D Conv
+                    const g3D = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const b3D = new GraphBuilder(g3D);
+                    const x3D = g3D
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 3, 3, 3], "input"))
+                        .as(TensorNode);
+                    const w3D = g3D
+                        .addNode("W")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 2, 2, 2], "input"))
+                        .as(TensorNode);
+                    b3D.createOp("Conv", [x3D, w3D], {
+                        strides: [1, 1, 1],
+                        pads: [0, 0, 0, 0, 0, 0],
+                    });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        g3D,
+                        new HistoryManager(g3D),
+                    );
+                    expect(() => validateGraph(g3D)).not.toThrow();
+                    expect(
+                        g3D
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+                }
+            });
+            it("lowers dynamic Slice, Pad (wrap/reflect/dynamic), and Tile via loop recipes in Pointer & Radix modes", () => {
+                for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                    // Dynamic Slice
+                    const gSl = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bSl = new GraphBuilder(gSl);
+                    const xSl = gSl
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [-1, 6], "input"))
+                        .as(TensorNode);
+                    const stSl = gSl
+                        .addNode("starts")
+                        .init(new TensorNode.Builder(DataType.INT64, [1], "input"))
+                        .as(TensorNode);
+                    const enSl = gSl
+                        .addNode("ends")
+                        .init(new TensorNode.Builder(DataType.INT64, [1], "input"))
+                        .as(TensorNode);
+                    bSl.createOp("Slice", [xSl, stSl, enSl]);
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gSl,
+                        new HistoryManager(gSl),
+                    );
+                    expect(() => validateGraph(gSl)).not.toThrow();
+                    expect(
+                        gSl
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+
+                    // Pad (wrap mode with dynamic pads)
+                    const gPad = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bPad = new GraphBuilder(gPad);
+                    const xPad = gPad
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+                        .as(TensorNode);
+                    const pPad = gPad
+                        .addNode("pads")
+                        .init(new TensorNode.Builder(DataType.INT64, [4], "input"))
+                        .as(TensorNode);
+                    bPad.createOp("Pad", [xPad, pPad], { mode: "wrap" });
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gPad,
+                        new HistoryManager(gPad),
+                    );
+                    expect(() => validateGraph(gPad)).not.toThrow();
+                    expect(
+                        gPad
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+
+                    // Dynamic Tile
+                    const gTile = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                    const bTile = new GraphBuilder(gTile);
+                    const xTile = gTile
+                        .addNode("X")
+                        .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3], "input"))
+                        .as(TensorNode);
+                    const rTile = gTile
+                        .addNode("repeats")
+                        .init(new TensorNode.Builder(DataType.INT64, [2], "input"))
+                        .as(TensorNode);
+                    bTile.createOp("Tile", [xTile, rTile]);
+                    new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                        gTile,
+                        new HistoryManager(gTile),
+                    );
+                    expect(() => validateGraph(gTile)).not.toThrow();
+                    expect(
+                        gTile
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type),
+                    ).toContain("Loop");
+                }
+            });
         });
     });
 });

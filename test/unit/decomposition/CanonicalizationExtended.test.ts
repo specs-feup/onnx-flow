@@ -356,4 +356,76 @@ describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
             applyRecipe(new Recipes.canonicalization.Det(), "Det", [[3, 3]], {}).producedOps,
         ).not.toContain("Det");
     });
+
+    it("decomposes dynamic / layout=1 / sequence_lens RNN, GRU, and LSTM via Loop recipes", () => {
+        // Dynamic seq_len & batch_size RNN
+        const rnnRes = applyRecipe(
+            new Recipes.canonicalization.RNNLoop(),
+            "RNN",
+            [
+                [-1, -1, 4],
+                [1, 5, 4],
+                [1, 5, 5],
+            ],
+            { hidden_size: 5 },
+            DataType.FLOAT,
+            ["Y", "Y_h"],
+        );
+        expect(rnnRes.producedOps).not.toContain("RNN");
+        expect(rnnRes.producedOps).toContain("Loop");
+
+        // layout=1 (batch_first) bidirectional GRU
+        const gruRes = applyRecipe(
+            new Recipes.canonicalization.GRULoop(),
+            "GRU",
+            [
+                [2, 3, 4],
+                [2, 15, 4],
+                [2, 15, 5],
+            ],
+            { hidden_size: 5, layout: 1, direction: "bidirectional" },
+            DataType.FLOAT,
+            ["Y", "Y_h"],
+        );
+        expect(gruRes.producedOps).not.toContain("GRU");
+        expect(gruRes.producedOps).toContain("Loop");
+
+        // sequence_lens LSTM
+        const lstmRes = applyRecipe(
+            new Recipes.canonicalization.LSTMLoop(),
+            "LSTM",
+            [[4, 2, 3], [1, 16, 3], [1, 16, 4], [1, 32], { shape: [2], dataType: DataType.INT32 }],
+            { hidden_size: 4 },
+            DataType.FLOAT,
+            ["Y", "Y_h", "Y_c"],
+        );
+        expect(lstmRes.producedOps).not.toContain("LSTM");
+        expect(lstmRes.producedOps).toContain("Loop");
+    });
+    it("decomposes dynamic Split via LowerSplitDynamicRecipe (runtime split & dynamic axis)", () => {
+        // Runtime split tensor
+        const res1 = applyRecipe(
+            new Recipes.canonicalization.SplitDynamic(),
+            "Split",
+            [[4, 3], { shape: [2], dataType: DataType.INT64 }],
+            { axis: 0 },
+            DataType.FLOAT,
+            ["Y0", "Y1"],
+        );
+        expect(res1.producedOps).not.toContain("Split");
+        expect(res1.producedOps).toContain("CumSum");
+        expect(res1.producedOps).toContain("Slice");
+
+        // Dynamic axis equal split (no split tensor)
+        const res2 = applyRecipe(
+            new Recipes.canonicalization.SplitDynamic(),
+            "Split",
+            [[-1, 3]],
+            { axis: 0, num_outputs: 2 },
+            DataType.FLOAT,
+            ["Y0", "Y1"],
+        );
+        expect(res2.producedOps).not.toContain("Split");
+        expect(res2.producedOps).toContain("Slice");
+    });
 });
