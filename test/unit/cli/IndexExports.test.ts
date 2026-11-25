@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import path from "path";
 import {
     parseOnnxFile,
     loadGraph,
@@ -8,14 +7,16 @@ import {
     generateGraphCode,
 } from "../../../src/index.js";
 import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import { ensureProtoExists, PROJECT_ROOT } from "../../compatibility_test.js";
+import { ensureProtoExists } from "../../helpers/ortHarness.js";
+import { ensureModelExists } from "../../helpers/modelFactory.js";
 
 describe("index.ts Library Functionality", () => {
-    beforeAll(() => {
-        ensureProtoExists();
-    });
+    let modelPath = "";
 
-    const modelPath = path.resolve(PROJECT_ROOT, "examples/onnx/vector_add_standard.onnx");
+    beforeAll(async () => {
+        ensureProtoExists();
+        modelPath = await ensureModelExists("examples/onnx/vector_add_standard.onnx");
+    });
 
     it("parses ONNX file into RawOnnxModel", async () => {
         const raw = await parseOnnxFile(modelPath);
@@ -26,12 +27,10 @@ describe("index.ts Library Functionality", () => {
     it("loads graph as DOT string and OnnxGraph object", async () => {
         const raw = await parseOnnxFile(modelPath);
 
-        // Load as DOT string
         const dotString = loadGraph(raw, false, false, true);
         expect(typeof dotString).toBe("string");
         expect(dotString).toContain("digraph");
 
-        // Load as OnnxGraph instance
         const graphObj = loadGraph(raw, false, false, false);
         expect(graphObj).toBeInstanceOf(OnnxGraph.Class);
     });
