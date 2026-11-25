@@ -1,10 +1,14 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import type { DataType } from "../../../OnnxTypes.js";
-import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
 import {
-    computeStrides,
+    type ValueNode,
+    type ConcreteValueNode,
+    type KnownShape,
+    DataType,
+} from "../../../OnnxTypes.js";
+import {
     getIntAttr,
+    int64Vec,
     makeTensorProto,
     normalizeAxis,
     readScalarFromTensorNode,
@@ -19,8 +23,10 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
@@ -36,10 +42,12 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly priority = 50;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["scan", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "ScatterElements",
@@ -61,16 +69,31 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
         if (!ins || ins.length < 2) return false;
         const dims = toStaticShape(ins[0].shape);
         const axisVal = readScalarFromTensorNode(ins[1]);
-        return dims.length > 0 && !dims.includes(-1) && axisVal !== undefined;
+        return dims.length > 0 && axisVal !== undefined;
     }
 
     getLoopBounds(
         op: OperationNode.Class,
         _outShape: KnownShape,
-    ): { totalIters: number; carryShape: number[] } {
-        const dims = toStaticShape(op.getInputs()![0].shape);
-        const total = dims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: dims };
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
+        const X = op.getInputs()![0];
+        const dims = toStaticShape(X.shape);
+        if (!dims.includes(-1)) {
+            const total = dims.reduce((a, b) => a * b, 1);
+            return { totalIters: total, carryShape: dims };
+        }
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `cs_bounds_${op.id}`);
+        const ax0 = builder.createConstant(`csb_ax0_${op.id}`, int64Vec([0]));
+        const [targetShape] = builder.createOp("Shape", [X], {}, [
+            { type: DataType.INT64, shape: [dims.length] },
+        ]);
+        const [totalIters] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, ax0]);
+        return { totalIters, carryShape, targetShape };
     }
 
     apply(
@@ -87,16 +110,12 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
         const builder = new GraphBuilder(body, `cumsum_${op.id}`);
         const ins = op.getInputs()!;
         const X = ins[0];
-        const dims = toStaticShape(X.shape);
+        const rawDims = toStaticShape(X.shape);
         const dtype = X.literalType as DataType;
 
-        const axis = normalizeAxis(Math.trunc(readScalarFromTensorNode(ins[1])!), dims.length);
+        const axis = normalizeAxis(Math.trunc(readScalarFromTensorNode(ins[1])!), rawDims.length);
         const exclusive = getIntAttr(op, "exclusive", 0) !== 0;
         const reverse = getIntAttr(op, "reverse", 0) !== 0;
-
-        const strides = computeStrides(dims);
-        const axisStride = strides[axis];
-        const axisDim = dims[axis];
 
         const rawInnerX = resolveRecipeInput(
             builder,
@@ -110,7 +129,14 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
             targetShapeNode,
             loopCtx,
         );
+        const dims = extractMixedDims(builder, rawInnerX, rawDims, `cs_${op.id}`);
+        const strides = buildMixedStrides(builder, dims);
+        const axisStride = strides[axis];
+        const axisDim = dims[axis];
         const flatX = ensureFlatInput(builder, rawInnerX);
+
+        const zeroI64 = builder.createConstant(`cs_z64_${op.id}`, scalarInt64(0));
+        const oneI64 = builder.createConstant(`cs_one_${op.id}`, scalarInt64(1));
 
         let flatOutIdx: ConcreteValueNode;
         let axisCoord: ConcreteValueNode;
@@ -125,11 +151,37 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
             );
             axisCoord = counters[axis];
 
-            const ptrStrides = [...strides];
-            let initialOffset = 0;
+            const ptrStrides: (number | ConcreteValueNode)[] = [...strides];
+            let initialOffset: number | ConcreteValueNode = 0;
             if (reverse) {
-                ptrStrides[axis] = -axisStride;
-                initialOffset = (axisDim - 1) * axisStride;
+                ptrStrides[axis] =
+                    typeof axisStride === "number"
+                        ? -axisStride
+                        : builder.createOp("Sub", [zeroI64, axisStride])[0];
+                if (typeof axisDim === "number" && typeof axisStride === "number") {
+                    initialOffset = (axisDim - 1) * axisStride;
+                } else {
+                    const outerB = loopCtx.outerBuilder;
+                    const oDims = extractMixedDims(outerB, X, rawDims, `cso_${op.id}`);
+                    const oStrides = buildMixedStrides(outerB, oDims);
+                    const oAxisDim =
+                        typeof oDims[axis] === "number"
+                            ? outerB.createConstant(
+                                  `cso_adim_${op.id}`,
+                                  scalarInt64(oDims[axis] as number),
+                              )
+                            : (oDims[axis] as ConcreteValueNode);
+                    const oAxisStride =
+                        typeof oStrides[axis] === "number"
+                            ? outerB.createConstant(
+                                  `cso_astr_${op.id}`,
+                                  scalarInt64(oStrides[axis] as number),
+                              )
+                            : (oStrides[axis] as ConcreteValueNode);
+                    const oOne = outerB.createConstant(`cso_one_${op.id}`, scalarInt64(1));
+                    const [dimMinus1] = outerB.createOp("Sub", [oAxisDim, oOne]);
+                    [initialOffset] = outerB.createOp("Mul", [dimMinus1, oAxisStride]);
+                }
             }
             flatOutIdx = buildAguPointer(
                 builder,
@@ -145,25 +197,27 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
             axisCoord = coords[axis];
             const mappedCoords = [...coords];
             if (reverse) {
-                const lastIdx = builder.createConstant(
-                    `cs_last_${op.id}`,
-                    scalarInt64(axisDim - 1),
-                );
+                const lastIdx =
+                    typeof axisDim === "number"
+                        ? builder.createConstant(`cs_last_${op.id}`, scalarInt64(axisDim - 1))
+                        : builder.createOp("Sub", [axisDim, oneI64])[0];
                 [mappedCoords[axis]] = builder.createOp("Sub", [lastIdx, axisCoord]);
             }
             flatOutIdx = buildLinearIndex(builder, mappedCoords, strides, `cs_lin_${op.id}`);
         }
 
-        const zeroI64 = builder.createConstant(`cs_z64_${op.id}`, scalarInt64(0));
-        const strideConst = builder.createConstant(`cs_str_${op.id}`, scalarInt64(axisStride));
+        const strideNode =
+            typeof axisStride === "number"
+                ? builder.createConstant(`cs_str_${op.id}`, scalarInt64(axisStride))
+                : axisStride;
         const zeroVal = builder.createConstant(`cs_zval_${op.id}`, makeTensorProto(dtype, [], [0]));
 
         const [isFirst] = builder.createOp("Equal", [axisCoord, zeroI64]);
 
         // Previous element index along the cumsum axis (clamped to 0 when isFirst)
         const [rawPrevIdx] = reverse
-            ? builder.createOp("Add", [flatOutIdx, strideConst])
-            : builder.createOp("Sub", [flatOutIdx, strideConst]);
+            ? builder.createOp("Add", [flatOutIdx, strideNode])
+            : builder.createOp("Sub", [flatOutIdx, strideNode]);
         const [safePrevIdx] = builder.createOp("Where", [isFirst, zeroI64, rawPrevIdx]);
 
         const prevCarry = gatherScalar(builder, carryNode, safePrevIdx);

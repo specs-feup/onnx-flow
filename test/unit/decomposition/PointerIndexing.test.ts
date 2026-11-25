@@ -1013,5 +1013,181 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
                 ).toContain("Loop");
             }
         });
+
+        it("lowers dynamic-shape CumSum, ReverseSequence, GatherElements, GatherND, ScatterND, MaxPool, ConvTranspose, and Resize in Pointer & Radix modes", () => {
+            for (const mode of [IndexingMode.Pointer, IndexingMode.Radix]) {
+                // 1. Dynamic CumSum (reverse=1)
+                const gCS = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bCS = new GraphBuilder(gCS);
+                const xCS = gCS
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, -1], "input"))
+                    .as(TensorNode);
+                const axCS = bCS.createConstant("ax", scalarInt64(2));
+                bCS.createOp("CumSum", [xCS, axCS], { exclusive: 0, reverse: 1 }, [
+                    { type: DataType.FLOAT, shape: [-1, 3, -1] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gCS,
+                    new HistoryManager(gCS),
+                );
+                expect(() => validateGraph(gCS)).not.toThrow();
+                expect(
+                    gCS
+                        .getOperationNodes()
+                        .toArray()
+                        .map((o) => o.type),
+                ).toContain("Loop");
+
+                // 2. Dynamic ReverseSequence
+                const gRS = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bRS = new GraphBuilder(gRS);
+                const xRS = gRS
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1, 2], "input"))
+                    .as(TensorNode);
+                const sRS = gRS
+                    .addNode("S")
+                    .init(new TensorNode.Builder(DataType.INT64, [-1], "input"))
+                    .as(TensorNode);
+                bRS.createOp("ReverseSequence", [xRS, sRS], { batch_axis: 0, time_axis: 1 }, [
+                    { type: DataType.FLOAT, shape: [-1, -1, 2] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gRS,
+                    new HistoryManager(gRS),
+                );
+                expect(() => validateGraph(gRS)).not.toThrow();
+
+                // 3. Dynamic GatherElements
+                const gGE = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bGE = new GraphBuilder(gGE);
+                const dGE = gGE
+                    .addNode("D")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, -1], "input"))
+                    .as(TensorNode);
+                const iGE = gGE
+                    .addNode("I")
+                    .init(new TensorNode.Builder(DataType.INT64, [-1, -1, -1], "input"))
+                    .as(TensorNode);
+                bGE.createOp("GatherElements", [dGE, iGE], { axis: 1 }, [
+                    { type: DataType.FLOAT, shape: [-1, -1, -1] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gGE,
+                    new HistoryManager(gGE),
+                );
+                expect(() => validateGraph(gGE)).not.toThrow();
+
+                // 4. Dynamic GatherND & ScatterND
+                const gGND = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bGND = new GraphBuilder(gGND);
+                const dGND = gGND
+                    .addNode("D")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, -1], "input"))
+                    .as(TensorNode);
+                const iGND = gGND
+                    .addNode("I")
+                    .init(new TensorNode.Builder(DataType.INT64, [-1, 2], "input"))
+                    .as(TensorNode);
+                bGND.createOp("GatherND", [dGND, iGND], {}, [
+                    { type: DataType.FLOAT, shape: [-1, -1] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gGND,
+                    new HistoryManager(gGND),
+                );
+                expect(() => validateGraph(gGND)).not.toThrow();
+
+                const gSND = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bSND = new GraphBuilder(gSND);
+                const dSND = gSND
+                    .addNode("D")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, -1], "input"))
+                    .as(TensorNode);
+                const iSND = gSND
+                    .addNode("I")
+                    .init(new TensorNode.Builder(DataType.INT64, [-1, 2], "input"))
+                    .as(TensorNode);
+                const uSND = gSND
+                    .addNode("U")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1], "input"))
+                    .as(TensorNode);
+                bSND.createOp("ScatterND", [dSND, iSND, uSND], {}, [
+                    { type: DataType.FLOAT, shape: [-1, 3, -1] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gSND,
+                    new HistoryManager(gSND),
+                );
+                expect(() => validateGraph(gSND)).not.toThrow();
+
+                // 5. Dynamic MaxPool, ConvTranspose, Resize
+                const gMP = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bMP = new GraphBuilder(gMP);
+                const xMP = gMP
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, -1, -1], "input"))
+                    .as(TensorNode);
+                bMP.createOp(
+                    "MaxPool",
+                    [xMP],
+                    { kernel_shape: [2, 2], strides: [2, 2], auto_pad: "SAME_UPPER", ceil_mode: 1 },
+                    [{ type: DataType.FLOAT, shape: [-1, 2, -1, -1] }],
+                );
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gMP,
+                    new HistoryManager(gMP),
+                );
+                expect(() => validateGraph(gMP)).not.toThrow();
+
+                const gCT = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bCT = new GraphBuilder(gCT);
+                const xCT = gCT
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, -1, -1], "input"))
+                    .as(TensorNode);
+                const wCT = gCT
+                    .addNode("W")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 3, 3], "input"))
+                    .as(TensorNode);
+                bCT.createOp(
+                    "ConvTranspose",
+                    [xCT, wCT],
+                    { strides: [2, 2], auto_pad: "SAME_UPPER" },
+                    [{ type: DataType.FLOAT, shape: [-1, 2, -1, -1] }],
+                );
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gCT,
+                    new HistoryManager(gCT),
+                );
+                expect(() => validateGraph(gCT)).not.toThrow();
+
+                const gRZ = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bRZ = new GraphBuilder(gRZ);
+                const xRZ = gRZ
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, -1, -1], "input"))
+                    .as(TensorNode);
+                const roiRZ = bRZ.createConstant("roi", {
+                    dataType: DataType.FLOAT,
+                    dims: [0],
+                    floatData: [],
+                });
+                const scRZ = bRZ.createConstant("scales", {
+                    dataType: DataType.FLOAT,
+                    dims: [4],
+                    floatData: [1, 1, 2, 2],
+                });
+                bRZ.createOp("Resize", [xRZ, roiRZ, scRZ], { mode: "cubic" }, [
+                    { type: DataType.FLOAT, shape: [-1, 2, -1, -1] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gRZ,
+                    new HistoryManager(gRZ),
+                );
+                expect(() => validateGraph(gRZ)).not.toThrow();
+            }
+        });
     });
 });

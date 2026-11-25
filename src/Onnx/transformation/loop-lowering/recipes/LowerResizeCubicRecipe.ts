@@ -7,13 +7,10 @@ import {
     DataType,
 } from "../../../OnnxTypes.js";
 import {
-    computeStrides,
     getFloatAttr,
     getIntAttr,
     getStringAttr,
     makeTensorProto,
-    readConstIntegerVectorFromTensorNode,
-    readVectorFromTensorNode,
     scalarInt64,
     toStaticShape,
 } from "../../../Utils.js";
@@ -25,12 +22,20 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
+import {
+    analyzeResizeAxes,
+    computeResizeLoopBounds,
+    mapResizeCoordToFloat,
+    resolveResizeOutDims,
+} from "./LowerResizeRecipe.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
 
@@ -47,12 +52,14 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
     public readonly phase = "loop-lowering" as const;
     public readonly precision = "exact" as const;
     public readonly priority = 10;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["imaging", "cubic", "fuseable"] as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "Unsqueeze",
@@ -83,41 +90,23 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
         if (getIntAttr(op, "antialias", 0) !== 0) return false;
 
         const inDims = toStaticShape(ins[0].shape);
-        if (inDims.length === 0 || inDims.includes(-1)) return false;
+        if (inDims.length === 0) return false;
 
-        const outDims = this.resolveOutDims(op, inDims);
-        if (!outDims || outDims.length !== inDims.length || outDims.includes(-1)) return false;
+        const info = analyzeResizeAxes(op, inDims);
+        if (!info.canResolve) return false;
 
-        const resizedAxes = inDims.filter((d, i) => d !== outDims[i]).length;
-        return resizedAxes <= 2;
-    }
-
-    private resolveOutDims(op: OperationNode.Class, inDims: number[]): number[] | undefined {
-        const ins = op.getInputs()!;
-        const sizesNode = ins.length >= 4 && ins[3].id !== "" ? ins[3] : undefined;
-        const scalesNode = ins.length >= 3 && ins[2].id !== "" ? ins[2] : undefined;
-
-        const sizes = sizesNode ? readConstIntegerVectorFromTensorNode(sizesNode) : undefined;
-        if (sizes && sizes.length === inDims.length) return sizes;
-
-        const scales = scalesNode ? readVectorFromTensorNode(scalesNode) : undefined;
-        if (scales && scales.length === inDims.length) {
-            return inDims.map((d, i) => Math.floor(d * scales[i]));
-        }
-
-        const outShape = toStaticShape(op.getOutputs()[0]?.shape);
-        if (outShape.length === inDims.length && !outShape.includes(-1)) return outShape;
-        return undefined;
+        return info.resizedMask.filter(Boolean).length <= 2;
     }
 
     getLoopBounds(
         op: OperationNode.Class,
         _outShape: KnownShape,
-    ): { totalIters: number; carryShape: number[] } {
-        const inDims = toStaticShape(op.getInputs()![0].shape);
-        const outDims = this.resolveOutDims(op, inDims)!;
-        const total = outDims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: outDims };
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
+        return computeResizeLoopBounds(op, "rzc");
     }
 
     apply(
@@ -134,15 +123,14 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
         const builder = new GraphBuilder(body, `rzcub_${op.id}`);
         const ins = op.getInputs()!;
         const X = ins[0];
-        const inDims = toStaticShape(X.shape);
-        const outDims = this.resolveOutDims(op, inDims)!;
+        const rawInDims = toStaticShape(X.shape);
+        const info = analyzeResizeAxes(op, rawInDims);
         const dtype = X.literalType as DataType;
-        const rank = inDims.length;
+        const rank = rawInDims.length;
 
         const coordMode = getStringAttr(op, "coordinate_transformation_mode", "half_pixel");
         const coeffA = getFloatAttr(op, "cubic_coeff_a", -0.75);
         const excludeOutside = getIntAttr(op, "exclude_outside", 0) !== 0;
-        const inStrides = computeStrides(inDims);
 
         const rawX = resolveRecipeInput(
             builder,
@@ -156,12 +144,15 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
             targetShapeNode,
             loopCtx,
         );
+        const inDims = extractMixedDims(builder, rawX, rawInDims, `rzc_id_${op.id}`);
+        const inStrides = buildMixedStrides(builder, inDims);
         const flatX = ensureFlatInput(builder, rawX);
+        const outDims = resolveResizeOutDims(builder, info, inDims, targetShapeNode, "rzc", op.id);
 
         const resizedAxes: number[] = [];
-        const baseStrides = new Array<number>(rank).fill(0);
+        const baseStrides: (number | ConcreteValueNode)[] = new Array(rank).fill(0);
         for (let d = 0; d < rank; d++) {
-            if (inDims[d] === outDims[d]) {
+            if (!info.resizedMask[d]) {
                 baseStrides[d] = inStrides[d];
             } else {
                 resizedAxes.push(d);
@@ -202,6 +193,8 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
         const halfF = cF("hf", 0.5);
         const oneF = cF("of", 1.0);
         const zeroI64 = builder.createConstant(`rzc_z64_${op.id}`, scalarInt64(0));
+        const oneI64 = builder.createConstant(`rzc_o64_${op.id}`, scalarInt64(1));
+        const twoI64 = builder.createConstant(`rzc_t64_${op.id}`, scalarInt64(2));
 
         // Cubic convolution kernel coefficients for parameter `a`
         const aC = cF("a", coeffA);
@@ -212,26 +205,21 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
         const aPlus3C = cF("ap3", coeffA + 3.0);
         const twoAPlus3C = cF("2ap3", 2.0 * coeffA + 3.0);
 
-        const mapCoordToFloat = (d: number): ConcreteValueNode => {
-            const [cFloat] = builder.createOp("Cast", [coords[d]], { to: DataType.FLOAT });
-            const inD = inDims[d];
-            const outD = outDims[d];
-            const invScale = inD / outD;
-
-            if (coordMode === "asymmetric") {
-                return builder.createOp("Mul", [cFloat, cF(`is_${d}`, invScale)])[0];
-            }
-            if (coordMode === "align_corners") {
-                if (outD <= 1) return zeroF;
-                return builder.createOp("Mul", [cFloat, cF(`ac_${d}`, (inD - 1) / (outD - 1))])[0];
-            }
-            if (coordMode === "pytorch_half_pixel" && outD <= 1) {
-                return zeroF;
-            }
-            const [plusHalf] = builder.createOp("Add", [cFloat, halfF]);
-            const [scaled] = builder.createOp("Mul", [plusHalf, cF(`hp_${d}`, invScale)]);
-            return builder.createOp("Sub", [scaled, halfF])[0];
-        };
+        const mapCoordToFloat = (d: number): ConcreteValueNode =>
+            mapResizeCoordToFloat(
+                builder,
+                coords[d],
+                inDims[d],
+                outDims[d],
+                coordMode,
+                halfF,
+                zeroF,
+                oneI64,
+                twoI64,
+                "rzc",
+                d,
+                op.id,
+            );
 
         // For each resized axis, compute 4 strided tap offsets and 4 cubic weights
         const axisInfo = resizedAxes.map((d) => {
@@ -266,11 +254,15 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
             let weights: ConcreteValueNode[] = [w0, w1, w2, w3];
 
             const [baseI] = builder.createOp("Cast", [flF], { to: DataType.INT64 });
-            const dimI = builder.createConstant(`rzc_dim_${d}_${op.id}`, scalarInt64(inDims[d]));
-            const maxI = builder.createConstant(
-                `rzc_max_${d}_${op.id}`,
-                scalarInt64(inDims[d] - 1),
-            );
+            const inD = inDims[d];
+            const dimI =
+                typeof inD === "number"
+                    ? builder.createConstant(`rzc_dim_${d}_${op.id}`, scalarInt64(inD))
+                    : inD;
+            const maxI =
+                typeof inD === "number"
+                    ? builder.createConstant(`rzc_max_${d}_${op.id}`, scalarInt64(inD - 1))
+                    : builder.createOp("Sub", [inD, oneI64])[0];
             const str = inStrides[d];
 
             const offsets: ConcreteValueNode[] = [];
@@ -293,15 +285,17 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
 
                 const [clampedI] = builder.createOp("Clip", [tapI, zeroI64, maxI]);
                 const strided =
-                    str === 1
-                        ? clampedI
-                        : builder.createOp("Mul", [
-                              clampedI,
-                              builder.createConstant(
-                                  `rzc_str_${d}_${m}_${op.id}`,
-                                  scalarInt64(str),
-                              ),
-                          ])[0];
+                    typeof str !== "number"
+                        ? builder.createOp("Mul", [clampedI, str])[0]
+                        : str === 1
+                          ? clampedI
+                          : builder.createOp("Mul", [
+                                clampedI,
+                                builder.createConstant(
+                                    `rzc_str_${d}_${m}_${op.id}`,
+                                    scalarInt64(str),
+                                ),
+                            ])[0];
                 offsets.push(strided);
             }
 

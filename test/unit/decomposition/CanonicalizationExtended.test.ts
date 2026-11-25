@@ -557,4 +557,42 @@ describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
         expect(det.producedOps).not.toContain("Det");
         expect(det.producedOps).toContain("ConstantOfShape");
     });
+
+    it("decomposes dynamic-shape Einsum and 2-output MaxPool", () => {
+        const ein = applyRecipe(
+            new Recipes.canonicalization.Einsum(),
+            "Einsum",
+            [
+                [-1, -1, -1],
+                [-1, -1, -1],
+            ],
+            { equation: "bij,bjk->bik" },
+        );
+        expect(ein.producedOps).not.toContain("Einsum");
+        expect(ein.producedOps).toContain("MatMul");
+
+        const einDiag = applyRecipe(
+            new Recipes.canonicalization.Einsum(),
+            "Einsum",
+            [
+                [-1, -1, -1],
+                [-1, -1],
+            ],
+            { equation: "iij,jk->ik" },
+        );
+        expect(einDiag.producedOps).not.toContain("Einsum");
+        expect(einDiag.producedOps).toContain("Range");
+
+        const mpIdx = applyRecipe(
+            new Recipes.canonicalization.MaxPoolWithIndices(),
+            "MaxPool",
+            [[-1, 2, -1, -1]],
+            { kernel_shape: [2, 2], strides: [2, 2], storage_order: 1 },
+            DataType.FLOAT,
+            ["Y", "Indices"],
+        );
+        expect(mpIdx.producedOps).not.toContain("MaxPool");
+        expect(mpIdx.producedOps).toContain("Loop");
+        expect(mpIdx.producedOps).toContain("Expand");
+    });
 });

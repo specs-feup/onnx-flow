@@ -129,9 +129,12 @@ export class GraphBuilder {
                     ].includes(type)
                 ) {
                     inferredType = DataType.BOOL;
-                } else if (["Shape", "Size"].includes(type)) {
+                } else if (type === "Shape") {
                     inferredType = DataType.INT64;
                     inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
+                } else if (type === "Size") {
+                    inferredType = DataType.INT64;
+                    inferredShape = [];
                 } else if (type === "Cast" && "to" in attributes) {
                     inferredType = attributes["to"] as DataType;
                 }
@@ -225,9 +228,12 @@ export class GraphBuilder {
                     ].includes(type)
                 ) {
                     inferredType = DataType.BOOL;
-                } else if (["Shape", "Size"].includes(type)) {
+                } else if (type === "Shape") {
                     inferredType = DataType.INT64;
                     inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
+                } else if (type === "Size") {
+                    inferredType = DataType.INT64;
+                    inferredShape = [];
                 } else if (type === "Cast" && "to" in attributes) {
                     inferredType = attributes["to"] as DataType;
                 }

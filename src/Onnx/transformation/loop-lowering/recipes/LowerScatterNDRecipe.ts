@@ -6,7 +6,7 @@ import {
     type KnownShape,
     DataType,
 } from "../../../OnnxTypes.js";
-import { computeStrides, getStringAttr, scalarInt64, toStaticShape } from "../../../Utils.js";
+import { getStringAttr, int64Vec, scalarInt64, toStaticShape } from "../../../Utils.js";
 import type {
     LoopCarryContext,
     LoopLoweringRecipe,
@@ -15,8 +15,10 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
@@ -31,10 +33,12 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly priority = 50;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["indexing", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "ScatterElements",
@@ -61,29 +65,58 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
         if (!ins || ins.length < 3) return false;
         const dataDims = toStaticShape(ins[0].shape);
         const idxDims = toStaticShape(ins[1].shape);
-        const updDims = toStaticShape(ins[2].shape);
-        if (
-            dataDims.length === 0 ||
-            idxDims.length === 0 ||
-            dataDims.includes(-1) ||
-            idxDims.includes(-1) ||
-            updDims.includes(-1)
-        ) {
+        if (!Array.isArray(ins[2].shape) || dataDims.length === 0 || idxDims.length === 0) {
             return false;
         }
+        const updDims = toStaticShape(ins[2].shape);
         const k = idxDims[idxDims.length - 1];
-        return k >= 1 && k <= dataDims.length;
+        return (
+            k >= 1 &&
+            k <= dataDims.length &&
+            updDims.length === idxDims.length - 1 + (dataDims.length - k)
+        );
     }
 
     getLoopBounds(
         op: OperationNode.Class,
         _outShape: KnownShape,
-    ): { totalIters: number; carryShape: number[] } {
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
         const ins = op.getInputs()!;
         const dataDims = toStaticShape(ins[0].shape);
-        const dataTotal = dataDims.reduce((a, b) => a * b, 1);
-        const updTotal = toStaticShape(ins[2].shape).reduce((a, b) => a * b, 1);
-        return { totalIters: dataTotal + updTotal, carryShape: dataDims };
+        const updDims = toStaticShape(ins[2].shape);
+        if (!dataDims.includes(-1) && !updDims.includes(-1)) {
+            const dataTotal = dataDims.reduce((a, b) => a * b, 1);
+            const updTotal = updDims.length === 0 ? 1 : updDims.reduce((a, b) => a * b, 1);
+            return { totalIters: dataTotal + updTotal, carryShape: dataDims };
+        }
+
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `snd_bounds_${op.id}`);
+        const ax0 = builder.createConstant(`sndb_ax0_${op.id}`, int64Vec([0]));
+        const [dataShape] = builder.createOp("Shape", [ins[0]], {}, [
+            { type: DataType.INT64, shape: [dataDims.length] },
+        ]);
+        const [dataTotal] = builder.createOp("ReduceProd", [dataShape, ax0], { keepdims: 0 });
+        let updTotal: ConcreteValueNode;
+        if (updDims.length === 0) {
+            updTotal = builder.createConstant(`sndb_utot1_${op.id}`, scalarInt64(1));
+        } else if (!updDims.includes(-1)) {
+            updTotal = builder.createConstant(
+                `sndb_utot_${op.id}`,
+                scalarInt64(updDims.reduce((a, b) => a * b, 1)),
+            );
+        } else {
+            const [updShape] = builder.createOp("Shape", [ins[2]], {}, [
+                { type: DataType.INT64, shape: [updDims.length] },
+            ]);
+            [updTotal] = builder.createOp("ReduceProd", [updShape, ax0], { keepdims: 0 });
+        }
+        const [totalIters] = builder.createOp("Add", [dataTotal, updTotal]);
+        const [carryShape] = builder.createOp("Unsqueeze", [dataTotal, ax0]);
+        return { totalIters, carryShape, targetShape: dataShape };
     }
 
     apply(
@@ -99,16 +132,12 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `snd_${op.id}`);
         const ins = op.getInputs()!;
-        const dataDims = toStaticShape(ins[0].shape);
-        const idxDims = toStaticShape(ins[1].shape);
-        const updDims = toStaticShape(ins[2].shape);
-        const q = idxDims.length;
-        const k = idxDims[q - 1];
+        const rawDataDims = toStaticShape(ins[0].shape);
+        const rawIdxDims = toStaticShape(ins[1].shape);
+        const rawUpdDims = toStaticShape(ins[2].shape);
+        const q = rawIdxDims.length;
+        const k = rawIdxDims[q - 1];
         const reduction = getStringAttr(op, "reduction", "none");
-
-        const dataTotal = dataDims.reduce((a, b) => a * b, 1);
-        const dataStrides = computeStrides(dataDims);
-        const idxStrides = computeStrides(idxDims);
 
         const rawData = resolveRecipeInput(
             builder,
@@ -117,7 +146,7 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            true,
+            false,
             false,
             targetShapeNode,
             loopCtx,
@@ -129,7 +158,7 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            true,
+            false,
             false,
             targetShapeNode,
             loopCtx,
@@ -141,18 +170,38 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            true,
+            false,
             false,
             targetShapeNode,
             loopCtx,
         );
+
+        const dataDims = extractMixedDims(builder, rawData, rawDataDims, `snd_dd_${op.id}`);
+        const idxDims = extractMixedDims(builder, rawIndices, rawIdxDims, `snd_id_${op.id}`);
+        const updDims = extractMixedDims(builder, rawUpdates, rawUpdDims, `snd_ud_${op.id}`);
+        const dataStrides = buildMixedStrides(builder, dataDims);
+        const idxStrides = buildMixedStrides(builder, idxDims);
 
         const flatData = ensureFlatInput(builder, rawData);
         const flatIndices = ensureFlatInput(builder, rawIndices);
         const flatUpdates = ensureFlatInput(builder, rawUpdates);
 
         const zeroI64 = builder.createConstant(`snd_z64_${op.id}`, scalarInt64(0));
-        const dataTotalConst = builder.createConstant(`snd_dtot_${op.id}`, scalarInt64(dataTotal));
+        let dataTotalNode: ConcreteValueNode;
+        if (!rawDataDims.includes(-1)) {
+            const dataTotal = rawDataDims.reduce((a, b) => a * b, 1);
+            dataTotalNode = builder.createConstant(`snd_dtot_${op.id}`, scalarInt64(dataTotal));
+        } else {
+            const d0 =
+                typeof dataDims[0] === "number"
+                    ? builder.createConstant(`snd_d0_${op.id}`, scalarInt64(dataDims[0]))
+                    : dataDims[0];
+            const s0 =
+                typeof dataStrides[0] === "number"
+                    ? builder.createConstant(`snd_s0_${op.id}`, scalarInt64(dataStrides[0]))
+                    : dataStrides[0];
+            [dataTotalNode] = builder.createOp("Mul", [d0, s0]);
+        }
 
         // Phase check: copy data when iter < dataTotal, else scatter updates
         let curIter: ConcreteValueNode = iter;
@@ -168,10 +217,10 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             curIter = ptrIn;
         }
 
-        const [isCopyPhase] = builder.createOp("Less", [curIter, dataTotalConst]);
+        const [isCopyPhase] = builder.createOp("Less", [curIter, dataTotalNode]);
         const [safeCopyIdx] = builder.createOp("Where", [isCopyPhase, curIter, zeroI64]);
 
-        const [rawUpdIter] = builder.createOp("Sub", [curIter, dataTotalConst]);
+        const [rawUpdIter] = builder.createOp("Sub", [curIter, dataTotalNode]);
         const [safeUpdIter] = builder.createOp("Where", [isCopyPhase, zeroI64, rawUpdIter]);
 
         // Decode safeUpdIter across updDims = [...idxDims[0..q-2], ...dataDims[k..r-1]]
@@ -179,11 +228,14 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
         let scatterTargetIdx: ConcreteValueNode = zeroI64;
 
         if (updDims.length > 0) {
-            const idxPrefixStrides = [
+            const idxPrefixStrides: (number | ConcreteValueNode)[] = [
                 ...idxStrides.slice(0, q - 1),
                 ...new Array<number>(updDims.length - (q - 1)).fill(0),
             ];
-            const trailingStrides = [...new Array<number>(q - 1).fill(0), ...dataStrides.slice(k)];
+            const trailingStrides: (number | ConcreteValueNode)[] = [
+                ...new Array<number>(q - 1).fill(0),
+                ...dataStrides.slice(k),
+            ];
 
             if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
                 const [isUpdPhase] = builder.createOp("Not", [isCopyPhase]);
@@ -240,22 +292,25 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
                 [coord] = builder.createOp("Cast", [coord], { to: DataType.INT64 });
             }
 
-            const dimConst = builder.createConstant(
-                `snd_dim_${j}_${op.id}`,
-                scalarInt64(dataDims[j]),
-            );
+            const indexedDim = dataDims[j];
+            const dimNode =
+                typeof indexedDim === "number"
+                    ? builder.createConstant(`snd_dim_${j}_${op.id}`, scalarInt64(indexedDim))
+                    : indexedDim;
             const [isNeg] = builder.createOp("Less", [coord, zeroI64]);
-            const [wrapped] = builder.createOp("Add", [coord, dimConst]);
+            const [wrapped] = builder.createOp("Add", [coord, dimNode]);
             const [normCoord] = builder.createOp("Where", [isNeg, wrapped, coord]);
 
             const stride = dataStrides[j];
             const term =
-                stride === 1
-                    ? normCoord
-                    : builder.createOp("Mul", [
-                          normCoord,
-                          builder.createConstant(`snd_str_${j}_${op.id}`, scalarInt64(stride)),
-                      ])[0];
+                typeof stride !== "number"
+                    ? builder.createOp("Mul", [normCoord, stride])[0]
+                    : stride === 1
+                      ? normCoord
+                      : builder.createOp("Mul", [
+                            normCoord,
+                            builder.createConstant(`snd_str_${j}_${op.id}`, scalarInt64(stride)),
+                        ])[0];
             [scatterTargetIdx] = builder.createOp("Add", [scatterTargetIdx, term]);
         }
 

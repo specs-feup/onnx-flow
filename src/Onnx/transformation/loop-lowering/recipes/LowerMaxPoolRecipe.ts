@@ -7,13 +7,11 @@ import {
     DataType,
 } from "../../../OnnxTypes.js";
 import {
-    computeStrides,
     getIntAttr,
     getIntsAttr,
     getStringAttr,
-    inferPoolDim,
+    int64Vec,
     makeTensorProto,
-    resolveAutoPads,
     scalarInt64,
     toStaticShape,
 } from "../../../Utils.js";
@@ -25,10 +23,15 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
+    mulMixed,
+    packShapeVector,
+    resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -42,10 +45,13 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly priority = 50;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["pooling", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "Concat",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "ScatterElements",
@@ -72,13 +78,15 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         if (!X || !Array.isArray(X.shape) || X.shape.length < 3) return false;
         const dims = toStaticShape(X.shape);
         const kernel = getIntsAttr(op, "kernel_shape", []);
-        return !dims.includes(-1) && kernel.length === dims.length - 2;
+        return kernel.length === dims.length - 2;
     }
 
-    private resolvePadsAndOutSpatial(
+    private resolveMixedPadsAndOutSpatial(
         op: OperationNode.Class,
-        inDims: number[],
-    ): { pads: number[]; outSpatial: number[] } {
+        builder: GraphBuilder,
+        inDims: (number | ConcreteValueNode)[],
+        tag: string,
+    ): { pHeads: (number | ConcreteValueNode)[]; outSpatial: (number | ConcreteValueNode)[] } {
         const spatialRank = inDims.length - 2;
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
@@ -87,40 +95,64 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
         const explicitPads = getIntsAttr(op, "pads", []);
 
-        const pads = resolveAutoPads(
+        return resolvePoolShapeAndPadsMixed(
             autoPad,
             inDims.slice(2),
             kernel,
             strides,
             dilations,
             explicitPads,
+            ceilMode,
+            builder,
+            tag,
         );
-        const outSpatial = inDims
-            .slice(2)
-            .map((inD, d) =>
-                inferPoolDim(
-                    inD,
-                    kernel[d],
-                    strides[d] ?? 1,
-                    pads[d] ?? 0,
-                    pads[spatialRank + d] ?? 0,
-                    dilations[d] ?? 1,
-                    ceilMode,
-                ),
-            );
-        return { pads, outSpatial };
     }
 
     getLoopBounds(
         op: OperationNode.Class,
         _outShape: KnownShape,
-    ): { totalIters: number; carryShape: number[] } {
-        const inDims = toStaticShape(op.getInputs()![0].shape);
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
+        const X = op.getInputs()![0];
+        const rawInDims = toStaticShape(X.shape);
         const kernel = getIntsAttr(op, "kernel_shape", []);
-        const { outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
-        const outTotal = inDims[0] * inDims[1] * outSpatial.reduce((a, b) => a * b, 1);
         const kTotal = kernel.reduce((a, b) => a * b, 1);
-        return { totalIters: outTotal * kTotal, carryShape: [inDims[0], inDims[1], ...outSpatial] };
+
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `mp_bounds_${op.id}`);
+        if (!rawInDims.includes(-1)) {
+            const { outSpatial } = this.resolveMixedPadsAndOutSpatial(
+                op,
+                builder,
+                rawInDims,
+                "mps",
+            );
+            const outDims = [rawInDims[0], rawInDims[1], ...(outSpatial as number[])];
+            const outTotal = outDims.reduce((a, b) => a * b, 1);
+            return { totalIters: outTotal * kTotal, carryShape: outDims };
+        }
+
+        const inDims = extractMixedDims(builder, X, rawInDims, `mpb_${op.id}`);
+        const { outSpatial } = this.resolveMixedPadsAndOutSpatial(
+            op,
+            builder,
+            inDims,
+            `mpb_${op.id}`,
+        );
+        const outDims = [inDims[0], inDims[1], ...outSpatial];
+        const targetShape = packShapeVector(builder, outDims, `mpb_tsh_${op.id}`);
+        const ax0 = builder.createConstant(`mpb_ax0_${op.id}`, int64Vec([0]));
+        const [outTotal] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
+        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0]);
+        const totalIters = mulMixed(
+            builder,
+            outTotal,
+            kTotal,
+            `mpb_it_${op.id}`,
+        ) as ConcreteValueNode;
+        return { totalIters, carryShape, targetShape };
     }
 
     apply(
@@ -136,19 +168,13 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `maxpool_${op.id}`);
         const X = op.getInputs()![0];
-        const inDims = toStaticShape(X.shape);
+        const rawInDims = toStaticShape(X.shape);
         const dtype = X.literalType as DataType;
-        const spatialRank = inDims.length - 2;
+        const spatialRank = rawInDims.length - 2;
 
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
-        const { pads, outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
-
-        const outDims = [inDims[0], inDims[1], ...outSpatial];
-        const iterDims = [...outDims, ...kernel];
-        const inStrides = computeStrides(inDims);
-        const outStrides = computeStrides(outDims);
 
         const rawX = resolveRecipeInput(
             builder,
@@ -157,11 +183,23 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            true,
+            false,
             false,
             targetShapeNode,
             loopCtx,
         );
+        const inDims = extractMixedDims(builder, rawX, rawInDims, `mp_id_${op.id}`);
+        const { pHeads, outSpatial } = this.resolveMixedPadsAndOutSpatial(
+            op,
+            builder,
+            inDims,
+            `mp_sh_${op.id}`,
+        );
+
+        const outDims = [inDims[0], inDims[1], ...outSpatial];
+        const iterDims = [...outDims, ...kernel];
+        const inStrides = buildMixedStrides(builder, inDims);
+        const outStrides = buildMixedStrides(builder, outDims);
         const flatX = ensureFlatInput(builder, rawX);
 
         let coords: ConcreteValueNode[];
@@ -229,7 +267,7 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
             isFirstTap = isFirstTap ? builder.createOp("And", [isFirstTap, kIsZero])[0] : kIsZero;
 
             const sVal = strides[d] ?? 1;
-            const pVal = pads[d] ?? 0;
+            const pVal = pHeads[d] ?? 0;
             const dilVal = dilations[d] ?? 1;
 
             let inCoord: ConcreteValueNode =
@@ -249,32 +287,39 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
                       ])[0];
 
             [inCoord] = builder.createOp("Add", [inCoord, kOff]);
-            if (pVal !== 0) {
+            if (typeof pVal !== "number") {
+                [inCoord] = builder.createOp("Sub", [inCoord, pVal]);
+            } else if (pVal !== 0) {
                 [inCoord] = builder.createOp("Sub", [
                     inCoord,
                     builder.createConstant(`mp_pad_${d}_${op.id}`, scalarInt64(pVal)),
                 ]);
             }
 
-            const dimConst = builder.createConstant(
-                `mp_dim_${d}_${op.id}`,
-                scalarInt64(inDims[2 + d]),
-            );
+            const dimNode =
+                typeof inDims[2 + d] === "number"
+                    ? builder.createConstant(
+                          `mp_dim_${d}_${op.id}`,
+                          scalarInt64(inDims[2 + d] as number),
+                      )
+                    : (inDims[2 + d] as ConcreteValueNode);
             const [ltZero] = builder.createOp("Less", [inCoord, zeroI64]);
             const [geZero] = builder.createOp("Not", [ltZero]);
-            const [ltDim] = builder.createOp("Less", [inCoord, dimConst]);
+            const [ltDim] = builder.createOp("Less", [inCoord, dimNode]);
             const [dimValid] = builder.createOp("And", [geZero, ltDim]);
             isValid = isValid ? builder.createOp("And", [isValid, dimValid])[0] : dimValid;
 
             const [safeCoord] = builder.createOp("Where", [dimValid, inCoord, zeroI64]);
             const str = inStrides[2 + d];
             const term =
-                str === 1
-                    ? safeCoord
-                    : builder.createOp("Mul", [
-                          safeCoord,
-                          builder.createConstant(`mp_istr_${d}_${op.id}`, scalarInt64(str)),
-                      ])[0];
+                typeof str !== "number"
+                    ? builder.createOp("Mul", [safeCoord, str])[0]
+                    : str === 1
+                      ? safeCoord
+                      : builder.createOp("Mul", [
+                            safeCoord,
+                            builder.createConstant(`mp_istr_${d}_${op.id}`, scalarInt64(str)),
+                        ])[0];
             [flatInIdx] = builder.createOp("Add", [flatInIdx, term]);
         }
 

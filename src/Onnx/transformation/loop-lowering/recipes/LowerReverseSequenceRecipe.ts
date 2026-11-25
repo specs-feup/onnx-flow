@@ -6,13 +6,7 @@ import {
     type KnownShape,
     DataType,
 } from "../../../OnnxTypes.js";
-import {
-    computeStrides,
-    getIntAttr,
-    normalizeAxis,
-    scalarInt64,
-    toStaticShape,
-} from "../../../Utils.js";
+import { getIntAttr, int64Vec, normalizeAxis, scalarInt64, toStaticShape } from "../../../Utils.js";
 import type {
     LoopCarryContext,
     LoopLoweringRecipe,
@@ -21,8 +15,10 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
@@ -38,10 +34,12 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly priority = 50;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["indexing", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "Unsqueeze",
@@ -63,7 +61,31 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
         const ins = op.getInputs();
         if (!ins || ins.length < 2) return false;
         const dims = toStaticShape(ins[0].shape);
-        return dims.length >= 2 && !dims.includes(-1);
+        return dims.length >= 2;
+    }
+
+    getLoopBounds(
+        op: OperationNode.Class,
+        _outShape: KnownShape,
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
+        const X = op.getInputs()![0];
+        const dims = toStaticShape(X.shape);
+        if (!dims.includes(-1)) {
+            const total = dims.reduce((a, b) => a * b, 1);
+            return { totalIters: total, carryShape: [total] };
+        }
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `rs_bounds_${op.id}`);
+        const ax0 = builder.createConstant(`rsb_ax0_${op.id}`, int64Vec([0]));
+        const [targetShape] = builder.createOp("Shape", [X], {}, [
+            { type: DataType.INT64, shape: [dims.length] },
+        ]);
+        const [totalIters] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, ax0]);
+        return { totalIters, carryShape, targetShape };
     }
 
     apply(
@@ -79,13 +101,11 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `revseq_${op.id}`);
         const ins = op.getInputs()!;
-        const dims = toStaticShape(ins[0].shape);
-        const rank = dims.length;
+        const rawDims = toStaticShape(ins[0].shape);
+        const rank = rawDims.length;
 
         const batchAxis = normalizeAxis(getIntAttr(op, "batch_axis", 1), rank);
         const timeAxis = normalizeAxis(getIntAttr(op, "time_axis", 0), rank);
-        const strides = computeStrides(dims);
-        const timeStride = strides[timeAxis];
 
         const rawIn = resolveRecipeInput(
             builder,
@@ -111,6 +131,9 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
             targetShapeNode,
             loopCtx,
         );
+        const dims = extractMixedDims(builder, rawIn, rawDims, `rs_${op.id}`);
+        const strides = buildMixedStrides(builder, dims);
+        const timeStride = strides[timeAxis];
         const flatIn = ensureFlatInput(builder, rawIn);
         const flatLens = ensureFlatInput(builder, rawLens);
 
@@ -118,7 +141,7 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
         let timeCoord: ConcreteValueNode;
         let basePtr: ConcreteValueNode;
 
-        const baseStrides = [...strides];
+        const baseStrides: (number | ConcreteValueNode)[] = [...strides];
         baseStrides[timeAxis] = 0;
 
         if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
@@ -161,7 +184,9 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
 
         // flatSrcIdx = basePtr + srcTime * timeStride
         let timeOffset: ConcreteValueNode = srcTime;
-        if (timeStride !== 1) {
+        if (typeof timeStride !== "number") {
+            [timeOffset] = builder.createOp("Mul", [srcTime, timeStride]);
+        } else if (timeStride !== 1) {
             const tsConst = builder.createConstant(`rs_tstr_${op.id}`, scalarInt64(timeStride));
             [timeOffset] = builder.createOp("Mul", [srcTime, tsConst]);
         }

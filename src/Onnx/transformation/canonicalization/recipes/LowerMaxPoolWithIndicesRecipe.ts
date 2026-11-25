@@ -8,14 +8,11 @@ import type { ConcreteValueNode, KnownShape, ValueNode } from "../../../OnnxType
 import { DataType } from "../../../OnnxTypes.js";
 import {
     bool,
-    computeStrides,
     getIntAttr,
     getIntsAttr,
     getStringAttr,
-    inferPoolDim,
     int64Vec,
     makeTensorProto,
-    resolveAutoPads,
     scalarInt64,
     toStaticShape,
     uniq,
@@ -23,9 +20,14 @@ import {
 } from "../../../Utils.js";
 import {
     buildLinearIndex,
+    buildMixedStrides,
     createCapturedInput,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
+    mulMixed,
+    packShapeVector,
+    resolvePoolShapeAndPadsMixed,
     squeezeIfLen1,
 } from "../../loop-lowering/RecipeUtils.js";
 import { emitBodyOutput } from "../RnnLoopUtils.js";
@@ -36,12 +38,17 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
     public readonly phase = "canonicalization" as const;
     public readonly precision = "exact" as const;
     public readonly priority = 10;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["pooling", "multi-output", "loop"] as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "Concat",
+        "ReduceProd",
+        "Max",
+        "Expand",
         "Reshape",
         "Gather",
         "ScatterElements",
@@ -68,7 +75,6 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         const X = op.getInputs()?.[0];
         if (!X || !Array.isArray(X.shape) || X.shape.length < 3) return false;
         const dims = toStaticShape(X.shape);
-        if (dims.includes(-1)) return false;
 
         const kernel = getIntsAttr(op, "kernel_shape", []);
         if (kernel.length !== dims.length - 2) return false;
@@ -78,10 +84,12 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         return storageOrder === 0 || storageOrder === 1;
     }
 
-    private resolvePadsAndOutSpatial(
+    private resolveMixedPadsAndOutSpatial(
         op: OperationNode.Class,
-        inDims: number[],
-    ): { pads: number[]; outSpatial: number[] } {
+        builder: GraphBuilder,
+        inDims: (number | ConcreteValueNode)[],
+        tag: string,
+    ): { pHeads: (number | ConcreteValueNode)[]; outSpatial: (number | ConcreteValueNode)[] } {
         const spatialRank = inDims.length - 2;
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
@@ -90,29 +98,17 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
         const explicitPads = getIntsAttr(op, "pads", []);
 
-        const pads = resolveAutoPads(
+        return resolvePoolShapeAndPadsMixed(
             autoPad,
             inDims.slice(2),
             kernel,
             strides,
             dilations,
             explicitPads,
+            ceilMode,
+            builder,
+            tag,
         );
-        const outSpatial = inDims
-            .slice(2)
-            .map((inD, d) =>
-                inferPoolDim(
-                    inD,
-                    kernel[d],
-                    strides[d] ?? 1,
-                    pads[d] ?? 0,
-                    pads[spatialRank + d] ?? 0,
-                    dilations[d] ?? 1,
-                    ceilMode,
-                ),
-            );
-
-        return { pads, outSpatial };
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -122,36 +118,71 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         const YOut = outputs[0];
         const IdxOut = outputs[1];
 
-        const inDims = toStaticShape(X.shape);
+        const rawInDims = toStaticShape(X.shape);
+        const isDynamic = rawInDims.includes(-1);
         const dtype = X.literalType as DataType;
-        const spatialRank = inDims.length - 2;
+        const spatialRank = rawInDims.length - 2;
         const storageOrder = getIntAttr(op, "storage_order", 0);
 
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
-        const { pads, outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
-
-        const outDims = [inDims[0], inDims[1], ...outSpatial];
-        const outTotal = outDims.reduce((a, b) => a * b, 1);
         const kTotal = kernel.reduce((a, b) => a * b, 1);
-        const totalIters = outTotal * kTotal;
 
-        const iterDims = [...outDims, ...kernel];
-        const inStrides = computeStrides(inDims);
-        const outStrides = computeStrides(outDims);
+        const outerInDims = extractMixedDims(builder, X, rawInDims, `mpib_${op.id}`);
+        const { outSpatial: outerOutSpatial } = this.resolveMixedPadsAndOutSpatial(
+            op,
+            builder,
+            outerInDims,
+            `mpib_${op.id}`,
+        );
+        const outerOutDims = [outerInDims[0], outerInDims[1], ...outerOutSpatial];
+        const knownOutShape = outerOutDims.map((d) =>
+            typeof d === "number" ? d : -1,
+        ) as KnownShape;
 
-        // 1. Outer loop inputs & initial carries
-        const tripCount = builder.createConstant(`mpi_trip_${op.id}`, scalarInt64(totalIters));
+        let tripCount: ConcreteValueNode;
+        let valCarry0: ConcreteValueNode;
+        let idxCarry0: ConcreteValueNode;
+        let carryKnownShape: KnownShape;
+        let outShapeNode: ConcreteValueNode;
+
+        if (!isDynamic) {
+            const staticOut = outerOutDims as number[];
+            const outTotal = staticOut.reduce((a, b) => a * b, 1);
+            tripCount = builder.createConstant(`mpi_trip_${op.id}`, scalarInt64(outTotal * kTotal));
+            valCarry0 = builder.createConstant(`mpi_val0_${op.id}`, zeroTensor(dtype, [outTotal]));
+            idxCarry0 = builder.createConstant(
+                `mpi_idx0_${op.id}`,
+                zeroTensor(DataType.INT64, [outTotal]),
+            );
+            carryKnownShape = [outTotal];
+            outShapeNode = builder.createConstant(`mpi_oshape_${op.id}`, int64Vec(staticOut));
+        } else {
+            const ax0 = builder.createConstant(`mpib_ax0_${op.id}`, int64Vec([0]));
+            outShapeNode = packShapeVector(builder, outerOutDims, `mpib_osh_${op.id}`);
+            const [outTotal] = builder.createOp("ReduceProd", [outShapeNode, ax0], { keepdims: 0 });
+            const [carryShapeVec] = builder.createOp("Unsqueeze", [outTotal, ax0]);
+            const totalIters = mulMixed(builder, outTotal, kTotal, `mpib_it_${op.id}`);
+            tripCount =
+                typeof totalIters === "number"
+                    ? builder.createConstant(`mpi_trip_${op.id}`, scalarInt64(totalIters))
+                    : totalIters;
+            const zeroV = builder.createConstant(
+                `mpi_zv_${op.id}`,
+                makeTensorProto(dtype, [], [0]),
+            );
+            const zeroI = builder.createConstant(`mpi_zi_${op.id}`, scalarInt64(0));
+            [valCarry0] = builder.createOp("Expand", [zeroV, carryShapeVec], {}, [
+                { type: dtype, shape: [-1] },
+            ]);
+            [idxCarry0] = builder.createOp("Expand", [zeroI, carryShapeVec], {}, [
+                { type: DataType.INT64, shape: [-1] },
+            ]);
+            carryKnownShape = [-1];
+        }
+
         const condInit = builder.createConstant(`mpi_cond_${op.id}`, bool(true));
-        const valCarry0 = builder.createConstant(
-            `mpi_val0_${op.id}`,
-            zeroTensor(dtype, [outTotal]),
-        );
-        const idxCarry0 = builder.createConstant(
-            `mpi_idx0_${op.id}`,
-            zeroTensor(DataType.INT64, [outTotal]),
-        );
 
         // 2. Build Loop body
         const loopBody = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
@@ -167,11 +198,11 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
             .as(TensorNode);
         const valCarryIn = loopBody
             .addNode(uniq(loopBody, "val_carry_in"))
-            .init(new TensorNode.Builder(dtype, [outTotal], "input"))
+            .init(new TensorNode.Builder(dtype, carryKnownShape, "input"))
             .as(TensorNode);
         const idxCarryIn = loopBody
             .addNode(uniq(loopBody, "idx_carry_in"))
-            .init(new TensorNode.Builder(DataType.INT64, [outTotal], "input"))
+            .init(new TensorNode.Builder(DataType.INT64, carryKnownShape, "input"))
             .as(TensorNode);
 
         const axes = innerBuilder.createConstant(`mpi_ax0_${op.id}`, int64Vec([0]));
@@ -186,6 +217,17 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         );
 
         const xCap = createCapturedInput(loopBody, X);
+        const innerInDims = extractMixedDims(innerBuilder, xCap, rawInDims, `mpi_id_${op.id}`);
+        const { pHeads, outSpatial } = this.resolveMixedPadsAndOutSpatial(
+            op,
+            innerBuilder,
+            innerInDims,
+            `mpi_sh_${op.id}`,
+        );
+        const innerOutDims = [innerInDims[0], innerInDims[1], ...outSpatial];
+        const iterDims = [...innerOutDims, ...kernel];
+        const inStrides = buildMixedStrides(innerBuilder, innerInDims);
+        const outStrides = buildMixedStrides(innerBuilder, innerOutDims);
         const flatX = ensureFlatInput(innerBuilder, xCap);
 
         const coords = decodeMixedRadix(innerBuilder, iterNode, iterDims, `mpi_dec_${op.id}`);
@@ -224,7 +266,7 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
                 : kIsZero;
 
             const sVal = strides[d] ?? 1;
-            const pVal = pads[d] ?? 0;
+            const pVal = pHeads[d] ?? 0;
             const dilVal = dilations[d] ?? 1;
 
             let inCoord: ConcreteValueNode =
@@ -244,20 +286,25 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
                       ])[0];
 
             [inCoord] = innerBuilder.createOp("Add", [inCoord, kOff]);
-            if (pVal !== 0) {
+            if (typeof pVal !== "number") {
+                [inCoord] = innerBuilder.createOp("Sub", [inCoord, pVal]);
+            } else if (pVal !== 0) {
                 [inCoord] = innerBuilder.createOp("Sub", [
                     inCoord,
                     innerBuilder.createConstant(`mpi_pad_${d}_${op.id}`, scalarInt64(pVal)),
                 ]);
             }
 
-            const dimConst = innerBuilder.createConstant(
-                `mpi_dim_${d}_${op.id}`,
-                scalarInt64(inDims[2 + d]),
-            );
+            const dimNode =
+                typeof innerInDims[2 + d] === "number"
+                    ? innerBuilder.createConstant(
+                          `mpi_dim_${d}_${op.id}`,
+                          scalarInt64(innerInDims[2 + d] as number),
+                      )
+                    : (innerInDims[2 + d] as ConcreteValueNode);
             const [ltZero] = innerBuilder.createOp("Less", [inCoord, zeroI64]);
             const [geZero] = innerBuilder.createOp("Not", [ltZero]);
-            const [ltDim] = innerBuilder.createOp("Less", [inCoord, dimConst]);
+            const [ltDim] = innerBuilder.createOp("Less", [inCoord, dimNode]);
             const [dimValid] = innerBuilder.createOp("And", [geZero, ltDim]);
             isValid = isValid ? innerBuilder.createOp("And", [isValid, dimValid])[0] : dimValid;
 
@@ -266,20 +313,28 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
 
             const str = inStrides[2 + d];
             const term =
-                str === 1
-                    ? safeCoord
-                    : innerBuilder.createOp("Mul", [
-                          safeCoord,
-                          innerBuilder.createConstant(`mpi_istr_${d}_${op.id}`, scalarInt64(str)),
-                      ])[0];
+                typeof str !== "number"
+                    ? innerBuilder.createOp("Mul", [safeCoord, str])[0]
+                    : str === 1
+                      ? safeCoord
+                      : innerBuilder.createOp("Mul", [
+                            safeCoord,
+                            innerBuilder.createConstant(`mpi_istr_${d}_${op.id}`, scalarInt64(str)),
+                        ])[0];
             [flatInIdx] = innerBuilder.createOp("Add", [flatInIdx, term]);
         }
 
         // Reported index: row-major flatInIdx (storage_order=0) or column-major (storage_order=1, 2D spatial)
         let reportedIdx: ConcreteValueNode = flatInIdx;
         if (storageOrder === 1 && spatialRank === 2) {
-            const hConst = innerBuilder.createConstant(`mpi_h_${op.id}`, scalarInt64(inDims[2]));
-            const [wTimesH] = innerBuilder.createOp("Mul", [safeSpatialCoords[1], hConst]);
+            const hNode =
+                typeof innerInDims[2] === "number"
+                    ? innerBuilder.createConstant(
+                          `mpi_h_${op.id}`,
+                          scalarInt64(innerInDims[2] as number),
+                      )
+                    : (innerInDims[2] as ConcreteValueNode);
+            const [wTimesH] = innerBuilder.createOp("Mul", [safeSpatialCoords[1], hNode]);
             const [colMajorSpatial] = innerBuilder.createOp("Add", [wTimesH, safeSpatialCoords[0]]);
             [reportedIdx] = innerBuilder.createOp("Add", [ncBasePtr, colMajorSpatial]);
         }
@@ -356,26 +411,25 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         const flatValOut = builder
             .addNode(
                 uniq(outerGraph, `mpi_flat_val_${op.id}`),
-                new TensorNode.Builder(dtype, [outTotal], "intermediate"),
+                new TensorNode.Builder(dtype, carryKnownShape, "intermediate"),
             )
             .as(TensorNode);
         const flatIdxOut = builder
             .addNode(
                 uniq(outerGraph, `mpi_flat_idx_${op.id}`),
-                new TensorNode.Builder(DataType.INT64, [outTotal], "intermediate"),
+                new TensorNode.Builder(DataType.INT64, carryKnownShape, "intermediate"),
             )
             .as(TensorNode);
 
-        builder.addEdge(loopOp, flatValOut, dtype, [outTotal]);
-        builder.addEdge(loopOp, flatIdxOut, DataType.INT64, [outTotal]);
+        builder.addEdge(loopOp, flatValOut, dtype, carryKnownShape);
+        builder.addEdge(loopOp, flatIdxOut, DataType.INT64, carryKnownShape);
 
         // 4. Reshape both outputs to outDims
-        const outShapeConst = builder.createConstant(`mpi_oshape_${op.id}`, int64Vec(outDims));
-        const [finalY] = builder.createOp("Reshape", [flatValOut, outShapeConst], {}, [
-            { type: dtype, shape: outDims as KnownShape },
+        const [finalY] = builder.createOp("Reshape", [flatValOut, outShapeNode], {}, [
+            { type: dtype, shape: knownOutShape },
         ]);
-        const [finalIdx] = builder.createOp("Reshape", [flatIdxOut, outShapeConst], {}, [
-            { type: DataType.INT64, shape: outDims as KnownShape },
+        const [finalIdx] = builder.createOp("Reshape", [flatIdxOut, outShapeNode], {}, [
+            { type: DataType.INT64, shape: knownOutShape },
         ]);
 
         builder.replaceAllUsesWith(YOut, finalY);

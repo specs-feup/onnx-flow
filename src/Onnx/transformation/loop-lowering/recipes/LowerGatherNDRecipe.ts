@@ -6,7 +6,7 @@ import {
     type KnownShape,
     DataType,
 } from "../../../OnnxTypes.js";
-import { computeStrides, getIntAttr, scalarInt64, toStaticShape } from "../../../Utils.js";
+import { getIntAttr, int64Vec, scalarInt64, toStaticShape } from "../../../Utils.js";
 import type {
     LoopCarryContext,
     LoopLoweringRecipe,
@@ -15,8 +15,10 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
@@ -31,10 +33,13 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly priority = 50;
-    public readonly shapeSupport = "static" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["indexing", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "Concat",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "Unsqueeze",
@@ -58,7 +63,6 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
         const idxDims = toStaticShape(ins[1].shape);
         const batchDims = getIntAttr(op, "batch_dims", 0);
         if (dataDims.length === 0 || idxDims.length === 0) return false;
-        if (dataDims.includes(-1) || idxDims.includes(-1)) return false;
         const k = idxDims[idxDims.length - 1];
         return k >= 1 && batchDims + k <= dataDims.length && batchDims < idxDims.length;
     }
@@ -66,15 +70,54 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
     getLoopBounds(
         op: OperationNode.Class,
         _outShape: KnownShape,
-    ): { totalIters: number; carryShape: number[] } {
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
         const ins = op.getInputs()!;
         const dataDims = toStaticShape(ins[0].shape);
         const idxDims = toStaticShape(ins[1].shape);
         const batchDims = getIntAttr(op, "batch_dims", 0);
-        const k = idxDims[idxDims.length - 1];
-        const outDims = [...idxDims.slice(0, -1), ...dataDims.slice(batchDims + k)];
-        const total = outDims.reduce((a, b) => a * b, 1);
-        return { totalIters: total, carryShape: outDims };
+        const q = idxDims.length;
+        const k = idxDims[q - 1];
+        const outDims = [...idxDims.slice(0, q - 1), ...dataDims.slice(batchDims + k)];
+        if (!outDims.includes(-1)) {
+            const total = outDims.length === 0 ? 1 : outDims.reduce((a, b) => a * b, 1);
+            return { totalIters: total, carryShape: outDims };
+        }
+
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `gnd_bounds_${op.id}`);
+        const ax0 = builder.createConstant(`gndb_ax0_${op.id}`, int64Vec([0]));
+        const parts: ConcreteValueNode[] = [];
+        if (q - 1 > 0) {
+            const [idxShape] = builder.createOp("Shape", [ins[1]], {}, [
+                { type: DataType.INT64, shape: [q] },
+            ]);
+            const prefixIdx = builder.createConstant(
+                `gndb_pidx_${op.id}`,
+                int64Vec(Array.from({ length: q - 1 }, (_, i) => i)),
+            );
+            const [pPart] = builder.createOp("Gather", [idxShape, prefixIdx], { axis: 0 });
+            parts.push(pPart);
+        }
+        const sliceLen = dataDims.length - (batchDims + k);
+        if (sliceLen > 0) {
+            const [dataShape] = builder.createOp("Shape", [ins[0]], {}, [
+                { type: DataType.INT64, shape: [dataDims.length] },
+            ]);
+            const suffixIdx = builder.createConstant(
+                `gndb_sidx_${op.id}`,
+                int64Vec(Array.from({ length: sliceLen }, (_, i) => batchDims + k + i)),
+            );
+            const [sPart] = builder.createOp("Gather", [dataShape, suffixIdx], { axis: 0 });
+            parts.push(sPart);
+        }
+        const targetShape =
+            parts.length === 1 ? parts[0] : builder.createOp("Concat", parts, { axis: 0 })[0];
+        const [totalIters] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, ax0]);
+        return { totalIters, carryShape, targetShape };
     }
 
     apply(
@@ -90,17 +133,11 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `gnd_${op.id}`);
         const ins = op.getInputs()!;
-        const dataDims = toStaticShape(ins[0].shape);
-        const idxDims = toStaticShape(ins[1].shape);
+        const rawDataDims = toStaticShape(ins[0].shape);
+        const rawIdxDims = toStaticShape(ins[1].shape);
         const batchDims = getIntAttr(op, "batch_dims", 0);
-        const q = idxDims.length;
-        const k = idxDims[q - 1];
-
-        const outDims = [...idxDims.slice(0, q - 1), ...dataDims.slice(batchDims + k)];
-        const outRank = outDims.length;
-
-        const dataStrides = computeStrides(dataDims);
-        const idxStrides = computeStrides(idxDims);
+        const q = rawIdxDims.length;
+        const k = rawIdxDims[q - 1];
 
         const rawData = resolveRecipeInput(
             builder,
@@ -126,21 +163,28 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
             targetShapeNode,
             loopCtx,
         );
+        const dataDims = extractMixedDims(builder, rawData, rawDataDims, `gnd_dd_${op.id}`);
+        const idxDims = extractMixedDims(builder, rawIndices, rawIdxDims, `gnd_id_${op.id}`);
+        const outDims = [...idxDims.slice(0, q - 1), ...dataDims.slice(batchDims + k)];
+        const outRank = outDims.length;
+
+        const dataStrides = buildMixedStrides(builder, dataDims);
+        const idxStrides = buildMixedStrides(builder, idxDims);
         const flatData = ensureFlatInput(builder, rawData);
         const flatIndices = ensureFlatInput(builder, rawIndices);
 
         // Strides over outDims for:
         // 1) baseDataPtr: batch dims [0..b-1] + trailing slice dims [q-1..outRank-1]
         // 2) idxTupleBase: index prefix dims [0..q-2]
-        const baseDataStrides = new Array<number>(outRank).fill(0);
+        const baseDataStrides: (number | ConcreteValueNode)[] = new Array(outRank).fill(0);
         for (let m = 0; m < batchDims; m++) {
             baseDataStrides[m] = dataStrides[m];
         }
-        for (let s = 0; s < dataDims.length - (batchDims + k); s++) {
+        for (let s = 0; s < rawDataDims.length - (batchDims + k); s++) {
             baseDataStrides[q - 1 + s] = dataStrides[batchDims + k + s];
         }
 
-        const idxBaseStrides = new Array<number>(outRank).fill(0);
+        const idxBaseStrides: (number | ConcreteValueNode)[] = new Array(outRank).fill(0);
         for (let i = 0; i < q - 1; i++) {
             idxBaseStrides[i] = idxStrides[i];
         }
@@ -191,17 +235,20 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
             }
 
             // Wrap negative index against dataDims[batchDims + j]
-            const dimConst = builder.createConstant(
-                `gnd_dim_${j}_${op.id}`,
-                scalarInt64(dataDims[batchDims + j]),
-            );
+            const indexedDim = dataDims[batchDims + j];
+            const dimNode =
+                typeof indexedDim === "number"
+                    ? builder.createConstant(`gnd_dim_${j}_${op.id}`, scalarInt64(indexedDim))
+                    : indexedDim;
             const [isNeg] = builder.createOp("Less", [coord, zeroI64]);
-            const [wrapped] = builder.createOp("Add", [coord, dimConst]);
+            const [wrapped] = builder.createOp("Add", [coord, dimNode]);
             const [normCoord] = builder.createOp("Where", [isNeg, wrapped, coord]);
 
             const stride = dataStrides[batchDims + j];
             let term: ConcreteValueNode = normCoord;
-            if (stride !== 1) {
+            if (typeof stride !== "number") {
+                [term] = builder.createOp("Mul", [normCoord, stride]);
+            } else if (stride !== 1) {
                 const strideConst = builder.createConstant(
                     `gnd_str_${j}_${op.id}`,
                     scalarInt64(stride),
