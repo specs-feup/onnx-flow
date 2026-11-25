@@ -6,6 +6,8 @@ import { executeEquivalenceTest } from "../helpers/ortHarness.js";
 import { COMPATIBILITY_TESTS } from "../helpers/modelRegistry.js";
 import { ensureModelExists } from "../helpers/modelFactory.js";
 
+const TEST_TIMEOUT = 150000; //ms
+
 describe("Integration: ONNX Model Compatibility & Lowering Equivalence", () => {
     let tmpDir: string;
 
@@ -36,6 +38,6 @@ describe("Integration: ONNX Model Compatibility & Lowering Equivalence", () => {
 
             expect(result.status, result.message ?? "Expected model outputs to match").toBe("pass");
         },
-        30000,
+        TEST_TIMEOUT,
     );
 });

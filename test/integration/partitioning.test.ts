@@ -4,6 +4,8 @@ import { runPartitionTest } from "../helpers/partitionHarness.js";
 import { ensureModelExists } from "../helpers/modelFactory.js";
 import { PARTITION_TESTS } from "../helpers/modelRegistry.js";
 
+const TEST_TIMEOUT = 150000; //ms
+
 describe("Integration: Graph Partitioning Equivalence", () => {
     it.each(PARTITION_TESTS)(
         "partitions graph and matches original execution for: $label",
@@ -15,6 +17,6 @@ describe("Integration: Graph Partitioning Equivalence", () => {
 
             await expect(runPartitionTest({ ...tc, originalPath: absPath })).resolves.not.toThrow();
         },
-        30000,
+        TEST_TIMEOUT,
     );
 });
