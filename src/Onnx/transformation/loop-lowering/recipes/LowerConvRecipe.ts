@@ -41,6 +41,8 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         "Loop",
         "Shape",
         "Size",
+        "Slice",
+        "Concat",
         "Gather",
         "Unsqueeze",
         "Squeeze",
@@ -49,6 +51,10 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         "Mod",
         "Add",
         "Sub",
+        "Equal",
+        "And",
+        "Where",
+        "ReduceSum",
     ];
 
     match(op: OperationNode.Class): boolean {

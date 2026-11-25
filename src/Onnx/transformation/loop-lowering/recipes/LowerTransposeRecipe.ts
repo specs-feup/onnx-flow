@@ -28,6 +28,7 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         "Loop",
         "Shape",
         "Size",
+        "Reshape",
         "Gather",
         "Unsqueeze",
         "Squeeze",
@@ -36,6 +37,9 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         "Mul",
         "Div",
         "Mod",
+        "Equal",
+        "And",
+        "Where",
     ];
 
     match(op: OperationNode.Class): boolean {

@@ -27,6 +27,7 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         "Loop",
         "Shape",
         "Size",
+        "Reshape",
         "Gather",
         "Unsqueeze",
         "Squeeze",

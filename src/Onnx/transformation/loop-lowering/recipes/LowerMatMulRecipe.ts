@@ -48,9 +48,16 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
         "Gather",
         "Unsqueeze",
         "Squeeze",
+        "Reshape",
+        "Concat",
+        "Add",
         "Mul",
         "Div",
         "Mod",
+        "Equal",
+        "And",
+        "Where",
+        "ReduceSum",
     ];
 
     match(op: OperationNode.Class): boolean {

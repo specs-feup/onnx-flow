@@ -27,6 +27,7 @@ export class LowerRangeRecipe implements LoopLoweringRecipe {
         "Loop",
         "Shape",
         "Size",
+        "Reshape",
         "Gather",
         "Unsqueeze",
         "Squeeze",
