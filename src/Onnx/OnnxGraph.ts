@@ -11,6 +11,14 @@ namespace OnnxGraph {
     export const TAG = "__specs-onnx__onnx_graph";
     export const VERSION = "1";
 
+    /**
+     * Factory method to instantiate a new OnnxGraph cleanly
+     * without requiring downstream apps to import @specs-feup/flow/graph/Graph.
+     */
+    export function create(): Class {
+        return Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    }
+
     export class Class<
         D extends Data = Data,
         S extends ScratchData = ScratchData,

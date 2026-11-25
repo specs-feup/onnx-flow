@@ -19,8 +19,7 @@ export class LowerExpRecipe implements DecompositionRecipe {
     private readonly ITERATIONS = 100;
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "Exp") return false;
-        return true;
+        return op.type === "Exp";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

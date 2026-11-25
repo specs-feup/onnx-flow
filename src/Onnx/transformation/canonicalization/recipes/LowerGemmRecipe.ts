@@ -13,8 +13,7 @@ export class LowerGemmRecipe implements DecompositionRecipe {
     public readonly producedOps = ["Transpose", "MatMul", "Mul", "Add"];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "Gemm") return false;
-        return true;
+        return op.type === "Gemm";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

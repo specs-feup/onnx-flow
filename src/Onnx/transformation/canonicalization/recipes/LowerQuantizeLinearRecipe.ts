@@ -22,8 +22,7 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
     ];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "QuantizeLinear") return false;
-        return true;
+        return op.type === "QuantizeLinear";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

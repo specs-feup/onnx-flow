@@ -7,13 +7,13 @@ import { makeTensorProto } from "../../../Utils.js";
 
 export class LowerTanhSigmoidRecipe implements DecompositionRecipe {
     public readonly name = "LowerTanhSigmoid";
-    public readonly targetOp = "TanhSigmoid";
+    public readonly targetOp = "Tanh";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
     public readonly producedOps = ["Mul", "Add", "Sigmoid"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "TanhSigmoid";
+        return op.type === "Tanh";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

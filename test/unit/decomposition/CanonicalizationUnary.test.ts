@@ -111,11 +111,11 @@ describe("Canonicalization - Unary & Activation Recipes", () => {
             applyRecipe(new Recipes.canonicalization.HardSigmoid(), "HardSigmoid").producedOps,
         ).not.toContain("HardSigmoid");
         expect(
-            applyRecipe(new Recipes.canonicalization.TanhSigmoid(), "TanhSigmoid").producedOps,
-        ).not.toContain("TanhSigmoid");
+            applyRecipe(new Recipes.canonicalization.TanhSigmoid(), "Tanh").producedOps,
+        ).not.toContain("Tanh");
         expect(
-            applyRecipe(new Recipes.canonicalization.TanhDiv(), "TanhDiv").producedOps,
-        ).not.toContain("TanhDiv");
+            applyRecipe(new Recipes.canonicalization.TanhDiv(), "Tanh").producedOps,
+        ).not.toContain("Tanh");
         expect(applyRecipe(new Recipes.canonicalization.Erf(), "Erf").producedOps).not.toContain(
             "Erf",
         );

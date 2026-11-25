@@ -13,8 +13,7 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
     public readonly producedOps = ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"];
 
     match(op: OperationNode.Class): boolean {
-        if (op.type !== "Softmax") return false;
-        return true;
+        return op.type === "Softmax";
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

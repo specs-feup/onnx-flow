@@ -14,7 +14,7 @@ import CgraDotFormatter from "./Onnx/dot/CgraDotFormatter.js";
 //import { generateCode } from "./codeGeneration.js";
 import { onnx2json } from "./onnx2json.js";
 import { json2onnx } from "./json2onnx.js";
-import { convertFlowGraphToOnnxJson, generateUnifiedExplorerJson } from "./flow2json.js";
+import { convertFlowGraphToOnnxJson } from "./flow2json.js";
 import { BASE_TEN, safeWriteJson } from "./Onnx/Utils.js";
 import type { DecompositionOptions, IndexingMode } from "./DecompositionOptions.js";
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
@@ -27,6 +27,7 @@ import OnnxGraphTransformer from "./Onnx/transformation/index.js";
 import { startExplorerServer } from "./ExplorerAPI/ExplorerServer.js";
 import { ExplorerSession } from "./ExplorerAPI/ExplorerSession.js";
 import inferShapes from "./Onnx/InferShapes.js";
+import { generateUnifiedExplorerJson } from "./ExplorerAPI/ExplorerSerializer.js";
 
 export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel> {
     return await onnx2json(inputFilePath);
@@ -52,6 +53,7 @@ export function loadGraph(
     recurse: boolean = defaultDecompositionOptions.recurse,
     coalesce: boolean = defaultDecompositionOptions.coalesce,
     loopLowering: boolean = defaultDecompositionOptions.loopLowering,
+    optimize: boolean = defaultDecompositionOptions.optimize,
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
     indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
     validate: boolean = true,
@@ -70,6 +72,7 @@ export function loadGraph(
             recurse,
             coalesce,
             loopLowering,
+            optimize,
             decomposeForCgra,
             indexingMode,
         };
@@ -247,6 +250,12 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             type: "boolean",
             default: defaultDecompositionOptions.loopLowering,
         })
+        .option("optimize", {
+            alias: "opt",
+            describe: "Run optimization passes (DeadCodeElimination, ShapeOptimization, etc.)",
+            type: "boolean",
+            default: defaultDecompositionOptions.optimize,
+        })
         .option("indexingMode", {
             alias: "im",
             describe:
@@ -371,6 +380,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 fuse: argv.fuse,
                 recurse: argv.recurse,
                 coalesce: argv.coalesce,
+                optimize: argv.optimize,
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
@@ -389,6 +399,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 fuse: argv.fuse,
                 recurse: argv.recurse,
                 coalesce: argv.coalesce,
+                optimize: argv.optimize,
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,

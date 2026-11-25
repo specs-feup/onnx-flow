@@ -6,12 +6,9 @@ import OperationNode from "../../../src/Onnx/OperationNode.js";
 import ConstantNode from "../../../src/Onnx/ConstantNode.js";
 import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import {
-    prepareGraphForExport,
-    convertFlowGraphToOnnxJson,
-    generateUnifiedExplorerJson,
-} from "../../../src/flow2json.js";
+import { prepareGraphForExport, convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import { generateUnifiedExplorerJson } from "../../../src/ExplorerAPI/ExplorerSerializer.js";
 
 describe("flow2json & Explorer Serialization", () => {
     initializeSchemaRegistry();

@@ -19,6 +19,9 @@ export interface DecompositionOptions {
     /** Apply loop lowering at all (create Loop nodes) */
     loopLowering: boolean;
 
+    /** Run DeadCodeElimination, ShapeOptimization and other optimization passes */
+    optimize: boolean;
+
     /** Apply example CGRA decomposition of MatMuls/Relus */
     decomposeForCgra: boolean;
 
@@ -36,6 +39,7 @@ export interface DecompositionOptions {
  *  - recurse: false
  *  - coalesce: true
  *  - loopLowering: true
+ *  - optimize: false
  *  - decomposeForCgra: false
  *  - indexingMode: "pointer"
  */
@@ -45,6 +49,7 @@ export const defaultDecompositionOptions: DecompositionOptions = {
     recurse: false,
     coalesce: true,
     loopLowering: true,
+    optimize: false,
     decomposeForCgra: false,
     indexingMode: IndexingMode.Pointer,
     tileSize: 0,
