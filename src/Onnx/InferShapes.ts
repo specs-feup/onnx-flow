@@ -116,8 +116,9 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
     }
 
     // --- Apply the results to the graph ---
-    const outputs = node.getOutgoers.targets.toArray();
-    node.getOutgoers.forEach((e) => graph.getEdgeById(e.id)?.remove());
+    // Update existing outgoing edges in-place so edge/node iteration order is preserved.
+    const existingEdges = node.getOutgoers.toArray() as OnnxEdge.Class[];
+    const outputs = existingEdges.map((e) => e.target);
 
     for (let i = 0; i < outputs.length; i++) {
         const output = outputs[i];
@@ -129,11 +130,25 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
             res = results[0];
         }
 
-        graph.addEdge(node, output).init(new OnnxEdge.Builder(res.dtype, res.shape));
+        const edge = existingEdges[i];
+        edge.setLiteralType(res.dtype);
+        edge.setShape(res.shape);
 
         if (output.is(TensorNode)) {
             const tn = output.as(TensorNode);
-            if (Array.isArray(res.shape) && res.shape.length > 0) tn.setShape(res.shape);
+            const isUnknownFallback =
+                Array.isArray(res.shape) && res.shape.length === 1 && res.shape[0] === -1;
+            const hasMoreSpecificExisting =
+                Array.isArray(tn.shape) &&
+                (tn.shape.length > 1 ||
+                    (tn.shape.length === 1 && typeof tn.shape[0] === "number" && tn.shape[0] >= 0));
+            if (
+                Array.isArray(res.shape) &&
+                res.shape.length > 0 &&
+                !(isUnknownFallback && hasMoreSpecificExisting)
+            ) {
+                tn.setShape(res.shape);
+            }
             if (res.dtype !== DataType.UNDEFINED) tn.setLiteralType(res.dtype);
         }
     }

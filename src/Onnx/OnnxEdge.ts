@@ -19,6 +19,14 @@ namespace OnnxEdge {
             return this.data[TAG].shape;
         }
 
+        setLiteralType(dtype: DataType): void {
+            this.data[TAG].type = dtype;
+        }
+
+        setShape(shape: Shape): void {
+            this.data[TAG].shape = shape;
+        }
+
         public toSnapshot(): EdgeSnapshot {
             return {
                 literalType: this.literalType,

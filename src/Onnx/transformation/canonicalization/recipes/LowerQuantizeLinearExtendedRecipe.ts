@@ -111,44 +111,6 @@ export class LowerQuantizeLinearExtendedRecipe implements DecompositionRecipe {
             [shapeXNode] = builder.createOp("Shape", [X], {}, [
                 { type: DataType.INT64, shape: [rank] },
             ]);
-            const [shapeScaleNode] = builder.createOp("Shape", [scale], {}, [
-                { type: DataType.INT64, shape: [rank] },
-            ]);
-
-            const parts: ConcreteValueNode[] = [];
-            if (axis > 0) {
-                const leftIdx = builder.createConstant(
-                    `qle_l_${op.id}`,
-                    int64Vec(Array.from({ length: axis }, (_, i) => i)),
-                );
-                parts.push(
-                    builder.createOp("Gather", [shapeXNode, leftIdx], { axis: 0 }, [
-                        { type: DataType.INT64, shape: [axis] },
-                    ])[0],
-                );
-            }
-            const axIdx = builder.createConstant(`qle_ax_${op.id}`, int64Vec([axis]));
-            const [numBlocks1D] = builder.createOp("Gather", [shapeScaleNode, axIdx], { axis: 0 }, [
-                { type: DataType.INT64, shape: [1] },
-            ]);
-            parts.push(numBlocks1D);
-            parts.push(builder.createConstant(`qle_bs_${op.id}`, int64Vec([blockSize])));
-            if (axis < rank - 1) {
-                const rightIdx = builder.createConstant(
-                    `qle_r_${op.id}`,
-                    int64Vec(Array.from({ length: rank - 1 - axis }, (_, i) => axis + 1 + i)),
-                );
-                parts.push(
-                    builder.createOp("Gather", [shapeXNode, rightIdx], { axis: 0 }, [
-                        { type: DataType.INT64, shape: [rank - 1 - axis] },
-                    ])[0],
-                );
-            }
-
-            const [blockedShapeNode] = builder.createOp("Concat", parts, { axis: 0 }, [
-                { type: DataType.INT64, shape: [rank + 1] },
-            ]);
-
             const xStatic = toStaticShape(X.shape);
             const blockedStatic = [
                 ...xStatic.slice(0, axis),
@@ -157,6 +119,55 @@ export class LowerQuantizeLinearExtendedRecipe implements DecompositionRecipe {
                 ...xStatic.slice(axis + 1),
             ] as KnownShape;
             workShape = blockedStatic;
+
+            let blockedShapeNode: ConcreteValueNode;
+            if (!blockedStatic.includes(-1)) {
+                blockedShapeNode = builder.createConstant(
+                    `qle_bshape_${op.id}`,
+                    int64Vec(blockedStatic as number[]),
+                );
+            } else {
+                const [shapeScaleNode] = builder.createOp("Shape", [scale], {}, [
+                    { type: DataType.INT64, shape: [rank] },
+                ]);
+
+                const parts: ConcreteValueNode[] = [];
+                if (axis > 0) {
+                    const leftIdx = builder.createConstant(
+                        `qle_l_${op.id}`,
+                        int64Vec(Array.from({ length: axis }, (_, i) => i)),
+                    );
+                    parts.push(
+                        builder.createOp("Gather", [shapeXNode, leftIdx], { axis: 0 }, [
+                            { type: DataType.INT64, shape: [axis] },
+                        ])[0],
+                    );
+                }
+                const axIdx = builder.createConstant(`qle_ax_${op.id}`, int64Vec([axis]));
+                const [numBlocks1D] = builder.createOp(
+                    "Gather",
+                    [shapeScaleNode, axIdx],
+                    { axis: 0 },
+                    [{ type: DataType.INT64, shape: [1] }],
+                );
+                parts.push(numBlocks1D);
+                parts.push(builder.createConstant(`qle_bs_${op.id}`, int64Vec([blockSize])));
+                if (axis < rank - 1) {
+                    const rightIdx = builder.createConstant(
+                        `qle_r_${op.id}`,
+                        int64Vec(Array.from({ length: rank - 1 - axis }, (_, i) => axis + 1 + i)),
+                    );
+                    parts.push(
+                        builder.createOp("Gather", [shapeXNode, rightIdx], { axis: 0 }, [
+                            { type: DataType.INT64, shape: [rank - 1 - axis] },
+                        ])[0],
+                    );
+                }
+
+                [blockedShapeNode] = builder.createOp("Concat", parts, { axis: 0 }, [
+                    { type: DataType.INT64, shape: [rank + 1] },
+                ]);
+            }
 
             [xCalc] = builder.createOp("Reshape", [xCalc, blockedShapeNode], {}, [
                 { type: calcDtype, shape: workShape },

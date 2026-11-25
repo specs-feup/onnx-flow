@@ -57,6 +57,7 @@ export function loadGraph(
     decomposeForCgra: boolean = defaultDecompositionOptions.decomposeForCgra,
     indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
     validate: boolean = true,
+    tileSize: number | undefined = defaultDecompositionOptions.tileSize,
 ): string | OnnxGraph.Class {
     let graph = createGraph(onnxObject);
 
@@ -75,6 +76,7 @@ export function loadGraph(
             optimize,
             decomposeForCgra,
             indexingMode,
+            ...(tileSize !== undefined ? { tileSize } : {}),
         };
         graph = graph.apply(new OnnxGraphTransformer(decompOptions));
 
@@ -144,12 +146,15 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
         .group(["partition"], "Partitioning Options (overrides Transformation Options):")
         .group(
             [
+                "canonicalize",
                 "fuse",
                 "coalesce",
                 "recurse",
                 "loopLowering",
+                "optimize",
                 "decomposeForCgra",
                 "indexingMode",
+                "tileSize",
                 "noLowLevel",
                 "noOptimize",
             ],
@@ -384,6 +389,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
+                ...(argv.tileSize !== undefined ? { tileSize: argv.tileSize } : {}),
             };
 
             console.log("\nStarting Interactive Mode. Automatic passes bypassed.");
@@ -403,6 +409,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
+                ...(argv.tileSize !== undefined ? { tileSize: argv.tileSize } : {}),
             };
             graph.apply(new OnnxGraphTransformer(decompOptions));
 
@@ -591,9 +598,9 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 );
             } else {
                 try {
-                    // Dynamic import so that compatibility_test.ts is only loaded if needed
+                    // Dynamic import so that test helpers are only loaded if needed
                     const { runEquivalenceForOriginalPath } =
-                        await import("../test/compatibility_test.js");
+                        await import("../test/helpers/modelRegistry.js");
 
                     const result = await runEquivalenceForOriginalPath(inputFilePath, {
                         skipCli: true, // reconversion was already done by this CLI run

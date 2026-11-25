@@ -50,14 +50,44 @@ export class DeadCodeEliminationPass implements GraphPass {
 
                 // Never remove the main graph's explicit inputs or outputs
                 if (node.is(TensorNode)) {
-                    const type = node.as(TensorNode).type;
-                    if (type === "input" || type === "output") continue;
+                    const tn = node.as(TensorNode);
+                    if (tn.type === "input" || tn.type === "output") continue;
+                    // Only remove an unconsumed intermediate tensor if it has no live producer op
+                    // (e.g. orphaned tensor; op outputs are removed together with their producer op
+                    // so multi-output ops like Loop/Split never lose positional output tensors)
+                    if (tn.outgoers.length === 0 && tn.incomers.length === 0) {
+                        tn.remove();
+                        removing = true;
+                        changed = true;
+                    }
+                    continue;
                 }
 
-                // If a node has ZERO consumers (outgoers)
-                if (node.outgoers.length === 0) {
-                    if (node.is(TensorNode) || node.is(ConstantNode) || node.is(OperationNode)) {
+                if (node.is(ConstantNode)) {
+                    if (node.outgoers.length === 0) {
                         node.remove();
+                        removing = true;
+                        changed = true;
+                    }
+                    continue;
+                }
+
+                if (node.is(OperationNode)) {
+                    const op = node.as(OperationNode);
+                    const outputs = op.getOutputs();
+                    const allOutputsDead = outputs.every(
+                        (out) =>
+                            !capturedIds.has(out.id) &&
+                            out.outgoers.length === 0 &&
+                            (!out.is(TensorNode) ||
+                                (out.as(TensorNode).type !== "input" &&
+                                    out.as(TensorNode).type !== "output")),
+                    );
+                    if (allOutputsDead) {
+                        op.remove();
+                        for (const out of outputs) {
+                            if (graph.hasNode(out.id)) out.remove();
+                        }
                         removing = true;
                         changed = true;
                     }

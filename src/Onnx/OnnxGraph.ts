@@ -33,14 +33,20 @@ namespace OnnxGraph {
             return this.nodes.filterIs(ConstantNode);
         }
 
-        // Retrieve all TensorNodes with type 'input'
+        // Retrieve all TensorNodes with type 'input' in deterministic creation order
         getInputTensorNodes(): NodeCollection<TensorNode.Class> {
-            return this.nodes.filterIs(TensorNode).filter((n) => n.type === "input");
+            return this.nodes
+                .filterIs(TensorNode)
+                .filter((n) => n.type === "input")
+                .sort((a, b) => a.creationSeq - b.creationSeq);
         }
 
-        // Retrieve all TensorNodes with type 'output'
+        // Retrieve all TensorNodes with type 'output' in deterministic creation order
         getOutputTensorNodes(): NodeCollection<TensorNode.Class> {
-            return this.nodes.filterIs(TensorNode).filter((n) => n.type === "output");
+            return this.nodes
+                .filterIs(TensorNode)
+                .filter((n) => n.type === "output")
+                .sort((a, b) => a.creationSeq - b.creationSeq);
         }
 
         // Retrieve all TensorNodes

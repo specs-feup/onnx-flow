@@ -37,11 +37,29 @@ export function makeTensorProto(dtype: DataType, dims: number[], values: number[
 
     switch (dtype) {
         case DataType.FLOAT:
-            t.floatData = values;
+            if (values.some((v) => !Number.isFinite(v))) {
+                const buf = Buffer.alloc(values.length * 4);
+                const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+                values.forEach((x, i) => dv.setFloat32(i * 4, x, true));
+                t.rawData = { type: "Buffer", data: Array.from(buf) };
+            } else {
+                t.floatData = values;
+            }
             break;
         case DataType.DOUBLE:
-            t.doubleData = values;
+            if (values.some((v) => !Number.isFinite(v))) {
+                const buf = Buffer.alloc(values.length * 8);
+                const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+                values.forEach((x, i) => dv.setFloat64(i * 8, x, true));
+                t.rawData = { type: "Buffer", data: Array.from(buf) };
+            } else {
+                t.doubleData = values;
+            }
             break;
+        case DataType.UINT8:
+        case DataType.INT8:
+        case DataType.UINT16:
+        case DataType.INT16:
         case DataType.INT32:
             t.int32Data = values.map((v) => v | 0);
             break;

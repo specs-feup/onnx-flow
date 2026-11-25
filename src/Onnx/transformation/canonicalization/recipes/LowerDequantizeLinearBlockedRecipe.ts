@@ -56,44 +56,6 @@ export class LowerDequantizeLinearBlockedRecipe implements DecompositionRecipe {
         const [shapeXNode] = builder.createOp("Shape", [X], {}, [
             { type: DataType.INT64, shape: [rank] },
         ]);
-        const [shapeScaleNode] = builder.createOp("Shape", [scale], {}, [
-            { type: DataType.INT64, shape: [rank] },
-        ]);
-
-        const parts: ConcreteValueNode[] = [];
-        if (axis > 0) {
-            const leftIdx = builder.createConstant(
-                `dqlb_l_${op.id}`,
-                int64Vec(Array.from({ length: axis }, (_, i) => i)),
-            );
-            parts.push(
-                builder.createOp("Gather", [shapeXNode, leftIdx], { axis: 0 }, [
-                    { type: DataType.INT64, shape: [axis] },
-                ])[0],
-            );
-        }
-        const axIdx = builder.createConstant(`dqlb_ax_${op.id}`, int64Vec([axis]));
-        const [numBlocks1D] = builder.createOp("Gather", [shapeScaleNode, axIdx], { axis: 0 }, [
-            { type: DataType.INT64, shape: [1] },
-        ]);
-        parts.push(numBlocks1D);
-        parts.push(builder.createConstant(`dqlb_bs_${op.id}`, int64Vec([blockSize])));
-        if (axis < rank - 1) {
-            const rightIdx = builder.createConstant(
-                `dqlb_r_${op.id}`,
-                int64Vec(Array.from({ length: rank - 1 - axis }, (_, i) => axis + 1 + i)),
-            );
-            parts.push(
-                builder.createOp("Gather", [shapeXNode, rightIdx], { axis: 0 }, [
-                    { type: DataType.INT64, shape: [rank - 1 - axis] },
-                ])[0],
-            );
-        }
-
-        const [blockedShapeNode] = builder.createOp("Concat", parts, { axis: 0 }, [
-            { type: DataType.INT64, shape: [rank + 1] },
-        ]);
-
         const xStatic = toStaticShape(X.shape);
         const workShape = [
             ...xStatic.slice(0, axis),
@@ -101,6 +63,52 @@ export class LowerDequantizeLinearBlockedRecipe implements DecompositionRecipe {
             blockSize,
             ...xStatic.slice(axis + 1),
         ] as KnownShape;
+
+        let blockedShapeNode: ConcreteValueNode;
+        if (!workShape.includes(-1)) {
+            blockedShapeNode = builder.createConstant(
+                `dqlb_bshape_${op.id}`,
+                int64Vec(workShape as number[]),
+            );
+        } else {
+            const [shapeScaleNode] = builder.createOp("Shape", [scale], {}, [
+                { type: DataType.INT64, shape: [rank] },
+            ]);
+
+            const parts: ConcreteValueNode[] = [];
+            if (axis > 0) {
+                const leftIdx = builder.createConstant(
+                    `dqlb_l_${op.id}`,
+                    int64Vec(Array.from({ length: axis }, (_, i) => i)),
+                );
+                parts.push(
+                    builder.createOp("Gather", [shapeXNode, leftIdx], { axis: 0 }, [
+                        { type: DataType.INT64, shape: [axis] },
+                    ])[0],
+                );
+            }
+            const axIdx = builder.createConstant(`dqlb_ax_${op.id}`, int64Vec([axis]));
+            const [numBlocks1D] = builder.createOp("Gather", [shapeScaleNode, axIdx], { axis: 0 }, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
+            parts.push(numBlocks1D);
+            parts.push(builder.createConstant(`dqlb_bs_${op.id}`, int64Vec([blockSize])));
+            if (axis < rank - 1) {
+                const rightIdx = builder.createConstant(
+                    `dqlb_r_${op.id}`,
+                    int64Vec(Array.from({ length: rank - 1 - axis }, (_, i) => axis + 1 + i)),
+                );
+                parts.push(
+                    builder.createOp("Gather", [shapeXNode, rightIdx], { axis: 0 }, [
+                        { type: DataType.INT64, shape: [rank - 1 - axis] },
+                    ])[0],
+                );
+            }
+
+            [blockedShapeNode] = builder.createOp("Concat", parts, { axis: 0 }, [
+                { type: DataType.INT64, shape: [rank + 1] },
+            ]);
+        }
 
         const [xCast] = builder.createOp("Cast", [X], { to: outDtype }, [
             { type: outDtype, shape: outShape },

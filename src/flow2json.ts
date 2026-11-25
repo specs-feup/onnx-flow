@@ -11,7 +11,7 @@ import type {
 import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
 import TensorNode from "./Onnx/TensorNode.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
-import { topologicalSortOperationNodes } from "./Onnx/Utils.js";
+import { toU8, topologicalSortOperationNodes } from "./Onnx/Utils.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
 
@@ -137,11 +137,12 @@ export function convertFlowGraphToOnnxJson(
             }
         }
 
-        // Special handling for rawData
-        if (tensor.rawData && Buffer.isBuffer(tensor.rawData) && tensor.rawData.length > 0) {
+        // Special handling for rawData (supports Buffer, Uint8Array, or { type: "Buffer", data: number[] })
+        const rawBytes = toU8(tensor.rawData);
+        if (rawBytes && rawBytes.length > 0) {
             sanitized["rawData"] = {
                 type: "Buffer",
-                data: Array.from(tensor.rawData),
+                data: Array.from(rawBytes),
             };
         }
 
