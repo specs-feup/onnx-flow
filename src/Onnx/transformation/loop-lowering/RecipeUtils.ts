@@ -101,9 +101,10 @@ export function getOrCreateIterationSpaceCounters(
     valueMap: Map<string, ValueNode>,
     dims: (number | ValueNode)[],
     tag: string,
+    stepEnable?: ConcreteValueNode,
 ): AguSpaceCounters {
     const dimsKey = dims.map((d) => (typeof d === "number" ? d.toString() : d.id)).join(",");
-    const cacheKey = `__agu_space_${dimsKey}`;
+    const cacheKey = `__agu_space_${dimsKey}_${stepEnable ? stepEnable.id : "uncond"}`;
 
     const cached = (valueMap as unknown as Map<string, unknown>).get(cacheKey) as
         | AguSpaceCounters
@@ -121,7 +122,7 @@ export function getOrCreateIterationSpaceCounters(
     for (let k = R - 1; k >= 0; k--) {
         const dim = dims[k];
         const isInnermost = k === R - 1;
-        const stepCond = isInnermost ? undefined : wraps[k + 1];
+        const stepCond = isInnermost ? stepEnable : wraps[k + 1];
 
         // Static size-1 dimension never changes from 0 and always wraps when stepped
         if (typeof dim === "number" && dim <= 1) {
@@ -188,6 +189,7 @@ export function buildAguPointer(
     strides: (number | ValueNode)[],
     tag: string,
     initialOffset: number | ValueNode = 0,
+    stepEnable?: ConcreteValueNode,
 ): ConcreteValueNode {
     const R = dims.length;
     const isAllStatic =
@@ -235,14 +237,24 @@ export function buildAguPointer(
                     `agu_step_${tag}`,
                     scalarInt64(firstDelta),
                 );
-                const [nextPtr] = builder.createOp("Add", [ptrIn, stepConst]);
+                const [steppedPtr] = builder.createOp("Add", [ptrIn, stepConst]);
+                const nextPtr = stepEnable
+                    ? builder.createOp("Where", [stepEnable, steppedPtr, ptrIn])[0]
+                    : steppedPtr;
                 loopCtx.setNextState(ptrIn, nextPtr);
             }
             return ptrIn;
         }
 
         // General Static AGU Cascade
-        const { wraps } = getOrCreateIterationSpaceCounters(builder, loopCtx, valueMap, dims, tag);
+        const { wraps } = getOrCreateIterationSpaceCounters(
+            builder,
+            loopCtx,
+            valueMap,
+            dims,
+            tag,
+            stepEnable,
+        );
         const deltaCache = new Map<number, ConcreteValueNode>();
         const getSteppedPtr = (delta: number): ConcreteValueNode => {
             if (delta === 0) return ptrIn;
@@ -267,12 +279,23 @@ export function buildAguPointer(
             }
         }
 
+        if (stepEnable) {
+            [nextPtr] = builder.createOp("Where", [stepEnable, nextPtr, ptrIn]);
+        }
+
         loopCtx.setNextState(ptrIn, nextPtr);
         return ptrIn;
     }
 
     // 4. Dynamic Dimensions / Strides AGU Cascade (Zero Div/Mod)
-    const { wraps } = getOrCreateIterationSpaceCounters(builder, loopCtx, valueMap, dims, tag);
+    const { wraps } = getOrCreateIterationSpaceCounters(
+        builder,
+        loopCtx,
+        valueMap,
+        dims,
+        tag,
+        stepEnable,
+    );
     const oneConst = builder.createConstant(`agu_dyn_one_${tag}`, scalarInt64(1));
     let rewindNode: ConcreteValueNode | null = null;
     const deltaNodes: ConcreteValueNode[] = new Array(R);
@@ -306,6 +329,10 @@ export function buildAguPointer(
     for (let k = R - 2; k >= 0; k--) {
         const [candPtr] = builder.createOp("Add", [ptrIn, deltaNodes[k]]);
         [nextPtr] = builder.createOp("Where", [wraps[k + 1], candPtr, nextPtr]);
+    }
+
+    if (stepEnable) {
+        [nextPtr] = builder.createOp("Where", [stepEnable, nextPtr, ptrIn]);
     }
 
     loopCtx.setNextState(ptrIn, nextPtr);

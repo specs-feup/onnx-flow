@@ -633,6 +633,19 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
                         new HistoryManager(gSN),
                     );
                     expect(() => validateGraph(gSN)).not.toThrow();
+                    if (mode === IndexingMode.Pointer) {
+                        const sndLoops = gSN
+                            .getOperationNodes()
+                            .toArray()
+                            .filter((o) => o.type === "Loop");
+                        expect(sndLoops.length).toBeGreaterThan(0);
+                        for (const lp of sndLoops) {
+                            const bodyOps = lp.getRegion(0)!.getOperationNodes().toArray();
+                            expect(bodyOps.some((o) => o.type === "Div" || o.type === "Mod")).toBe(
+                                false,
+                            );
+                        }
+                    }
 
                     // ConvTranspose
                     const gCT = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);

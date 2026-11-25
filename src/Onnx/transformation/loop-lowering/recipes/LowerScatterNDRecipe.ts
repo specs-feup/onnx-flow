@@ -13,6 +13,7 @@ import type {
     RecipeApplyResult,
 } from "../LoopLoweringRecipe.js";
 import {
+    buildAguPointer,
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
@@ -44,7 +45,10 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
         "Mul",
         "Max",
         "Min",
+        "Equal",
         "Less",
+        "And",
+        "Not",
         "Where",
         "Cast",
         "Div",
@@ -175,25 +179,54 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
         let scatterTargetIdx: ConcreteValueNode = zeroI64;
 
         if (updDims.length > 0) {
-            const updCoords = decodeMixedRadix(builder, safeUpdIter, updDims, `snd_dec_${op.id}`);
             const idxPrefixStrides = [
                 ...idxStrides.slice(0, q - 1),
                 ...new Array<number>(updDims.length - (q - 1)).fill(0),
             ];
-            idxTupleBase = buildLinearIndex(
-                builder,
-                updCoords,
-                idxPrefixStrides,
-                `snd_ilin_${op.id}`,
-            );
-
             const trailingStrides = [...new Array<number>(q - 1).fill(0), ...dataStrides.slice(k)];
-            scatterTargetIdx = buildLinearIndex(
-                builder,
-                updCoords,
-                trailingStrides,
-                `snd_tlin_${op.id}`,
-            );
+
+            if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+                const [isUpdPhase] = builder.createOp("Not", [isCopyPhase]);
+                idxTupleBase = buildAguPointer(
+                    builder,
+                    loopCtx,
+                    valueMap,
+                    updDims,
+                    idxPrefixStrides,
+                    `snd_idx_${op.id}`,
+                    0,
+                    isUpdPhase,
+                );
+                scatterTargetIdx = buildAguPointer(
+                    builder,
+                    loopCtx,
+                    valueMap,
+                    updDims,
+                    trailingStrides,
+                    `snd_tgt_${op.id}`,
+                    0,
+                    isUpdPhase,
+                );
+            } else {
+                const updCoords = decodeMixedRadix(
+                    builder,
+                    safeUpdIter,
+                    updDims,
+                    `snd_dec_${op.id}`,
+                );
+                idxTupleBase = buildLinearIndex(
+                    builder,
+                    updCoords,
+                    idxPrefixStrides,
+                    `snd_ilin_${op.id}`,
+                );
+                scatterTargetIdx = buildLinearIndex(
+                    builder,
+                    updCoords,
+                    trailingStrides,
+                    `snd_tlin_${op.id}`,
+                );
+            }
         }
 
         for (let j = 0; j < k; j++) {
