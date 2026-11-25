@@ -1,17 +1,15 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { AttributeMap, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import type { DataType } from "../../../OnnxTypes.js";
 import {
-    getAttr,
+    buildResolvedConvAttrs,
     getIntAttr,
     getIntsAttr,
     makeTensorProto,
     toStaticShape,
 } from "../../../Utils.js";
-
-const CONV_FORWARD_ATTRS = ["auto_pad", "dilations", "kernel_shape", "pads", "strides"] as const;
 
 export class LowerLpPoolRecipe implements DecompositionRecipe {
     public readonly name = "LowerLpPool";
@@ -72,11 +70,9 @@ export class LowerLpPoolRecipe implements DecompositionRecipe {
             makeTensorProto(dtype, weightShape, new Array<number>(totalWeights).fill(1)),
         );
 
-        const convAttrs: AttributeMap = { group: C };
-        for (const key of CONV_FORWARD_ATTRS) {
-            const val = getAttr(op, key);
-            if (val !== undefined) convAttrs[key] = val as AttributeMap[string];
-        }
+        const convAttrs = buildResolvedConvAttrs(op, inShape.slice(2), kernelShape, {
+            fixedGroup: C,
+        });
 
         const [windowSum] = builder.createOp("Conv", [powered, onesKernel], convAttrs, outMeta);
 

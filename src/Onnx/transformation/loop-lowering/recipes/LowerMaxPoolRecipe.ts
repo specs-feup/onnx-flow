@@ -13,6 +13,7 @@ import {
     getStringAttr,
     inferPoolDim,
     makeTensorProto,
+    resolveAutoPads,
     scalarInt64,
     toStaticShape,
 } from "../../../Utils.js";
@@ -66,8 +67,6 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "MaxPool") return false;
-        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
-        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") return false;
         if (op.getOutputs().length > 1) return false; // optional Indices output not lowered here
         const X = op.getInputs()?.[0];
         if (!X || !Array.isArray(X.shape) || X.shape.length < 3) return false;
@@ -76,19 +75,31 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         return !dims.includes(-1) && kernel.length === dims.length - 2;
     }
 
-    private computeOutSpatial(op: OperationNode.Class, inDims: number[]): number[] {
+    private resolvePadsAndOutSpatial(
+        op: OperationNode.Class,
+        inDims: number[],
+    ): { pads: number[]; outSpatial: number[] } {
         const spatialRank = inDims.length - 2;
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
-        const pads = getIntsAttr(op, "pads", new Array<number>(spatialRank * 2).fill(0));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
+        const explicitPads = getIntsAttr(op, "pads", []);
 
-        const outSpatial: number[] = [];
-        for (let d = 0; d < spatialRank; d++) {
-            outSpatial.push(
+        const pads = resolveAutoPads(
+            autoPad,
+            inDims.slice(2),
+            kernel,
+            strides,
+            dilations,
+            explicitPads,
+        );
+        const outSpatial = inDims
+            .slice(2)
+            .map((inD, d) =>
                 inferPoolDim(
-                    inDims[2 + d],
+                    inD,
                     kernel[d],
                     strides[d] ?? 1,
                     pads[d] ?? 0,
@@ -97,8 +108,7 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
                     ceilMode,
                 ),
             );
-        }
-        return outSpatial;
+        return { pads, outSpatial };
     }
 
     getLoopBounds(
@@ -107,7 +117,7 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
     ): { totalIters: number; carryShape: number[] } {
         const inDims = toStaticShape(op.getInputs()![0].shape);
         const kernel = getIntsAttr(op, "kernel_shape", []);
-        const outSpatial = this.computeOutSpatial(op, inDims);
+        const { outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
         const outTotal = inDims[0] * inDims[1] * outSpatial.reduce((a, b) => a * b, 1);
         const kTotal = kernel.reduce((a, b) => a * b, 1);
         return { totalIters: outTotal * kTotal, carryShape: [inDims[0], inDims[1], ...outSpatial] };
@@ -132,9 +142,8 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
 
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
-        const pads = getIntsAttr(op, "pads", new Array<number>(spatialRank * 2).fill(0));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
-        const outSpatial = this.computeOutSpatial(op, inDims);
+        const { pads, outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
 
         const outDims = [inDims[0], inDims[1], ...outSpatial];
         const iterDims = [...outDims, ...kernel];

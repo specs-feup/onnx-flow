@@ -1,11 +1,9 @@
 import type OperationNode from "../../../OperationNode.js";
 import type { GraphBuilder } from "../../../GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { AttributeMap, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import type { DataType } from "../../../OnnxTypes.js";
-import { getAttr } from "../../../Utils.js";
-
-const CONV_ATTRS = ["auto_pad", "dilations", "group", "kernel_shape", "pads", "strides"] as const;
+import { buildResolvedConvAttrs, getIntsAttr, toStaticShape } from "../../../Utils.js";
 
 export class LowerQLinearConvRecipe implements DecompositionRecipe {
     public readonly name = "LowerQLinearConv";
@@ -51,11 +49,12 @@ export class LowerQLinearConvRecipe implements DecompositionRecipe {
             convInputs.push(bDequant);
         }
 
-        const convAttrs: AttributeMap = {};
-        for (const key of CONV_ATTRS) {
-            const val = getAttr(op, key);
-            if (val !== undefined) convAttrs[key] = val as AttributeMap[string];
-        }
+        const xShape = toStaticShape(x.shape);
+        const wShape = toStaticShape(w.shape);
+        const kernelShape = getIntsAttr(op, "kernel_shape", wShape.slice(2));
+        const convAttrs = buildResolvedConvAttrs(op, xShape.slice(2), kernelShape, {
+            includeGroup: true,
+        });
 
         const [convF] = builder.createOp("Conv", convInputs, convAttrs, [
             { type: floatDtype, shape: Y.shape as KnownShape },

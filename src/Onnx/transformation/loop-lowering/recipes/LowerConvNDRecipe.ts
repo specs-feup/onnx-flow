@@ -10,6 +10,7 @@ import {
     inferConvDim,
     int64Vec,
     makeTensorProto,
+    resolveAutoPads,
     scalarInt64,
     toStaticShape,
 } from "../../../Utils.js";
@@ -83,44 +84,28 @@ export class LowerConvNDRecipe implements LoopLoweringRecipe {
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        const explicitPads = getIntsAttr(op, "pads", []);
 
-        let pads = getIntsAttr(op, "pads", new Array<number>(spatialRank * 2).fill(0));
-        const outSpatial: number[] = [];
-
-        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
-            const pHead: number[] = [];
-            const pTail: number[] = [];
-            for (let d = 0; d < spatialRank; d++) {
-                const inD = xDims[2 + d];
-                const s = strides[d] ?? 1;
-                const dil = dilations[d] ?? 1;
-                const effK = (kernelDims[d] - 1) * dil + 1;
-                const outD = Math.ceil(inD / s);
-                const padTotal = Math.max((outD - 1) * s + effK - inD, 0);
-                const head =
-                    autoPad === "SAME_LOWER" ? Math.ceil(padTotal / 2) : Math.floor(padTotal / 2);
-                pHead.push(head);
-                pTail.push(padTotal - head);
-                outSpatial.push(outD);
-            }
-            pads = [...pHead, ...pTail];
-        } else {
-            if (autoPad === "VALID") {
-                pads = new Array<number>(spatialRank * 2).fill(0);
-            }
-            for (let d = 0; d < spatialRank; d++) {
-                outSpatial.push(
-                    inferConvDim(
-                        xDims[2 + d],
-                        kernelDims[d],
-                        strides[d] ?? 1,
-                        pads[d] ?? 0,
-                        pads[spatialRank + d] ?? 0,
-                        dilations[d] ?? 1,
-                    ),
-                );
-            }
-        }
+        const pads = resolveAutoPads(
+            autoPad,
+            xDims.slice(2),
+            kernelDims,
+            strides,
+            dilations,
+            explicitPads,
+        );
+        const outSpatial = xDims
+            .slice(2)
+            .map((inD, d) =>
+                inferConvDim(
+                    inD,
+                    kernelDims[d],
+                    strides[d] ?? 1,
+                    pads[d] ?? 0,
+                    pads[spatialRank + d] ?? 0,
+                    dilations[d] ?? 1,
+                ),
+            );
 
         return { pads, outDims: [xDims[0], wDims[0], ...outSpatial] };
     }

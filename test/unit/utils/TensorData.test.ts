@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
 import ConstantNode from "../../../src/Onnx/ConstantNode.js";
+import OperationNode from "../../../src/Onnx/OperationNode.js";
+import TensorNode from "../../../src/Onnx/TensorNode.js";
+import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
 import {
     bool,
@@ -18,6 +21,8 @@ import {
     readScalarFromTensorNode,
     readVectorFromTensorNode,
     readTensorData,
+    resolveAutoPads,
+    buildResolvedConvAttrs,
 } from "../../../src/Onnx/utils/TensorData.js";
 
 describe("TensorData Utilities", () => {
@@ -118,5 +123,56 @@ describe("TensorData Utilities", () => {
         const data = readTensorData(f16Node);
         expect(data).toBeDefined();
         expect(data?.[0]).toBeCloseTo(1.0);
+    });
+
+    it("resolves auto_pad modes accurately via resolveAutoPads", () => {
+        expect(resolveAutoPads("NOTSET", [5, 5], [3, 3], [1, 1], [1, 1], [1, 2, 3, 4])).toEqual([
+            1, 2, 3, 4,
+        ]);
+        expect(resolveAutoPads("NOTSET", [5, 5], [3, 3], [1, 1], [1, 1])).toEqual([0, 0, 0, 0]);
+        expect(resolveAutoPads("VALID", [5, 5], [3, 3], [1, 1], [1, 1], [1, 2, 3, 4])).toEqual([
+            0, 0, 0, 0,
+        ]);
+        // Asymmetric padding: input=4, kernel=3, stride=2, dil=1 => out=2, totalPad=(2-1)*2+3-4=1
+        expect(resolveAutoPads("SAME_UPPER", [4, 5], [3, 3], [2, 2], [1, 1])).toEqual([0, 1, 1, 1]);
+        expect(resolveAutoPads("SAME_LOWER", [4, 5], [3, 3], [2, 2], [1, 1])).toEqual([1, 1, 0, 1]);
+        // With dilations: input=5, kernel=3, stride=1, dil=2 => effK=5, out=5, totalPad=4
+        expect(resolveAutoPads("SAME_UPPER", [5], [3], [1], [2])).toEqual([2, 2]);
+    });
+
+    it("builds resolved Conv attributes without conflicting auto_pad and pads", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph);
+        const xStatic = graph
+            .addNode("xStatic")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4], "input"))
+            .as(TensorNode);
+        const xDyn = graph
+            .addNode("xDyn")
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, -1, -1], "input"))
+            .as(TensorNode);
+
+        const [y1] = builder.createOp("AveragePool", [xStatic], {
+            kernel_shape: [2, 2],
+            strides: [2, 2],
+            auto_pad: "SAME_UPPER",
+            pads: [9, 9, 9, 9],
+        });
+        const op1 = y1.incomers.sources.filterIs(OperationNode).first()!;
+        const attrs1 = buildResolvedConvAttrs(op1, [4, 4], [2, 2], { fixedGroup: 2 });
+        expect(attrs1["auto_pad"]).toBeUndefined();
+        expect(attrs1["pads"]).toEqual([0, 0, 0, 0]);
+        expect(attrs1["group"]).toBe(2);
+
+        const [y2] = builder.createOp("AveragePool", [xDyn], {
+            kernel_shape: [3, 3],
+            strides: [2, 2],
+            auto_pad: "SAME_LOWER",
+            pads: [1, 1, 1, 1],
+        });
+        const op2 = y2.incomers.sources.filterIs(OperationNode).first()!;
+        const attrs2 = buildResolvedConvAttrs(op2, [-1, -1], [3, 3]);
+        expect(attrs2["auto_pad"]).toBe("SAME_LOWER");
+        expect(attrs2["pads"]).toBeUndefined();
     });
 });

@@ -13,6 +13,7 @@ import {
     getStringAttr,
     inferPoolDim,
     makeTensorProto,
+    resolveAutoPads,
     scalarInt64,
     toStaticShape,
 } from "../../../Utils.js";
@@ -82,58 +83,37 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
+        const explicitPads = getIntsAttr(op, "pads", []);
 
-        let pads = getIntsAttr(op, "pads", new Array<number>(spatialRank * 2).fill(0));
-        const outSpatial: number[] = [];
-
-        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
-            const pHead: number[] = [];
-            const pTail: number[] = [];
-            for (let d = 0; d < spatialRank; d++) {
-                const inD = inDims[2 + d];
-                const s = strides[d] ?? 1;
-                const dil = dilations[d] ?? 1;
-                const effK = (kernel[d] - 1) * dil + 1;
-                const outD = Math.ceil(inD / s);
-                const padTotal = Math.max((outD - 1) * s + effK - inD, 0);
-                const head =
-                    autoPad === "SAME_LOWER" ? Math.ceil(padTotal / 2) : Math.floor(padTotal / 2);
-                pHead.push(head);
-                pTail.push(padTotal - head);
-                outSpatial.push(outD);
-            }
-            pads = [...pHead, ...pTail];
-        } else {
-            if (autoPad === "VALID") {
-                pads = new Array<number>(spatialRank * 2).fill(0);
-            }
-            for (let d = 0; d < spatialRank; d++) {
-                outSpatial.push(
-                    inferPoolDim(
-                        inDims[2 + d],
-                        kernel[d],
-                        strides[d] ?? 1,
-                        pads[d] ?? 0,
-                        pads[spatialRank + d] ?? 0,
-                        dilations[d] ?? 1,
-                        ceilMode,
-                    ),
-                );
-            }
-        }
+        const pads = resolveAutoPads(
+            autoPad,
+            inDims.slice(2),
+            kernel,
+            strides,
+            dilations,
+            explicitPads,
+        );
+        const outSpatial = inDims
+            .slice(2)
+            .map((inD, d) =>
+                inferPoolDim(
+                    inD,
+                    kernel[d],
+                    strides[d] ?? 1,
+                    pads[d] ?? 0,
+                    pads[spatialRank + d] ?? 0,
+                    dilations[d] ?? 1,
+                    ceilMode,
+                ),
+            );
 
         return { pads, outSpatial };
     }
 
     private usesConstantDivisor(op: OperationNode.Class, pads: number[]): boolean {
         const countIncludePad = getIntAttr(op, "count_include_pad", 0);
-        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
-        return (
-            countIncludePad === 1 ||
-            autoPad === "VALID" ||
-            (ceilMode === 0 && pads.every((p) => p === 0))
-        );
+        return countIncludePad === 1 || (ceilMode === 0 && pads.every((p) => p === 0));
     }
 
     getLoopBounds(

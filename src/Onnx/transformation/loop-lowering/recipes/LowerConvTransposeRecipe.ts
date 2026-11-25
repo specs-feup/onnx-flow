@@ -60,8 +60,6 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "ConvTranspose") return false;
-        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
-        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") return false;
         const ins = op.getInputs();
         if (!ins || ins.length < 2) return false;
         const xDims = toStaticShape(ins[0].shape);
@@ -74,11 +72,14 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
         );
     }
 
-    private computeOutDims(op: OperationNode.Class, xDims: number[], wDims: number[]): number[] {
+    private resolvePadsAndOutDims(
+        op: OperationNode.Class,
+        xDims: number[],
+        wDims: number[],
+    ): { pads: number[]; outDims: number[] } {
         const spatialRank = xDims.length - 2;
         const group = getIntAttr(op, "group", 1);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
-        const pads = getIntsAttr(op, "pads", new Array<number>(spatialRank * 2).fill(0));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
         const outPadding = getIntsAttr(
             op,
@@ -86,22 +87,67 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
             new Array<number>(spatialRank).fill(0),
         );
         const explicitOutShape = getIntsAttr(op, "output_shape", []);
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        const explicitPads = getIntsAttr(op, "pads", []);
 
-        const outSpatial: number[] = [];
-        for (let d = 0; d < spatialRank; d++) {
-            if (explicitOutShape.length === spatialRank) {
-                outSpatial.push(explicitOutShape[d]);
-            } else {
+        if (autoPad === "VALID") {
+            const pads = new Array<number>(spatialRank * 2).fill(0);
+            const outSpatial = xDims.slice(2).map((inD, d) => {
+                if (explicitOutShape.length === spatialRank) return explicitOutShape[d];
                 const k = wDims[2 + d];
                 const s = strides[d] ?? 1;
-                const pHead = pads[d] ?? 0;
-                const pTail = pads[spatialRank + d] ?? 0;
                 const dil = dilations[d] ?? 1;
                 const opad = outPadding[d] ?? 0;
-                outSpatial.push(s * (xDims[2 + d] - 1) + opad + (k - 1) * dil + 1 - pHead - pTail);
-            }
+                return s * (inD - 1) + opad + (k - 1) * dil + 1;
+            });
+            return { pads, outDims: [xDims[0], wDims[1] * group, ...outSpatial] };
         }
-        return [xDims[0], wDims[1] * group, ...outSpatial];
+
+        if (
+            autoPad === "SAME_UPPER" ||
+            autoPad === "SAME_LOWER" ||
+            explicitOutShape.length === spatialRank
+        ) {
+            const pHead: number[] = [];
+            const pTail: number[] = [];
+            const outSpatial: number[] = [];
+            for (let d = 0; d < spatialRank; d++) {
+                const k = wDims[2 + d];
+                const s = strides[d] ?? 1;
+                const dil = dilations[d] ?? 1;
+                const opad = outPadding[d] ?? 0;
+                const outD =
+                    explicitOutShape.length === spatialRank
+                        ? explicitOutShape[d]
+                        : xDims[2 + d] * s;
+                const unpaddedOut = s * (xDims[2 + d] - 1) + opad + (k - 1) * dil + 1;
+                const totalPad = Math.max(0, unpaddedOut - outD);
+                const head =
+                    autoPad === "SAME_UPPER" ? Math.floor(totalPad / 2) : Math.ceil(totalPad / 2);
+                pHead.push(head);
+                pTail.push(totalPad - head);
+                outSpatial.push(outD);
+            }
+            return {
+                pads: [...pHead, ...pTail],
+                outDims: [xDims[0], wDims[1] * group, ...outSpatial],
+            };
+        }
+
+        const pads =
+            explicitPads.length === spatialRank * 2
+                ? explicitPads.map(Number)
+                : new Array<number>(spatialRank * 2).fill(0);
+        const outSpatial = xDims.slice(2).map((inD, d) => {
+            const k = wDims[2 + d];
+            const s = strides[d] ?? 1;
+            const pHead = pads[d] ?? 0;
+            const pTail = pads[spatialRank + d] ?? 0;
+            const dil = dilations[d] ?? 1;
+            const opad = outPadding[d] ?? 0;
+            return s * (inD - 1) + opad + (k - 1) * dil + 1 - pHead - pTail;
+        });
+        return { pads, outDims: [xDims[0], wDims[1] * group, ...outSpatial] };
     }
 
     getLoopBounds(
@@ -112,7 +158,7 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
         const xDims = toStaticShape(ins[0].shape);
         const wDims = toStaticShape(ins[1].shape);
         const group = getIntAttr(op, "group", 1);
-        const outDims = this.computeOutDims(op, xDims, wDims);
+        const { outDims } = this.resolvePadsAndOutDims(op, xDims, wDims);
 
         const outTotal = outDims.reduce((a, b) => a * b, 1);
         const cInPerGroup = xDims[1] / group;
@@ -126,7 +172,7 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
 
         const xDims = toStaticShape(ins[0].shape);
         const wDims = toStaticShape(ins[1].shape);
-        const outDims = this.computeOutDims(op, xDims, wDims);
+        const { outDims } = this.resolvePadsAndOutDims(op, xDims, wDims);
         const dtype = ins[0].literalType as DataType;
 
         const outShapeConst = builder.createConstant(`ct_outshape_${op.id}`, int64Vec(outDims));
@@ -170,10 +216,9 @@ export class LowerConvTransposeRecipe implements LoopLoweringRecipe {
         const spatialRank = xDims.length - 2;
         const group = getIntAttr(op, "group", 1);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
-        const pads = getIntsAttr(op, "pads", new Array<number>(spatialRank * 2).fill(0));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
 
-        const outDims = this.computeOutDims(op, xDims, wDims);
+        const { pads, outDims } = this.resolvePadsAndOutDims(op, xDims, wDims);
         const cInPerGroup = xDims[1] / group;
         const cOutPerGroup = wDims[1];
         const kernelDims = wDims.slice(2);
