@@ -176,7 +176,7 @@ export const COMPATIBILITY_TESTS: EquivalenceTestConfig[] = [
         tol: 1e-5,
         cliArgs: jsonFullArgs,
         specs: [
-            { name: "start", dtype: "float32", shape: [], gen: "range", value: 1 },
+            { name: "start", dtype: "float32", shape: [], gen: "range", value: 0 },
             { name: "limit", dtype: "float32", shape: [], gen: "range", value: 6 },
             { name: "delta", dtype: "float32", shape: [], gen: "range", value: 1.5 },
             { name: "V", dtype: "float32", shape: [4] },
@@ -973,21 +973,7 @@ export const PARTITION_TESTS: PartitionTestCase[] = [
             label: t.label,
             originalPath: t.originalPath,
             tol: t.tol ?? 1e-4,
-            specs:
-                t.label === "range_standard"
-                    ? [
-                          { name: "start", dtype: "float32" as const, shape: [], init: [0] },
-                          { name: "limit", dtype: "float32" as const, shape: [], init: [5] },
-                          { name: "delta", dtype: "float32" as const, shape: [], init: [1] },
-                      ]
-                    : t.label === "range_add_standard"
-                      ? [
-                            { name: "start", dtype: "float32" as const, shape: [], init: [0] },
-                            { name: "limit", dtype: "float32" as const, shape: [], init: [6] },
-                            { name: "delta", dtype: "float32" as const, shape: [], init: [1.5] },
-                            { name: "V", dtype: "float32" as const, shape: [4] },
-                        ]
-                      : t.specs,
+            specs: t.specs,
         })),
     {
         label: "kws_ref_model_float32_standard",

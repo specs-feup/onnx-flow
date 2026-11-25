@@ -19,7 +19,7 @@ import {
     type RawOnnxValueInfo,
     type TensorProto,
 } from "../../src/Onnx/OnnxTypes.js";
-import { safeWriteJson } from "../../src/Onnx/Utils.js";
+import { makeTensorProto, safeWriteJson } from "../../src/Onnx/Utils.js";
 import {
     ensureProtoExists,
     exportGraphToOnnx,
@@ -1587,4 +1587,68 @@ export async function ensureModelExists(relOrAbsPath: string): Promise<string> {
         }
     }
     return absPath;
+}
+
+/* ============================== SHARED SUBGRAPH BUILDERS ================================== */
+
+/** Builds `Relu(X) -> Conv -> Relu -> Conv -> Add(skip) -> Relu` with intermediate fork edge. */
+export function buildResidualSkipForkGraph(scopeTag: string = "res"): OnnxGraph.Class {
+    initializeSchemaRegistry();
+    const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const b = new GraphBuilder(g, scopeTag);
+    const x = g
+        .addNode("X")
+        .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4], "input"))
+        .as(TensorNode);
+    const w1 = b.createConstant(
+        "w1",
+        makeTensorProto(
+            DataType.FLOAT,
+            [2, 2, 3, 3],
+            Array.from({ length: 36 }, (_, i) => ((i % 5) - 2) * 0.08),
+        ),
+    );
+    const w2 = b.createConstant(
+        "w2",
+        makeTensorProto(
+            DataType.FLOAT,
+            [2, 2, 3, 3],
+            Array.from({ length: 36 }, (_, i) => (((i + 2) % 5) - 2) * 0.08),
+        ),
+    );
+    const [r0] = b.createOp("Relu", [x], {}, [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }]);
+    const [c1] = b.createOp("Conv", [r0, w1], { strides: [1, 1], pads: [1, 1, 1, 1] }, [
+        { type: DataType.FLOAT, shape: [1, 2, 4, 4] },
+    ]);
+    const [r1] = b.createOp("Relu", [c1], {}, [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }]);
+    const [c2] = b.createOp("Conv", [r1, w2], { strides: [1, 1], pads: [1, 1, 1, 1] }, [
+        { type: DataType.FLOAT, shape: [1, 2, 4, 4] },
+    ]);
+    const [sum] = b.createOp("Add", [c2, r0], {}, [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }]);
+    const [out] = b.createOp("Relu", [sum], {}, [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }]);
+    if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+    return g;
+}
+
+/** Builds `Split(X, num_outputs=2) -> [Relu, Neg -> Exp] -> Concat`. */
+export function buildSplitMultiBranchConcatGraph(scopeTag: string = "sc"): OnnxGraph.Class {
+    initializeSchemaRegistry();
+    const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const b = new GraphBuilder(g, scopeTag);
+    const x = g
+        .addNode("X")
+        .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+        .as(TensorNode);
+    const [b0, b1] = b.createOp("Split", [x], { axis: 1, num_outputs: 2 }, [
+        { type: DataType.FLOAT, shape: [2, 2] },
+        { type: DataType.FLOAT, shape: [2, 2] },
+    ]);
+    const [r0] = b.createOp("Relu", [b0], {}, [{ type: DataType.FLOAT, shape: [2, 2] }]);
+    const [neg1] = b.createOp("Neg", [b1], {}, [{ type: DataType.FLOAT, shape: [2, 2] }]);
+    const [exp1] = b.createOp("Exp", [neg1], {}, [{ type: DataType.FLOAT, shape: [2, 2] }]);
+    const [out] = b.createOp("Concat", [r0, exp1], { axis: 1 }, [
+        { type: DataType.FLOAT, shape: [2, 4] },
+    ]);
+    if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+    return g;
 }

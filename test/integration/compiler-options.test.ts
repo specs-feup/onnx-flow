@@ -4,14 +4,21 @@ import os from "node:os";
 import path from "node:path";
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
+import OperationNode from "../../src/Onnx/OperationNode.js";
+import RegionArgumentNode from "../../src/Onnx/RegionArgumentNode.js";
 import TensorNode from "../../src/Onnx/TensorNode.js";
+import OnnxEdge from "../../src/Onnx/OnnxEdge.js";
 import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../src/Onnx/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../src/Onnx/Schema/index.js";
 import OnnxGraphTransformer from "../../src/Onnx/transformation/index.js";
 import { IndexingMode, type DecompositionOptions } from "../../src/DecompositionOptions.js";
-import { int64Vec } from "../../src/Onnx/Utils.js";
+import { floatVec, int64Vec, makeTensorProto, scalarFloat } from "../../src/Onnx/Utils.js";
 import validateGraph from "../../src/Onnx/validation/ValidateGraph.js";
+import {
+    buildResidualSkipForkGraph,
+    buildSplitMultiBranchConcatGraph,
+} from "../helpers/modelFactory.js";
 import {
     buildFeeds,
     compareOrtOutputs,
@@ -575,5 +582,475 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
                 },
             );
         });
+    });
+
+    describe("Multi-Op Subgraph Combinations (ORT Equivalence)", () => {
+        const fullOpts: Partial<DecompositionOptions> = {
+            canonicalize: true,
+            loopLowering: true,
+            fuse: true,
+            coalesce: true,
+            optimize: true,
+            indexingMode: IndexingMode.Pointer,
+        };
+
+        it("matches ORT for Conv -> BatchNormalization -> Relu -> MaxPool CNN block", async () => {
+            await assertTransformMatchesOrt(
+                "combo_cnn_conv_bn_relu_maxpool",
+                {
+                    label: "cnn_block",
+                    feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "cnn");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4], "input"))
+                            .as(TensorNode);
+                        const w = b.createConstant(
+                            "conv_w",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [2, 2, 3, 3],
+                                Array.from({ length: 36 }, (_, i) => ((i % 7) - 3) * 0.1),
+                            ),
+                        );
+                        const scale = b.createConstant("bn_s", floatVec([1.2, 0.8]));
+                        const bias = b.createConstant("bn_b", floatVec([0.1, -0.2]));
+                        const mean = b.createConstant("bn_m", floatVec([0.05, -0.05]));
+                        const variance = b.createConstant("bn_v", floatVec([0.5, 1.5]));
+
+                        const [cv] = b.createOp(
+                            "Conv",
+                            [x, w],
+                            { strides: [1, 1], pads: [1, 1, 1, 1] },
+                            [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }],
+                        );
+                        const [bn] = b.createOp(
+                            "BatchNormalization",
+                            [cv, scale, bias, mean, variance],
+                            { epsilon: 1e-5 },
+                            [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }],
+                        );
+                        const [rl] = b.createOp("Relu", [bn], {}, [
+                            { type: DataType.FLOAT, shape: [1, 2, 4, 4] },
+                        ]);
+                        const [out] = b.createOp(
+                            "MaxPool",
+                            [rl],
+                            { kernel_shape: [2, 2], strides: [2, 2] },
+                            [{ type: DataType.FLOAT, shape: [1, 2, 2, 2] }],
+                        );
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
+        it("matches ORT for Residual Skip-Fork DAG (Relu -> Conv -> Relu -> Conv -> Add(skip) -> Relu)", async () => {
+            await assertTransformMatchesOrt(
+                "combo_residual_skip_fork",
+                {
+                    label: "res_fork",
+                    feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+                    build: () => buildResidualSkipForkGraph("res"),
+                },
+                fullOpts,
+            );
+        });
+
+        it("matches ORT for Depthwise-Separable Conv -> GlobalAveragePool -> Flatten -> Gemm block", async () => {
+            await assertTransformMatchesOrt(
+                "combo_depthwise_separable_gap_gemm",
+                {
+                    label: "dw_sep_gemm",
+                    feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "dw");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4], "input"))
+                            .as(TensorNode);
+                        const wDw = b.createConstant(
+                            "w_dw",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [2, 1, 3, 3],
+                                Array.from({ length: 18 }, (_, i) => ((i % 5) - 2) * 0.1),
+                            ),
+                        );
+                        const wPw = b.createConstant(
+                            "w_pw",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 2, 1, 1],
+                                Array.from({ length: 8 }, (_, i) => (i - 3) * 0.12),
+                            ),
+                        );
+                        const wFc = b.createConstant(
+                            "w_fc",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 3],
+                                Array.from({ length: 12 }, (_, i) => ((i % 5) - 2) * 0.15),
+                            ),
+                        );
+                        const bFc = b.createConstant("b_fc", floatVec([0.1, -0.1, 0.2]));
+
+                        const [dw] = b.createOp(
+                            "Conv",
+                            [x, wDw],
+                            { group: 2, strides: [1, 1], pads: [1, 1, 1, 1] },
+                            [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }],
+                        );
+                        const [pw] = b.createOp("Conv", [dw, wPw], { strides: [1, 1] }, [
+                            { type: DataType.FLOAT, shape: [1, 4, 4, 4] },
+                        ]);
+                        const [rl] = b.createOp("Relu", [pw], {}, [
+                            { type: DataType.FLOAT, shape: [1, 4, 4, 4] },
+                        ]);
+                        const [gap] = b.createOp("GlobalAveragePool", [rl], {}, [
+                            { type: DataType.FLOAT, shape: [1, 4, 1, 1] },
+                        ]);
+                        const [flat] = b.createOp("Flatten", [gap], { axis: 1 }, [
+                            { type: DataType.FLOAT, shape: [1, 4] },
+                        ]);
+                        const [out] = b.createOp(
+                            "Gemm",
+                            [flat, wFc, bFc],
+                            { alpha: 1, beta: 1, transA: 0, transB: 0 },
+                            [{ type: DataType.FLOAT, shape: [1, 3] }],
+                        );
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
+        it("matches ORT for Transformer Attention block (LayerNorm -> QKV -> Transpose -> Softmax -> MatMul)", async () => {
+            await assertTransformMatchesOrt(
+                "combo_attention_ln_matmul_softmax",
+                {
+                    label: "attn",
+                    tol: 1e-3,
+                    feeds: [{ name: "X", dtype: "float32", shape: [1, 3, 4], gen: "negmix" }],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "attn");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [1, 3, 4], "input"))
+                            .as(TensorNode);
+                        const lnS = b.createConstant("ln_s", floatVec([1, 1, 1, 1]));
+                        const lnB = b.createConstant("ln_b", floatVec([0, 0.1, -0.1, 0]));
+                        const wq = b.createConstant(
+                            "wq",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 4],
+                                Array.from({ length: 16 }, (_, i) => ((i % 7) - 3) * 0.1),
+                            ),
+                        );
+                        const wk = b.createConstant(
+                            "wk",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 4],
+                                Array.from({ length: 16 }, (_, i) => (((i + 3) % 7) - 3) * 0.1),
+                            ),
+                        );
+                        const wv = b.createConstant(
+                            "wv",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 2],
+                                Array.from({ length: 8 }, (_, i) => (i - 3) * 0.15),
+                            ),
+                        );
+                        const scale = b.createConstant("dk", scalarFloat(2.0));
+
+                        const [ln] = b.createOp(
+                            "LayerNormalization",
+                            [x, lnS, lnB],
+                            { axis: -1, epsilon: 1e-5 },
+                            [{ type: DataType.FLOAT, shape: [1, 3, 4] }],
+                        );
+                        const [q] = b.createOp("MatMul", [ln, wq], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 4] },
+                        ]);
+                        const [k] = b.createOp("MatMul", [ln, wk], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 4] },
+                        ]);
+                        const [v] = b.createOp("MatMul", [ln, wv], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 2] },
+                        ]);
+                        const [kt] = b.createOp("Transpose", [k], { perm: [0, 2, 1] }, [
+                            { type: DataType.FLOAT, shape: [1, 4, 3] },
+                        ]);
+                        const [scores] = b.createOp("MatMul", [q, kt], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 3] },
+                        ]);
+                        const [scaled] = b.createOp("Div", [scores, scale], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 3] },
+                        ]);
+                        const [attn] = b.createOp("Softmax", [scaled], { axis: -1 }, [
+                            { type: DataType.FLOAT, shape: [1, 3, 3] },
+                        ]);
+                        const [out] = b.createOp("MatMul", [attn, v], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 2] },
+                        ]);
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
+        it("matches ORT for multi-output Split -> Asymmetric Branches (Relu vs Neg+Exp) -> Concat", async () => {
+            await assertTransformMatchesOrt(
+                "combo_split_multibranch_concat",
+                {
+                    label: "split_concat",
+                    feeds: [{ name: "X", dtype: "float32", shape: [2, 4], gen: "negmix" }],
+                    build: () => buildSplitMultiBranchConcatGraph("sc"),
+                },
+                fullOpts,
+            );
+        });
+
+        it("matches ORT for QDQ Quantized MLP (Q -> DQ -> MatMul -> Add -> Relu -> Q -> DQ)", async () => {
+            await assertTransformMatchesOrt(
+                "combo_qdq_quantized_mlp",
+                {
+                    label: "qdq_mlp",
+                    tol: 1e-4,
+                    feeds: [
+                        {
+                            name: "X",
+                            dtype: "float32",
+                            shape: [2, 4],
+                            init: [-0.8, 0.4, 1.2, -0.4, 0.2, -1.2, 0.8, 0.0],
+                        },
+                    ],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "qdq");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                            .as(TensorNode);
+                        const sc1 = b.createConstant("sc1", scalarFloat(0.2));
+                        const zp1 = b.createConstant(
+                            "zp1",
+                            makeTensorProto(DataType.UINT8, [], [128]),
+                        );
+                        const sc2 = b.createConstant("sc2", scalarFloat(0.25));
+                        const zp2 = b.createConstant(
+                            "zp2",
+                            makeTensorProto(DataType.UINT8, [], [0]),
+                        );
+                        const w = b.createConstant(
+                            "W",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 3],
+                                [
+                                    0.5, -0.5, 0.25, 0.25, 0.5, -0.25, -0.5, 0.25, 0.5, 0.25, -0.25,
+                                    0.5,
+                                ],
+                            ),
+                        );
+                        const bias = b.createConstant("B", floatVec([0.1, 0.3, -0.2]));
+
+                        const [q1] = b.createOp("QuantizeLinear", [x, sc1, zp1], {}, [
+                            { type: DataType.UINT8, shape: [2, 4] },
+                        ]);
+                        const [dq1] = b.createOp("DequantizeLinear", [q1, sc1, zp1], {}, [
+                            { type: DataType.FLOAT, shape: [2, 4] },
+                        ]);
+                        const [mm] = b.createOp("MatMul", [dq1, w], {}, [
+                            { type: DataType.FLOAT, shape: [2, 3] },
+                        ]);
+                        const [sum] = b.createOp("Add", [mm, bias], {}, [
+                            { type: DataType.FLOAT, shape: [2, 3] },
+                        ]);
+                        const [rl] = b.createOp("Relu", [sum], {}, [
+                            { type: DataType.FLOAT, shape: [2, 3] },
+                        ]);
+                        const [q2] = b.createOp("QuantizeLinear", [rl, sc2, zp2], {}, [
+                            { type: DataType.UINT8, shape: [2, 3] },
+                        ]);
+                        const [out] = b.createOp("DequantizeLinear", [q2, sc2, zp2], {}, [
+                            { type: DataType.FLOAT, shape: [2, 3] },
+                        ]);
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
+        it("matches ORT for Dynamic-Batch [-1, 4] MatMul -> Add -> Relu -> Softmax", async () => {
+            await assertTransformMatchesOrt(
+                "combo_dynamic_batch_relu_softmax",
+                {
+                    label: "dyn_relu_sm",
+                    tol: 1e-3,
+                    feeds: [{ name: "X", dtype: "float32", shape: [3, 4], gen: "negmix" }],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "dg");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [-1, 4], "input"))
+                            .as(TensorNode);
+                        const w = b.createConstant(
+                            "W",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [4, 4],
+                                Array.from({ length: 16 }, (_, i) => ((i % 7) - 3) * 0.15),
+                            ),
+                        );
+                        const bias = b.createConstant("B", floatVec([0.1, -0.2, 0.05, 0.3]));
+
+                        const [mm] = b.createOp("MatMul", [x, w], {}, [
+                            { type: DataType.FLOAT, shape: [-1, 4] },
+                        ]);
+                        const [add] = b.createOp("Add", [mm, bias], {}, [
+                            { type: DataType.FLOAT, shape: [-1, 4] },
+                        ]);
+                        const [rl] = b.createOp("Relu", [add], {}, [
+                            { type: DataType.FLOAT, shape: [-1, 4] },
+                        ]);
+                        const [out] = b.createOp("Softmax", [rl], { axis: -1 }, [
+                            { type: DataType.FLOAT, shape: [-1, 4] },
+                        ]);
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
+        it.each([true, false])(
+            "matches ORT for If control-flow with captured multi-op MatMul/Relu branches (cond=%s)",
+            async (condVal) => {
+                await assertTransformMatchesOrt(
+                    `combo_if_cf_${String(condVal)}`,
+                    {
+                        label: `if_cf_${String(condVal)}`,
+                        feeds: [
+                            { name: "cond", dtype: "bool", shape: [], init: [condVal] },
+                            { name: "X", dtype: "float32", shape: [2, 3], gen: "negmix" },
+                            { name: "W1", dtype: "float32", shape: [3, 2], gen: "negmix" },
+                            { name: "W2", dtype: "float32", shape: [3, 2], gen: "negmix" },
+                            { name: "B", dtype: "float32", shape: [2], gen: "negmix" },
+                        ],
+                        build: () => {
+                            const thenGraph = Graph.create()
+                                .init(new OnnxGraph.Builder())
+                                .as(OnnxGraph);
+                            const thenB = new GraphBuilder(thenGraph, "then");
+                            const tX = thenGraph
+                                .addNode("X")
+                                .init(
+                                    new RegionArgumentNode.Builder(0, "X", DataType.FLOAT, [2, 3]),
+                                )
+                                .as(RegionArgumentNode);
+                            const tW1 = thenGraph
+                                .addNode("W1")
+                                .init(
+                                    new RegionArgumentNode.Builder(1, "W1", DataType.FLOAT, [3, 2]),
+                                )
+                                .as(RegionArgumentNode);
+                            const tB = thenGraph
+                                .addNode("B")
+                                .init(new RegionArgumentNode.Builder(2, "B", DataType.FLOAT, [2]))
+                                .as(RegionArgumentNode);
+                            const [tMm] = thenB.createOp("MatMul", [tX, tW1], {}, [
+                                { type: DataType.FLOAT, shape: [2, 2] },
+                            ]);
+                            const [tOut] = thenB.createOp("Add", [tMm, tB], {}, [
+                                { type: DataType.FLOAT, shape: [2, 2] },
+                            ]);
+                            if (tOut.is(TensorNode)) tOut.as(TensorNode).setType("output");
+
+                            const elseGraph = Graph.create()
+                                .init(new OnnxGraph.Builder())
+                                .as(OnnxGraph);
+                            const elseB = new GraphBuilder(elseGraph, "else");
+                            const eX = elseGraph
+                                .addNode("X")
+                                .init(
+                                    new RegionArgumentNode.Builder(0, "X", DataType.FLOAT, [2, 3]),
+                                )
+                                .as(RegionArgumentNode);
+                            const eW2 = elseGraph
+                                .addNode("W2")
+                                .init(
+                                    new RegionArgumentNode.Builder(1, "W2", DataType.FLOAT, [3, 2]),
+                                )
+                                .as(RegionArgumentNode);
+                            const [eMm] = elseB.createOp("MatMul", [eX, eW2], {}, [
+                                { type: DataType.FLOAT, shape: [2, 2] },
+                            ]);
+                            const [eOut] = elseB.createOp("Relu", [eMm], {}, [
+                                { type: DataType.FLOAT, shape: [2, 2] },
+                            ]);
+                            if (eOut.is(TensorNode)) eOut.as(TensorNode).setType("output");
+
+                            const outer = Graph.create()
+                                .init(new OnnxGraph.Builder())
+                                .as(OnnxGraph);
+                            const cond = outer
+                                .addNode("cond")
+                                .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
+                                .as(TensorNode);
+                            outer
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"));
+                            outer
+                                .addNode("W1")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [3, 2], "input"));
+                            outer
+                                .addNode("W2")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [3, 2], "input"));
+                            outer
+                                .addNode("B")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [2], "input"));
+
+                            const ifOp = outer
+                                .addNode("if_0")
+                                .init(
+                                    new OperationNode.Builder("If", [cond], {}, [
+                                        thenGraph,
+                                        elseGraph,
+                                    ]),
+                                )
+                                .as(OperationNode);
+                            outer.addEdge(cond, ifOp).init(new OnnxEdge.Builder(DataType.BOOL, []));
+                            const yOut = outer
+                                .addNode("Y")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [2, 2], "output"))
+                                .as(TensorNode);
+                            outer
+                                .addEdge(ifOp, yOut)
+                                .init(new OnnxEdge.Builder(DataType.FLOAT, [2, 2]));
+                            return outer;
+                        },
+                    },
+                    fullOpts,
+                );
+            },
+        );
     });
 });

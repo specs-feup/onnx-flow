@@ -15,6 +15,13 @@ export class DeadCodeEliminationPass implements GraphPass {
                     out.add(arg.id);
                     out.add(arg.originalName);
                 }
+                for (const innerOp of region.getOperationNodes()) {
+                    for (const inp of innerOp.getInputs() ?? []) {
+                        if (!region.hasNode(inp.id)) {
+                            out.add(inp.id);
+                        }
+                    }
+                }
                 this.collectCapturedIds(region, out);
             }
         }
