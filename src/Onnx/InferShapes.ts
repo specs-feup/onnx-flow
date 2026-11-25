@@ -100,7 +100,7 @@ export function inferNodeShape(node: OperationNode.Class, graph: OnnxGraph.Class
 
     // --- Delegate to the Schema ---
     const registry = OpRegistry.getInstance();
-    const schema = registry.get(node.type, 19);
+    const schema = registry.get(node.type, graph.getTargetOpset());
 
     let results: TensorInfo[] = [];
 

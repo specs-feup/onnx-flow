@@ -14,9 +14,7 @@ import ConstantNode from "./Onnx/ConstantNode.js";
 import { toU8, topologicalSortOperationNodes } from "./Onnx/Utils.js";
 import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
-
-const IR_VERSION = 9;
-const OPSET_IMPORT = 20;
+import { resolveExportVersions } from "./Onnx/Schema/Versioning.js";
 
 export function prepareGraphForExport(graph: OnnxGraph.Class): void {
     const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];
@@ -68,7 +66,13 @@ export function convertFlowGraphToOnnxJson(
     graph: OnnxGraph.Class,
     name?: string,
     bodyCount: number = 0,
+    options?: { targetOpset?: number; irVersion?: number },
 ): RawOnnxModel {
+    const resolvedVersions =
+        bodyCount === 0
+            ? resolveExportVersions(graph, options)
+            : { irVersion: graph.getIrVersion(), opsetVersion: graph.getTargetOpset() };
+    const effectiveOpset = options?.targetOpset ?? resolvedVersions.opsetVersion;
     const modelInputs: RawOnnxValueInfo[] = [];
     const modelOutputs: RawOnnxValueInfo[] = [];
 
@@ -234,7 +238,7 @@ export function convertFlowGraphToOnnxJson(
         const baseAttrs: RawOnnxAttribute[] = [];
 
         // Get the schema for this operation to correctly type numerical attributes
-        const schema = OpRegistry.getInstance().get(opType, OPSET_IMPORT);
+        const schema = OpRegistry.getInstance().get(opType, effectiveOpset);
 
         // Serialize attributes
         for (const [name, value] of Object.entries(opNode.attributes)) {
@@ -303,6 +307,7 @@ export function convertFlowGraphToOnnxJson(
                 bodyGraph,
                 `loop_body_${bodyCount}`,
                 bodyCount + 1,
+                { targetOpset: effectiveOpset, irVersion: resolvedVersions.irVersion },
             ).graph!;
             baseAttrs.push({
                 name: "body",
@@ -318,6 +323,7 @@ export function convertFlowGraphToOnnxJson(
                 thenGraph,
                 `then_${bodyCount}`,
                 bodyCount + 1,
+                { targetOpset: effectiveOpset, irVersion: resolvedVersions.irVersion },
             ).graph!;
             baseAttrs.push({ name: "then_branch", type: AttributeType.GRAPH, g: thenJson });
             //elseGraph
@@ -325,6 +331,7 @@ export function convertFlowGraphToOnnxJson(
                 elseGraph,
                 `else_${bodyCount}`,
                 bodyCount + 1,
+                { targetOpset: effectiveOpset, irVersion: resolvedVersions.irVersion },
             ).graph!;
             baseAttrs.push({ name: "else_branch", type: AttributeType.GRAPH, g: elseJson });
         } else if (opType === "Scan") {
@@ -333,6 +340,7 @@ export function convertFlowGraphToOnnxJson(
                 bodyGraph,
                 `scan_${bodyCount}`,
                 bodyCount + 1,
+                { targetOpset: effectiveOpset, irVersion: resolvedVersions.irVersion },
             ).graph!;
             baseAttrs.push({ name: "body", type: AttributeType.GRAPH, g: gJson });
         }
@@ -347,8 +355,8 @@ export function convertFlowGraphToOnnxJson(
     }
 
     return {
-        irVersion: IR_VERSION,
-        opsetImport: [{ version: OPSET_IMPORT }],
+        irVersion: resolvedVersions.irVersion,
+        opsetImport: [{ domain: "", version: effectiveOpset }],
         graph: {
             name: name ?? "Graph",
             initializer: modelInitializers,

@@ -94,7 +94,7 @@ export class GraphBuilder {
 
         // 3. Provision Output Tensors
         // Look up the schema to know how many outputs to generate (default to 1)
-        const schema = OpRegistry.getInstance().get(type, 19);
+        const schema = OpRegistry.getInstance().get(type, this.graph.getTargetOpset());
         let numOutputs = schema ? schema.outputs.length : 1;
 
         // Override output count for variadic ops like Split

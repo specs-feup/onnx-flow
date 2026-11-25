@@ -77,6 +77,11 @@ export interface RawOnnxGraph {
     doc_string?: string;
 }
 
+export interface OpsetImport {
+    domain: string;
+    version: number;
+}
+
 export interface RawOnnxModel {
     irVersion?: number | string;
     ir_version?: number | string;
@@ -132,13 +137,19 @@ export enum DataType {
     COMPLEX64 = 14,
     COMPLEX128 = 15,
     BFLOAT16 = 16,
-    // --- Newer ONNX Types (Opset 19+) ---
+    // --- Newer ONNX Types (Opset 19+ / IR 9..14) ---
     FLOAT8E4M3FN = 17,
     FLOAT8E4M3FNUZ = 18,
     FLOAT8E5M2 = 19,
     FLOAT8E5M2FNUZ = 20,
     UINT4 = 21,
     INT4 = 22,
+    FLOAT4E2M1 = 23,
+    FLOAT8E8M0 = 24,
+    UINT2 = 25,
+    INT2 = 26,
+    FLOAT6E2M3 = 27,
+    FLOAT6E3M2 = 28,
 }
 
 // ONNX-compatible TensorProto definition

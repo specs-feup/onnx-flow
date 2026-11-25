@@ -10,6 +10,11 @@ import type {
     RawOnnxNode,
 } from "./Onnx/OnnxTypes.js";
 import { BASE_TEN } from "./Onnx/Utils.js";
+import {
+    DEFAULT_COMPAT_IR_VERSION,
+    DEFAULT_COMPAT_OPSET,
+    getOpsetMinIrVersion,
+} from "./Onnx/Schema/Versioning.js";
 
 /**
  * Toggle strict behavior for Reshape shape constants:
@@ -17,9 +22,6 @@ import { BASE_TEN } from "./Onnx/Utils.js";
  * - true: throw when there are 2+ nulls
  */
 const STRICT_RESHAPE_NULLS = false as boolean;
-
-const OPSET = 20;
-const IR_VERSION = 9;
 
 const MODEL_VERSION = 1;
 
@@ -246,7 +248,11 @@ export function coerceNumericFields(obj: unknown): unknown {
     return obj;
 }
 
-export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): Promise<void> {
+export async function json2onnx(
+    jsonFilePath: string,
+    outputOnnxPath: string,
+    options?: { targetOpset?: number; irVersion?: number },
+): Promise<void> {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const protoPath = path.join(__dirname, "../../out/src/Onnx/onnx.proto");
 
@@ -268,17 +274,31 @@ export async function json2onnx(jsonFilePath: string, outputOnnxPath: string): P
         const jsonText = fs.readFileSync(jsonFilePath, "utf-8");
         const jsonData = JSON.parse(jsonText) as RawOnnxModel;
 
+        const defaultOpset = options?.targetOpset ?? DEFAULT_COMPAT_OPSET;
+        const defaultIr =
+            options?.irVersion ??
+            Math.max(DEFAULT_COMPAT_IR_VERSION, getOpsetMinIrVersion(defaultOpset));
         const defaultFields = {
-            ir_version: IR_VERSION,
-            opset_import: [{ domain: "", version: OPSET }],
+            ir_version: defaultIr,
+            opset_import: [{ domain: "", version: defaultOpset }],
             producer_name: "onnx-flow",
             producer_version: "0.1.0",
             model_version: MODEL_VERSION,
         };
 
+        const rawIr = jsonData.irVersion ?? jsonData.ir_version;
+        const resolvedIr = options?.irVersion ?? (rawIr !== undefined ? Number(rawIr) : defaultIr);
+        const rawOpsets = jsonData.opsetImport ?? jsonData.opset_import;
+        const resolvedOpsets =
+            options?.targetOpset !== undefined
+                ? [{ domain: "", version: options.targetOpset }]
+                : rawOpsets;
+
         const completeJson = {
             ...defaultFields,
             ...jsonData,
+            irVersion: resolvedIr,
+            ...(resolvedOpsets !== undefined ? { opsetImport: resolvedOpsets } : {}),
             graph: {
                 name: jsonData.graph?.name ?? "default_graph",
                 ...jsonData.graph,
