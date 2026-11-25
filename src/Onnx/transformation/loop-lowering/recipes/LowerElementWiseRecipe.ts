@@ -18,10 +18,16 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     public readonly targetOp = OpCategory.ElementWise;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["elementwise", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
         "Size",
+        "Reshape",
         "Gather",
         "Unsqueeze",
         "Squeeze",

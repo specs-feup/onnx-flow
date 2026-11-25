@@ -33,6 +33,47 @@ describe("Canonicalization - Structural & Normalization Recipes", () => {
         expect(producedOps).not.toContain("AveragePool");
     });
 
+    it("decomposes AveragePool with auto_pad VALID + ceil_mode=1 and SAME_UPPER into explicit Conv pads", () => {
+        const validCeil = applyRecipe(
+            new Recipes.canonicalization.AveragePool(),
+            "AveragePool",
+            [[1, 1, 1, 4]],
+            {
+                kernel_shape: [1, 3],
+                strides: [1, 2],
+                auto_pad: "VALID",
+                ceil_mode: 1,
+                count_include_pad: 0,
+            },
+        );
+        expect(validCeil.producedOps).toContain("Conv");
+        const convNodes = validCeil.graph
+            .getOperationNodes()
+            .toArray()
+            .filter((o) => o.type === "Conv");
+        // Expect 2 Conv ops (sum + mask) with ceil-augmented pads [0, 0, 0, 2]
+        expect(convNodes.length).toBe(2);
+        expect(convNodes[0].attributes["auto_pad"]).toBeUndefined();
+        expect(convNodes[0].attributes["pads"]).toEqual([0, 0, 0, 2]);
+
+        const sameUpper = applyRecipe(
+            new Recipes.canonicalization.AveragePool(),
+            "AveragePool",
+            [[1, 1, 4, 4]],
+            {
+                kernel_shape: [3, 3],
+                strides: [2, 2],
+                auto_pad: "SAME_UPPER",
+            },
+        );
+        const suConv = sameUpper.graph
+            .getOperationNodes()
+            .toArray()
+            .find((o) => o.type === "Conv")!;
+        expect(suConv.attributes["auto_pad"]).toBeUndefined();
+        expect(suConv.attributes["pads"]).toEqual([0, 0, 1, 1]);
+    });
+
     it("decomposes Concat", () => {
         const { producedOps } = applyRecipe(
             new Recipes.canonicalization.Concat(),
@@ -51,7 +92,7 @@ describe("Canonicalization - Structural & Normalization Recipes", () => {
             applyRecipe(new Recipes.canonicalization.QuantizeLinear(), "QuantizeLinear", [
                 [2, 2],
                 [],
-                [],
+                { shape: [], dataType: DataType.UINT8 },
             ]).producedOps,
         ).not.toContain("QuantizeLinear");
 

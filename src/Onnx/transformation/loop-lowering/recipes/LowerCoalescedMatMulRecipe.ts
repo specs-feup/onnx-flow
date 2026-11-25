@@ -13,6 +13,7 @@ import {
     int64Vec,
     UNKNOWN_SHAPE,
     computeStrides,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -21,8 +22,8 @@ import type {
 } from "../LoopLoweringRecipe.js";
 import {
     resolveRecipeInput,
-    squeezeIfLen1,
     ensureFlatInput,
+    gatherScalar,
     buildLinearIndex,
     decodeMixedRadix,
     buildAguPointer,
@@ -35,27 +36,38 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "MatMul";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 60;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["linear-algebra", "coalesced", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
         "Size",
         "Gather",
+        "ScatterElements",
         "Unsqueeze",
         "Squeeze",
+        "Reshape",
+        "Add",
         "Mul",
         "Div",
         "Mod",
+        "Equal",
+        "And",
+        "Where",
     ];
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "MatMul") return false;
         const inputs = op.getInputs();
-        return (
-            !!inputs &&
-            inputs.length >= 2 &&
-            inputs[0].shape.length > 0 &&
-            inputs[1].shape.length > 0
-        );
+        if (!inputs || inputs.length < 2) return false;
+        const sA = toStaticShape(inputs[0].shape);
+        const sB = toStaticShape(inputs[1].shape);
+        if (sA.length === 0 || sB.length === 0) return false;
+        if (sA.slice(0, -2).includes(-1) || sB.slice(0, -2).includes(-1)) return false;
+        return true;
     }
 
     getLoopBounds(
@@ -192,12 +204,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
                     scalarInt64(offsetFromEnd),
                 );
                 const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]);
-                const [dimRaw] = builder.createOp(
-                    "Gather",
-                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
-                    { axis: 0 },
-                );
-                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+                return gatherScalar(builder, shapeNode, targetAxis);
             };
 
             const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [rawInnerA])[0]]);
@@ -386,25 +393,13 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const flatA = ensureFlatInput(builder, rawInnerA);
         const flatB = ensureFlatInput(builder, rawInnerB);
 
-        const [gAOut] = builder.createOp(
-            "Gather",
-            [flatA, builder.createOp("Unsqueeze", [idxA, axes])[0]],
-            { axis: 0 },
-        );
-        const [gBOut] = builder.createOp(
-            "Gather",
-            [flatB, builder.createOp("Unsqueeze", [idxB, axes])[0]],
-            { axis: 0 },
-        );
-
-        const valA = squeezeIfLen1(builder, gAOut, axes, `sqA`);
-        const valB = squeezeIfLen1(builder, gBOut, axes, `sqB`);
+        const valA = gatherScalar(builder, flatA, idxA);
+        const valB = gatherScalar(builder, flatB, idxB);
         const [prod] = builder.createOp("Mul", [valA, valB]);
 
         // 5. Update the accumulator (Carry state)
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const [gAccOut] = builder.createOp("Gather", [carryNode, flatOutIdxUnsq], { axis: 0 });
-        const currentAcc = squeezeIfLen1(builder, gAccOut, axes, `sqAcc`);
+        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         const [newSum] = builder.createOp("Add", [currentAcc, prod]);
         const [scatterOut] = builder.createOp(

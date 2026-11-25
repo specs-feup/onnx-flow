@@ -16,6 +16,11 @@ export class LowerPadRecipe implements DecompositionRecipe {
     public readonly targetOp = "Pad";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = true;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["constant-pads"];
     public readonly producedOps = ["Slice", "Concat", "Gather", "Expand", "Range"];
 
     match(op: OperationNode.Class): boolean {
@@ -27,6 +32,22 @@ export class LowerPadRecipe implements DecompositionRecipe {
         const inShape = toStaticShape(ins[0].shape);
 
         if (inShape.length === 0 || !inShape.every((d) => d > 0)) return false;
+
+        const mode = getStringAttr(op, "mode", "constant").toLowerCase();
+        if (mode !== "constant" && mode !== "edge" && mode !== "reflect") return false;
+
+        if (mode === "reflect") {
+            const rawPads = decodeIntegerVectorFromTensorProto(
+                ins[1].as(ConstantNode).constantValue,
+            );
+            if (!rawPads) return false;
+            const rank = inShape.length;
+            const half = Math.floor(rawPads.length / 2);
+            for (let i = 0; i < half && i < rank; i++) {
+                if (rawPads[i] >= inShape[i] || rawPads[i + half] >= inShape[i]) return false;
+            }
+        }
+
         return true;
     }
 

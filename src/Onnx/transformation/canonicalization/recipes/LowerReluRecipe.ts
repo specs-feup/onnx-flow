@@ -10,6 +10,10 @@ export class LowerReluRecipe implements DecompositionRecipe {
     public readonly targetOp = "Relu";
     public readonly exposesControlFlow = true; // Exposes Where/MUX logic
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Greater", "Where"];
 
     match(op: OperationNode.Class): boolean {

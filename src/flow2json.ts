@@ -16,7 +16,7 @@ import RegionArgumentNode from "./Onnx/RegionArgumentNode.js";
 import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
 
 const IR_VERSION = 9;
-const OPSET_IMPORT = 19;
+const OPSET_IMPORT = 20;
 
 export function prepareGraphForExport(graph: OnnxGraph.Class): void {
     const mapNodeAndInputs: { nodeId: string; inputs: string[] }[] = [];
@@ -168,7 +168,7 @@ export function convertFlowGraphToOnnxJson(
                     shape: {
                         dim: node.shape.map((d) => {
                             if (typeof d === "string") return { dimParam: d };
-                            return d == null ? {} : { dimValue: d };
+                            return d == null || d < 0 ? {} : { dimValue: d };
                         }),
                     },
                 },
@@ -205,7 +205,7 @@ export function convertFlowGraphToOnnxJson(
                     shape: {
                         dim: node.shape.map((d) => {
                             if (typeof d === "string") return { dimParam: d };
-                            return d == null ? {} : { dimValue: d };
+                            return d == null || d < 0 ? {} : { dimValue: d };
                         }),
                     },
                 },
@@ -253,17 +253,25 @@ export function convertFlowGraphToOnnxJson(
 
             const attr: RawOnnxAttribute = { name };
             if (Array.isArray(value)) {
-                // Determine if it should be FLOATS or INTS
+                // Determine if it should be FLOATS, STRINGS, or INTS
                 if (expectedType === AttributeType.FLOATS) {
                     attr.floats = value as number[];
                     attr.type = AttributeType.FLOATS;
+                } else if (expectedType === AttributeType.STRINGS || typeof value[0] === "string") {
+                    attr.strings = (value as string[]).map((s) =>
+                        Buffer.from(s, "utf8").toString("base64"),
+                    );
+                    attr.type = AttributeType.STRINGS;
                 } else {
                     attr.ints = value as (number | string)[];
                     attr.type = AttributeType.INTS;
                 }
             } else if (typeof value === "number") {
-                // Distinguish between FLOAT and INT based on the schema
-                if (expectedType === AttributeType.FLOAT) {
+                // Distinguish between FLOAT and INT based on the schema (fallback to FLOAT for non-integers)
+                if (
+                    expectedType === AttributeType.FLOAT ||
+                    (expectedType === undefined && !Number.isInteger(value))
+                ) {
                     attr.f = value;
                     attr.type = AttributeType.FLOAT;
                 } else {
@@ -271,7 +279,7 @@ export function convertFlowGraphToOnnxJson(
                     attr.type = AttributeType.INT;
                 }
             } else if (typeof value === "string") {
-                attr.s = value;
+                attr.s = Buffer.from(value, "utf8").toString("base64");
                 attr.type = AttributeType.STRING;
             } else if (
                 typeof value === "object" &&
@@ -329,6 +337,7 @@ export function convertFlowGraphToOnnxJson(
         }
 
         modelNodes.push({
+            name: opNode.id,
             opType,
             input: inputs,
             output: outputs,

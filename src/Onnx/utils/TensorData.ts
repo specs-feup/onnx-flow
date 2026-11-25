@@ -1,6 +1,7 @@
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import ConstantNode from "../ConstantNode.js";
-import type { TensorProto, KnownShape } from "../OnnxTypes.js";
+import type OperationNode from "../OperationNode.js";
+import type { TensorProto, KnownShape, AttributeMap } from "../OnnxTypes.js";
 import { DataType } from "../OnnxTypes.js";
 
 export function bool(v: boolean): TensorProto {
@@ -358,4 +359,133 @@ export function readTensorData(node?: BaseNode.Class): number[] | undefined {
     }
 
     return out;
+}
+
+export function resolveAutoPads(
+    autoPad: string,
+    inputSpatial: number[],
+    kernelShape: number[],
+    strides: number[],
+    dilations: number[],
+    explicitPads?: number[],
+): number[] {
+    const k = inputSpatial.length;
+    if (!autoPad || autoPad === "NOTSET") {
+        return explicitPads && explicitPads.length === 2 * k
+            ? explicitPads.map(Number)
+            : new Array<number>(2 * k).fill(0);
+    }
+    if (autoPad === "VALID") {
+        return new Array<number>(2 * k).fill(0);
+    }
+    const padHead = new Array<number>(k).fill(0);
+    const padTail = new Array<number>(k).fill(0);
+    for (let d = 0; d < k; d++) {
+        const stride = strides[d] ?? 1;
+        const dil = dilations[d] ?? 1;
+        const effK = (kernelShape[d] - 1) * dil + 1;
+        const outDim = Math.ceil(inputSpatial[d] / stride);
+        const totalPad = Math.max(0, (outDim - 1) * stride + effK - inputSpatial[d]);
+        if (autoPad === "SAME_LOWER") {
+            padHead[d] = Math.ceil(totalPad / 2);
+            padTail[d] = Math.floor(totalPad / 2);
+        } else {
+            // SAME_UPPER
+            padHead[d] = Math.floor(totalPad / 2);
+            padTail[d] = Math.ceil(totalPad / 2);
+        }
+    }
+    return [...padHead, ...padTail];
+}
+
+/**
+ * Builds canonical Conv-compatible attributes from an op with auto_pad/pads,
+ * resolving auto_pad into explicit `pads` whenever spatial and kernel dimensions
+ * are statically known (or for NOTSET/VALID), and avoiding conflicting `auto_pad`
+ * + `pads` attributes on the lowered node.
+ */
+export function buildResolvedConvAttrs(
+    op: OperationNode.Class,
+    inputSpatial: number[],
+    kernelShape: number[],
+    options?: { includeGroup?: boolean; fixedGroup?: number },
+): AttributeMap {
+    const attrs =
+        (
+            op as {
+                getAttributes?: () => Record<string, unknown>;
+                attributes?: Record<string, unknown>;
+            }
+        ).getAttributes?.() ??
+        (op as { attributes?: Record<string, unknown> }).attributes ??
+        {};
+
+    const spatialRank = inputSpatial.length;
+    const autoPad = typeof attrs["auto_pad"] === "string" ? attrs["auto_pad"] : "NOTSET";
+    const explicitPads = Array.isArray(attrs["pads"]) ? (attrs["pads"] as number[]) : undefined;
+    const strides = Array.isArray(attrs["strides"])
+        ? (attrs["strides"] as number[]).map(Number)
+        : new Array<number>(spatialRank).fill(1);
+    const dilations = Array.isArray(attrs["dilations"])
+        ? (attrs["dilations"] as number[]).map(Number)
+        : new Array<number>(spatialRank).fill(1);
+
+    const convAttrs: AttributeMap = {};
+    if (options?.fixedGroup !== undefined) {
+        convAttrs["group"] = options.fixedGroup;
+    } else if (options?.includeGroup === true && attrs["group"] !== undefined) {
+        convAttrs["group"] = attrs["group"] as AttributeMap[string];
+    }
+    if (attrs["dilations"] !== undefined) convAttrs["dilations"] = dilations;
+    if (attrs["kernel_shape"] !== undefined) {
+        convAttrs["kernel_shape"] = (attrs["kernel_shape"] as number[]).map(Number);
+    }
+    if (attrs["strides"] !== undefined) convAttrs["strides"] = strides;
+
+    const hasStaticSpatial =
+        spatialRank > 0 &&
+        inputSpatial.every((d) => d > 0) &&
+        kernelShape.length === spatialRank &&
+        kernelShape.every((k) => k > 0);
+
+    if (autoPad === "NOTSET") {
+        if (explicitPads !== undefined) {
+            convAttrs["pads"] =
+                spatialRank > 0
+                    ? resolveAutoPads(
+                          "NOTSET",
+                          inputSpatial,
+                          kernelShape,
+                          strides,
+                          dilations,
+                          explicitPads,
+                      )
+                    : explicitPads.map(Number);
+        }
+    } else if (autoPad === "VALID") {
+        if (spatialRank > 0) {
+            convAttrs["pads"] = resolveAutoPads(
+                "VALID",
+                inputSpatial,
+                kernelShape,
+                strides,
+                dilations,
+            );
+        } else {
+            convAttrs["auto_pad"] = "VALID";
+        }
+    } else if (hasStaticSpatial) {
+        convAttrs["pads"] = resolveAutoPads(
+            autoPad,
+            inputSpatial,
+            kernelShape,
+            strides,
+            dilations,
+            explicitPads,
+        );
+    } else {
+        convAttrs["auto_pad"] = autoPad;
+    }
+
+    return convAttrs;
 }

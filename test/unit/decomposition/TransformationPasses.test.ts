@@ -4,6 +4,7 @@ import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
 import TensorNode from "../../../src/Onnx/TensorNode.js";
 import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import { IndexingMode } from "../../../src/DecompositionOptions.js";
 import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
 import { CanonicalizationPass } from "../../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
 import { InferShapesPass } from "../../../src/Onnx/transformation/InferShapesPass.js";
@@ -12,6 +13,7 @@ import { TransformationRegistry } from "../../../src/Onnx/transformation/Transfo
 import OnnxGraphTransformer from "../../../src/Onnx/transformation/index.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import type { DecompositionRecipe } from "../../../src/Onnx/transformation/Recipe.js";
 
 describe("Transformation Pipeline & Passes", () => {
     initializeSchemaRegistry();
@@ -92,5 +94,80 @@ describe("Transformation Pipeline & Passes", () => {
         expect(transformedGraph).toBe(graph);
 
         logSpy.mockRestore();
+    });
+
+    it("falls back to secondary complementary recipes in CanonicalizationPass and OrchestratorPass", () => {
+        const neverMatchRelu: DecompositionRecipe = {
+            name: "NeverMatchRelu",
+            targetOp: "Relu",
+            exposesControlFlow: false,
+            exposesDataAccess: false,
+            phase: "canonicalization" as const,
+            precision: "exact" as const,
+            priority: 50,
+            shapeSupport: "dynamic" as const,
+            producedOps: [],
+            match: () => false,
+            apply: () => {
+                throw new Error("Should not be called");
+            },
+        };
+        const fallbackRelu = new Recipes.canonicalization.Relu();
+
+        // 1. CanonicalizationPass fallback
+        const g1 = createSimpleReluGraph();
+        const h1 = new HistoryManager(g1);
+        const canonPass = new CanonicalizationPass([neverMatchRelu, fallbackRelu]);
+        expect(canonPass.run(g1, h1)).toBe(true);
+        expect(
+            g1
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).not.toContain("Relu");
+        expect(h1.getHistory()[0].opportunityId).toContain("LowerRelu");
+
+        // 2. OrchestratorPass fallback
+        const g2 = createSimpleReluGraph();
+        const orchPass = new OrchestratorPass("FallbackOrch", [neverMatchRelu, fallbackRelu]);
+        expect(orchPass.run(g2)).toBe(true);
+        expect(
+            g2
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).not.toContain("Relu");
+    });
+
+    it("preserves outer tensors captured by Loop RegionArgumentNodes during DeadCodeEliminationPass", () => {
+        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const b = new GraphBuilder(g, "dce_capture");
+        const x = g
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        const [reluOut] = b.createOp("Relu", [x], {}, [{ type: DataType.FLOAT, shape: [2, 3] }]);
+        const [negOut] = b.createOp("Neg", [reluOut], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        if (negOut.is(TensorNode)) negOut.as(TensorNode).setType("output");
+
+        const out = new OnnxGraphTransformer({
+            canonicalize: true,
+            loopLowering: true,
+            fuse: true,
+            coalesce: true,
+            recurse: true,
+            optimize: true,
+            decomposeForCgra: false,
+            indexingMode: IndexingMode.Pointer,
+        }).apply(g, false);
+
+        const outerOps = out
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(outerOps).toContain("Loop");
+        expect(outerOps).toContain("Reshape");
     });
 });

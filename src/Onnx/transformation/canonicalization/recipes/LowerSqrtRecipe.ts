@@ -10,6 +10,11 @@ export class LowerSqrtRecipe implements DecompositionRecipe {
     public readonly targetOp = "Sqrt";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 40;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["newton-raphson"];
     public readonly producedOps = ["Add", "Mul", "Div"];
 
     private readonly ITERATIONS = 50;

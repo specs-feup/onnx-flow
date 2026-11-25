@@ -7,9 +7,11 @@ import {
     getIntsAttr,
     getStringAttr,
     getIntAttr,
+    resolveAutoPads,
     scalarInt64,
     int64Vec,
     UNKNOWN_SHAPE,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -18,9 +20,9 @@ import type {
 } from "../LoopLoweringRecipe.js";
 import {
     buildAguPointer,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -30,10 +32,17 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "Conv";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["conv", "2d", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
         "Size",
+        "Slice",
+        "Concat",
         "Gather",
         "Unsqueeze",
         "Squeeze",
@@ -42,10 +51,24 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         "Mod",
         "Add",
         "Sub",
+        "Equal",
+        "And",
+        "Where",
+        "ReduceSum",
     ];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "Conv";
+        if (op.type !== "Conv") return false;
+        const inputs = op.getInputs();
+        if (!inputs || inputs.length < 2) return false;
+        if (inputs[0].shape.length !== 4 || inputs[1].shape.length !== 4) return false;
+
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
+            const xDims = toStaticShape(inputs[0].shape);
+            if (xDims[2] <= 0 || xDims[3] <= 0) return false;
+        }
+        return true;
     }
 
     getLoopBounds(
@@ -171,18 +194,12 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
                     scalarInt64(offsetFromEnd),
                 );
                 const [targetAxis] = builder.createOp("Add", [rankX, offsetNode]);
-                const [dimRaw] = builder.createOp(
-                    "Gather",
-                    [shapeX, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
-                    { axis: 0 },
-                );
-                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+                return gatherScalar(builder, shapeX, targetAxis);
             };
 
             if (inputs[0].shape[0] === -1 || typeof inputs[0].shape[0] === "string") {
-                const zeroIdx = builder.createConstant(`batch_idx_0`, int64Vec([0]));
-                const [bRaw] = builder.createOp("Gather", [shapeX, zeroIdx], { axis: 0 });
-                N_batch = squeezeIfLen1(builder, bRaw, axes, `N_batch_sq`);
+                const zeroIdx = builder.createConstant(`batch_idx_0`, scalarInt64(0));
+                N_batch = gatherScalar(builder, shapeX, zeroIdx);
             }
             if (inputs[0].shape[2] === -1 || typeof inputs[0].shape[2] === "string") {
                 H = getSpatialDim(-2, "H");
@@ -195,37 +212,36 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         const strides = getIntsAttr(op, "strides", [1, 1]);
         const dilations = getIntsAttr(op, "dilations", [1, 1]);
         const kernelShape = getIntsAttr(op, "kernel_shape", [wShape[2], wShape[3]]);
-        let pads = getIntsAttr(op, "pads", []);
+        const explicitPads = getIntsAttr(op, "pads", []);
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const group = getIntAttr(op, "group", 1);
 
         const kH = kernelShape[0],
             kW = kernelShape[1];
-        const sH = strides[0],
-            sW = strides[1];
-        const dH = dilations[0],
-            dW = dilations[1];
+        const sH = strides[0] ?? 1,
+            sW = strides[1] ?? 1;
+        const dH = dilations[0] ?? 1,
+            dW = dilations[1] ?? 1;
         const kEffH = dH * (kH - 1) + 1;
         const kEffW = dW * (kW - 1) + 1;
 
         // 3. Handle Padding logic
-        if (pads.length === 0) {
-            if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
-                if (typeof H !== "number" || typeof Win !== "number") {
-                    throw new Error(
-                        "Dynamic spatial dimensions with auto_pad is not supported. Run CanonicalizePadPass first.",
-                    );
-                }
-                const isLower = autoPad === "SAME_LOWER";
-                const padH = Math.max((Math.ceil(H / sH) - 1) * sH + kEffH - H, 0);
-                const padW = Math.max((Math.ceil(Win / sW) - 1) * sW + kEffW - Win, 0);
-                const pT = isLower ? Math.ceil(padH / 2) : Math.floor(padH / 2);
-                const pL = isLower ? Math.ceil(padW / 2) : Math.floor(padW / 2);
-                pads = [pT, pL, padH - pT, padW - pL];
-            } else {
-                pads = [0, 0, 0, 0];
-            }
+        if (
+            (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") &&
+            (typeof H !== "number" || typeof Win !== "number")
+        ) {
+            throw new Error(
+                "Dynamic spatial dimensions with auto_pad is not supported. Run CanonicalizePadPass first.",
+            );
         }
+        const pads = resolveAutoPads(
+            autoPad,
+            typeof H === "number" && typeof Win === "number" ? [H, Win] : [1, 1],
+            [kH, kW],
+            [sH, sW],
+            [dH, dW],
+            explicitPads,
+        );
 
         const pT = pads[0] ?? 0,
             pL = pads[1] ?? 0,
@@ -423,8 +439,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         // 7. Final bias addition
         let finalScalar = sumOut;
         if (B_bias) {
-            const [gBiasOut] = builder.createOp("Gather", [B_bias, mIdxUnsq], { axis: 0 });
-            const biasSq = squeezeIfLen1(builder, gBiasOut, axes, `sqBias`);
+            const biasSq = gatherScalar(builder, B_bias, mIdx);
             [finalScalar] = builder.createOp("Add", [sumOut, biasSq]);
         }
 

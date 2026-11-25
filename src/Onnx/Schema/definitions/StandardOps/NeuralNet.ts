@@ -1,6 +1,6 @@
 import type { AttributeValue } from "../../../OnnxTypes.js";
 import { DataType, AttributeType } from "../../../OnnxTypes.js";
-import { toStaticShape, inferPoolDim } from "../../../Utils.js";
+import { toStaticShape, inferPoolDim, resolveAutoPads } from "../../../Utils.js";
 import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";
 
@@ -41,25 +41,25 @@ function inferPoolingShape(
         : Array(spatialRank).fill(1);
 
     // Calculate effective padding if auto_pad is used
-    if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
+    if (xShape.slice(2).every((d) => d >= 0)) {
+        pads = resolveAutoPads(autoPad, xShape.slice(2), kernel, strides, dilations, pads);
+    } else if (autoPad === "VALID") {
+        pads = Array(spatialRank * 2).fill(0);
+    } else if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
         pads = Array(spatialRank * 2).fill(0);
         for (let i = 0; i < spatialRank; i++) {
             const dIn = xShape[i + 2] as number;
             if (dIn === -1) continue;
 
-            const dEffK = dilations[i] * (kernel[i] - 1) + 1;
-            const totalPad = Math.max(
-                0,
-                (Math.ceil(dIn / strides[i]) - 1) * strides[i] + dEffK - dIn,
+            const [head, tail] = resolveAutoPads(
+                autoPad,
+                [dIn],
+                [kernel[i]],
+                [strides[i]],
+                [dilations[i]],
             );
-
-            if (autoPad === "SAME_UPPER") {
-                pads[i] = Math.floor(totalPad / 2); // pad_low
-                pads[i + spatialRank] = totalPad - pads[i]; // pad_high
-            } else {
-                pads[i + spatialRank] = Math.floor(totalPad / 2); // pad_low
-                pads[i] = totalPad - pads[i + spatialRank]; // pad_high
-            }
+            pads[i] = head;
+            pads[i + spatialRank] = tail;
         }
     }
 
@@ -142,26 +142,33 @@ export const Conv: OpSchema = {
         let pads = "pads" in attrs ? (attrs["pads"] as number[]) : Array(spatialRank * 2).fill(0);
         const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
 
-        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
+        if (xShape.slice(2).every((d) => d >= 0) && wShape.slice(2).every((d) => d >= 0)) {
+            pads = resolveAutoPads(
+                autoPad,
+                xShape.slice(2),
+                wShape.slice(2),
+                strides,
+                dilations,
+                pads,
+            );
+        } else if (autoPad === "VALID") {
+            pads = Array(spatialRank * 2).fill(0);
+        } else if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
             pads = Array(spatialRank * 2).fill(0);
             for (let i = 0; i < spatialRank; i++) {
                 const dIn = xShape[i + 2];
                 const kDim = wShape[i + 2];
                 if (dIn === -1 || kDim === -1) continue;
 
-                const kEff = dilations[i] * (kDim - 1) + 1;
-                const totalPad = Math.max(
-                    0,
-                    (Math.ceil(dIn / strides[i]) - 1) * strides[i] + kEff - dIn,
+                const [head, tail] = resolveAutoPads(
+                    autoPad,
+                    [dIn],
+                    [kDim],
+                    [strides[i]],
+                    [dilations[i]],
                 );
-
-                if (autoPad === "SAME_UPPER") {
-                    pads[i] = Math.floor(totalPad / 2); // pad_low
-                    pads[i + spatialRank] = totalPad - pads[i]; // pad_high
-                } else {
-                    pads[i + spatialRank] = Math.floor(totalPad / 2); // pad_low
-                    pads[i] = totalPad - pads[i + spatialRank]; // pad_high
-                }
+                pads[i] = head;
+                pads[i + spatialRank] = tail;
             }
         }
 
@@ -301,6 +308,30 @@ export const Resize: OpSchema = {
             required: false,
             defaultValue: "round_prefer_floor",
         },
+        cubic_coeff_a: {
+            name: "cubic_coeff_a",
+            type: AttributeType.FLOAT,
+            required: false,
+            defaultValue: -0.75,
+        },
+        exclude_outside: {
+            name: "exclude_outside",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        extrapolation_value: {
+            name: "extrapolation_value",
+            type: AttributeType.FLOAT,
+            required: false,
+            defaultValue: 0.0,
+        },
+        antialias: {
+            name: "antialias",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
     },
 
     inferShape: (inputs) => {
@@ -358,32 +389,58 @@ export const ConvTranspose: OpSchema = {
         const wShape = toStaticShape(inputs[1]?.shape);
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
 
-        if (xShape.length < 4 || wShape.length < 4) return [{ shape: [], dtype }];
+        if (xShape.length < 3 || wShape.length < 3 || xShape.length !== wShape.length) {
+            return [{ shape: [], dtype }];
+        }
 
-        const [N, , H, W] = xShape;
-        const [, M_over_group, kH, kW] = wShape; // W is [C, M/group, kH, kW]
+        const spatialRank = xShape.length - 2;
+        const N = xShape[0];
+        const M_over_group = wShape[1]; // W is [C, M/group, ...kernel]
         const group = "group" in attrs ? (attrs["group"] as number) : 1;
-        const M = M_over_group * group;
+        const M = M_over_group >= 0 ? M_over_group * group : -1;
 
         // If output_shape is explicitly provided, use it directly
         const outShapeAttr = attrs["output_shape"] as number[] | undefined;
-        if (outShapeAttr && outShapeAttr.length === 2) {
-            return [{ shape: [N, M, outShapeAttr[0], outShapeAttr[1]], dtype }];
+        if (outShapeAttr && outShapeAttr.length === spatialRank) {
+            return [{ shape: [N, M, ...outShapeAttr], dtype }];
         }
 
-        const strides = "strides" in attrs ? (attrs["strides"] as number[]) : [1, 1];
-        const dilations = "dilations" in attrs ? (attrs["dilations"] as number[]) : [1, 1];
-        const pads = "pads" in attrs ? (attrs["pads"] as number[]) : [0, 0, 0, 0];
-        const outPads = "output_padding" in attrs ? (attrs["output_padding"] as number[]) : [0, 0];
+        const strides =
+            "strides" in attrs ? (attrs["strides"] as number[]) : Array(spatialRank).fill(1);
+        const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
 
-        // Formula: H_out = (H_in - 1) * stride - pad_top - pad_bottom + effective_kernel + out_padding
-        const kEffH = dilations[0] * (kH - 1) + 1;
-        const kEffW = dilations[1] * (kW - 1) + 1;
+        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
+            const outSpatial = xShape.slice(2).map((d, i) => (d >= 0 ? d * (strides[i] ?? 1) : -1));
+            return [{ shape: [N, M, ...outSpatial], dtype }];
+        }
 
-        const H_out = (H - 1) * strides[0] - (pads[0] ?? 0) - (pads[2] ?? 0) + kEffH + outPads[0];
-        const W_out = (W - 1) * strides[1] - (pads[1] ?? 0) - (pads[3] ?? 0) + kEffW + outPads[1];
+        const dilations =
+            "dilations" in attrs ? (attrs["dilations"] as number[]) : Array(spatialRank).fill(1);
+        const pads =
+            autoPad === "VALID"
+                ? Array(spatialRank * 2).fill(0)
+                : "pads" in attrs
+                  ? (attrs["pads"] as number[])
+                  : Array(spatialRank * 2).fill(0);
+        const outPads =
+            "output_padding" in attrs
+                ? (attrs["output_padding"] as number[])
+                : Array(spatialRank).fill(0);
 
-        return [{ shape: [N, M, H_out, W_out], dtype }];
+        const outSpatial = xShape.slice(2).map((dIn, i) => {
+            const k = wShape[2 + i];
+            if (dIn < 0 || k < 0) return -1;
+            const kEff = (dilations[i] ?? 1) * (k - 1) + 1;
+            return (
+                (dIn - 1) * (strides[i] ?? 1) -
+                (pads[i] ?? 0) -
+                (pads[spatialRank + i] ?? 0) +
+                kEff +
+                (outPads[i] ?? 0)
+            );
+        });
+
+        return [{ shape: [N, M, ...outSpatial], dtype }];
     },
 };
 

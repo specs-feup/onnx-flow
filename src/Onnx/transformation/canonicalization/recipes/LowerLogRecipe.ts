@@ -10,6 +10,11 @@ export class LowerLogRecipe implements DecompositionRecipe {
     public readonly targetOp = "Log";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 40;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["series"];
     public readonly producedOps = ["Add", "Mul", "Div", "Sub"];
 
     private readonly ITERATIONS = 100;

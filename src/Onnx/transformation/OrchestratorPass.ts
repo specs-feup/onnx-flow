@@ -35,10 +35,10 @@ export class OrchestratorPass implements GraphPass {
 
                 // Find the first recipe that matches
                 const recipe = this.recipes.find(
-                    (r) => r.targetOp === op.type || r.targetOp === category,
+                    (r) => (r.targetOp === op.type || r.targetOp === category) && r.match(op),
                 );
 
-                if (recipe && recipe.match(op)) {
+                if (recipe !== undefined) {
                     const opp = new TransformationOpportunity(
                         recipe.name,
                         op.id,

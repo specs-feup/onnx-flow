@@ -11,6 +11,11 @@ export class MatMulGridDecompositionRecipe implements DecompositionRecipe {
 
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["grid-decomposition-example"];
     public readonly producedOps = ["Gather", "Mul", "ReduceSum", "Concat", "Unsqueeze"];
 
     match(op: OperationNode.Class): boolean {

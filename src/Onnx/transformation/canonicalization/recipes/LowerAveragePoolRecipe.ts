@@ -7,7 +7,9 @@ import {
     getIntAttr,
     getIntsAttr,
     getStringAttr,
+    inferPoolDim,
     makeTensorProto,
+    resolveAutoPads,
     toStaticShape,
 } from "../../../Utils.js";
 
@@ -16,6 +18,11 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
     public readonly targetOp = "AveragePool";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 100;
+    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly tags = ["conv-based"];
     public readonly producedOps = ["Conv", "Div", "Shape", "Expand"];
 
     match(op: OperationNode.Class): boolean {
@@ -33,9 +40,23 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const [kH, kW] = kernelShape;
         const strides = getIntsAttr(op, "strides", [1, 1]);
         const padsAttr = getIntsAttr(op, "pads", [0, 0, 0, 0]);
-        const pads = padsAttr.length === 4 ? padsAttr.map(Number) : [0, 0, 0, 0];
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
+
+        const hasStaticSpatial = xShape[2] > 0 && xShape[3] > 0;
+        if (ceilMode === 1 && !hasStaticSpatial) return false;
+
+        const pads =
+            hasStaticSpatial || autoPad === "NOTSET" || autoPad === "VALID"
+                ? resolveAutoPads(
+                      autoPad,
+                      hasStaticSpatial ? [xShape[2], xShape[3]] : [1, 1],
+                      kernelShape,
+                      strides.map(Number),
+                      [1, 1],
+                      padsAttr,
+                  )
+                : [];
 
         if (
             autoPad === "NOTSET" &&
@@ -61,38 +82,48 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const kernelShape = getIntsAttr(op, "kernel_shape", []);
         const [kH, kW] = kernelShape;
         const strides = getIntsAttr(op, "strides", [1, 1]);
-        const padsAttr = getIntsAttr(op, "pads", [0, 0, 0, 0]);
-        let pads = padsAttr.length === 4 ? padsAttr.map(Number) : [0, 0, 0, 0];
+        const padsAttr = getIntsAttr(op, "pads", []);
         const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
         const countIncludePad = getIntAttr(op, "count_include_pad", 0);
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
 
-        // --- Handle ceil_mode dynamically by augmenting right/bottom padding ---
-        if (ceilMode === 1 && autoPad === "NOTSET") {
-            const H = xShape[2];
-            const W = xShape[3];
+        const H = xShape[2];
+        const W = xShape[3];
+        const hasStaticSpatial = H > 0 && W > 0;
 
-            if (typeof H === "number" && typeof W === "number") {
-                const pT = pads[0];
-                const pL = pads[1];
-                let pB = pads[2];
-                let pR = pads[3];
+        let resolvedPads: number[] | undefined;
+        if (hasStaticSpatial || autoPad === "NOTSET" || autoPad === "VALID") {
+            resolvedPads = resolveAutoPads(
+                autoPad,
+                hasStaticSpatial ? [H, W] : [1, 1],
+                [kH, kW],
+                strides.map(Number),
+                [1, 1],
+                padsAttr,
+            );
+
+            // --- Handle ceil_mode dynamically by augmenting right/bottom padding ---
+            if (ceilMode === 1 && hasStaticSpatial) {
+                const pT = resolvedPads[0];
+                const pL = resolvedPads[1];
+                let pB = resolvedPads[2];
+                let pR = resolvedPads[3];
                 const [sH, sW] = strides.map(Number);
 
                 // Calculate if an extra step is required due to ceiling
-                const outHFloor = Math.floor((H + pT + pB - kH) / sH) + 1;
-                const outHCeil = Math.ceil((H + pT + pB - kH) / sH) + 1;
+                const outHFloor = inferPoolDim(H, kH, sH, pT, pB, 1, 0);
+                const outHCeil = inferPoolDim(H, kH, sH, pT, pB, 1, 1);
                 if (outHCeil > outHFloor) {
                     pB += (outHCeil - outHFloor) * sH; // Inject enough padding to push floor to ceil
                 }
 
-                const outWFloor = Math.floor((W + pL + pR - kW) / sW) + 1;
-                const outWCeil = Math.ceil((W + pL + pR - kW) / sW) + 1;
+                const outWFloor = inferPoolDim(W, kW, sW, pL, pR, 1, 0);
+                const outWCeil = inferPoolDim(W, kW, sW, pL, pR, 1, 1);
                 if (outWCeil > outWFloor) {
                     pR += (outWCeil - outWFloor) * sW;
                 }
 
-                pads = [pT, pL, pB, pR];
+                resolvedPads = [pT, pL, pB, pR];
             }
         }
 
@@ -108,8 +139,8 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
             group: C,
             strides: strides,
         };
-        if (autoPad !== "NOTSET") convAttrs["auto_pad"] = autoPad;
-        else convAttrs["pads"] = pads;
+        if (resolvedPads !== undefined) convAttrs["pads"] = resolvedPads;
+        else convAttrs["auto_pad"] = autoPad;
 
         const XShapeStatic = toStaticShape(X.shape);
         const YShapeStatic = toStaticShape(Y.shape);
@@ -122,7 +153,10 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
 
         // 3. Compute Divisor
         let divisor: ConcreteValueNode;
-        if (countIncludePad === 1 || autoPad === "VALID") {
+        if (
+            countIncludePad === 1 ||
+            (ceilMode === 0 && resolvedPads !== undefined && resolvedPads.every((p) => p === 0))
+        ) {
             // Simple case: Divide by constant kernel area
             divisor = builder.createConstant(
                 `AvgPool_Div_${op.id}`,

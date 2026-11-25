@@ -1,5 +1,5 @@
 import { AttributeType, DataType } from "../../../OnnxTypes.js";
-import { toStaticShape, inferPoolDim } from "../../../Utils.js";
+import { toStaticShape, inferPoolDim, resolveAutoPads } from "../../../Utils.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
 
@@ -104,29 +104,14 @@ export const QLinearConv: OpSchema = {
         const pads = "pads" in attrs ? (attrs["pads"] as number[]) : [0, 0, 0, 0];
         const autoPad = "auto_pad" in attrs ? (attrs["auto_pad"] as string) : "NOTSET";
 
-        let padTop = pads[0] ?? 0,
-            padLeft = pads[1] ?? 0,
-            padBottom = pads[2] ?? 0,
-            padRight = pads[3] ?? 0;
-
-        if (autoPad === "SAME_UPPER" || autoPad === "SAME_LOWER") {
-            const kEffH = dilations[0] * (kH - 1) + 1;
-            const kEffW = dilations[1] * (kW - 1) + 1;
-            const totalPadH = Math.max(0, (Math.ceil(H / strides[0]) - 1) * strides[0] + kEffH - H);
-            const totalPadW = Math.max(0, (Math.ceil(W / strides[1]) - 1) * strides[1] + kEffW - W);
-
-            if (autoPad === "SAME_UPPER") {
-                padTop = Math.floor(totalPadH / 2);
-                padBottom = totalPadH - padTop;
-                padLeft = Math.floor(totalPadW / 2);
-                padRight = totalPadW - padLeft;
-            } else {
-                padBottom = Math.floor(totalPadH / 2);
-                padTop = totalPadH - padBottom;
-                padRight = Math.floor(totalPadW / 2);
-                padLeft = totalPadW - padRight;
-            }
-        }
+        const [padTop, padLeft, padBottom, padRight] = resolveAutoPads(
+            autoPad,
+            [H, W],
+            [kH, kW],
+            strides,
+            dilations,
+            pads,
+        );
 
         const H_out = inferPoolDim(H, kH, strides[0], padTop, padBottom, dilations[0]);
         const W_out = inferPoolDim(W, kW, strides[1], padLeft, padRight, dilations[1]);
@@ -231,7 +216,7 @@ export const MatMulInteger: OpSchema = {
 export const DynamicQuantizeLinear: OpSchema = {
     opType: "DynamicQuantizeLinear",
     sinceVersion: 11,
-    category: OpCategory.ElementWise,
+    category: OpCategory.Other,
     broadcastable: false,
     hasState: false,
     inputs: [{ name: "x", typeConstraint: T_ANY }],

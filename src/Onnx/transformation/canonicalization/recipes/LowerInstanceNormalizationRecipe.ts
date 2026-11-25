@@ -10,10 +10,16 @@ export class LowerInstanceNormalizationRecipe implements DecompositionRecipe {
     public readonly targetOp = "InstanceNormalization";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Unsqueeze", "ReduceMean", "Sub", "Mul", "Add", "Sqrt", "Div"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "InstanceNormalization";
+        if (op.type !== "InstanceNormalization") return false;
+        const ins = op.getInputs();
+        return !!ins && ins.length >= 3 && ins[0].shape.length >= 3 && op.getOutputs().length === 1;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

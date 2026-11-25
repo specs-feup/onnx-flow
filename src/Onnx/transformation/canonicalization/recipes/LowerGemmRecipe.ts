@@ -10,6 +10,10 @@ export class LowerGemmRecipe implements DecompositionRecipe {
     public readonly targetOp = "Gemm";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Transpose", "MatMul", "Mul", "Add"];
 
     match(op: OperationNode.Class): boolean {

@@ -16,7 +16,7 @@ import { OpCategory } from "../../Schema/OpSchema.js";
 import { OpRegistry } from "../../Schema/OpRegistry.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
-// Your Strategy Recipes
+// Loop Lowering Recipes
 import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
 import { LowerTransposeRecipe } from "./recipes/LowerTransposeRecipe.js";
 import { LowerElementWiseRecipe } from "./recipes/LowerElementWiseRecipe.js";
@@ -26,6 +26,23 @@ import { LowerMatMulRecipe } from "./recipes/LowerMatMulRecipe.js";
 import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
 import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
+import { LowerCumSumRecipe } from "./recipes/LowerCumSumRecipe.js";
+import { LowerReverseSequenceRecipe } from "./recipes/LowerReverseSequenceRecipe.js";
+import { LowerGatherElementsRecipe } from "./recipes/LowerGatherElementsRecipe.js";
+import { LowerGatherNDRecipe } from "./recipes/LowerGatherNDRecipe.js";
+import { LowerMaxPoolRecipe } from "./recipes/LowerMaxPoolRecipe.js";
+import { LowerScatterNDRecipe } from "./recipes/LowerScatterNDRecipe.js";
+import { LowerConvTransposeRecipe } from "./recipes/LowerConvTransposeRecipe.js";
+import { LowerResizeRecipe } from "./recipes/LowerResizeRecipe.js";
+import { LowerAveragePoolLoopRecipe } from "./recipes/LowerAveragePoolLoopRecipe.js";
+import { LowerConvNDRecipe } from "./recipes/LowerConvNDRecipe.js";
+import { LowerSliceLoopRecipe } from "./recipes/LowerSliceLoopRecipe.js";
+import { LowerPadLoopRecipe } from "./recipes/LowerPadLoopRecipe.js";
+import { LowerTileLoopRecipe } from "./recipes/LowerTileLoopRecipe.js";
+import { LowerDynamicReductionRecipe } from "./recipes/LowerDynamicReductionRecipe.js";
+import { LowerOneHotLoopRecipe } from "./recipes/LowerOneHotLoopRecipe.js";
+import { LowerResizeCubicRecipe } from "./recipes/LowerResizeCubicRecipe.js";
+import { LowerDynamicBatchedMatMulRecipe } from "./recipes/LowerDynamicBatchedMatMulRecipe.js";
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -34,15 +51,42 @@ export class LoopFusionMatcher {
     >();
     private recipes: LoopLoweringRecipe[];
 
-    constructor(private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode }) {
-        this.recipes = [
-            new LowerElementWiseRecipe(),
-            new LowerReductionRecipe(),
-            new LowerTransposeRecipe(),
-            new LowerRangeRecipe(),
-            this.options.coalesce ? new LowerCoalescedMatMulRecipe() : new LowerMatMulRecipe(),
-            new LowerConvRecipe(),
-        ];
+    constructor(
+        private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode },
+        customRecipes?: LoopLoweringRecipe[],
+    ) {
+        this.recipes =
+            customRecipes !== undefined
+                ? [...customRecipes]
+                : [
+                      new LowerElementWiseRecipe(),
+                      new LowerReductionRecipe(),
+                      new LowerTransposeRecipe(),
+                      new LowerRangeRecipe(),
+                      this.options.coalesce
+                          ? new LowerCoalescedMatMulRecipe()
+                          : new LowerMatMulRecipe(),
+                      new LowerConvRecipe(),
+                      new LowerConvNDRecipe(),
+                      new LowerAveragePoolLoopRecipe(),
+                      new LowerCumSumRecipe(),
+                      new LowerReverseSequenceRecipe(),
+                      new LowerGatherElementsRecipe(),
+                      new LowerGatherNDRecipe(),
+                      new LowerMaxPoolRecipe(),
+                      new LowerScatterNDRecipe(),
+                      new LowerConvTransposeRecipe(),
+                      new LowerResizeRecipe(),
+                      new LowerSliceLoopRecipe(),
+                      new LowerPadLoopRecipe(),
+                      new LowerTileLoopRecipe(),
+                      new LowerOneHotLoopRecipe(),
+                      new LowerDynamicReductionRecipe(),
+                      new LowerResizeCubicRecipe(),
+                      new LowerDynamicBatchedMatMulRecipe(),
+                  ];
+
+        this.recipes.sort((a, b) => b.priority - a.priority);
     }
 
     public findOpportunities(graph: OnnxGraph.Class): TransformationOpportunity[] {
@@ -179,7 +223,12 @@ export class LoopFusionMatcher {
         }
 
         // 5. Final Reshape to target shape
-        const originalIsDynamic = originalOutShape.includes(-1) || originalOutShape.length === 0;
+        const staticCarryTotal = Array.isArray(carryShape)
+            ? (carryShape as number[]).reduce((a, b) => a * b, 1)
+            : -1;
+        const isScalarOutput = originalOutShape.length === 0 && staticCarryTotal === 1;
+        const originalIsDynamic =
+            originalOutShape.includes(-1) || (originalOutShape.length === 0 && !isScalarOutput);
         let targetShapeNode: ValueNode;
 
         if (bounds.targetShape) {
@@ -194,12 +243,27 @@ export class LoopFusionMatcher {
             targetShapeNode = carryShape as ValueNode;
         }
 
-        const [reshaped] = outerBuilder.createOp("Reshape", [processedOut, targetShapeNode], {}, [
-            { type: elemTy, shape: originalOutShape },
-        ]);
+        let finalOutput: ValueNode;
+        if (isScalarOutput) {
+            const squeezeAxis = outerBuilder.createConstant(
+                `squeeze_scalar_axis_${rootOp.id}`,
+                int64Vec([0]),
+            );
+            [finalOutput] = outerBuilder.createOp("Squeeze", [processedOut, squeezeAxis], {}, [
+                { type: elemTy, shape: [] },
+            ]);
+        } else {
+            const [reshaped] = outerBuilder.createOp(
+                "Reshape",
+                [processedOut, targetShapeNode],
+                {},
+                [{ type: elemTy, shape: originalOutShape }],
+            );
+            finalOutput = reshaped;
+        }
 
         // 6. Integrate results back into the main graph
-        outerBuilder.replaceAllUsesWith(rootOutNodeRaw, reshaped);
+        outerBuilder.replaceAllUsesWith(rootOutNodeRaw, finalOutput);
         chain.forEach((op) => outerBuilder.removeNode(op));
     }
 
@@ -272,7 +336,15 @@ export class LoopFusionMatcher {
         const registry = OpRegistry.getInstance();
 
         const roots = ops.filter((op) => {
-            if (!this.isSupported(op)) return false;
+            const opRecipe = this.getRecipeFor(op);
+            if (opRecipe === undefined) return false;
+            if (
+                opRecipe.tags?.includes("self-carry") === true ||
+                opRecipe.postProcess !== undefined
+            ) {
+                return true;
+            }
+
             const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
             const goesToGraphOutput = outTensors.some((t) => t.type === "output");
 

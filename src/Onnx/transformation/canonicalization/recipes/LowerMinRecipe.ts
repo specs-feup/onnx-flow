@@ -9,13 +9,17 @@ export class LowerMinRecipe implements DecompositionRecipe {
     public readonly targetOp = "Min";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Where", "Less"];
 
     match(op: OperationNode.Class): boolean {
         if (op.type !== "Min") return false;
 
         const ins = op.getInputs();
-        if (!ins || ins.length < 2) return false;
+        if (!ins || ins.length !== 2) return false;
 
         return true;
     }

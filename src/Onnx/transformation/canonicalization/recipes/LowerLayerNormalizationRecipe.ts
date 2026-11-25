@@ -10,10 +10,16 @@ export class LowerLayerNormalizationRecipe implements DecompositionRecipe {
     public readonly targetOp = "LayerNormalization";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["ReduceMean", "Sub", "Mul", "Add", "Sqrt", "Div"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "LayerNormalization";
+        if (op.type !== "LayerNormalization") return false;
+        const ins = op.getInputs();
+        return !!ins && ins.length >= 2 && ins[0].shape.length >= 1;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
@@ -79,7 +85,23 @@ export class LowerLayerNormalizationRecipe implements DecompositionRecipe {
             finalOut = builder.createOp("Add", [scaled, B], {}, output)[0];
         }
 
-        builder.replaceAllUsesWith(Y, finalOut);
+        const outputs = op.getOutputs();
+        builder.replaceAllUsesWith(outputs[0], finalOut);
+
+        if (outputs.length > 1) {
+            builder.replaceAllUsesWith(outputs[1], mean);
+        }
+        if (outputs.length > 2) {
+            const oneConst = builder.createConstant(
+                `layernorm_one_${op.id}`,
+                makeTensorProto(dtype, [], [1]),
+            );
+            const [invStdDev] = builder.createOp("Div", [oneConst, stdDev], {}, [
+                { type: dtype, shape: stdDev.shape as KnownShape },
+            ]);
+            builder.replaceAllUsesWith(outputs[2], invStdDev);
+        }
+
         op.remove();
     }
 }

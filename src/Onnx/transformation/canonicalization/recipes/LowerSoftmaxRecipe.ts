@@ -10,6 +10,10 @@ export class LowerSoftmaxRecipe implements DecompositionRecipe {
     public readonly targetOp = "Softmax";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["ReduceMax", "Sub", "Exp", "ReduceSum", "Div"];
 
     match(op: OperationNode.Class): boolean {

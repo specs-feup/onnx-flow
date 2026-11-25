@@ -10,6 +10,11 @@ export class LowerSinRecipe implements DecompositionRecipe {
     public readonly targetOp = "Sin";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "approximation" as const;
+    public readonly priority = 40;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["series"];
     public readonly producedOps = ["Add", "Sub", "Mul", "Div"];
 
     private readonly ITERATIONS = 10;

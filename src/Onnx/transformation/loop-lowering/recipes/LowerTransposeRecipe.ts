@@ -8,7 +8,7 @@ import {
     decodeMixedRadix,
     buildLinearIndex,
     ensureFlatInput,
-    squeezeIfLen1,
+    gatherScalar,
     buildAguPointer,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -19,10 +19,16 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "Transpose";
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["data-movement", "fuseable"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
         "Size",
+        "Reshape",
         "Gather",
         "Unsqueeze",
         "Squeeze",
@@ -31,6 +37,9 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         "Mul",
         "Div",
         "Mod",
+        "Equal",
+        "And",
+        "Where",
     ];
 
     match(op: OperationNode.Class): boolean {
@@ -117,10 +126,8 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         if (inShapeNum.includes(-1)) {
             const [shapeNode] = builder.createOp("Shape", [X]);
             for (let i = 0; i < rank; i++) {
-                const iConst = builder.createConstant(`dim_idx_${i}`, int64Vec([i]));
-                const [dimValRaw] = builder.createOp("Gather", [shapeNode, iConst], { axis: 0 });
-                const [dimVal] = builder.createOp("Squeeze", [dimValRaw, axes]);
-                inDims.push(dimVal);
+                const iConst = builder.createConstant(`dim_idx_${i}`, scalarInt64(i));
+                inDims.push(gatherScalar(builder, shapeNode, iConst));
             }
             decodeDims = validPerm.map((p) => inDims[p]);
         } else {
@@ -176,10 +183,7 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
             lin = buildLinearIndex(builder, iDigits, strides, `lin`);
         }
 
-        const [linU] = builder.createOp("Unsqueeze", [lin, axes]);
         const flat = ensureFlatInput(builder, X);
-        const [gathered] = builder.createOp("Gather", [flat, linU], { axis: 0 });
-
-        return squeezeIfLen1(builder, gathered, axes, `scalar`);
+        return gatherScalar(builder, flat, lin);
     }
 }

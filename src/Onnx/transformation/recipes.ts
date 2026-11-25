@@ -1,3 +1,29 @@
+// Loop Lowering Recipes
+import { LowerMatMulRecipe } from "./loop-lowering/recipes/LowerMatMulRecipe.js";
+import { LowerCoalescedMatMulRecipe } from "./loop-lowering/recipes/LowerCoalescedMatMulRecipe.js";
+import { LowerConvRecipe } from "./loop-lowering/recipes/LowerConvRecipe.js";
+import { LowerElementWiseRecipe } from "./loop-lowering/recipes/LowerElementWiseRecipe.js";
+import { LowerRangeRecipe } from "./loop-lowering/recipes/LowerRangeRecipe.js";
+import { LowerReductionRecipe } from "./loop-lowering/recipes/LowerReductionRecipe.js";
+import { LowerTransposeRecipe } from "./loop-lowering/recipes/LowerTransposeRecipe.js";
+import { LowerConvTransposeRecipe } from "./loop-lowering/recipes/LowerConvTransposeRecipe.js";
+import { LowerCumSumRecipe } from "./loop-lowering/recipes/LowerCumSumRecipe.js";
+import { LowerGatherElementsRecipe } from "./loop-lowering/recipes/LowerGatherElementsRecipe.js";
+import { LowerGatherNDRecipe } from "./loop-lowering/recipes/LowerGatherNDRecipe.js";
+import { LowerScatterNDRecipe } from "./loop-lowering/recipes/LowerScatterNDRecipe.js";
+import { LowerMaxPoolRecipe } from "./loop-lowering/recipes/LowerMaxPoolRecipe.js";
+import { LowerResizeRecipe } from "./loop-lowering/recipes/LowerResizeRecipe.js";
+import { LowerReverseSequenceRecipe } from "./loop-lowering/recipes/LowerReverseSequenceRecipe.js";
+import { LowerAveragePoolLoopRecipe } from "./loop-lowering/recipes/LowerAveragePoolLoopRecipe.js";
+import { LowerConvNDRecipe } from "./loop-lowering/recipes/LowerConvNDRecipe.js";
+import { LowerSliceLoopRecipe } from "./loop-lowering/recipes/LowerSliceLoopRecipe.js";
+import { LowerPadLoopRecipe } from "./loop-lowering/recipes/LowerPadLoopRecipe.js";
+import { LowerTileLoopRecipe } from "./loop-lowering/recipes/LowerTileLoopRecipe.js";
+import { LowerOneHotLoopRecipe } from "./loop-lowering/recipes/LowerOneHotLoopRecipe.js";
+import { LowerDynamicReductionRecipe } from "./loop-lowering/recipes/LowerDynamicReductionRecipe.js";
+import { LowerResizeCubicRecipe } from "./loop-lowering/recipes/LowerResizeCubicRecipe.js";
+import { LowerDynamicBatchedMatMulRecipe } from "./loop-lowering/recipes/LowerDynamicBatchedMatMulRecipe.js";
+
 // Canonicalization Recipes
 import { LowerSoftmaxRecipe } from "./canonicalization/recipes/LowerSoftmaxRecipe.js";
 import { LowerGemmRecipe } from "./canonicalization/recipes/LowerGemmRecipe.js";
@@ -11,15 +37,6 @@ import { LowerClipRecipe } from "./canonicalization/recipes/LowerClipRecipe.js";
 import { LowerAveragePoolRecipe } from "./canonicalization/recipes/LowerAveragePoolRecipe.js";
 import { LowerQuantizeLinearRecipe } from "./canonicalization/recipes/LowerQuantizeLinearRecipe.js";
 import { LowerDequantizeLinearRecipe } from "./canonicalization/recipes/LowerDequantizeLinearRecipe.js";
-
-// Loop Lowering Recipes
-import { LowerMatMulRecipe } from "./loop-lowering/recipes/LowerMatMulRecipe.js";
-import { LowerCoalescedMatMulRecipe } from "./loop-lowering/recipes/LowerCoalescedMatMulRecipe.js";
-import { LowerConvRecipe } from "./loop-lowering/recipes/LowerConvRecipe.js";
-import { LowerElementWiseRecipe } from "./loop-lowering/recipes/LowerElementWiseRecipe.js";
-import { LowerRangeRecipe } from "./loop-lowering/recipes/LowerRangeRecipe.js";
-import { LowerReductionRecipe } from "./loop-lowering/recipes/LowerReductionRecipe.js";
-import { LowerTransposeRecipe } from "./loop-lowering/recipes/LowerTransposeRecipe.js";
 import { LowerGroupNormalizationRecipe } from "./canonicalization/recipes/LowerGroupNormalizationRecipe.js";
 import { LowerAbsRecipe } from "./canonicalization/recipes/LowerAbsRecipe.js";
 import { LowerInstanceNormalizationRecipe } from "./canonicalization/recipes/LowerInstanceNormalizationRecipe.js";
@@ -66,6 +83,76 @@ import { LowerLessRecipe } from "./canonicalization/recipes/LowerLessRecipe.js";
 import { LowerLessOrEqualRecipe } from "./canonicalization/recipes/LowerLessOrEqualRecipe.js";
 import { LowerMinRecipe } from "./canonicalization/recipes/LowerMinRecipe.js";
 import { LowerMaxRecipe } from "./canonicalization/recipes/LowerMaxRecipe.js";
+import { LowerFloorRecipe } from "./canonicalization/recipes/LowerFloorRecipe.js";
+import { LowerNegRecipe } from "./canonicalization/recipes/LowerNegRecipe.js";
+import { LowerReciprocalRecipe } from "./canonicalization/recipes/LowerReciprocalRecipe.js";
+import { LowerExpRecipe } from "./canonicalization/recipes/LowerExpRecipe.js";
+import { LowerCosPCRecipe } from "./canonicalization/recipes/LowerCosPCRecipe.js";
+import { LowerSinPCRecipe } from "./canonicalization/recipes/LowerSinPCRecipe.js";
+import { LowerLogPCRecipe } from "./canonicalization/recipes/LowerLogPCRecipe.js";
+import { LowerSqrtPCRecipe } from "./canonicalization/recipes/LowerSqrtPCRecipe.js";
+import { LowerCastLikeRecipe } from "./canonicalization/recipes/LowerCastLikeRecipe.js";
+import { LowerMeanRecipe } from "./canonicalization/recipes/LowerMeanRecipe.js";
+import { LowerSumRecipe } from "./canonicalization/recipes/LowerSumRecipe.js";
+import { LowerBinarizerRecipe } from "./canonicalization/recipes/LowerBinarizerRecipe.js";
+import { LowerDynamicQuantizeLinearRecipe } from "./canonicalization/recipes/LowerDynamicQuantizeLinearRecipe.js";
+import { LowerGeluRecipe } from "./canonicalization/recipes/LowerGeluRecipe.js";
+import { LowerHardSwishRecipe } from "./canonicalization/recipes/LowerHardSwishRecipe.js";
+import { LowerPReluRecipe } from "./canonicalization/recipes/LowerPReluRecipe.js";
+import { LowerShrinkRecipe } from "./canonicalization/recipes/LowerShrinkRecipe.js";
+import { LowerThresholdedReluRecipe } from "./canonicalization/recipes/LowerThresholdedReluRecipe.js";
+import { LowerConvIntegerRecipe } from "./canonicalization/recipes/LowerConvIntegerRecipe.js";
+import { LowerEyeLikeRecipe } from "./canonicalization/recipes/LowerEyeLikeRecipe.js";
+import { LowerFlattenRecipe } from "./canonicalization/recipes/LowerFlattenRecipe.js";
+import { LowerGlobalAveragePoolRecipe } from "./canonicalization/recipes/LowerGlobalAveragePoolRecipe.js";
+import { LowerGlobalLpPoolRecipe } from "./canonicalization/recipes/LowerGlobalLpPoolRecipe.js";
+import { LowerGlobalMaxPoolRecipe } from "./canonicalization/recipes/LowerGlobalMaxPoolRecipe.js";
+import { LowerHardmaxRecipe } from "./canonicalization/recipes/LowerHardmaxRecipe.js";
+import { LowerLogSoftmaxRecipe } from "./canonicalization/recipes/LowerLogSoftmaxRecipe.js";
+import { LowerLpNormalizationRecipe } from "./canonicalization/recipes/LowerLpNormalizationRecipe.js";
+import { LowerMatMulIntegerRecipe } from "./canonicalization/recipes/LowerMatMulIntegerRecipe.js";
+import { LowerOneHotRecipe } from "./canonicalization/recipes/LowerOneHotRecipe.js";
+import { LowerQLinearConvRecipe } from "./canonicalization/recipes/LowerQLinearConvRecipe.js";
+import { LowerQLinearMatMulRecipe } from "./canonicalization/recipes/LowerQLinearMatMulRecipe.js";
+import { LowerSplitRecipe } from "./canonicalization/recipes/LowerSplitRecipe.js";
+import { LowerTileRecipe } from "./canonicalization/recipes/LowerTileRecipe.js";
+import { LowerTriluRecipe } from "./canonicalization/recipes/LowerTriluRecipe.js";
+import { LowerLpPoolRecipe } from "./canonicalization/recipes/LowerLpPoolRecipe.js";
+import { LowerNegativeLogLikelihoodLossRecipe } from "./canonicalization/recipes/LowerNegativeLogLikelihoodLossRecipe.js";
+import { LowerSoftmaxCrossEntropyLossRecipe } from "./canonicalization/recipes/LowerSoftmaxCrossEntropyLossRecipe.js";
+import { LowerScanRecipe } from "./canonicalization/recipes/LowerScanRecipe.js";
+import { LowerRNNRecipe } from "./canonicalization/recipes/LowerRNNRecipe.js";
+import { LowerGRURecipe } from "./canonicalization/recipes/LowerGRURecipe.js";
+import { LowerLSTMRecipe } from "./canonicalization/recipes/LowerLSTMRecipe.js";
+import { LowerScatterRecipe } from "./canonicalization/recipes/LowerScatterRecipe.js";
+import {
+    LowerArgMaxRecipe,
+    LowerArgMinRecipe,
+} from "./canonicalization/recipes/LowerArgMinMaxRecipe.js";
+import { LowerTopKRecipe } from "./canonicalization/recipes/LowerTopKRecipe.js";
+import { LowerEinsumRecipe } from "./canonicalization/recipes/LowerEinsumRecipe.js";
+import { LowerDetRecipe } from "./canonicalization/recipes/LowerDetRecipe.js";
+import { LowerRNNLoopRecipe } from "./canonicalization/recipes/LowerRNNLoopRecipe.js";
+import { LowerGRULoopRecipe } from "./canonicalization/recipes/LowerGRULoopRecipe.js";
+import { LowerLSTMLoopRecipe } from "./canonicalization/recipes/LowerLSTMLoopRecipe.js";
+import { LowerSplitDynamicRecipe } from "./canonicalization/recipes/LowerSplitDynamicRecipe.js";
+import {
+    LowerVariadicMaxRecipe,
+    LowerVariadicMinRecipe,
+} from "./canonicalization/recipes/LowerVariadicMinMaxRecipe.js";
+import {
+    LowerArgMaxLoopRecipe,
+    LowerArgMinLoopRecipe,
+} from "./canonicalization/recipes/LowerArgMinMaxLoopRecipe.js";
+import { LowerTopKLoopRecipe } from "./canonicalization/recipes/LowerTopKLoopRecipe.js";
+import { LowerMaxPoolWithIndicesRecipe } from "./canonicalization/recipes/LowerMaxPoolWithIndicesRecipe.js";
+import { LowerLpNormalizationGeneralRecipe } from "./canonicalization/recipes/LowerLpNormalizationGeneralRecipe.js";
+import { LowerQuantizeLinearExtendedRecipe } from "./canonicalization/recipes/LowerQuantizeLinearExtendedRecipe.js";
+import { LowerDequantizeLinearBlockedRecipe } from "./canonicalization/recipes/LowerDequantizeLinearBlockedRecipe.js";
+import { LowerHardmaxDynamicRecipe } from "./canonicalization/recipes/LowerHardmaxDynamicRecipe.js";
+import { LowerTriluDynamicRecipe } from "./canonicalization/recipes/LowerTriluDynamicRecipe.js";
+import { LowerEyeLikeDynamicRecipe } from "./canonicalization/recipes/LowerEyeLikeDynamicRecipe.js";
+import { LowerDetDynamicRecipe } from "./canonicalization/recipes/LowerDetDynamicRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -128,6 +215,70 @@ export {
     LowerLessOrEqualRecipe,
     LowerMinRecipe,
     LowerMaxRecipe,
+    LowerFloorRecipe,
+    LowerNegRecipe,
+    LowerReciprocalRecipe,
+    LowerExpRecipe,
+    LowerCosPCRecipe,
+    LowerSinPCRecipe,
+    LowerLogPCRecipe,
+    LowerSqrtPCRecipe,
+    LowerCastLikeRecipe,
+    LowerMeanRecipe,
+    LowerSumRecipe,
+    LowerBinarizerRecipe,
+    LowerDynamicQuantizeLinearRecipe,
+    LowerGeluRecipe,
+    LowerHardSwishRecipe,
+    LowerPReluRecipe,
+    LowerShrinkRecipe,
+    LowerThresholdedReluRecipe,
+    LowerConvIntegerRecipe,
+    LowerEyeLikeRecipe,
+    LowerFlattenRecipe,
+    LowerGlobalAveragePoolRecipe,
+    LowerGlobalLpPoolRecipe,
+    LowerGlobalMaxPoolRecipe,
+    LowerHardmaxRecipe,
+    LowerLogSoftmaxRecipe,
+    LowerLpNormalizationRecipe,
+    LowerMatMulIntegerRecipe,
+    LowerOneHotRecipe,
+    LowerQLinearConvRecipe,
+    LowerQLinearMatMulRecipe,
+    LowerSplitRecipe,
+    LowerTileRecipe,
+    LowerTriluRecipe,
+    LowerLpPoolRecipe,
+    LowerNegativeLogLikelihoodLossRecipe,
+    LowerSoftmaxCrossEntropyLossRecipe,
+    LowerGRURecipe,
+    LowerLSTMRecipe,
+    LowerRNNRecipe,
+    LowerScanRecipe,
+    LowerScatterRecipe,
+    LowerArgMaxRecipe,
+    LowerArgMinRecipe,
+    LowerTopKRecipe,
+    LowerEinsumRecipe,
+    LowerDetRecipe,
+    LowerRNNLoopRecipe,
+    LowerGRULoopRecipe,
+    LowerLSTMLoopRecipe,
+    LowerSplitDynamicRecipe,
+    LowerVariadicMinRecipe,
+    LowerVariadicMaxRecipe,
+    LowerArgMaxLoopRecipe,
+    LowerArgMinLoopRecipe,
+    LowerTopKLoopRecipe,
+    LowerMaxPoolWithIndicesRecipe,
+    LowerLpNormalizationGeneralRecipe,
+    LowerQuantizeLinearExtendedRecipe,
+    LowerDequantizeLinearBlockedRecipe,
+    LowerHardmaxDynamicRecipe,
+    LowerTriluDynamicRecipe,
+    LowerEyeLikeDynamicRecipe,
+    LowerDetDynamicRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -137,6 +288,23 @@ export {
     LowerRangeRecipe,
     LowerReductionRecipe,
     LowerTransposeRecipe,
+    LowerConvTransposeRecipe,
+    LowerCumSumRecipe,
+    LowerGatherElementsRecipe,
+    LowerGatherNDRecipe,
+    LowerScatterNDRecipe,
+    LowerMaxPoolRecipe,
+    LowerResizeRecipe,
+    LowerReverseSequenceRecipe,
+    LowerConvNDRecipe,
+    LowerAveragePoolLoopRecipe,
+    LowerSliceLoopRecipe,
+    LowerPadLoopRecipe,
+    LowerTileLoopRecipe,
+    LowerOneHotLoopRecipe,
+    LowerDynamicReductionRecipe,
+    LowerResizeCubicRecipe,
+    LowerDynamicBatchedMatMulRecipe,
 };
 
 // Export an organized catalog object for easy IDE discovery/autocomplete
@@ -200,6 +368,70 @@ export const Recipes = {
         LessOrEqual: LowerLessOrEqualRecipe,
         Min: LowerMinRecipe,
         Max: LowerMaxRecipe,
+        Exp: LowerExpRecipe,
+        Floor: LowerFloorRecipe,
+        Reciprocal: LowerReciprocalRecipe,
+        Neg: LowerNegRecipe,
+        SinPC: LowerSinPCRecipe,
+        CosPC: LowerCosPCRecipe,
+        LogPC: LowerLogPCRecipe,
+        SqrtPC: LowerSqrtPCRecipe,
+        CastLike: LowerCastLikeRecipe,
+        Mean: LowerMeanRecipe,
+        Sum: LowerSumRecipe,
+        Binarizer: LowerBinarizerRecipe,
+        DynamicQuantizeLinear: LowerDynamicQuantizeLinearRecipe,
+        Gelu: LowerGeluRecipe,
+        HardSwish: LowerHardSwishRecipe,
+        PRelu: LowerPReluRecipe,
+        Shrink: LowerShrinkRecipe,
+        ThresholdedRelu: LowerThresholdedReluRecipe,
+        ConvInteger: LowerConvIntegerRecipe,
+        EyeLike: LowerEyeLikeRecipe,
+        Flatten: LowerFlattenRecipe,
+        GlobalAveragePool: LowerGlobalAveragePoolRecipe,
+        GlobalLpPool: LowerGlobalLpPoolRecipe,
+        GlobalMaxPool: LowerGlobalMaxPoolRecipe,
+        Hardmax: LowerHardmaxRecipe,
+        LogSoftmax: LowerLogSoftmaxRecipe,
+        LpNormalization: LowerLpNormalizationRecipe,
+        MatMulInteger: LowerMatMulIntegerRecipe,
+        OneHot: LowerOneHotRecipe,
+        QLinearConv: LowerQLinearConvRecipe,
+        QLinearMatMul: LowerQLinearMatMulRecipe,
+        Split: LowerSplitRecipe,
+        Tile: LowerTileRecipe,
+        Trilu: LowerTriluRecipe,
+        LpPool: LowerLpPoolRecipe,
+        NegativeLogLikelihoodLoss: LowerNegativeLogLikelihoodLossRecipe,
+        SoftmaxCrossEntropyLoss: LowerSoftmaxCrossEntropyLossRecipe,
+        GRU: LowerGRURecipe,
+        LSTM: LowerLSTMRecipe,
+        RNN: LowerRNNRecipe,
+        Scan: LowerScanRecipe,
+        Scatter: LowerScatterRecipe,
+        ArgMax: LowerArgMaxRecipe,
+        ArgMin: LowerArgMinRecipe,
+        TopK: LowerTopKRecipe,
+        Einsum: LowerEinsumRecipe,
+        Det: LowerDetRecipe,
+        RNNLoop: LowerRNNLoopRecipe,
+        GRULoop: LowerGRULoopRecipe,
+        LSTMLoop: LowerLSTMLoopRecipe,
+        SplitDynamic: LowerSplitDynamicRecipe,
+        VariadicMin: LowerVariadicMinRecipe,
+        VariadicMax: LowerVariadicMaxRecipe,
+        ArgMaxLoop: LowerArgMaxLoopRecipe,
+        ArgMinLoop: LowerArgMinLoopRecipe,
+        TopKLoop: LowerTopKLoopRecipe,
+        MaxPoolWithIndices: LowerMaxPoolWithIndicesRecipe,
+        LpNormalizationGeneral: LowerLpNormalizationGeneralRecipe,
+        QuantizeLinearExtended: LowerQuantizeLinearExtendedRecipe,
+        DequantizeLinearBlocked: LowerDequantizeLinearBlockedRecipe,
+        HardmaxDynamic: LowerHardmaxDynamicRecipe,
+        TriluDynamic: LowerTriluDynamicRecipe,
+        EyeLikeDynamic: LowerEyeLikeDynamicRecipe,
+        DetDynamic: LowerDetDynamicRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,
@@ -209,5 +441,22 @@ export const Recipes = {
         Range: LowerRangeRecipe,
         Reduction: LowerReductionRecipe,
         Transpose: LowerTransposeRecipe,
+        ConvTranspose: LowerConvTransposeRecipe,
+        CumSum: LowerCumSumRecipe,
+        GatherElements: LowerGatherElementsRecipe,
+        GatherND: LowerGatherNDRecipe,
+        ScatterND: LowerScatterNDRecipe,
+        MaxPool: LowerMaxPoolRecipe,
+        Resize: LowerResizeRecipe,
+        ReverseSequence: LowerReverseSequenceRecipe,
+        ConvND: LowerConvNDRecipe,
+        AveragePoolLoop: LowerAveragePoolLoopRecipe,
+        SliceLoop: LowerSliceLoopRecipe,
+        PadLoop: LowerPadLoopRecipe,
+        TileLoop: LowerTileLoopRecipe,
+        OneHotLoop: LowerOneHotLoopRecipe,
+        DynamicReduction: LowerDynamicReductionRecipe,
+        ResizeCubic: LowerResizeCubicRecipe,
+        DynamicBatchedMatMul: LowerDynamicBatchedMatMulRecipe,
     },
 };

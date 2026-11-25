@@ -94,4 +94,54 @@ describe("Canonicalization - Binary & Comparison Recipes", () => {
         ]);
         expect(producedOps).not.toContain("Clip");
     });
+
+    it("decomposes PRelu, Sum, Mean, CastLike, and Scatter", () => {
+        expect(
+            applyRecipe(new Recipes.canonicalization.PRelu(), "PRelu", [[2, 2], [2]]).producedOps,
+        ).not.toContain("PRelu");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Sum(), "Sum", [
+                [2, 2],
+                [2, 2],
+                [2, 2],
+            ]).producedOps,
+        ).not.toContain("Sum");
+        expect(
+            applyRecipe(new Recipes.canonicalization.Mean(), "Mean", [
+                [2, 2],
+                [2, 2],
+            ]).producedOps,
+        ).not.toContain("Mean");
+        expect(
+            applyRecipe(new Recipes.canonicalization.CastLike(), "CastLike", [
+                { shape: [2, 2], dataType: DataType.INT32 },
+                { shape: [2, 2], dataType: DataType.FLOAT },
+            ]).producedOps,
+        ).toContain("Cast");
+        expect(
+            applyRecipe(
+                new Recipes.canonicalization.Scatter(),
+                "Scatter",
+                [
+                    { shape: [2, 4], dataType: DataType.FLOAT },
+                    { shape: [2, 2], dataType: DataType.INT64 },
+                    { shape: [2, 2], dataType: DataType.FLOAT },
+                ],
+                { axis: 1 },
+            ).producedOps,
+        ).toContain("ScatterElements");
+    });
+
+    it("decomposes 1-input and 3-input variadic Min and Max", () => {
+        expect(
+            applyRecipe(new Recipes.canonicalization.VariadicMin(), "Min", [[2, 2]]).producedOps,
+        ).toContain("Identity");
+        expect(
+            applyRecipe(new Recipes.canonicalization.VariadicMax(), "Max", [
+                [2, 2],
+                [2, 2],
+                [2, 2],
+            ]).producedOps.filter((t) => t === "Max").length,
+        ).toBe(2);
+    });
 });

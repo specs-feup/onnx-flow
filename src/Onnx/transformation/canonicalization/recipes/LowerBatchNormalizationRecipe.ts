@@ -10,10 +10,16 @@ export class LowerBatchNormalizationRecipe implements DecompositionRecipe {
     public readonly targetOp = "BatchNormalization";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly producedOps = ["Unsqueeze", "Add", "Sqrt", "Sub", "Div", "Mul"];
 
     match(op: OperationNode.Class): boolean {
-        return op.type === "BatchNormalization";
+        if (op.type !== "BatchNormalization") return false;
+        const ins = op.getInputs();
+        return !!ins && ins.length >= 5 && ins[0].shape.length >= 2 && op.getOutputs().length === 1;
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

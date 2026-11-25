@@ -10,6 +10,7 @@ import {
     computeStrides,
     int64Vec,
     UNKNOWN_SHAPE,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -20,8 +21,8 @@ import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
 import {
     resolveRecipeInput,
-    squeezeIfLen1,
     ensureFlatInput,
+    gatherScalar,
     decodeMixedRadix,
     buildLinearIndex,
     buildAguPointer,
@@ -36,11 +37,18 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     public readonly targetOp = OpCategory.Reduction;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
+    public readonly phase = "loop-lowering" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "static" as const;
+    public readonly tags = ["reduction", "self-carry"] as const;
     public readonly producedOps = [
         "Loop",
         "Shape",
         "Size",
+        "Reshape",
         "Gather",
+        "ScatterElements",
         "Unsqueeze",
         "Squeeze",
         "Add",
@@ -48,6 +56,9 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         "Mul",
         "Div",
         "Mod",
+        "Equal",
+        "And",
+        "Where",
         "Max",
         "Min",
         "Abs",
@@ -55,8 +66,13 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     ];
 
     match(op: OperationNode.Class): boolean {
+        if (op.type === "ArgMax" || op.type === "ArgMin" || op.type === "TopK") return false;
         const schema = OpRegistry.getInstance().get(op.type, 19);
-        return schema?.category === OpCategory.Reduction;
+        if (schema?.category !== OpCategory.Reduction) return false;
+        const inputs = op.getInputs();
+        if (!inputs || inputs.length === 0) return false;
+        const dims = toStaticShape(inputs[0].shape);
+        return dims.length > 0 && !dims.includes(-1);
     }
 
     getLoopBounds(
@@ -163,9 +179,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             );
         }
 
-        const [readIdxUnsq] = builder.createOp("Unsqueeze", [readIdx, axes]);
-        const [gatheredOut] = builder.createOp("Gather", [flatInput, readIdxUnsq], { axis: 0 });
-        let val = squeezeIfLen1(builder, gatheredOut, axes, `sq_in`) as ConcreteValueNode;
+        let val = gatherScalar(builder, flatInput, readIdx);
 
         // 2. Pre-processing for specific reductions
         if (op.type === "ReduceLogSumExp") [val] = builder.createOp("Exp", [val]);
@@ -222,8 +236,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
         // 4. Accumulate
-        const [gAccOut] = builder.createOp("Gather", [carryNode, flatOutIdxUnsq], { axis: 0 });
-        const currentAcc = squeezeIfLen1(builder, gAccOut, axes, `sq_acc`) as ConcreteValueNode;
+        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         let mathOpType = "Add";
         if (op.type === "ReduceMax") mathOpType = "Max";

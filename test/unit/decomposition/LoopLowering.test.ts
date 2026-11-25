@@ -10,8 +10,21 @@ import { HistoryManager } from "../../../src/Onnx/transformation/tracking/Histor
 import { scalarFloat } from "../../../src/Onnx/utils/TensorData.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
+import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
 
 describe("Loop Lowering - Multi-Operation Passes", () => {
+    function assertLoweredToLoop(graph: OnnxGraph.Class, originalOpType: string): void {
+        expect(() => validateGraph(graph)).not.toThrow();
+        const ops = graph.getOperationNodes().toArray();
+        const opTypes = ops.map((o) => o.type);
+        expect(opTypes).toContain("Loop");
+        expect(opTypes).not.toContain(originalOpType);
+
+        const loopOp = ops.find((o) => o.type === "Loop")!;
+        expect(loopOp.regions.length).toBe(1);
+        expect(loopOp.regions[0].getOperationNodes().toArray().length).toBeGreaterThan(0);
+    }
+
     initializeSchemaRegistry();
 
     it("lowers MatMul (Standard) into a Loop", () => {
@@ -33,12 +46,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             indexingMode: IndexingMode.Radix,
         }).run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "MatMul");
     });
 
     it("lowers MatMul with coalesced scalar MAC into a Loop", () => {
@@ -59,12 +67,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             new HistoryManager(graph),
         );
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "MatMul");
     });
 
     it("lowers ElementWise (Add) into a Loop", () => {
@@ -86,12 +89,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             indexingMode: IndexingMode.Radix,
         }).run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Add");
     });
 
     it("lowers Conv into a Loop", () => {
@@ -117,12 +115,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             indexingMode: IndexingMode.Radix,
         }).run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Conv");
     });
 
     it("lowers Transpose into a Loop", () => {
@@ -136,12 +129,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         builder.createOp("Transpose", [x], { perm: [1, 0] });
         new LoopLoweringPass().run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Transpose");
     });
 
     it("lowers Reductions (ReduceMean) into a Loop", () => {
@@ -155,12 +143,7 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         builder.createOp("ReduceMean", [x], { axes: [1] });
         new LoopLoweringPass().run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "ReduceMean");
     });
 
     it("lowers static Range into a Loop", () => {
@@ -182,11 +165,75 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         builder.createOp("Range", [start, limit, delta]);
         new LoopLoweringPass().run(graph, new HistoryManager(graph));
 
-        expect(
-            graph
-                .getOperationNodes()
-                .toArray()
-                .map((o) => o.type),
-        ).toContain("Loop");
+        assertLoweredToLoop(graph, "Range");
+    });
+
+    it("lowers Conv with auto_pad overriding stale pads into a Loop", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph);
+        const x = graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 4, 4], "input"))
+            .as(TensorNode);
+        const w = graph
+            .addNode("W")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 3, 3], "input"))
+            .as(TensorNode);
+
+        builder.createOp("Conv", [x, w], {
+            kernel_shape: [3, 3],
+            strides: [1, 1],
+            auto_pad: "SAME_UPPER",
+            pads: [0, 0, 0, 0],
+        });
+        new LoopLoweringPass({
+            coalesce: false,
+            fuse: false,
+            indexingMode: IndexingMode.Radix,
+        }).run(graph, new HistoryManager(graph));
+
+        assertLoweredToLoop(graph, "Conv");
+        const loopOp = graph
+            .getOperationNodes()
+            .toArray()
+            .find((o) => o.type === "Loop")!;
+        const bodyOps = loopOp.regions[0]
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(bodyOps).toContain("Pad");
+    });
+
+    it("lowers MaxPool with SAME_UPPER and ConvTranspose with SAME_LOWER into Loops", () => {
+        const gMp = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bMp = new GraphBuilder(gMp);
+        const xMp = gMp
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 4, 4], "input"))
+            .as(TensorNode);
+        bMp.createOpWithExact("mp", "MaxPool", [xMp], ["Y"], {
+            kernel_shape: [3, 3],
+            strides: [2, 2],
+            auto_pad: "SAME_UPPER",
+        });
+        new LoopLoweringPass().run(gMp, new HistoryManager(gMp));
+        assertLoweredToLoop(gMp, "MaxPool");
+
+        const gCt = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bCt = new GraphBuilder(gCt);
+        const xCt = gCt
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 3, 3], "input"))
+            .as(TensorNode);
+        const wCt = gCt
+            .addNode("W")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 3, 3], "input"))
+            .as(TensorNode);
+        bCt.createOp("ConvTranspose", [xCt, wCt], {
+            strides: [2, 2],
+            auto_pad: "SAME_LOWER",
+        });
+        new LoopLoweringPass().run(gCt, new HistoryManager(gCt));
+        assertLoweredToLoop(gCt, "ConvTranspose");
     });
 });

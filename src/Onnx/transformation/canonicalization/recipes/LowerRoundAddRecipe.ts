@@ -10,6 +10,11 @@ export class LowerRoundAddRecipe implements DecompositionRecipe {
     public readonly targetOp = "Round";
     public readonly exposesControlFlow = false;
     public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 60;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["round-half-to-even"];
     public readonly producedOps = ["Floor", "Sub", "Equal", "Greater", "Mod", "Where", "Add"];
 
     match(op: OperationNode.Class): boolean {

@@ -18,7 +18,7 @@ import { BASE_TEN } from "./Onnx/Utils.js";
  */
 const STRICT_RESHAPE_NULLS = false as boolean;
 
-const OPSET = 19;
+const OPSET = 20;
 const IR_VERSION = 9;
 
 const MODEL_VERSION = 1;
