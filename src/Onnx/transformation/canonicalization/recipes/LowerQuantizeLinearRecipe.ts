@@ -30,7 +30,13 @@ export class LowerQuantizeLinearRecipe implements DecompositionRecipe {
         const ins = op.getInputs();
         if (!ins || ins.length < 2) return false;
         if (getIntAttr(op, "block_size", 0) !== 0) return false;
-        const targetType = ins.length > 2 ? ins[2].literalType : op.getOutputs()[0]?.literalType;
+        const zp = ins.length > 2 && ins[2].id !== "" ? ins[2] : undefined;
+        const attrOutDtype = getIntAttr(op, "output_dtype", 0);
+        const targetType = zp
+            ? zp.literalType
+            : attrOutDtype !== 0
+              ? attrOutDtype
+              : op.getOutputs()[0]?.literalType;
         return targetType === DataType.INT8 || targetType === DataType.UINT8;
     }
 

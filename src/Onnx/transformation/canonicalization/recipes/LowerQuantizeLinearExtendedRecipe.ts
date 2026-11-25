@@ -15,6 +15,10 @@ const QUANT_BOUNDS: Partial<Record<DataType, [number, number]>> = {
     [DataType.INT8]: [-128, 127],
     [DataType.UINT16]: [0, 65535],
     [DataType.INT16]: [-32768, 32767],
+    [DataType.UINT4]: [0, 15],
+    [DataType.INT4]: [-8, 7],
+    [DataType.UINT2]: [0, 3],
+    [DataType.INT2]: [-2, 1],
 };
 
 export class LowerQuantizeLinearExtendedRecipe implements DecompositionRecipe {
@@ -70,8 +74,15 @@ export class LowerQuantizeLinearExtendedRecipe implements DecompositionRecipe {
             return true;
         }
 
-        // Per-tensor / per-axis extended dtypes (INT16 / UINT16)
-        return targetDtype === DataType.INT16 || targetDtype === DataType.UINT16;
+        // Per-tensor / per-axis extended dtypes (INT16 / UINT16 / INT4 / UINT4 / INT2 / UINT2)
+        return (
+            targetDtype === DataType.INT16 ||
+            targetDtype === DataType.UINT16 ||
+            targetDtype === DataType.INT4 ||
+            targetDtype === DataType.UINT4 ||
+            targetDtype === DataType.INT2 ||
+            targetDtype === DataType.UINT2
+        );
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {

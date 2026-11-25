@@ -565,7 +565,6 @@ export const Attention: OpSchema = {
         const kShape = inputs[1]?.shape ?? [];
         const vShape = inputs[2]?.shape ?? [];
         const pastKShape = inputs[4]?.shape ?? [];
-        const pastVShape = inputs[5]?.shape ?? [];
         const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
 
         let yShape = qShape.slice();
@@ -582,38 +581,48 @@ export const Attention: OpSchema = {
             yShape = [qShape[0], qShape[1], outHidden];
         }
 
+        const qHeadsAttr = "q_num_heads" in attrs ? Number(attrs["q_num_heads"]) : 0;
+        const kvHeadsAttr = "kv_num_heads" in attrs ? Number(attrs["kv_num_heads"]) : 0;
+        const kvHeads =
+            kvHeadsAttr > 0 ? kvHeadsAttr : kShape.length === 4 ? (kShape[1] ?? -1) : -1;
+        const kBatch = kShape[0] ?? -1;
+        const curKvSeq =
+            kShape.length === 4 ? (kShape[2] ?? -1) : kShape.length === 3 ? (kShape[1] ?? -1) : -1;
+        const pastKvSeq = pastKShape.length === 4 ? (pastKShape[2] ?? 0) : 0;
         const totalKvSeq =
-            typeof kShape[2] === "number" && kShape.length === 4
-                ? (pastKShape.length === 4 && typeof pastKShape[2] === "number"
-                      ? (pastKShape[2] as number)
-                      : 0) + (kShape[2] as number)
+            typeof curKvSeq === "number" &&
+            curKvSeq >= 0 &&
+            typeof pastKvSeq === "number" &&
+            pastKvSeq >= 0
+                ? pastKvSeq + curKvSeq
                 : -1;
 
-        const presentKeyShape =
-            kShape.length === 4 ? [kShape[0], kShape[1], totalKvSeq, kShape[3]] : kShape.slice();
-        const presentValShape =
+        const kHeadDim =
+            kShape.length === 4
+                ? (kShape[3] ?? -1)
+                : kShape.length === 3 &&
+                    typeof kShape[2] === "number" &&
+                    kShape[2] > 0 &&
+                    kvHeadsAttr > 0
+                  ? Math.floor((kShape[2] as number) / kvHeadsAttr)
+                  : -1;
+        const vHeadDim =
             vShape.length === 4
-                ? [
-                      vShape[0],
-                      vShape[1],
-                      pastVShape.length === 4 &&
-                      typeof pastVShape[2] === "number" &&
-                      typeof vShape[2] === "number"
-                          ? (pastVShape[2] as number) + (vShape[2] as number)
-                          : (vShape[2] ?? -1),
-                      vShape[3],
-                  ]
-                : vShape.slice();
+                ? (vShape[3] ?? -1)
+                : vShape.length === 3 &&
+                    typeof vShape[2] === "number" &&
+                    vShape[2] > 0 &&
+                    kvHeadsAttr > 0
+                  ? Math.floor((vShape[2] as number) / kvHeadsAttr)
+                  : -1;
+
+        const presentKeyShape = [kBatch, kvHeads, totalKvSeq, kHeadDim];
+        const presentValShape = [vShape[0] ?? kBatch, kvHeads, totalKvSeq, vHeadDim];
 
         const qkShape =
             qShape.length === 4
                 ? [qShape[0], qShape[1], qShape[2], totalKvSeq]
-                : [
-                      qShape[0] ?? -1,
-                      "q_num_heads" in attrs ? Number(attrs["q_num_heads"]) : -1,
-                      qShape[1] ?? -1,
-                      kShape[1] ?? -1,
-                  ];
+                : [qShape[0] ?? -1, qHeadsAttr > 0 ? qHeadsAttr : -1, qShape[1] ?? -1, totalKvSeq];
 
         return [
             { shape: yShape, dtype },

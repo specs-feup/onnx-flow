@@ -45,11 +45,14 @@ export class LowerModRecipe implements DecompositionRecipe {
         const workDtype = isInt ? DataType.FLOAT : originalDtype;
         const workExpectedOut = [{ type: workDtype, shape: outShape }];
 
+        const expectedA = [{ type: workDtype, shape: A.shape as KnownShape }];
+        const expectedB = [{ type: workDtype, shape: B.shape as KnownShape }];
+
         const A_work = isInt
-            ? builder.createOp("Cast", [A], { to: DataType.FLOAT }, workExpectedOut)[0]
+            ? builder.createOp("Cast", [A], { to: DataType.FLOAT }, expectedA)[0]
             : A;
         const B_work = isInt
-            ? builder.createOp("Cast", [B], { to: DataType.FLOAT }, workExpectedOut)[0]
+            ? builder.createOp("Cast", [B], { to: DataType.FLOAT }, expectedB)[0]
             : B;
 
         const div = builder.createOp("Div", [A_work, B_work], {}, workExpectedOut)[0];

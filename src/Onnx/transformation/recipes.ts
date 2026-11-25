@@ -153,6 +153,13 @@ import { LowerHardmaxDynamicRecipe } from "./canonicalization/recipes/LowerHardm
 import { LowerTriluDynamicRecipe } from "./canonicalization/recipes/LowerTriluDynamicRecipe.js";
 import { LowerEyeLikeDynamicRecipe } from "./canonicalization/recipes/LowerEyeLikeDynamicRecipe.js";
 import { LowerDetDynamicRecipe } from "./canonicalization/recipes/LowerDetDynamicRecipe.js";
+import { LowerSwishRecipe } from "./canonicalization/recipes/LowerSwishRecipe.js";
+import { LowerRMSNormalizationRecipe } from "./canonicalization/recipes/LowerRMSNormalizationRecipe.js";
+import { LowerRotaryEmbeddingRecipe } from "./canonicalization/recipes/LowerRotaryEmbeddingRecipe.js";
+import { LowerAttentionRecipe } from "./canonicalization/recipes/LowerAttentionRecipe.js";
+import { LowerSpaceToDepthRecipe } from "./canonicalization/recipes/LowerSpaceToDepthRecipe.js";
+import { LowerTensorScatterRecipe } from "./canonicalization/recipes/LowerTensorScatterRecipe.js";
+import { LowerReductionNoopRecipe } from "./canonicalization/recipes/LowerReductionNoopRecipe.js";
 
 // Export classes for manual instantiation
 export {
@@ -279,6 +286,13 @@ export {
     LowerTriluDynamicRecipe,
     LowerEyeLikeDynamicRecipe,
     LowerDetDynamicRecipe,
+    LowerSwishRecipe,
+    LowerRMSNormalizationRecipe,
+    LowerRotaryEmbeddingRecipe,
+    LowerAttentionRecipe,
+    LowerSpaceToDepthRecipe,
+    LowerTensorScatterRecipe,
+    LowerReductionNoopRecipe,
 
     // Loop Lowering Recipes
     LowerMatMulRecipe,
@@ -432,6 +446,13 @@ export const Recipes = {
         TriluDynamic: LowerTriluDynamicRecipe,
         EyeLikeDynamic: LowerEyeLikeDynamicRecipe,
         DetDynamic: LowerDetDynamicRecipe,
+        Swish: LowerSwishRecipe,
+        RMSNormalization: LowerRMSNormalizationRecipe,
+        RotaryEmbedding: LowerRotaryEmbeddingRecipe,
+        Attention: LowerAttentionRecipe,
+        SpaceToDepth: LowerSpaceToDepthRecipe,
+        TensorScatter: LowerTensorScatterRecipe,
+        ReductionNoop: LowerReductionNoopRecipe,
     },
     loopLowering: {
         MatMul: LowerMatMulRecipe,
