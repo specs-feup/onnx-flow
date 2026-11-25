@@ -21,9 +21,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -166,23 +166,19 @@ export class LowerCumSumRecipe implements LoopLoweringRecipe {
             : builder.createOp("Sub", [flatOutIdx, strideConst]);
         const [safePrevIdx] = builder.createOp("Where", [isFirst, zeroI64, rawPrevIdx]);
 
-        const [prevIdxUnsq] = builder.createOp("Unsqueeze", [safePrevIdx, axes]);
-        const [prevCarryRaw] = builder.createOp("Gather", [carryNode, prevIdxUnsq], { axis: 0 });
-        const prevCarry = squeezeIfLen1(builder, prevCarryRaw, axes, `cs_sq_prev_${op.id}`);
+        const prevCarry = gatherScalar(builder, carryNode, safePrevIdx);
 
         const [outIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
         let outVal: ConcreteValueNode;
         if (exclusive) {
             // exclusive: out[0] = 0; out[i] = out[i-1] + x[i-1]
-            const [xPrevRaw] = builder.createOp("Gather", [flatX, prevIdxUnsq], { axis: 0 });
-            const xPrev = squeezeIfLen1(builder, xPrevRaw, axes, `cs_sq_xp_${op.id}`);
+            const xPrev = gatherScalar(builder, flatX, safePrevIdx);
             const [sum] = builder.createOp("Add", [prevCarry, xPrev]);
             [outVal] = builder.createOp("Where", [isFirst, zeroVal, sum]);
         } else {
             // inclusive: out[0] = x[0]; out[i] = out[i-1] + x[i]
-            const [xCurRaw] = builder.createOp("Gather", [flatX, outIdxUnsq], { axis: 0 });
-            const xCur = squeezeIfLen1(builder, xCurRaw, axes, `cs_sq_xc_${op.id}`);
+            const xCur = gatherScalar(builder, flatX, flatOutIdx);
             const [prevEff] = builder.createOp("Where", [isFirst, zeroVal, prevCarry]);
             [outVal] = builder.createOp("Add", [prevEff, xCur]);
         }

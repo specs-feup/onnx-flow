@@ -8,7 +8,7 @@ import {
     decodeMixedRadix,
     buildLinearIndex,
     ensureFlatInput,
-    squeezeIfLen1,
+    gatherScalar,
     buildAguPointer,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -126,10 +126,8 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
         if (inShapeNum.includes(-1)) {
             const [shapeNode] = builder.createOp("Shape", [X]);
             for (let i = 0; i < rank; i++) {
-                const iConst = builder.createConstant(`dim_idx_${i}`, int64Vec([i]));
-                const [dimValRaw] = builder.createOp("Gather", [shapeNode, iConst], { axis: 0 });
-                const [dimVal] = builder.createOp("Squeeze", [dimValRaw, axes]);
-                inDims.push(dimVal);
+                const iConst = builder.createConstant(`dim_idx_${i}`, scalarInt64(i));
+                inDims.push(gatherScalar(builder, shapeNode, iConst));
             }
             decodeDims = validPerm.map((p) => inDims[p]);
         } else {
@@ -185,10 +183,7 @@ export class LowerTransposeRecipe implements LoopLoweringRecipe {
             lin = buildLinearIndex(builder, iDigits, strides, `lin`);
         }
 
-        const [linU] = builder.createOp("Unsqueeze", [lin, axes]);
         const flat = ensureFlatInput(builder, X);
-        const [gathered] = builder.createOp("Gather", [flat, linU], { axis: 0 });
-
-        return squeezeIfLen1(builder, gathered, axes, `scalar`);
+        return gatherScalar(builder, flat, lin);
     }
 }

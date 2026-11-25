@@ -21,8 +21,8 @@ import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
 import {
     resolveRecipeInput,
-    squeezeIfLen1,
     ensureFlatInput,
+    gatherScalar,
     decodeMixedRadix,
     buildLinearIndex,
     buildAguPointer,
@@ -179,9 +179,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             );
         }
 
-        const [readIdxUnsq] = builder.createOp("Unsqueeze", [readIdx, axes]);
-        const [gatheredOut] = builder.createOp("Gather", [flatInput, readIdxUnsq], { axis: 0 });
-        let val = squeezeIfLen1(builder, gatheredOut, axes, `sq_in`) as ConcreteValueNode;
+        let val = gatherScalar(builder, flatInput, readIdx);
 
         // 2. Pre-processing for specific reductions
         if (op.type === "ReduceLogSumExp") [val] = builder.createOp("Exp", [val]);
@@ -238,8 +236,7 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
         // 4. Accumulate
-        const [gAccOut] = builder.createOp("Gather", [carryNode, flatOutIdxUnsq], { axis: 0 });
-        const currentAcc = squeezeIfLen1(builder, gAccOut, axes, `sq_acc`) as ConcreteValueNode;
+        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         let mathOpType = "Add";
         if (op.type === "ReduceMax") mathOpType = "Max";

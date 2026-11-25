@@ -22,8 +22,8 @@ import type {
 } from "../LoopLoweringRecipe.js";
 import {
     resolveRecipeInput,
-    squeezeIfLen1,
     ensureFlatInput,
+    gatherScalar,
     buildLinearIndex,
     decodeMixedRadix,
     buildAguPointer,
@@ -204,12 +204,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
                     scalarInt64(offsetFromEnd),
                 );
                 const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]);
-                const [dimRaw] = builder.createOp(
-                    "Gather",
-                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
-                    { axis: 0 },
-                );
-                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+                return gatherScalar(builder, shapeNode, targetAxis);
             };
 
             const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [rawInnerA])[0]]);
@@ -398,25 +393,13 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const flatA = ensureFlatInput(builder, rawInnerA);
         const flatB = ensureFlatInput(builder, rawInnerB);
 
-        const [gAOut] = builder.createOp(
-            "Gather",
-            [flatA, builder.createOp("Unsqueeze", [idxA, axes])[0]],
-            { axis: 0 },
-        );
-        const [gBOut] = builder.createOp(
-            "Gather",
-            [flatB, builder.createOp("Unsqueeze", [idxB, axes])[0]],
-            { axis: 0 },
-        );
-
-        const valA = squeezeIfLen1(builder, gAOut, axes, `sqA`);
-        const valB = squeezeIfLen1(builder, gBOut, axes, `sqB`);
+        const valA = gatherScalar(builder, flatA, idxA);
+        const valB = gatherScalar(builder, flatB, idxB);
         const [prod] = builder.createOp("Mul", [valA, valB]);
 
         // 5. Update the accumulator (Carry state)
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const [gAccOut] = builder.createOp("Gather", [carryNode, flatOutIdxUnsq], { axis: 0 });
-        const currentAcc = squeezeIfLen1(builder, gAccOut, axes, `sqAcc`);
+        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         const [newSum] = builder.createOp("Add", [currentAcc, prod]);
         const [scatterOut] = builder.createOp(

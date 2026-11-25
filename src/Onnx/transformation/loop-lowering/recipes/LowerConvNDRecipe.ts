@@ -24,9 +24,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -353,24 +353,14 @@ export class LowerConvNDRecipe implements LoopLoweringRecipe {
             [xIdx] = builder.createOp("Add", [xIdx, term]);
         }
 
-        const [xUnsq] = builder.createOp("Unsqueeze", [xIdx, axes]);
-        const [wUnsq] = builder.createOp("Unsqueeze", [wIdx, axes]);
-        const [xRaw] = builder.createOp("Gather", [flatX, xUnsq], { axis: 0 });
-        const [wRaw] = builder.createOp("Gather", [flatW, wUnsq], { axis: 0 });
-        const xVal = squeezeIfLen1(builder, xRaw, axes, `cnd_sqx_${op.id}`) as ConcreteValueNode;
-        const wVal = squeezeIfLen1(builder, wRaw, axes, `cnd_sqw_${op.id}`) as ConcreteValueNode;
+        const xVal = gatherScalar(builder, flatX, xIdx);
+        const wVal = gatherScalar(builder, flatW, wIdx);
 
         const [rawProd] = builder.createOp("Mul", [xVal, wVal]);
         const [prod] = builder.createOp("Where", [isValid!, rawProd, zeroVal]);
 
         const [outUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const [accRaw] = builder.createOp("Gather", [carryNode, outUnsq], { axis: 0 });
-        const curAcc = squeezeIfLen1(
-            builder,
-            accRaw,
-            axes,
-            `cnd_sqa_${op.id}`,
-        ) as ConcreteValueNode;
+        const curAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         const [newSum] = builder.createOp("Add", [curAcc, prod]);
         const [newSumUnsq] = builder.createOp("Unsqueeze", [newSum, axes]);

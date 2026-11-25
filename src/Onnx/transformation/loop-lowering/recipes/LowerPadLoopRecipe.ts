@@ -23,6 +23,7 @@ import {
     decodeMixedRadix,
     ensureFlatInput,
     ensureInnerValueNode,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
     squeezeIfLen1,
@@ -255,9 +256,8 @@ export class LowerPadLoopRecipe implements LoopLoweringRecipe {
         const flatData = ensureFlatInput(builder, rawData);
 
         const gatherElem = (vec: ValueNode, idx: number, tag: string): ConcreteValueNode => {
-            const idxC = builder.createConstant(`${tag}_${idx}`, int64Vec([idx]));
-            const [raw] = builder.createOp("Gather", [vec, idxC], { axis: 0 });
-            return squeezeIfLen1(builder, raw, axes, `${tag}_sq_${idx}`) as ConcreteValueNode;
+            const idxC = builder.createConstant(`${tag}_${idx}`, scalarInt64(idx));
+            return gatherScalar(builder, vec, idxC);
         };
 
         const inDims: ConcreteValueNode[] = [];
@@ -344,9 +344,7 @@ export class LowerPadLoopRecipe implements LoopLoweringRecipe {
         }
 
         const flatInIdx = buildLinearIndex(builder, inCoords, inStrides, `padi_lin_${op.id}`);
-        const [idxUnsq] = builder.createOp("Unsqueeze", [flatInIdx, axes]);
-        const [gathered] = builder.createOp("Gather", [flatData, idxUnsq], { axis: 0 });
-        const val = squeezeIfLen1(builder, gathered, axes, `padi_sq_${op.id}`) as ConcreteValueNode;
+        const val = gatherScalar(builder, flatData, flatInIdx);
 
         if (mode === "constant" && isInBounds !== null) {
             const constScalar = squeezeIfLen1(builder, rawConstVal, axes, `padi_cval_${op.id}`);

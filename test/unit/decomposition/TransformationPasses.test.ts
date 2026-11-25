@@ -4,6 +4,7 @@ import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
 import TensorNode from "../../../src/Onnx/TensorNode.js";
 import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import { IndexingMode } from "../../../src/DecompositionOptions.js";
 import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
 import { CanonicalizationPass } from "../../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
 import { InferShapesPass } from "../../../src/Onnx/transformation/InferShapesPass.js";
@@ -136,5 +137,37 @@ describe("Transformation Pipeline & Passes", () => {
                 .toArray()
                 .map((o) => o.type),
         ).not.toContain("Relu");
+    });
+
+    it("preserves outer tensors captured by Loop RegionArgumentNodes during DeadCodeEliminationPass", () => {
+        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const b = new GraphBuilder(g, "dce_capture");
+        const x = g
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        const [reluOut] = b.createOp("Relu", [x], {}, [{ type: DataType.FLOAT, shape: [2, 3] }]);
+        const [negOut] = b.createOp("Neg", [reluOut], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        if (negOut.is(TensorNode)) negOut.as(TensorNode).setType("output");
+
+        const out = new OnnxGraphTransformer({
+            canonicalize: true,
+            loopLowering: true,
+            fuse: true,
+            coalesce: true,
+            recurse: true,
+            optimize: true,
+            decomposeForCgra: false,
+            indexingMode: IndexingMode.Pointer,
+        }).apply(g, false);
+
+        const outerOps = out
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(outerOps).toContain("Loop");
+        expect(outerOps).toContain("Reshape");
     });
 });

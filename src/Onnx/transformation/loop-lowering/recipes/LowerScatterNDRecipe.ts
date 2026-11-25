@@ -17,8 +17,8 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -117,7 +117,7 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            false,
+            true,
             false,
             targetShapeNode,
             loopCtx,
@@ -129,7 +129,7 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            false,
+            true,
             false,
             targetShapeNode,
             loopCtx,
@@ -141,7 +141,7 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            false,
+            true,
             false,
             targetShapeNode,
             loopCtx,
@@ -235,14 +235,7 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
                 const jConst = builder.createConstant(`snd_j_${j}_${op.id}`, scalarInt64(j));
                 [elemIdxPos] = builder.createOp("Add", [idxTupleBase, jConst]);
             }
-            const [posUnsq] = builder.createOp("Unsqueeze", [elemIdxPos, axes]);
-            const [rawCoord] = builder.createOp("Gather", [flatIndices, posUnsq], { axis: 0 });
-            let coord = squeezeIfLen1(
-                builder,
-                rawCoord,
-                axes,
-                `snd_sqc_${j}_${op.id}`,
-            ) as ConcreteValueNode;
+            let coord = gatherScalar(builder, flatIndices, elemIdxPos);
             if (ins[1].literalType !== DataType.INT64) {
                 [coord] = builder.createOp("Cast", [coord], { to: DataType.INT64 });
             }
@@ -267,30 +260,14 @@ export class LowerScatterNDRecipe implements LoopLoweringRecipe {
         }
 
         // Gather copy value and update value
-        const [copyUnsq] = builder.createOp("Unsqueeze", [safeCopyIdx, axes]);
-        const [copyRaw] = builder.createOp("Gather", [flatData, copyUnsq], { axis: 0 });
-        const copyVal = squeezeIfLen1(
-            builder,
-            copyRaw,
-            axes,
-            `snd_sqd_${op.id}`,
-        ) as ConcreteValueNode;
-
-        const [updUnsq] = builder.createOp("Unsqueeze", [safeUpdIter, axes]);
-        const [updRaw] = builder.createOp("Gather", [flatUpdates, updUnsq], { axis: 0 });
-        let updVal = squeezeIfLen1(builder, updRaw, axes, `snd_squ_${op.id}`) as ConcreteValueNode;
+        const copyVal = gatherScalar(builder, flatData, safeCopyIdx);
+        let updVal = gatherScalar(builder, flatUpdates, safeUpdIter);
 
         const [writeIdx] = builder.createOp("Where", [isCopyPhase, safeCopyIdx, scatterTargetIdx]);
         const [writeIdxUnsq] = builder.createOp("Unsqueeze", [writeIdx, axes]);
 
         if (reduction !== "none") {
-            const [curRaw] = builder.createOp("Gather", [carryNode, writeIdxUnsq], { axis: 0 });
-            const curVal = squeezeIfLen1(
-                builder,
-                curRaw,
-                axes,
-                `snd_sqcur_${op.id}`,
-            ) as ConcreteValueNode;
+            const curVal = gatherScalar(builder, carryNode, writeIdx);
             const redOp =
                 reduction === "add"
                     ? "Add"

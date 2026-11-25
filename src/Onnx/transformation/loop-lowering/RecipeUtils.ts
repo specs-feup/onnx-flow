@@ -70,12 +70,19 @@ export function buildLinearIndex(
     return acc;
 }
 
+function asValueNode(node: BaseNode.Class): ValueNode {
+    if (node.is(TensorNode)) return node.as(TensorNode);
+    if (node.is(ConstantNode)) return node.as(ConstantNode);
+    if (node.is(RegionArgumentNode)) return node.as(RegionArgumentNode);
+    throw new Error(`Expected ValueNode for '${node.id}'`);
+}
+
 /**
  * Ensures an input in outerGraph is available inside innerGraph as a ValueNode.
  */
 export function ensureInnerValueNode(builder: GraphBuilder, d: ValueNode): ValueNode {
     if (builder.graph.hasNode(d.id)) {
-        return builder.graph.getNodeById(d.id) as ValueNode;
+        return asValueNode(builder.graph.getNodeById(d.id)!);
     }
     if (d.is(ConstantNode)) {
         const c = d.as(ConstantNode);
@@ -340,6 +347,18 @@ export function buildAguPointer(
 }
 
 /**
+ * Reads a single scalar (0D) element from a 1D tensor at a scalar 0D index,
+ * avoiding Unsqueeze/Squeeze wrapper ops around Gather.
+ */
+export function gatherScalar(
+    builder: GraphBuilder,
+    flatTensor: ValueNode,
+    scalarIdx: ConcreteValueNode,
+): ConcreteValueNode {
+    return builder.createOp("Gather", [flatTensor, scalarIdx], { axis: 0 })[0];
+}
+
+/**
  * Ensures an input is 1D by reshaping it if necessary.
  */
 export function ensureFlatInput(builder: GraphBuilder, t: ValueNode): ValueNode {
@@ -400,9 +419,47 @@ export function resolveRecipeInput(
     else if (input.is(RegionArgumentNode)) tOuter = input.as(RegionArgumentNode);
     else throw new Error(`Unhandled input case for ${input.id}`);
 
+    const wantsFlat =
+        flatten || (returnGather && ((tOuter.shape as Shape | undefined)?.length ?? 0) > 0);
+    if (
+        wantsFlat &&
+        loopCtx &&
+        !tOuter.is(RegionArgumentNode) &&
+        ((tOuter.shape as Shape | undefined)?.length ?? 0) > 1 &&
+        loopCtx.outerBuilder.graph.hasNode(tOuter.id)
+    ) {
+        const flatOuterKey = `__flat_outer_${tOuter.id}`;
+        let flatOuter = valueMap.get(flatOuterKey);
+        if (!flatOuter) {
+            flatOuter = ensureFlatInput(loopCtx.outerBuilder, tOuter);
+            valueMap.set(flatOuterKey, flatOuter);
+        }
+        const tInnerFlat = builder.graph.hasNode(flatOuter.id)
+            ? asValueNode(builder.graph.getNodeById(flatOuter.id)!)
+            : createCapturedInput(builder.graph, flatOuter);
+        if (!returnGather) {
+            valueMap.set(input.id, tInnerFlat);
+            return tInnerFlat;
+        }
+        // Keep shapeKey below using original tOuter dims, while gathering from tInnerFlat
+        const linScalar = resolveGatherScalarIndex(
+            builder,
+            tOuter,
+            valueMap,
+            iter,
+            axes,
+            outShape,
+            targetShapeNode,
+            loopCtx,
+        );
+        const finalScalar = gatherScalar(builder, tInnerFlat, linScalar);
+        valueMap.set(input.id, finalScalar);
+        return finalScalar;
+    }
+
     let tInner: ValueNode;
     if (builder.graph.hasNode(tOuter.id)) {
-        tInner = builder.graph.getNodeById(tOuter.id) as ValueNode;
+        tInner = asValueNode(builder.graph.getNodeById(tOuter.id)!);
     } else if (tOuter.is(ConstantNode)) {
         const c = tOuter.as(ConstantNode);
         tInner = builder.createConstant(c.id, c.constantValue);
@@ -419,202 +476,193 @@ export function resolveRecipeInput(
         return res;
     }
 
-    const inDimsStatic = toStaticShape(tInner.shape as Shape);
+    const linScalar = resolveGatherScalarIndex(
+        builder,
+        tInner,
+        valueMap,
+        iter,
+        axes,
+        outShape,
+        targetShapeNode,
+        loopCtx,
+    );
+    const flatT = ensureFlatInput(builder, tInner);
+    const finalScalar = gatherScalar(builder, flatT, linScalar);
+
+    valueMap.set(input.id, finalScalar);
+    return finalScalar;
+}
+
+function resolveGatherScalarIndex(
+    builder: GraphBuilder,
+    tRef: ValueNode,
+    valueMap: Map<string, ValueNode>,
+    iter: ConcreteValueNode,
+    axes: ConcreteValueNode,
+    outShape: KnownShape,
+    targetShapeNode?: ValueNode,
+    loopCtx?: LoopCarryContext,
+): ConcreteValueNode {
+    const inDimsStatic = toStaticShape(tRef.shape as Shape);
     const outDimsStatic = toStaticShape(outShape as Shape);
     const isDynamic = inDimsStatic.includes(-1) || outDimsStatic.includes(-1);
     const modeTag = loopCtx?.indexingMode ?? IndexingMode.Radix;
     const shapeKey = isDynamic
-        ? `__idx_cache_${modeTag}_dyn_${tInner.id}_to_out`
+        ? `__idx_cache_${modeTag}_dyn_${tRef.id}_to_out`
         : `__idx_cache_${modeTag}_${inDimsStatic.join(",")}_to_${outDimsStatic.join(",")}`;
 
-    let linU: ConcreteValueNode;
-
     if (valueMap.has(shapeKey)) {
-        linU = valueMap.get(shapeKey) as ConcreteValueNode;
-    } else {
-        const rO = outDimsStatic.length;
-        const rI = inDimsStatic.length;
-
-        const outDims: (number | ValueNode)[] = [...outDimsStatic];
-        let inDims: (number | ValueNode)[] = [...inDimsStatic];
-
-        if (isDynamic) {
-            const extractDims = (tensor: ValueNode, staticDims: number[], isOut: boolean) => {
-                const dims: (number | ValueNode)[] = [];
-                let shapeNode: ValueNode | null = null;
-                for (let i = 0; i < staticDims.length; i++) {
-                    if (staticDims[i] !== -1) {
-                        dims.push(staticDims[i]);
-                    } else {
-                        if (!shapeNode) {
-                            shapeNode = builder.createOp("Shape", [tensor])[0];
-                        }
-                        const iConst = builder.createConstant(
-                            `dim_idx_${isOut ? "out" : "in"}_${i}`,
-                            int64Vec([i]),
-                        );
-                        const [dimRaw] = builder.createOp("Gather", [shapeNode, iConst], {
-                            axis: 0,
-                        });
-                        dims.push(squeezeIfLen1(builder, dimRaw, axes, `sq_dim`));
-                    }
-                }
-                return dims;
-            };
-            inDims = extractDims(tInner, inDimsStatic, false);
-        }
-
-        const outRadix = outDims.map((d, i) => {
-            if (typeof d === "number") {
-                if (d > 0) return d;
-                if (targetShapeNode) {
-                    const innerTarget = ensureInnerValueNode(builder, targetShapeNode);
-                    const iConst = builder.createConstant(
-                        `dim_idx_out_${tInner.id}_${i}`,
-                        int64Vec([i]),
-                    );
-                    const [dimRaw] = builder.createOp("Gather", [innerTarget, iConst], {
-                        axis: 0,
-                    });
-                    const sqDim = squeezeIfLen1(
-                        builder,
-                        dimRaw,
-                        axes,
-                        `sq_dim_out_${tInner.id}_${i}`,
-                    );
-                    const oneConst = builder.createConstant(
-                        `one_max_${tInner.id}_${i}`,
-                        scalarInt64(1),
-                    );
-                    return builder.createOp("Max", [sqDim, oneConst])[0];
-                }
-                return 1;
-            }
-            const oneConst = builder.createConstant(`one`, scalarInt64(1));
-            return builder.createOp("Max", [d, oneConst])[0];
-        });
-
-        const inRadix = inDims.map((d) => {
-            if (typeof d === "number") return d > 0 ? d : 1;
-            const oneConst = builder.createConstant(`one`, scalarInt64(1));
-            return builder.createOp("Max", [d, oneConst])[0];
-        });
-
-        // Compute raw input strides
-        const inStrides: (number | ValueNode)[] = new Array(rI).fill(1);
-        let currentStride: ValueNode | number = 1;
-        for (let i = rI - 1; i >= 0; i--) {
-            inStrides[i] = currentStride;
-            if (i > 0) {
-                const dim = inRadix[i];
-                if (typeof currentStride === "number" && typeof dim === "number") {
-                    currentStride = currentStride * dim;
-                } else {
-                    const cNode =
-                        typeof currentStride === "number"
-                            ? builder.createConstant(`cs_${i}`, scalarInt64(currentStride))
-                            : currentStride;
-                    const dNode =
-                        typeof dim === "number"
-                            ? builder.createConstant(`cd_${i}`, scalarInt64(dim))
-                            : (dim as ValueNode);
-                    [currentStride] = builder.createOp("Mul", [cNode, dNode]);
-                }
-            }
-        }
-
-        let linScalar: ConcreteValueNode;
-
-        // --- BRANCH: POINTER MATH vs RADIX ---
-        if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
-            // Align input strides to the output iteration space (broadcasted dims get stride 0)
-            const alignedStrides: (number | ValueNode)[] = new Array(rO).fill(0);
-            for (let k = 0; k < rI; k++) {
-                const outPos = rO - rI + k;
-                if (outPos < 0) continue;
-                const inDim = inRadix[k];
-                if (typeof inDim === "number") {
-                    alignedStrides[outPos] = inDim === 1 ? 0 : inStrides[k];
-                } else {
-                    const oneConst = builder.createConstant(
-                        `agu_bcast_1_${tInner.id}_${k}`,
-                        scalarInt64(1),
-                    );
-                    const zeroConst = builder.createConstant(
-                        `agu_bcast_0_${tInner.id}_${k}`,
-                        scalarInt64(0),
-                    );
-                    const [isOne] = builder.createOp("Equal", [inDim, oneConst]);
-                    const sNode =
-                        typeof inStrides[k] === "number"
-                            ? builder.createConstant(
-                                  `agu_s_val_${tInner.id}_${k}`,
-                                  scalarInt64(inStrides[k] as number),
-                              )
-                            : (inStrides[k] as ValueNode);
-                    const [effStride] = builder.createOp("Where", [isOne, zeroConst, sNode]);
-                    alignedStrides[outPos] = effStride;
-                }
-            }
-
-            linScalar = buildAguPointer(
-                builder,
-                loopCtx,
-                valueMap,
-                outRadix,
-                alignedStrides,
-                `in_${tInner.id}`,
-            );
-        } else {
-            // Legacy Radix Mode
-            const oDigits = decodeMixedRadix(builder, iter, outRadix, `gb_out_${tInner.id}`);
-            const iDigits: ConcreteValueNode[] = [];
-            for (let k = 0; k < rI; k++) {
-                const inDim = inRadix[k];
-                const outPos = rO - rI + k;
-                if (outPos < 0) {
-                    iDigits.push(
-                        builder.createConstant(`gb_zero_${tInner.id}_${k}`, scalarInt64(0)),
-                    );
-                } else if (typeof inDim === "number") {
-                    if (inDim === 1) {
-                        iDigits.push(
-                            builder.createConstant(`gb_zero_${tInner.id}_${k}`, scalarInt64(0)),
-                        );
-                    } else {
-                        iDigits.push(oDigits[outPos]);
-                    }
-                } else {
-                    const oneConst = builder.createConstant(
-                        `gb_one_${tInner.id}_${k}`,
-                        scalarInt64(1),
-                    );
-                    const zeroConst = builder.createConstant(
-                        `gb_zero_${tInner.id}_${k}`,
-                        scalarInt64(0),
-                    );
-                    const [isOne] = builder.createOp("Equal", [inDim, oneConst]);
-                    const [bcastIdx] = builder.createOp("Where", [
-                        isOne,
-                        zeroConst,
-                        oDigits[outPos],
-                    ]);
-                    iDigits.push(bcastIdx as ConcreteValueNode);
-                }
-            }
-            linScalar = buildLinearIndex(builder, iDigits, inStrides, `gb_lin_${tInner.id}`);
-        }
-
-        [linU] = builder.createOp("Unsqueeze", [linScalar, axes]);
-        valueMap.set(shapeKey, linU);
+        return valueMap.get(shapeKey) as ConcreteValueNode;
     }
 
-    const flatT = ensureFlatInput(builder, tInner);
-    const [gathered] = builder.createOp("Gather", [flatT, linU], { axis: 0 });
-    const finalScalar = squeezeIfLen1(builder, gathered, axes, `gb_sq_${tInner.id}`);
+    const rO = outDimsStatic.length;
+    const rI = inDimsStatic.length;
 
-    valueMap.set(input.id, finalScalar);
-    return finalScalar;
+    const outDims: (number | ValueNode)[] = [...outDimsStatic];
+    let inDims: (number | ValueNode)[] = [...inDimsStatic];
+
+    if (isDynamic) {
+        const extractDims = (tensor: ValueNode, staticDims: number[], isOut: boolean) => {
+            const innerTensor = ensureInnerValueNode(builder, tensor);
+            const dims: (number | ValueNode)[] = [];
+            let shapeNode: ValueNode | null = null;
+            for (let i = 0; i < staticDims.length; i++) {
+                if (staticDims[i] !== -1) {
+                    dims.push(staticDims[i]);
+                } else {
+                    if (!shapeNode) {
+                        shapeNode = builder.createOp("Shape", [innerTensor])[0];
+                    }
+                    const iConst = builder.createConstant(
+                        `dim_idx_${isOut ? "out" : "in"}_${i}`,
+                        scalarInt64(i),
+                    );
+                    dims.push(gatherScalar(builder, shapeNode, iConst));
+                }
+            }
+            return dims;
+        };
+        inDims = extractDims(tRef, inDimsStatic, false);
+    }
+
+    const outRadix = outDims.map((d, i) => {
+        if (typeof d === "number") {
+            if (d > 0) return d;
+            if (targetShapeNode) {
+                const innerTarget = ensureInnerValueNode(builder, targetShapeNode);
+                const iConst = builder.createConstant(
+                    `dim_idx_out_${tRef.id}_${i}`,
+                    scalarInt64(i),
+                );
+                const sqDim = gatherScalar(builder, innerTarget, iConst);
+                const oneConst = builder.createConstant(`one_max_${tRef.id}_${i}`, scalarInt64(1));
+                return builder.createOp("Max", [sqDim, oneConst])[0];
+            }
+            return 1;
+        }
+        const oneConst = builder.createConstant(`one`, scalarInt64(1));
+        return builder.createOp("Max", [d, oneConst])[0];
+    });
+
+    const inRadix = inDims.map((d) => {
+        if (typeof d === "number") return d > 0 ? d : 1;
+        const oneConst = builder.createConstant(`one`, scalarInt64(1));
+        return builder.createOp("Max", [d, oneConst])[0];
+    });
+
+    // Compute raw input strides
+    const inStrides: (number | ValueNode)[] = new Array(rI).fill(1);
+    let currentStride: ValueNode | number = 1;
+    for (let i = rI - 1; i >= 0; i--) {
+        inStrides[i] = currentStride;
+        if (i > 0) {
+            const dim = inRadix[i];
+            if (typeof currentStride === "number" && typeof dim === "number") {
+                currentStride = currentStride * dim;
+            } else {
+                const cNode =
+                    typeof currentStride === "number"
+                        ? builder.createConstant(`cs_${i}`, scalarInt64(currentStride))
+                        : currentStride;
+                const dNode =
+                    typeof dim === "number"
+                        ? builder.createConstant(`cd_${i}`, scalarInt64(dim))
+                        : (dim as ValueNode);
+                [currentStride] = builder.createOp("Mul", [cNode, dNode]);
+            }
+        }
+    }
+
+    let linScalar: ConcreteValueNode;
+
+    // --- BRANCH: POINTER MATH vs RADIX ---
+    if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
+        // Align input strides to the output iteration space (broadcasted dims get stride 0)
+        const alignedStrides: (number | ValueNode)[] = new Array(rO).fill(0);
+        for (let k = 0; k < rI; k++) {
+            const outPos = rO - rI + k;
+            if (outPos < 0) continue;
+            const inDim = inRadix[k];
+            if (typeof inDim === "number") {
+                alignedStrides[outPos] = inDim === 1 ? 0 : inStrides[k];
+            } else {
+                const oneConst = builder.createConstant(
+                    `agu_bcast_1_${tRef.id}_${k}`,
+                    scalarInt64(1),
+                );
+                const zeroConst = builder.createConstant(
+                    `agu_bcast_0_${tRef.id}_${k}`,
+                    scalarInt64(0),
+                );
+                const [isOne] = builder.createOp("Equal", [inDim, oneConst]);
+                const sNode =
+                    typeof inStrides[k] === "number"
+                        ? builder.createConstant(
+                              `agu_s_val_${tRef.id}_${k}`,
+                              scalarInt64(inStrides[k] as number),
+                          )
+                        : (inStrides[k] as ValueNode);
+                const [effStride] = builder.createOp("Where", [isOne, zeroConst, sNode]);
+                alignedStrides[outPos] = effStride;
+            }
+        }
+
+        linScalar = buildAguPointer(
+            builder,
+            loopCtx,
+            valueMap,
+            outRadix,
+            alignedStrides,
+            `in_${tRef.id}`,
+        );
+    } else {
+        // Legacy Radix Mode
+        const oDigits = decodeMixedRadix(builder, iter, outRadix, `gb_out_${tRef.id}`);
+        const iDigits: ConcreteValueNode[] = [];
+        for (let k = 0; k < rI; k++) {
+            const inDim = inRadix[k];
+            const outPos = rO - rI + k;
+            if (outPos < 0) {
+                iDigits.push(builder.createConstant(`gb_zero_${tRef.id}_${k}`, scalarInt64(0)));
+            } else if (typeof inDim === "number") {
+                if (inDim === 1) {
+                    iDigits.push(builder.createConstant(`gb_zero_${tRef.id}_${k}`, scalarInt64(0)));
+                } else {
+                    iDigits.push(oDigits[outPos]);
+                }
+            } else {
+                const oneConst = builder.createConstant(`gb_one_${tRef.id}_${k}`, scalarInt64(1));
+                const zeroConst = builder.createConstant(`gb_zero_${tRef.id}_${k}`, scalarInt64(0));
+                const [isOne] = builder.createOp("Equal", [inDim, oneConst]);
+                const [bcastIdx] = builder.createOp("Where", [isOne, zeroConst, oDigits[outPos]]);
+                iDigits.push(bcastIdx as ConcreteValueNode);
+            }
+        }
+        linScalar = buildLinearIndex(builder, iDigits, inStrides, `gb_lin_${tRef.id}`);
+    }
+
+    valueMap.set(shapeKey, linScalar);
+    return linScalar;
 }
 
 export function squeezeIfLen1(

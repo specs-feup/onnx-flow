@@ -23,9 +23,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -147,14 +147,7 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
         }
 
         // seqLen = sequence_lens[batchCoord]
-        const [bUnsq] = builder.createOp("Unsqueeze", [batchCoord, axes]);
-        const [lenRaw] = builder.createOp("Gather", [flatLens, bUnsq], { axis: 0 });
-        let seqLen = squeezeIfLen1(
-            builder,
-            lenRaw,
-            axes,
-            `rs_sq_len_${op.id}`,
-        ) as ConcreteValueNode;
+        let seqLen = gatherScalar(builder, flatLens, batchCoord);
         if (ins[1].literalType !== DataType.INT64) {
             [seqLen] = builder.createOp("Cast", [seqLen], { to: DataType.INT64 });
         }
@@ -174,8 +167,6 @@ export class LowerReverseSequenceRecipe implements LoopLoweringRecipe {
         }
         const [flatSrcIdx] = builder.createOp("Add", [basePtr, timeOffset]);
 
-        const [srcUnsq] = builder.createOp("Unsqueeze", [flatSrcIdx, axes]);
-        const [gathered] = builder.createOp("Gather", [flatIn, srcUnsq], { axis: 0 });
-        return squeezeIfLen1(builder, gathered, axes, `rs_sq_out_${op.id}`);
+        return gatherScalar(builder, flatIn, flatSrcIdx);
     }
 }

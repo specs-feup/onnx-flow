@@ -24,7 +24,7 @@ import {
     resolveRecipeInput,
     buildLinearIndex,
     decodeMixedRadix,
-    squeezeIfLen1,
+    gatherScalar,
     buildAguPointer,
     getOrCreateIterationSpaceCounters,
 } from "../RecipeUtils.js";
@@ -189,12 +189,7 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
                     scalarInt64(offsetFromEnd),
                 );
                 const [targetAxis] = builder.createOp("Add", [rankNode, offsetNode]);
-                const [dimRaw] = builder.createOp(
-                    "Gather",
-                    [shapeNode, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
-                    { axis: 0 },
-                );
-                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+                return gatherScalar(builder, shapeNode, targetAxis);
             };
 
             const [rankA] = builder.createOp("Size", [builder.createOp("Shape", [tInnerA])[0]]);

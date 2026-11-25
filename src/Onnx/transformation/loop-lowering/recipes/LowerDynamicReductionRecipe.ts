@@ -21,9 +21,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import ConstantNode from "../../../ConstantNode.js";
@@ -181,11 +181,8 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
 
         const inDims: ConcreteValueNode[] = [];
         for (let d = 0; d < rank; d++) {
-            const dIdx = builder.createConstant(`dredi_d_${op.id}_${d}`, int64Vec([d]));
-            const [rawD] = builder.createOp("Gather", [shapeIn, dIdx], { axis: 0 });
-            inDims.push(
-                squeezeIfLen1(builder, rawD, axes, `dredi_sqd_${op.id}_${d}`) as ConcreteValueNode,
-            );
+            const dIdx = builder.createConstant(`dredi_d_${op.id}_${d}`, scalarInt64(d));
+            inDims.push(gatherScalar(builder, shapeIn, dIdx));
         }
 
         let readIdx: ConcreteValueNode = iter;
@@ -213,14 +210,7 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
             inCoords = decodeMixedRadix(builder, iter, inDims, `dredi_dec_${op.id}`);
         }
 
-        const [readIdxUnsq] = builder.createOp("Unsqueeze", [readIdx, axes]);
-        const [gatheredOut] = builder.createOp("Gather", [flatInput, readIdxUnsq], { axis: 0 });
-        let val = squeezeIfLen1(
-            builder,
-            gatheredOut,
-            axes,
-            `dredi_sq_in_${op.id}`,
-        ) as ConcreteValueNode;
+        let val = gatherScalar(builder, flatInput, readIdx);
 
         // Pre-processing for specialized reductions
         if (op.type === "ReduceLogSumExp") [val] = builder.createOp("Exp", [val]);
@@ -265,13 +255,7 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
         const flatOutIdx = buildLinearIndex(builder, outCoords, accStrides, `dredi_out_${op.id}`);
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
-        const [gAccOut] = builder.createOp("Gather", [carryNode, flatOutIdxUnsq], { axis: 0 });
-        const currentAcc = squeezeIfLen1(
-            builder,
-            gAccOut,
-            axes,
-            `dredi_sq_acc_${op.id}`,
-        ) as ConcreteValueNode;
+        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         let mathOpType = "Add";
         if (op.type === "ReduceMax") mathOpType = "Max";

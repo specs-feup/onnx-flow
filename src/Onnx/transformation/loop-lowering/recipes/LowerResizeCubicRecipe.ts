@@ -27,9 +27,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -193,9 +193,7 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
         }
 
         if (resizedAxes.length === 0) {
-            const [idxUnsq] = builder.createOp("Unsqueeze", [basePtr, axes]);
-            const [raw] = builder.createOp("Gather", [flatX, idxUnsq], { axis: 0 });
-            return squeezeIfLen1(builder, raw, axes, `rzc_sq0_${op.id}`);
+            return gatherScalar(builder, flatX, basePtr);
         }
 
         const cF = (tag: string, v: number) =>
@@ -319,15 +317,8 @@ export class LowerResizeCubicRecipe implements LoopLoweringRecipe {
             return { offsets, weights };
         });
 
-        const gatherAt = (idx: ConcreteValueNode, tag: string): ConcreteValueNode => {
-            const [u] = builder.createOp("Unsqueeze", [idx, axes]);
-            const [g] = builder.createOp("Gather", [flatX, u], { axis: 0 });
-            const sq = squeezeIfLen1(
-                builder,
-                g,
-                axes,
-                `rzc_sq_${tag}_${op.id}`,
-            ) as ConcreteValueNode;
+        const gatherAt = (idx: ConcreteValueNode, _tag: string): ConcreteValueNode => {
+            const sq = gatherScalar(builder, flatX, idx);
             return dtype === DataType.FLOAT
                 ? sq
                 : builder.createOp("Cast", [sq], { to: DataType.FLOAT })[0];

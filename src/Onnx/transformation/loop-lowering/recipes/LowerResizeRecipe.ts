@@ -26,9 +26,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -262,16 +262,12 @@ export class LowerResizeRecipe implements LoopLoweringRecipe {
                 [flatInIdx] = builder.createOp("Add", [flatInIdx, term]);
             }
 
-            const [idxUnsq] = builder.createOp("Unsqueeze", [flatInIdx, axes]);
-            const [raw] = builder.createOp("Gather", [flatX, idxUnsq], { axis: 0 });
-            return squeezeIfLen1(builder, raw, axes, `rz_sqn_${op.id}`);
+            return gatherScalar(builder, flatX, flatInIdx);
         }
 
         // Linear / Bilinear interpolation across 0, 1, or 2 resized axes
         if (resizedAxes.length === 0) {
-            const [idxUnsq] = builder.createOp("Unsqueeze", [basePtr, axes]);
-            const [raw] = builder.createOp("Gather", [flatX, idxUnsq], { axis: 0 });
-            return squeezeIfLen1(builder, raw, axes, `rz_sq0_${op.id}`);
+            return gatherScalar(builder, flatX, basePtr);
         }
 
         const axisInfo = resizedAxes.map((d) => {
@@ -311,15 +307,8 @@ export class LowerResizeRecipe implements LoopLoweringRecipe {
             };
         });
 
-        const gatherAt = (idx: ConcreteValueNode, tag: string): ConcreteValueNode => {
-            const [u] = builder.createOp("Unsqueeze", [idx, axes]);
-            const [g] = builder.createOp("Gather", [flatX, u], { axis: 0 });
-            const sq = squeezeIfLen1(
-                builder,
-                g,
-                axes,
-                `rz_sql_${tag}_${op.id}`,
-            ) as ConcreteValueNode;
+        const gatherAt = (idx: ConcreteValueNode, _tag: string): ConcreteValueNode => {
+            const sq = gatherScalar(builder, flatX, idx);
             return dtype === DataType.FLOAT
                 ? sq
                 : builder.createOp("Cast", [sq], { to: DataType.FLOAT })[0];

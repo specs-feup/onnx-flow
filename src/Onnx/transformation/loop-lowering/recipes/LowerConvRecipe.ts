@@ -20,9 +20,9 @@ import type {
 } from "../LoopLoweringRecipe.js";
 import {
     buildAguPointer,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -194,18 +194,12 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
                     scalarInt64(offsetFromEnd),
                 );
                 const [targetAxis] = builder.createOp("Add", [rankX, offsetNode]);
-                const [dimRaw] = builder.createOp(
-                    "Gather",
-                    [shapeX, builder.createOp("Unsqueeze", [targetAxis, axes])[0]],
-                    { axis: 0 },
-                );
-                return squeezeIfLen1(builder, dimRaw, axes, `${tag}_sq`);
+                return gatherScalar(builder, shapeX, targetAxis);
             };
 
             if (inputs[0].shape[0] === -1 || typeof inputs[0].shape[0] === "string") {
-                const zeroIdx = builder.createConstant(`batch_idx_0`, int64Vec([0]));
-                const [bRaw] = builder.createOp("Gather", [shapeX, zeroIdx], { axis: 0 });
-                N_batch = squeezeIfLen1(builder, bRaw, axes, `N_batch_sq`);
+                const zeroIdx = builder.createConstant(`batch_idx_0`, scalarInt64(0));
+                N_batch = gatherScalar(builder, shapeX, zeroIdx);
             }
             if (inputs[0].shape[2] === -1 || typeof inputs[0].shape[2] === "string") {
                 H = getSpatialDim(-2, "H");
@@ -445,8 +439,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         // 7. Final bias addition
         let finalScalar = sumOut;
         if (B_bias) {
-            const [gBiasOut] = builder.createOp("Gather", [B_bias, mIdxUnsq], { axis: 0 });
-            const biasSq = squeezeIfLen1(builder, gBiasOut, axes, `sqBias`);
+            const biasSq = gatherScalar(builder, B_bias, mIdx);
             [finalScalar] = builder.createOp("Add", [sumOut, biasSq]);
         }
 

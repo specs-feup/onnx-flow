@@ -17,8 +17,8 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -184,14 +184,7 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
                 [elemIdxPos] = builder.createOp("Add", [idxTupleBase, jConst]);
             }
 
-            const [posUnsq] = builder.createOp("Unsqueeze", [elemIdxPos, axes]);
-            const [rawCoord] = builder.createOp("Gather", [flatIndices, posUnsq], { axis: 0 });
-            let coord = squeezeIfLen1(
-                builder,
-                rawCoord,
-                axes,
-                `gnd_sq_c_${j}_${op.id}`,
-            ) as ConcreteValueNode;
+            let coord = gatherScalar(builder, flatIndices, elemIdxPos);
 
             if (ins[1].literalType !== DataType.INT64) {
                 [coord] = builder.createOp("Cast", [coord], { to: DataType.INT64 });
@@ -218,8 +211,6 @@ export class LowerGatherNDRecipe implements LoopLoweringRecipe {
             [dataIdx] = builder.createOp("Add", [dataIdx, term]);
         }
 
-        const [dataIdxUnsq] = builder.createOp("Unsqueeze", [dataIdx, axes]);
-        const [gathered] = builder.createOp("Gather", [flatData, dataIdxUnsq], { axis: 0 });
-        return squeezeIfLen1(builder, gathered, axes, `gnd_sq_out_${op.id}`);
+        return gatherScalar(builder, flatData, dataIdx);
     }
 }

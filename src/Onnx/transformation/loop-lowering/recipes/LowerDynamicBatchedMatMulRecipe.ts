@@ -17,9 +17,9 @@ import {
     decodeMixedRadix,
     ensureFlatInput,
     ensureInnerValueNode,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -175,9 +175,8 @@ export class LowerDynamicBatchedMatMulRecipe implements LoopLoweringRecipe {
     ): ConcreteValueNode[] {
         const dims: ConcreteValueNode[] = [];
         for (let d = 0; d < rank; d++) {
-            const dIdx = builder.createConstant(`${prefix}_idx_${d}`, int64Vec([d]));
-            const [rawD] = builder.createOp("Gather", [shapeNode, dIdx], { axis: 0 });
-            dims.push(squeezeIfLen1(builder, rawD, axes, `${prefix}_sq_${d}`) as ConcreteValueNode);
+            const dIdx = builder.createConstant(`${prefix}_idx_${d}`, scalarInt64(d));
+            dims.push(gatherScalar(builder, shapeNode, dIdx));
         }
         return dims;
     }
@@ -320,34 +319,13 @@ export class LowerDynamicBatchedMatMulRecipe implements LoopLoweringRecipe {
         const flatBIdx = buildLinearIndex(builder, coordsB, stridesB, `dbmm_blin_${op.id}`);
 
         // 4. Gather A, B and accumulate into self-carry output buffer
-        const [aUnsq] = builder.createOp("Unsqueeze", [flatAIdx, axes]);
-        const [rawValA] = builder.createOp("Gather", [flatA, aUnsq], { axis: 0 });
-        const valA = squeezeIfLen1(
-            builder,
-            rawValA,
-            axes,
-            `dbmm_sqa_${op.id}`,
-        ) as ConcreteValueNode;
-
-        const [bUnsq] = builder.createOp("Unsqueeze", [flatBIdx, axes]);
-        const [rawValB] = builder.createOp("Gather", [flatB, bUnsq], { axis: 0 });
-        const valB = squeezeIfLen1(
-            builder,
-            rawValB,
-            axes,
-            `dbmm_sqb_${op.id}`,
-        ) as ConcreteValueNode;
+        const valA = gatherScalar(builder, flatA, flatAIdx);
+        const valB = gatherScalar(builder, flatB, flatBIdx);
 
         const [prod] = builder.createOp("Mul", [valA, valB]);
 
         const [outUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const [rawPrev] = builder.createOp("Gather", [carryNode, outUnsq], { axis: 0 });
-        const prevAcc = squeezeIfLen1(
-            builder,
-            rawPrev,
-            axes,
-            `dbmm_sqacc_${op.id}`,
-        ) as ConcreteValueNode;
+        const prevAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         const [sumAcc] = builder.createOp("Add", [prevAcc, prod]);
         const [isFirstK] = builder.createOp("Equal", [kCoord, zeroI64]);

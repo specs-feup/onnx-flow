@@ -27,9 +27,9 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -157,7 +157,7 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            false,
+            true,
             false,
             targetShapeNode,
             loopCtx,
@@ -278,19 +278,11 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
             [flatInIdx] = builder.createOp("Add", [flatInIdx, term]);
         }
 
-        const [inUnsq] = builder.createOp("Unsqueeze", [flatInIdx, axes]);
-        const [rawVal] = builder.createOp("Gather", [flatX, inUnsq], { axis: 0 });
-        const xVal = squeezeIfLen1(builder, rawVal, axes, `mp_sqx_${op.id}`) as ConcreteValueNode;
+        const xVal = gatherScalar(builder, flatX, flatInIdx);
         const [effVal] = builder.createOp("Where", [isValid!, xVal, negInf]);
 
         const [outUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const [accRaw] = builder.createOp("Gather", [carryNode, outUnsq], { axis: 0 });
-        const prevAcc = squeezeIfLen1(
-            builder,
-            accRaw,
-            axes,
-            `mp_sqa_${op.id}`,
-        ) as ConcreteValueNode;
+        const prevAcc = gatherScalar(builder, carryNode, flatOutIdx);
 
         const [baseAcc] = builder.createOp("Where", [isFirstTap!, negInf, prevAcc]);
         const [newMax] = builder.createOp("Max", [baseAcc, effVal]);

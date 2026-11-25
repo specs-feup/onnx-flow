@@ -17,9 +17,9 @@ import {
     decodeMixedRadix,
     ensureFlatInput,
     ensureInnerValueNode,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -150,7 +150,7 @@ export class LowerOneHotLoopRecipe implements LoopLoweringRecipe {
             iter,
             axes,
             outShape,
-            false,
+            idxRank > 0,
             false,
             targetShapeNode,
             loopCtx,
@@ -171,11 +171,8 @@ export class LowerOneHotLoopRecipe implements LoopLoweringRecipe {
         const innerTargetShape = ensureInnerValueNode(builder, targetShapeNode!);
         const outDims: ConcreteValueNode[] = [];
         for (let d = 0; d < outRank; d++) {
-            const dIdx = builder.createConstant(`ohi_d_${op.id}_${d}`, int64Vec([d]));
-            const [rawD] = builder.createOp("Gather", [innerTargetShape, dIdx], { axis: 0 });
-            outDims.push(
-                squeezeIfLen1(builder, rawD, axes, `ohi_sqd_${op.id}_${d}`) as ConcreteValueNode,
-            );
+            const dIdx = builder.createConstant(`ohi_d_${op.id}_${d}`, scalarInt64(d));
+            outDims.push(gatherScalar(builder, innerTargetShape, dIdx));
         }
 
         const outCoords: ConcreteValueNode[] =
@@ -214,9 +211,7 @@ export class LowerOneHotLoopRecipe implements LoopLoweringRecipe {
             }
 
             const flatIdxPos = buildLinearIndex(builder, idxCoords, idxStrides, `ohi_lin_${op.id}`);
-            const [posUnsq] = builder.createOp("Unsqueeze", [flatIdxPos, axes]);
-            const [rawIdx] = builder.createOp("Gather", [flatIndices, posUnsq], { axis: 0 });
-            idxVal = squeezeIfLen1(builder, rawIdx, axes, `ohi_sqi_${op.id}`) as ConcreteValueNode;
+            idxVal = gatherScalar(builder, flatIndices, flatIdxPos);
         }
 
         if (ins[0].literalType !== DataType.INT64) {

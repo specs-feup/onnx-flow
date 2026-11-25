@@ -23,8 +23,8 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    gatherScalar,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -166,8 +166,6 @@ export class LowerGatherElementsRecipe implements LoopLoweringRecipe {
         }
         const [flatDataIdx] = builder.createOp("Add", [basePtr, axisOff]);
 
-        const [idxUnsq] = builder.createOp("Unsqueeze", [flatDataIdx, axes]);
-        const [gathered] = builder.createOp("Gather", [flatData, idxUnsq], { axis: 0 });
-        return squeezeIfLen1(builder, gathered, axes, `ge_sq_${op.id}`);
+        return gatherScalar(builder, flatData, flatDataIdx);
     }
 }

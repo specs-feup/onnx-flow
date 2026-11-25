@@ -17,9 +17,9 @@ import {
     decodeMixedRadix,
     ensureFlatInput,
     ensureInnerValueNode,
+    gatherScalar,
     getOrCreateIterationSpaceCounters,
     resolveRecipeInput,
-    squeezeIfLen1,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -124,9 +124,8 @@ export class LowerTileLoopRecipe implements LoopLoweringRecipe {
         const flatIn = ensureFlatInput(builder, rawIn);
 
         const gatherElem = (vec: ValueNode, idx: number, tag: string): ConcreteValueNode => {
-            const idxC = builder.createConstant(`${tag}_${idx}`, int64Vec([idx]));
-            const [raw] = builder.createOp("Gather", [vec, idxC], { axis: 0 });
-            return squeezeIfLen1(builder, raw, axes, `${tag}_sq_${idx}`) as ConcreteValueNode;
+            const idxC = builder.createConstant(`${tag}_${idx}`, scalarInt64(idx));
+            return gatherScalar(builder, vec, idxC);
         };
 
         const inDims: ConcreteValueNode[] = [];
@@ -187,8 +186,6 @@ export class LowerTileLoopRecipe implements LoopLoweringRecipe {
         }
 
         const flatInIdx = buildLinearIndex(builder, inCoords, inStrides, `tl_lin_${op.id}`);
-        const [idxUnsq] = builder.createOp("Unsqueeze", [flatInIdx, axes]);
-        const [gathered] = builder.createOp("Gather", [flatIn, idxUnsq], { axis: 0 });
-        return squeezeIfLen1(builder, gathered, axes, `tl_sq_${op.id}`);
+        return gatherScalar(builder, flatIn, flatInIdx);
     }
 }
