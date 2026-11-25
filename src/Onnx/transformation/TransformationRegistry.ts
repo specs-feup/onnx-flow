@@ -18,7 +18,7 @@ export class TransformationRegistry {
         for (const op of ops) {
             if (!graph.hasNode(op.id)) continue;
 
-            const schema = schemaRegistry.get(op.type, 19);
+            const schema = schemaRegistry.get(op.type, graph.getTargetOpset());
             const category = schema?.category;
 
             for (const recipe of this.recipes) {

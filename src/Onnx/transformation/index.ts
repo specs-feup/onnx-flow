@@ -26,6 +26,8 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     private decomposeForCgra: boolean;
     private indexingMode: IndexingMode;
     private tileSize?: number | undefined;
+    private targetOpset?: number | undefined;
+    private irVersion?: number | undefined;
 
     // Overload signatures (for TypeScript type checking)
     constructor();
@@ -77,11 +79,19 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.indexingMode =
                 fuseOrOptions.indexingMode ?? defaultDecompositionOptions.indexingMode;
             this.tileSize = fuseOrOptions.tileSize ?? defaultDecompositionOptions.tileSize;
+            this.targetOpset = fuseOrOptions.targetOpset;
+            this.irVersion = fuseOrOptions.irVersion;
         }
     }
 
     apply(graph: OnnxGraph.Class, printSummary: boolean = true): OnnxGraph.Class {
         initializeSchemaRegistry();
+        if (this.targetOpset !== undefined) {
+            graph.setTargetOpset(this.targetOpset, true);
+        }
+        if (this.irVersion !== undefined) {
+            graph.setIrVersion(this.irVersion, true);
+        }
         const pm = new PassManager();
         const historyManager = new HistoryManager(graph);
 

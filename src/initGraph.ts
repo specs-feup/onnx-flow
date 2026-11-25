@@ -5,6 +5,7 @@ import type {
     AttributeMap,
     KnownDim,
     KnownShape,
+    OpsetImport,
     RawOnnxAttribute,
     RawOnnxDim,
     RawOnnxModel,
@@ -16,6 +17,7 @@ import type {
     ValueNode,
 } from "./Onnx/OnnxTypes.js";
 import { AttributeType, DataType } from "./Onnx/OnnxTypes.js";
+import { LATEST_ONNX_OPSET } from "./Onnx/utils/Constants.js";
 import inferShapes from "./Onnx/InferShapes.js";
 import { applyAdapters } from "./Onnx/Frontend/Adapters.js";
 import ConstantNode from "./Onnx/ConstantNode.js";
@@ -379,11 +381,48 @@ function addNodes(
     return captures;
 }
 
+interface GraphVersionMeta {
+    irVersion?: number;
+    opsetImport?: OpsetImport[];
+    sourceOpset?: number;
+    targetOpset?: number;
+}
+
 function createGraphWithCaptures(
     data: RawOnnxModel,
     parentGraph?: OnnxGraph.Class,
+    versionMeta?: GraphVersionMeta,
 ): { graph: OnnxGraph.Class; captures: string[] } {
-    const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const builderOpts: { targetOpset?: number; irVersion?: number } = {};
+    if (versionMeta?.targetOpset !== undefined) {
+        builderOpts.targetOpset = versionMeta.targetOpset;
+    } else if (parentGraph?.hasExplicitTargetOpset() === true) {
+        builderOpts.targetOpset = parentGraph.getTargetOpset();
+    }
+    if (parentGraph?.hasExplicitIrVersion() === true) {
+        builderOpts.irVersion = parentGraph.getIrVersion();
+    }
+
+    const graph = Graph.create().init(new OnnxGraph.Builder(builderOpts)).as(OnnxGraph);
+
+    if (!parentGraph) {
+        if (versionMeta?.irVersion !== undefined) {
+            graph.setIrVersion(versionMeta.irVersion, false);
+        }
+    } else if (!parentGraph.hasExplicitIrVersion()) {
+        graph.setIrVersion(parentGraph.getIrVersion(), false);
+    }
+
+    const opsetImport = versionMeta?.opsetImport ?? parentGraph?.getOpsetImport();
+    if (opsetImport && opsetImport.length > 0) {
+        graph.setOpsetImport(opsetImport);
+    }
+
+    const sourceOpset = versionMeta?.sourceOpset ?? parentGraph?.getSourceOpset();
+    if (sourceOpset !== undefined) {
+        graph.setSourceOpset(sourceOpset);
+    }
+
     const builder = new GraphBuilder(graph);
 
     addInitializers(data, graph);
@@ -398,7 +437,26 @@ function createGraphWithCaptures(
     return { graph, captures };
 }
 
-export function createGraph(data: RawOnnxModel): OnnxGraph.Class {
+export function createGraph(data: RawOnnxModel, targetOpset?: number): OnnxGraph.Class {
+    const rawIr = data.irVersion ?? data.ir_version;
+    const irVersion = rawIr !== undefined ? Number(rawIr) : undefined;
+    const rawOpsets = data.opsetImport ?? data.opset_import;
+    const opsetImport: OpsetImport[] | undefined = rawOpsets?.map((o) => ({
+        domain: o.domain ?? "",
+        version: Number(o.version ?? LATEST_ONNX_OPSET),
+    }));
+    const sourceOpset = opsetImport?.find(
+        (o) => o.domain === "" || o.domain === "ai.onnx",
+    )?.version;
+
     applyAdapters(data);
-    return createGraphWithCaptures(data, undefined).graph;
+
+    const versionMeta: GraphVersionMeta = {
+        ...(irVersion !== undefined ? { irVersion } : {}),
+        ...(opsetImport !== undefined ? { opsetImport } : {}),
+        ...(sourceOpset !== undefined ? { sourceOpset } : {}),
+        ...(targetOpset !== undefined ? { targetOpset } : {}),
+    };
+
+    return createGraphWithCaptures(data, undefined, versionMeta).graph;
 }

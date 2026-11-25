@@ -30,6 +30,12 @@ export interface DecompositionOptions {
 
     /** Optional loop tiling (strip-mining) factor; disabled when <= 1 or undefined */
     tileSize?: number;
+
+    /** Target ONNX opset version for schema resolution & export (up to 28) */
+    targetOpset?: number;
+
+    /** Explicit ONNX IR version override for export (up to 14) */
+    irVersion?: number;
 }
 
 /**

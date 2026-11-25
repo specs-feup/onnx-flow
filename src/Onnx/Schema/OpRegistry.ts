@@ -1,5 +1,6 @@
 import type { OpSchema } from "./OpSchema.js";
 import { StandardOps } from "./definitions/StandardOps/index.js";
+import { LATEST_ONNX_OPSET } from "../utils/Constants.js";
 
 export class OpRegistry {
     private static instance: OpRegistry | undefined;
@@ -36,9 +37,26 @@ export class OpRegistry {
     }
 
     /**
+     * Retrieve all registered versions of an operator sorted by sinceVersion ascending.
+     */
+    public getAllVersions(opType: string): OpSchema[] {
+        const versionMap = this.schemas.get(opType);
+        if (!versionMap) return [];
+        return Array.from(versionMap.values()).sort((a, b) => a.sinceVersion - b.sinceVersion);
+    }
+
+    /**
+     * Retrieve the lowest registered sinceVersion for an operator, if any.
+     */
+    public getMinSinceVersion(opType: string): number | undefined {
+        const versions = this.getAllVersions(opType);
+        return versions.length > 0 ? versions[0].sinceVersion : undefined;
+    }
+
+    /**
      * Retrieve the schema for a specific operator and opset version.
      */
-    public get(opType: string, opsetVersion: number): OpSchema | undefined {
+    public get(opType: string, opsetVersion: number = LATEST_ONNX_OPSET): OpSchema | undefined {
         const versionMap = this.schemas.get(opType);
         if (!versionMap) return undefined;
 

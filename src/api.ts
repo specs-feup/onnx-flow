@@ -30,6 +30,13 @@ export { default as OnnxDotFormatter } from "./Onnx/dot/OnnxDotFormatter.js";
 
 // --- 3. Schema, Shape Inference, Validation & Utilities ---
 export { initializeSchemaRegistry, OpRegistry, inferShapes, inferNodeShape, propagateToRegion };
+export {
+    DEFAULT_COMPAT_IR_VERSION,
+    DEFAULT_COMPAT_OPSET,
+    getDataTypeMinIrVersion,
+    getOpsetMinIrVersion,
+    resolveExportVersions,
+} from "./Onnx/Schema/Versioning.js";
 export * from "./Onnx/Schema/OpSchema.js";
 export {
     default as validateGraph,
