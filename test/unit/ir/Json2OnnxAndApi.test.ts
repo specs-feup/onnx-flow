@@ -9,6 +9,11 @@ import { createGraph } from "../../../src/initGraph.js";
 import { convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
+import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
+import TensorNode from "../../../src/Onnx/TensorNode.js";
+import Graph from "@specs-feup/flow/graph/Graph";
+import * as ort from "onnxruntime-web";
 import { ensureProtoExists } from "../../setup.js";
 import { ensureModelExists } from "../../helpers/modelFactory.js";
 
@@ -95,6 +100,72 @@ describe("json2onnx, onnx2json & Public API", () => {
             ]);
             expect(count).toBeGreaterThan(0);
             expect(fs.existsSync(outOnnx)).toBe(true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it("roundtrips IR 14 / Opset 28 binary ONNX and executes adaptive Opset 23 / IR 11 model in ORT", async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-v28-"));
+        try {
+            // 1. Build RMSNormalization model (Opset 23 -> auto-resolved IR 11) and run in onnxruntime-web
+            const graph23 = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const builder23 = new GraphBuilder(graph23);
+            const xIn = graph23
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 4], "input"))
+                .as(TensorNode);
+            const scaleIn = builder23.createConstant("scale", {
+                dataType: DataType.FLOAT,
+                dims: [4],
+                floatData: [1, 1, 1, 1],
+            });
+            const [rmsOut] = builder23.createOp("RMSNormalization", [xIn, scaleIn], {
+                axis: -1,
+                epsilon: 1e-5,
+            });
+            if (rmsOut.is(TensorNode)) {
+                rmsOut.setType("output");
+            }
+
+            const json23 = convertFlowGraphToOnnxJson(graph23, "rms_graph");
+            expect(json23.irVersion).toBe(11);
+            expect(json23.opsetImport?.[0].version).toBe(23);
+
+            const json23Path = path.join(tmpDir, "rms23.json");
+            const onnx23Path = path.join(tmpDir, "rms23.onnx");
+            fs.writeFileSync(json23Path, JSON.stringify(json23));
+            await json2onnx(json23Path, onnx23Path);
+
+            const session = await ort.InferenceSession.create(onnx23Path);
+            const feeds = {
+                X: new ort.Tensor("float32", new Float32Array([3, 4, 0, 0]), [1, 4]),
+            };
+            const outputs = await session.run(feeds);
+            const outData = outputs[rmsOut.id].data as Float32Array;
+            // rms([3,4,0,0]) = sqrt((9+16)/4) = sqrt(6.25) = 2.5 -> [1.2, 1.6, 0, 0]
+            expect(outData[0]).toBeCloseTo(1.2, 4);
+            expect(outData[1]).toBeCloseTo(1.6, 4);
+
+            // 2. Explicit IR 14 / Opset 28 binary roundtrip
+            const json28 = convertFlowGraphToOnnxJson(graph23, "rms_v28", undefined, {
+                targetOpset: 28,
+                irVersion: 14,
+            });
+            expect(json28.irVersion).toBe(14);
+            expect(json28.opsetImport?.[0].version).toBe(28);
+
+            const json28Path = path.join(tmpDir, "rms28.json");
+            const onnx28Path = path.join(tmpDir, "rms28.onnx");
+            fs.writeFileSync(json28Path, JSON.stringify(json28));
+            await json2onnx(json28Path, onnx28Path);
+
+            const decoded28 = await onnx2json(onnx28Path);
+            expect(Number(decoded28.irVersion)).toBe(14);
+            expect(Number(decoded28.opsetImport?.[0].version)).toBe(28);
+            const reimported = createGraph(decoded28);
+            expect(reimported.getIrVersion()).toBe(14);
+            expect(reimported.getSourceOpset()).toBe(28);
         } finally {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }

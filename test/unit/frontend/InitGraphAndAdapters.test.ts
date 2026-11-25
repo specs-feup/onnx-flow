@@ -176,6 +176,226 @@ describe("Frontend Adapters & Graph Ingestion (initGraph)", () => {
             };
 
             expect(() => applyAdapters(rawModel)).not.toThrow();
+            const resizeNode = rawModel.graph?.node?.find((n) => n.opType === "Resize");
+            expect(resizeNode).toBeDefined();
+            expect(resizeNode?.input?.[1]).toBe("");
+            expect(resizeNode?.input?.[2]).toBeTruthy();
+            expect(
+                resizeNode?.attribute?.find((a) => a.name === "coordinate_transformation_mode")?.s,
+            ).toBe("asymmetric");
+        });
+
+        it("adapts pre-Opset 7 broadcast=1 and axis attributes to Unsqueeze + Multidirectional Mul", () => {
+            const rawModel: RawOnnxModel = {
+                irVersion: 3,
+                opsetImport: [{ domain: "", version: 5 }],
+                graph: {
+                    input: [
+                        {
+                            name: "x4",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: {
+                                        dim: [
+                                            { dimValue: 2 },
+                                            { dimValue: 3 },
+                                            { dimValue: 4 },
+                                            { dimValue: 5 },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            name: "scale1d",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: { dim: [{ dimValue: 3 }] },
+                                },
+                            },
+                        },
+                    ],
+                    output: [
+                        {
+                            name: "scaled",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: {
+                                        dim: [
+                                            { dimValue: 2 },
+                                            { dimValue: 3 },
+                                            { dimValue: 4 },
+                                            { dimValue: 5 },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    node: [
+                        {
+                            name: "mul_bcast",
+                            opType: "Mul",
+                            input: ["x4", "scale1d"],
+                            output: ["scaled"],
+                            attribute: [
+                                { name: "broadcast", type: AttributeType.INT, i: 1 },
+                                { name: "axis", type: AttributeType.INT, i: 1 },
+                            ],
+                        },
+                    ],
+                },
+            };
+
+            applyAdapters(rawModel);
+
+            const nodes = rawModel.graph!.node!;
+            const mulNode = nodes.find((n) => n.opType === "Mul");
+            expect(mulNode?.attribute?.length ?? 0).toBe(0);
+            expect(nodes.some((n) => n.opType === "Unsqueeze")).toBe(true);
+        });
+
+        it("recursively adapts nested subgraphs and handles <13 Softmax and <18 ReduceMean", () => {
+            const rawModel: RawOnnxModel = {
+                irVersion: 8,
+                opsetImport: [{ domain: "", version: 11 }],
+                graph: {
+                    input: [
+                        {
+                            name: "cond",
+                            type: { tensorType: { elemType: DataType.BOOL, shape: { dim: [] } } },
+                        },
+                        {
+                            name: "x4",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: {
+                                        dim: [
+                                            { dimValue: 2 },
+                                            { dimValue: 3 },
+                                            { dimValue: 4 },
+                                            { dimValue: 5 },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    output: [
+                        {
+                            name: "y_out",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: {
+                                        dim: [
+                                            { dimValue: 2 },
+                                            { dimValue: 3 },
+                                            { dimValue: 4 },
+                                            { dimValue: 5 },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    node: [
+                        {
+                            name: "sm_legacy",
+                            opType: "Softmax",
+                            input: ["x4"],
+                            output: ["sm_out"],
+                            attribute: [{ name: "axis", type: AttributeType.INT, i: 1 }],
+                        },
+                        {
+                            opType: "If",
+                            input: ["cond"],
+                            output: ["y_out"],
+                            attribute: [
+                                {
+                                    name: "then_branch",
+                                    type: AttributeType.GRAPH,
+                                    g: {
+                                        node: [
+                                            {
+                                                name: "inner_clip",
+                                                opType: "Clip",
+                                                input: ["sm_out"],
+                                                output: ["y_out"],
+                                                attribute: [
+                                                    { name: "min", type: "FLOAT", f: 0.0 },
+                                                    { name: "max", type: "FLOAT", f: 1.0 },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                },
+                                {
+                                    name: "else_branch",
+                                    type: AttributeType.GRAPH,
+                                    g: {
+                                        node: [
+                                            {
+                                                name: "inner_reduce",
+                                                opType: "ReduceMean",
+                                                input: ["sm_out"],
+                                                output: ["reduced"],
+                                                attribute: [
+                                                    { name: "axes", type: "INTS", ints: [2, 3] },
+                                                    { name: "keepdims", type: "INT", i: 1 },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            };
+
+            applyAdapters(rawModel);
+
+            const nodes = rawModel.graph!.node!;
+            // Legacy Softmax along axis 1 on 4D input lowers to Shape -> Flatten(1) -> Softmax(1) -> Reshape
+            expect(nodes.some((n) => n.opType === "Flatten")).toBe(true);
+            const updatedSoftmax = nodes.find((n) => n.opType === "Softmax");
+            expect(updatedSoftmax?.attribute?.find((a) => a.name === "axis")?.i).toBe(1);
+
+            const ifNode = nodes.find((n) => n.opType === "If")!;
+            const thenClip = ifNode.attribute![0].g!.node![0];
+            expect(thenClip.input!.length).toBe(3);
+            expect(thenClip.attribute!.length).toBe(0);
+
+            const elseReduce = ifNode.attribute![1].g!.node![0];
+            expect(elseReduce.input!.length).toBe(2);
+            expect(elseReduce.attribute!.some((a) => a.name === "axes")).toBe(false);
+        });
+
+        it("produces deterministic initializer names across repeated adapter runs", () => {
+            const makeModel = (): RawOnnxModel => ({
+                graph: {
+                    node: [
+                        {
+                            name: "clip0",
+                            opType: "Clip",
+                            input: ["X"],
+                            output: ["Y"],
+                            attribute: [{ name: "min", type: "FLOAT", f: -1.0 }],
+                        },
+                    ],
+                },
+            });
+
+            const m1 = makeModel();
+            const m2 = makeModel();
+            applyAdapters(m1);
+            applyAdapters(m2);
+            expect(m1.graph!.initializer![0].name).toBe(m2.graph!.initializer![0].name);
         });
     });
 
@@ -390,6 +610,89 @@ describe("Frontend Adapters & Graph Ingestion (initGraph)", () => {
             const capturedNodes = thenRegion.getNodes().filterIs(RegionArgumentNode).toArray();
             expect(capturedNodes.length).toBeGreaterThan(0);
             expect(capturedNodes[0].originalName).toBe("outer_var");
+        });
+
+        it("propagates sourceOpset, irVersion, and explicit targetOpset across graph and child regions", () => {
+            const rawModel: RawOnnxModel = {
+                irVersion: 11,
+                opsetImport: [{ domain: "", version: 23 }],
+                graph: {
+                    input: [
+                        {
+                            name: "cond",
+                            type: { tensorType: { elemType: DataType.BOOL, shape: { dim: [] } } },
+                        },
+                        {
+                            name: "x",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: { dim: [{ dimValue: 2 }, { dimValue: 4 }] },
+                                },
+                            },
+                        },
+                    ],
+                    output: [
+                        {
+                            name: "out",
+                            type: {
+                                tensorType: {
+                                    elemType: DataType.FLOAT,
+                                    shape: { dim: [{ dimValue: 2 }, { dimValue: 4 }] },
+                                },
+                            },
+                        },
+                    ],
+                    node: [
+                        {
+                            opType: "If",
+                            input: ["cond"],
+                            output: ["out"],
+                            attribute: [
+                                {
+                                    name: "then_branch",
+                                    type: AttributeType.GRAPH,
+                                    g: {
+                                        node: [
+                                            {
+                                                opType: "Relu",
+                                                input: ["x"],
+                                                output: ["out"],
+                                            },
+                                        ],
+                                    },
+                                },
+                                {
+                                    name: "else_branch",
+                                    type: AttributeType.GRAPH,
+                                    g: {
+                                        node: [
+                                            {
+                                                opType: "Identity",
+                                                input: ["x"],
+                                                output: ["out"],
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            };
+
+            const graph = createGraph(rawModel, 26);
+            expect(graph.getSourceOpset()).toBe(23);
+            expect(graph.getTargetOpset()).toBe(26);
+            expect(graph.getIrVersion()).toBe(11);
+            expect(graph.hasExplicitIrVersion()).toBe(false);
+
+            const ifOp = graph
+                .getOperationNodes()
+                .toArray()
+                .find((o) => o.type === "If")!;
+            expect(ifOp.regions[0].getSourceOpset()).toBe(23);
+            expect(ifOp.regions[0].getTargetOpset()).toBe(26);
         });
 
         it("terminates gracefully without throwing on unresolved or circular inputs", () => {
