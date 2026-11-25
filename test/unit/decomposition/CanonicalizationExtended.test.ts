@@ -9,7 +9,7 @@ import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
 import { int64Vec, makeTensorProto, scalarInt64 } from "../../../src/Onnx/Utils.js";
-import { applyRecipe } from "./harness.js";
+import { applyRecipe } from "../../helpers/recipeHarness.js";
 
 describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
     initializeSchemaRegistry();
