@@ -1,11 +1,17 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
+import {
+    DataType,
+    type ValueNode,
+    type ConcreteValueNode,
+    type KnownShape,
+} from "../../../OnnxTypes.js";
 import type { LoopCarryContext, LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
 import {
     broadcastMixedShapes,
     extractMixedDims,
     packShapeVector,
+    productMixed,
     resolveRecipeInput,
     squeezeIfLen1,
 } from "../RecipeUtils.js";
@@ -78,8 +84,16 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
         if (inputs.length === 0) return { totalIters: 1, carryShape: [1] };
 
         let targetShapeNode: ConcreteValueNode;
+        let totalIters: ConcreteValueNode;
         if (inputs.length === 1) {
             [targetShapeNode] = builder.createOp("Shape", [inputs[0]]);
+            const dims = extractMixedDims(
+                builder,
+                inputs[0],
+                toStaticShape(inputs[0].shape),
+                `ewb_0_${op.id}`,
+            );
+            totalIters = productMixed(builder, dims, `ewb_prod_${op.id}`);
         } else {
             const perInputDims = inputs.map((inp, i) =>
                 extractMixedDims(builder, inp, toStaticShape(inp.shape), `ewb_${i}_${op.id}`),
@@ -93,12 +107,12 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
                 };
             }
             targetShapeNode = packShapeVector(builder, outDims, `ewb_tsh_${op.id}`);
+            totalIters = productMixed(builder, outDims, `ewb_prod_${op.id}`);
         }
 
-        const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
-            keepdims: 0,
-        });
-        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0]);
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
 
         return { totalIters, carryShape, targetShape: targetShapeNode };
     }

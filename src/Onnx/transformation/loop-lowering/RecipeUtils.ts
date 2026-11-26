@@ -158,6 +158,21 @@ export function mulMixed(
 }
 
 /**
+ * Multiplies a list of mixed static/dynamic INT64 scalar dimensions into a scalar INT64 node or number.
+ */
+export function productMixed(
+    builder: GraphBuilder,
+    dims: (number | ConcreteValueNode)[],
+    tag: string,
+): ConcreteValueNode {
+    let acc: number | ConcreteValueNode = 1;
+    for (let i = 0; i < dims.length; i++) {
+        acc = mulMixed(builder, acc, dims[i], `${tag}_${i}`);
+    }
+    return typeof acc === "number" ? builder.createConstant(`${tag}_const`, scalarInt64(acc)) : acc;
+}
+
+/**
  * Adds two mixed static/dynamic INT64 scalar values without redundant Add(+0).
  */
 export function addMixed(
@@ -243,7 +258,10 @@ export function broadcastMixedShapes(
         } else {
             let acc: ConcreteValueNode = dyns[0];
             for (let i = 1; i < dyns.length; i++) {
-                [acc] = builder.createOp("Max", [acc, dyns[i]], {}, [
+                const [gt] = builder.createOp("Greater", [acc, dyns[i]], {}, [
+                    { type: DataType.BOOL, shape: [] },
+                ]);
+                [acc] = builder.createOp("Where", [gt, acc, dyns[i]], {}, [
                     { type: DataType.INT64, shape: [] },
                 ]);
             }

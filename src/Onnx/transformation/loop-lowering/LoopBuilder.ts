@@ -58,8 +58,36 @@ export function createAccumulatorCarry(
     } else {
         const zeroScalar = outerBuilder.createConstant(`zero_${tag}`, zeroTensor(elemTy, []));
         const axes0 = outerBuilder.createConstant(`ax0_fl_${tag}`, int64Vec([0]));
-        const flatTrip = outerBuilder.createOp("ReduceProd", [carryLen, axes0], { keepdims: 0 })[0];
-        const flatTrip1D = outerBuilder.createOp("Unsqueeze", [flatTrip, axes0])[0];
+        const carryDims = carryLen.shape;
+        let flatTrip1D: ConcreteValueNode;
+        if (Array.isArray(carryDims) && carryDims.length === 1 && carryDims[0] === 1) {
+            flatTrip1D = carryLen as ConcreteValueNode;
+        } else if (
+            Array.isArray(carryDims) &&
+            carryDims.length === 1 &&
+            typeof carryDims[0] === "number" &&
+            carryDims[0] > 1 &&
+            carryDims[0] <= 8
+        ) {
+            let prod: ConcreteValueNode | undefined;
+            for (let d = 0; d < carryDims[0]; d++) {
+                const idx = outerBuilder.createConstant(`idx_fl_${tag}_${d}`, scalarInt64(d));
+                const [elem] = outerBuilder.createOp("Gather", [carryLen, idx], { axis: 0 }, [
+                    { type: DataType.INT64, shape: [] },
+                ]);
+                prod = prod ? outerBuilder.createOp("Mul", [prod, elem])[0] : elem;
+            }
+            [flatTrip1D] = outerBuilder.createOp("Unsqueeze", [prod!, axes0], {}, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
+        } else {
+            const flatTrip = outerBuilder.createOp("ReduceProd", [carryLen, axes0], {
+                keepdims: 0,
+            })[0];
+            [flatTrip1D] = outerBuilder.createOp("Unsqueeze", [flatTrip, axes0], {}, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
+        }
         [initialVal] = outerBuilder.createOp("Expand", [zeroScalar, flatTrip1D], {}, [
             { type: elemTy, shape: UNKNOWN_SHAPE },
         ]);

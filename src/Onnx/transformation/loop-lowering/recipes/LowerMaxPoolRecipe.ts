@@ -32,6 +32,7 @@ import {
     getOrCreateIterationSpaceCounters,
     mulMixed,
     packShapeVector,
+    productMixed,
     resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
@@ -145,8 +146,10 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         const outDims = [inDims[0], inDims[1], ...outSpatial];
         const targetShape = packShapeVector(builder, outDims, `mpb_tsh_${op.id}`);
         const ax0 = builder.createConstant(`mpb_ax0_${op.id}`, int64Vec([0]));
-        const [outTotal] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
-        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0]);
+        const outTotal = productMixed(builder, outDims, `mpb_tot_${op.id}`);
+        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
         const totalIters = mulMixed(
             builder,
             outTotal,

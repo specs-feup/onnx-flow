@@ -30,6 +30,7 @@ import {
     getOrCreateIterationSpaceCounters,
     extractMixedDims,
     packShapeVector,
+    productMixed,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import ConstantNode from "../../../ConstantNode.js";
@@ -120,18 +121,14 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
                 return { totalIters: 1, carryShape: [1], targetShape: [] };
             }
 
-            const [shapeNode] = builder.createOp("Shape", [inputNode]);
             const axesConst0 = builder.createConstant(`axes_fallback_${op.id}_0`, int64Vec([0]));
-            const [totalIters] = builder.createOp("ReduceProd", [shapeNode, axesConst0], {
-                keepdims: 0,
-            });
-
             const inDims = extractMixedDims(
                 builder,
                 inputNode,
                 toStaticShape(inputNode.shape),
                 `rb_${op.id}`,
             );
+            const totalIters = productMixed(builder, inDims, `rb_tot_${op.id}`);
             const keepdims = getIntAttr(op, "keepdims", 1);
             const axesSet = new Set(axes);
             const outDims =
@@ -145,10 +142,10 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             }
 
             const targetShapeNode = packShapeVector(builder, outDims, `rb_tsh_${op.id}`);
-            const [carryLen] = builder.createOp("ReduceProd", [targetShapeNode, axesConst0], {
-                keepdims: 0,
-            });
-            const [carryShape] = builder.createOp("Unsqueeze", [carryLen, axesConst0]);
+            const carryLen = productMixed(builder, outDims, `rb_cl_${op.id}`);
+            const [carryShape] = builder.createOp("Unsqueeze", [carryLen, axesConst0], {}, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
 
             return { totalIters, carryShape, targetShape: targetShapeNode };
         }
@@ -317,20 +314,22 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
     }
 
     postProcess(op: OperationNode.Class, builder: GraphBuilder, loopOut: ValueNode): ValueNode {
-        if (op.type === "ReduceL2") return builder.createOp("Sqrt", [loopOut])[0];
+        const outDtype = loopOut.literalType || DataType.FLOAT;
+        const outShape = toStaticShape(loopOut.shape) as KnownShape;
+        const outSpec = [{ type: outDtype, shape: outShape }];
+
+        if (op.type === "ReduceL2") return builder.createOp("Sqrt", [loopOut], {}, outSpec)[0];
         if (op.type === "ReduceLogSum" || op.type === "ReduceLogSumExp")
-            return builder.createOp("Log", [loopOut])[0];
+            return builder.createOp("Log", [loopOut], {}, outSpec)[0];
 
         if (op.type === "ReduceMean") {
             const bounds = this.getLoopBounds(op, []);
 
             // --- DYNAMIC SUPPORT ---
-            // Use Array.isArray to prove to TypeScript whether carryShape is a static array or a ValueNode
             const isDynamic =
                 typeof bounds.totalIters !== "number" || !Array.isArray(bounds.carryShape);
 
             if (isDynamic) {
-                // Bounds are ValueNodes; construct division dynamically
                 const iterNode =
                     typeof bounds.totalIters === "number"
                         ? builder.createConstant(`mean_iters`, scalarInt64(bounds.totalIters))
@@ -348,23 +347,33 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
 
                 const [countRaw] = builder.createOp("Div", [iterNode, carryLenNode]);
                 const [countCast] = builder.createOp("Cast", [countRaw], {
-                    to: loopOut.literalType || DataType.FLOAT,
+                    to: outDtype,
                 });
 
-                return builder.createOp("Div", [loopOut, countCast])[0];
+                return builder.createOp("Div", [loopOut, countCast], {}, outSpec)[0];
             }
-            // ---------------------------
 
-            // Static fallback: Because of the check above, TypeScript knows bounds.carryShape is an Array here~
             const boundsCarryShape = bounds.carryShape as KnownShape;
             const count = (bounds.totalIters as number) / (boundsCarryShape[0] as number);
+            const isFloat =
+                outDtype === DataType.FLOAT ||
+                outDtype === DataType.DOUBLE ||
+                outDtype === DataType.FLOAT16 ||
+                outDtype === DataType.BFLOAT16;
+            if (isFloat && Number.isFinite(count) && count !== 0) {
+                const invConst = builder.createConstant(
+                    `mean_inv_count`,
+                    makeTensorProto(outDtype, [], [1 / count]),
+                );
+                return builder.createOp("Mul", [loopOut, invConst], {}, outSpec)[0];
+            }
             const countConst = builder.createConstant(`mean_count`, {
-                dataType: loopOut.literalType || DataType.FLOAT,
+                dataType: outDtype,
                 dims: [],
                 floatData: [count],
                 int64Data: [BigInt(count)],
             });
-            return builder.createOp("Div", [loopOut, countConst])[0];
+            return builder.createOp("Div", [loopOut, countConst], {}, outSpec)[0];
         }
         return loopOut;
     }

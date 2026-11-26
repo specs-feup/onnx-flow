@@ -1,7 +1,11 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import type { DataType } from "../../../OnnxTypes.js";
-import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
+import {
+    type ValueNode,
+    type ConcreteValueNode,
+    type KnownShape,
+    DataType,
+} from "../../../OnnxTypes.js";
 import {
     getIntAttr,
     getIntsAttr,
@@ -29,6 +33,7 @@ import {
     getOrCreateIterationSpaceCounters,
     mulMixed,
     packShapeVector,
+    productMixed,
     resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
@@ -170,8 +175,10 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
         const outDims = [inDims[0], inDims[1], ...outSpatial];
         const targetShape = packShapeVector(builder, outDims, `apb_tsh_${op.id}`);
         const ax0 = builder.createConstant(`apb_ax0_${op.id}`, int64Vec([0]));
-        const [outTotal] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
-        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0]);
+        const outTotal = productMixed(builder, outDims, `apb_tot_${op.id}`);
+        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
         const totalIters = mulMixed(
             builder,
             outTotal,

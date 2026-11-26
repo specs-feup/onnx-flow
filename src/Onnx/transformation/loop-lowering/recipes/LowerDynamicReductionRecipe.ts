@@ -10,6 +10,7 @@ import {
     normalizeAxis,
     readConstIntegerVectorFromTensorNode,
     scalarInt64,
+    toStaticShape,
 } from "../../../Utils.js";
 import type {
     LoopCarryContext,
@@ -22,8 +23,11 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
+    packShapeVector,
+    productMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -118,25 +122,22 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
 
         const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `dred_bounds_${op.id}`);
         const ax0 = builder.createConstant(`dredb_ax0_${op.id}`, int64Vec([0]));
-        const [shapeNode] = builder.createOp("Shape", [ins[0]], {}, [
-            { type: DataType.INT64, shape: [rank] },
-        ]);
-        const [totalIters] = builder.createOp("ReduceProd", [shapeNode, ax0], { keepdims: 0 });
+        const inDims = extractMixedDims(
+            builder,
+            ins[0],
+            toStaticShape(ins[0].shape),
+            `dredb_d_${op.id}`,
+        );
+        const totalIters = productMixed(builder, inDims, `dredb_tot_${op.id}`);
 
         if (keepdims === 1) {
-            const axesC = builder.createConstant(`dredb_axes_${op.id}`, int64Vec(axesList));
-            const onesC = builder.createConstant(
-                `dredb_ones_${op.id}`,
-                int64Vec(new Array(axesList.length).fill(1)),
-            );
-            const [targetShape] = builder.createOp(
-                "ScatterElements",
-                [shapeNode, axesC, onesC],
-                { axis: 0 },
-                [{ type: DataType.INT64, shape: [rank] }],
-            );
-            const [carryLen] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
-            const [carryShape] = builder.createOp("Unsqueeze", [carryLen, ax0]);
+            const axesSet = new Set(axesList);
+            const outDims = inDims.map((d, idx) => (axesSet.has(idx) ? 1 : d));
+            const targetShape = packShapeVector(builder, outDims, `dredb_tsh_${op.id}`);
+            const carryLen = productMixed(builder, outDims, `dredb_cl_${op.id}`);
+            const [carryShape] = builder.createOp("Unsqueeze", [carryLen, ax0], {}, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
             return { totalIters, carryShape, targetShape };
         }
 
@@ -148,12 +149,12 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
             return { totalIters, carryShape: [1] };
         }
 
-        const keptC = builder.createConstant(`dredb_kept_${op.id}`, int64Vec(keptAxes));
-        const [targetShape] = builder.createOp("Gather", [shapeNode, keptC], { axis: 0 }, [
-            { type: DataType.INT64, shape: [keptAxes.length] },
+        const outDims = keptAxes.map((idx) => inDims[idx]);
+        const targetShape = packShapeVector(builder, outDims, `dredb_tshk_${op.id}`);
+        const carryLen = productMixed(builder, outDims, `dredb_clk_${op.id}`);
+        const [carryShape] = builder.createOp("Unsqueeze", [carryLen, ax0], {}, [
+            { type: DataType.INT64, shape: [1] },
         ]);
-        const [carryLen] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
-        const [carryShape] = builder.createOp("Unsqueeze", [carryLen, ax0]);
         return { totalIters, carryShape, targetShape };
     }
 
