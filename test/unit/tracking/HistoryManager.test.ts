@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { TrackedGraphBuilder } from "../../../src/Onnx/transformation/tracking/TrackedGraphBuilder.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import OperationNode from "../../../src/onnx/OperationNode.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import { TrackedGraphBuilder } from "../../../src/onnx/transformation/tracking/TrackedGraphBuilder.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 
 describe("HistoryManager & TrackedGraphBuilder", () => {
     initializeSchemaRegistry();

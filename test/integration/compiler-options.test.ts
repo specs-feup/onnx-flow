@@ -3,18 +3,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
-import OperationNode from "../../src/Onnx/OperationNode.js";
-import RegionArgumentNode from "../../src/Onnx/RegionArgumentNode.js";
-import TensorNode from "../../src/Onnx/TensorNode.js";
-import OnnxEdge from "../../src/Onnx/OnnxEdge.js";
-import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../src/Onnx/OnnxTypes.js";
-import { initializeSchemaRegistry } from "../../src/Onnx/Schema/index.js";
-import OnnxGraphTransformer from "../../src/Onnx/transformation/index.js";
+import OnnxGraph from "../../src/onnx/OnnxGraph.js";
+import OperationNode from "../../src/onnx/OperationNode.js";
+import RegionArgumentNode from "../../src/onnx/RegionArgumentNode.js";
+import TensorNode from "../../src/onnx/TensorNode.js";
+import OnnxEdge from "../../src/onnx/OnnxEdge.js";
+import { GraphBuilder } from "../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../src/onnx/OnnxTypes.js";
+import { initializeSchemaRegistry } from "../../src/onnx/schema/index.js";
+import OnnxGraphTransformer from "../../src/onnx/transformation/index.js";
 import { IndexingMode, type DecompositionOptions } from "../../src/DecompositionOptions.js";
-import { floatVec, int64Vec, makeTensorProto, scalarFloat } from "../../src/Onnx/Utils.js";
-import validateGraph from "../../src/Onnx/validation/ValidateGraph.js";
+import { floatVec, int64Vec, makeTensorProto, scalarFloat } from "../../src/onnx/utils/index.js";
+import validateGraph from "../../src/onnx/validation/ValidateGraph.js";
 import {
     buildResidualSkipForkGraph,
     buildSplitMultiBranchConcatGraph,
@@ -1548,7 +1548,7 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
         it(
             "matches ORT for Schedule API (useRecipe + split SoftmaxLoop, reorder, unroll, cacheRead)",
             async () => {
-                const { Schedule } = await import("../../src/Onnx/transformation/Schedule.js");
+                const { Schedule } = await import("../../src/onnx/transformation/Schedule.js");
 
                 await assertTransformMatchesOrt(
                     "schedule_softmax_split_unroll",
@@ -1636,7 +1636,7 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
         it(
             "matches ORT for LowerDetLoop, LowerTopKScalarLoop, LowerLogSoftmaxLoop, LowerRMSNormLoop, and deferred AveragePool",
             async () => {
-                const { Schedule } = await import("../../src/Onnx/transformation/Schedule.js");
+                const { Schedule } = await import("../../src/onnx/transformation/Schedule.js");
 
                 // 1. Dynamic 4x4 & 5x5 Det via LowerDetLoop
                 await assertTransformMatchesOrt(

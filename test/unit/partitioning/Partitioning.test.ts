@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { splitByAncestor } from "../../../src/Onnx/partitioning/Strategies.js";
-import { partitionGraph } from "../../../src/Onnx/partitioning/Partition.js";
-import { int64Vec } from "../../../src/Onnx/Utils.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import { splitByAncestor } from "../../../src/onnx/partitioning/Strategies.js";
+import { partitionGraph } from "../../../src/onnx/partitioning/Partition.js";
+import { int64Vec } from "../../../src/onnx/utils/index.js";
 
 describe("Graph Partitioning Strategies & Splitter", () => {
     function buildChainGraph() {

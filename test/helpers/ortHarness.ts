@@ -3,12 +3,15 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { onnx2json } from "../../src/onnx2json.js";
-import { createGraph } from "../../src/initGraph.js";
-import { convertFlowGraphToOnnxJson, prepareGraphForExport } from "../../src/flow2json.js";
-import { json2onnx } from "../../src/json2onnx.js";
-import { safeWriteJson } from "../../src/Onnx/Utils.js";
-import type OnnxGraph from "../../src/Onnx/OnnxGraph.js";
+import { onnx2json } from "../../src/io/OnnxToJson.js";
+import { createGraph } from "../../src/io/OnnxGraphLoader.js";
+import {
+    convertFlowGraphToOnnxJson,
+    prepareGraphForExport,
+} from "../../src/io/OnnxGraphExporter.js";
+import { json2onnx } from "../../src/io/JsonToOnnx.js";
+import { safeWriteJson } from "../../src/onnx/utils/index.js";
+import type OnnxGraph from "../../src/onnx/OnnxGraph.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,11 +30,11 @@ export function findProjectRoot(startDir: string = __dirname): string {
 export const PROJECT_ROOT = findProjectRoot(__dirname);
 
 export function ensureProtoExists(): void {
-    const srcProto = path.resolve(PROJECT_ROOT, "src/Onnx/onnx.proto");
+    const srcProto = path.resolve(PROJECT_ROOT, "src/onnx/onnx.proto");
     if (!fs.existsSync(srcProto)) return;
     const targets = [
-        path.resolve(PROJECT_ROOT, "out/src/Onnx/onnx.proto"),
-        path.resolve(PROJECT_ROOT, "../out/src/Onnx/onnx.proto"),
+        path.resolve(PROJECT_ROOT, "out/src/onnx/onnx.proto"),
+        path.resolve(PROJECT_ROOT, "../out/src/onnx/onnx.proto"),
     ];
     for (const target of targets) {
         if (!fs.existsSync(target)) {

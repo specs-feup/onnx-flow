@@ -2,12 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
-import { json2onnx } from "../../src/json2onnx.js";
-import { initializeSchemaRegistry } from "../../src/Onnx/Schema/index.js";
-import inferShapes from "../../src/Onnx/InferShapes.js";
+import OnnxGraph from "../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../src/onnx/TensorNode.js";
+import { GraphBuilder } from "../../src/onnx/GraphBuilder.js";
+import { json2onnx } from "../../src/io/JsonToOnnx.js";
+import { initializeSchemaRegistry } from "../../src/onnx/schema/index.js";
+import inferShapes from "../../src/onnx/InferShapes.js";
 import {
     DataType,
     type AttributeMap,
@@ -18,8 +18,8 @@ import {
     type RawOnnxNode,
     type RawOnnxValueInfo,
     type TensorProto,
-} from "../../src/Onnx/OnnxTypes.js";
-import { makeTensorProto, safeWriteJson } from "../../src/Onnx/Utils.js";
+} from "../../src/onnx/OnnxTypes.js";
+import { makeTensorProto, safeWriteJson } from "../../src/onnx/utils/index.js";
 import {
     ensureProtoExists,
     exportGraphToOnnx,

@@ -10,11 +10,11 @@ import {
     inferPoolDim,
     inferConvDim,
     shapesEqual,
-} from "../../../src/Onnx/utils/ShapeMath.js";
+} from "../../../src/onnx/utils/ShapeMath.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
 
 describe("ShapeMath Utilities", () => {
     it("converts dimension values and shapes to numbers and static forms", () => {

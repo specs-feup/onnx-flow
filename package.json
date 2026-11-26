@@ -20,7 +20,7 @@
     "main": "./out/src/index.js",
     "files": [
         "out/",
-        "src/Onnx/onnx.proto",
+        "src/onnx/onnx.proto",
         "package.json",
         "README.md"
     ],
@@ -28,7 +28,7 @@
         "clean": "rimraf out",
         "build": "tsc",
         "build:watch": "tsc --watch",
-        "postbuild": "npx cpx2 \"src/Onnx/onnx.proto\" \"out/src/Onnx\"",
+        "postbuild": "npx cpx2 \"src/onnx/onnx.proto\" \"out/src/onnx\"",
         "typecheck": "tsc --noEmit",
         "format": "prettier --write \"{src,test}/**/*.{ts,js,json}\" package.json",
         "lint": "eslint \"{src,test}/**/*.{ts,js}\" --fix",

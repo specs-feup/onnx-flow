@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runCli } from "../../../src/index.js";
-import { onnx2json } from "../../../src/onnx2json.js";
+import { onnx2json } from "../../../src/io/OnnxToJson.js";
 import { ensureProtoExists } from "../../helpers/ortHarness.js";
 import { ensureModelExists } from "../../helpers/modelFactory.js";
 

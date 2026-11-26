@@ -18,14 +18,13 @@ export function findProjectRoot(startDir: string = __dirname): string {
 
 export function ensureProtoExists(): void {
     const root = findProjectRoot();
-    const srcProto = path.resolve(root, "src/Onnx/onnx.proto");
+    const srcProto = path.resolve(root, "src/onnx/onnx.proto");
     if (!fs.existsSync(srcProto)) return;
 
-    // 1. Where compiled index.js looks (<root>/out/src/Onnx/onnx.proto)
-    // 2. Where uncompiled src/json2onnx.ts looks when called in-process (<parent>/out/src/Onnx/onnx.proto)
+    // Ensure onnx.proto is copied to compiled output directory when running uncompiled tests
     const targets = [
-        path.resolve(root, "out/src/Onnx/onnx.proto"),
-        path.resolve(root, "../out/src/Onnx/onnx.proto"),
+        path.resolve(root, "out/src/onnx/onnx.proto"),
+        path.resolve(root, "../out/src/onnx/onnx.proto"),
     ];
 
     for (const target of targets) {

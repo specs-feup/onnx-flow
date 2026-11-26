@@ -2,13 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as ort from "onnxruntime-web";
-import { createGraph } from "../../src/initGraph.js";
-import { onnx2json } from "../../src/onnx2json.js";
-import { convertFlowGraphToOnnxJson } from "../../src/flow2json.js";
-import { json2onnx } from "../../src/json2onnx.js";
-import { splitByAncestor } from "../../src/Onnx/partitioning/Strategies.js";
-import { partitionGraph } from "../../src/Onnx/partitioning/Partition.js";
-import type OnnxGraph from "../../src/Onnx/OnnxGraph.js";
+import { createGraph } from "../../src/io/OnnxGraphLoader.js";
+import { onnx2json } from "../../src/io/OnnxToJson.js";
+import { convertFlowGraphToOnnxJson } from "../../src/io/OnnxGraphExporter.js";
+import { json2onnx } from "../../src/io/JsonToOnnx.js";
+import { splitByAncestor } from "../../src/onnx/partitioning/Strategies.js";
+import { partitionGraph } from "../../src/onnx/partitioning/Partition.js";
+import type OnnxGraph from "../../src/onnx/OnnxGraph.js";
 import { buildFeeds, compareOrtOutputs, ensureProtoExists, type FeedSpec } from "./ortHarness.js";
 
 export interface PartitionTestCase {

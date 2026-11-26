@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { Recipes } from "../../../src/onnx/transformation/recipes.js";
 import { applyRecipe } from "../../helpers/recipeHarness.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { int64Vec } from "../../../src/Onnx/Utils.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import { int64Vec } from "../../../src/onnx/utils/index.js";
 
 describe("Canonicalization - Structural & Normalization Recipes", () => {
     initializeSchemaRegistry();

@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import type { GraphPass } from "../../../src/Onnx/PassManager.js";
-import { PassManager } from "../../../src/Onnx/PassManager.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { topologicalSortOperationNodes } from "../../../src/Onnx/Utils.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OperationNode from "../../../src/onnx/OperationNode.js";
+import type { GraphPass } from "../../../src/onnx/PassManager.js";
+import { PassManager } from "../../../src/onnx/PassManager.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import { topologicalSortOperationNodes } from "../../../src/onnx/utils/index.js";
 
 describe("PassManager & Topological Sort", () => {
     it("stops PassManager when a pass returns false (fixed-point reached)", () => {

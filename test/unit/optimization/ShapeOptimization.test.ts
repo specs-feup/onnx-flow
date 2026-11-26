@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import OnnxEdge from "../../../src/Onnx/OnnxEdge.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { ShapeOptimizationPass } from "../../../src/Onnx/transformation/optimization/ShapeOptimizationPass.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import OperationNode from "../../../src/onnx/OperationNode.js";
+import OnnxEdge from "../../../src/onnx/OnnxEdge.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import { ShapeOptimizationPass } from "../../../src/onnx/transformation/optimization/ShapeOptimizationPass.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 
 describe("ShapeOptimizationPass", () => {
     initializeSchemaRegistry();

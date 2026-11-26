@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
 import { applyRecipe } from "../../helpers/recipeHarness.js";
-import { LowerExpRecipe } from "../../../src/Onnx/transformation/canonicalization/recipes/LowerExpRecipe.js";
-import { LowerReciprocalRecipe } from "../../../src/Onnx/transformation/canonicalization/recipes/LowerReciprocalRecipe.js";
+import { LowerExpRecipe } from "../../../src/onnx/transformation/canonicalization/recipes/LowerExpRecipe.js";
+import { LowerReciprocalRecipe } from "../../../src/onnx/transformation/canonicalization/recipes/LowerReciprocalRecipe.js";
 
 describe("Canonicalization - Unary & Activation Recipes", () => {
     initializeSchemaRegistry();

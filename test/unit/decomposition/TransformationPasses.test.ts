@@ -1,19 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { CanonicalizationPass } from "../../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
-import { InferShapesPass } from "../../../src/Onnx/transformation/InferShapesPass.js";
-import { OrchestratorPass } from "../../../src/Onnx/transformation/OrchestratorPass.js";
-import { TransformationRegistry } from "../../../src/Onnx/transformation/TransformationRegistry.js";
-import OnnxGraphTransformer from "../../../src/Onnx/transformation/index.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import type { DecompositionRecipe } from "../../../src/Onnx/transformation/Recipe.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import { CanonicalizationPass } from "../../../src/onnx/transformation/canonicalization/CanonicalizationPass.js";
+import { InferShapesPass } from "../../../src/onnx/transformation/InferShapesPass.js";
+import { OrchestratorPass } from "../../../src/onnx/transformation/OrchestratorPass.js";
+import { TransformationRegistry } from "../../../src/onnx/transformation/TransformationRegistry.js";
+import OnnxGraphTransformer from "../../../src/onnx/transformation/index.js";
+import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import type { DecompositionRecipe } from "../../../src/onnx/transformation/Recipe.js";
 
 describe("Transformation Pipeline & Passes", () => {
     initializeSchemaRegistry();

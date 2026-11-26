@@ -1,4 +1,4 @@
-import type { Schedule, ScheduleConfig } from "./Onnx/transformation/Schedule.js";
+import type { Schedule, ScheduleConfig } from "./onnx/transformation/Schedule.js";
 
 export enum IndexingMode {
     Pointer = "pointer",

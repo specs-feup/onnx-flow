@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { LoopLoweringPass } from "../../../src/Onnx/transformation/loop-lowering/LoopLoweringPass.js";
-import { LoopTilingPass } from "../../../src/Onnx/transformation/loop-lowering/LoopTilingPass.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import { LoopLoweringPass } from "../../../src/onnx/transformation/loop-lowering/LoopLoweringPass.js";
+import { LoopTilingPass } from "../../../src/onnx/transformation/loop-lowering/LoopTilingPass.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import validateGraph from "../../../src/onnx/validation/ValidateGraph.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 
 describe("LoopTilingPass (Strip-Mining)", () => {
     initializeSchemaRegistry();

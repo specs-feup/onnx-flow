@@ -1,22 +1,22 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType, type ValueNode } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import ConstantNode from "../../../src/onnx/ConstantNode.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType, type ValueNode } from "../../../src/onnx/OnnxTypes.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { buildForLoopRegion } from "../../../src/Onnx/transformation/loop-lowering/LoopBuilder.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { buildForLoopRegion } from "../../../src/onnx/transformation/loop-lowering/LoopBuilder.js";
 import {
     getOrCreateIterationSpaceCounters,
     buildAguPointer,
     resolveRecipeInput,
-} from "../../../src/Onnx/transformation/loop-lowering/RecipeUtils.js";
-import { LoopLoweringPass } from "../../../src/Onnx/transformation/loop-lowering/LoopLoweringPass.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { int64Vec, scalarFloat, scalarInt64 } from "../../../src/Onnx/utils/TensorData.js";
-import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
+} from "../../../src/onnx/transformation/loop-lowering/RecipeUtils.js";
+import { LoopLoweringPass } from "../../../src/onnx/transformation/loop-lowering/LoopLoweringPass.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import { int64Vec, scalarFloat, scalarInt64 } from "../../../src/onnx/utils/TensorData.js";
+import validateGraph from "../../../src/onnx/validation/ValidateGraph.js";
 
 describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
     initializeSchemaRegistry();

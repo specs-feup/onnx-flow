@@ -1,13 +1,13 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
-import type { AttributeMap, TensorProto, ConcreteValueNode } from "../../src/Onnx/OnnxTypes.js";
-import { DataType, type KnownShape } from "../../src/Onnx/OnnxTypes.js";
-import type { DecompositionRecipe } from "../../src/Onnx/transformation/Recipe.js";
-import inferShapes from "../../src/Onnx/InferShapes.js";
+import OnnxGraph from "../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../src/onnx/TensorNode.js";
+import { GraphBuilder } from "../../src/onnx/GraphBuilder.js";
+import type { AttributeMap, TensorProto, ConcreteValueNode } from "../../src/onnx/OnnxTypes.js";
+import { DataType, type KnownShape } from "../../src/onnx/OnnxTypes.js";
+import type { DecompositionRecipe } from "../../src/onnx/transformation/Recipe.js";
+import inferShapes from "../../src/onnx/InferShapes.js";
 import { expect } from "vitest";
-import validateGraph from "../../src/Onnx/validation/ValidateGraph.js";
+import validateGraph from "../../src/onnx/validation/ValidateGraph.js";
 
 export type TestInputSpec =
     | KnownShape

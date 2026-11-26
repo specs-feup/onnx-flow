@@ -1,14 +1,17 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { prepareGraphForExport, convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { generateUnifiedExplorerJson } from "../../../src/ExplorerAPI/ExplorerSerializer.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import OperationNode from "../../../src/onnx/OperationNode.js";
+import ConstantNode from "../../../src/onnx/ConstantNode.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import {
+    prepareGraphForExport,
+    convertFlowGraphToOnnxJson,
+} from "../../../src/io/OnnxGraphExporter.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { generateUnifiedExplorerJson } from "../../../src/explorer/ExplorerSerializer.js";
 
 describe("flow2json & Explorer Serialization", () => {
     initializeSchemaRegistry();

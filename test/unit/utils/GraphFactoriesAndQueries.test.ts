@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import RegionArgumentNode from "../../../src/Onnx/RegionArgumentNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/TensorNode.js";
+import OperationNode from "../../../src/onnx/OperationNode.js";
+import RegionArgumentNode from "../../../src/onnx/RegionArgumentNode.js";
+import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/OnnxTypes.js";
 import {
     scalarOfType,
     scalarZeroOfType,
@@ -19,7 +19,7 @@ import {
     getConsumers,
     shapeOf,
     editShapeDim,
-} from "../../../src/Onnx/utils/GraphFactories.js";
+} from "../../../src/onnx/utils/GraphFactories.js";
 import {
     formatId,
     addEdge,
@@ -39,7 +39,7 @@ import {
     tryAsOnnxNode,
     chunkTensor,
     topologicalSortOperationNodesSubset,
-} from "../../../src/Onnx/utils/GraphQueries.js";
+} from "../../../src/onnx/utils/GraphQueries.js";
 import {
     toScalar,
     toNumShape,
@@ -56,8 +56,8 @@ import {
     getLargestRankShape,
     unsqueezeIdx,
     as1D,
-} from "../../../src/Onnx/utils/ShapeMath.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+} from "../../../src/onnx/utils/ShapeMath.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 
 describe("GraphFactories, GraphQueries & ShapeMath", () => {
     initializeSchemaRegistry();

@@ -1,32 +1,32 @@
 import fs from "fs";
-import { onnx2json } from "./onnx2json.js";
-import { createGraph } from "./initGraph.js";
-import { convertFlowGraphToOnnxJson, prepareGraphForExport } from "./flow2json.js";
-import { json2onnx } from "./json2onnx.js";
-import { GraphBuilder } from "./Onnx/GraphBuilder.js";
-import inferShapes, { inferNodeShape, propagateToRegion } from "./Onnx/InferShapes.js";
-import { topologicalSortOperationNodes, safeWriteJson } from "./Onnx/Utils.js";
-import { initializeSchemaRegistry } from "./Onnx/Schema/index.js";
-import { OpRegistry } from "./Onnx/Schema/OpRegistry.js";
-import type { DecompositionRecipe } from "./Onnx/transformation/Recipe.js";
-import type OnnxGraph from "./Onnx/OnnxGraph.js";
-import { TrackedGraphBuilder } from "./Onnx/transformation/tracking/TrackedGraphBuilder.js";
-import { HistoryManager } from "./Onnx/transformation/tracking/HistoryManager.js";
+import { onnx2json } from "./io/OnnxToJson.js";
+import { createGraph } from "./io/OnnxGraphLoader.js";
+import { convertFlowGraphToOnnxJson, prepareGraphForExport } from "./io/OnnxGraphExporter.js";
+import { json2onnx } from "./io/JsonToOnnx.js";
+import { GraphBuilder } from "./onnx/GraphBuilder.js";
+import inferShapes, { inferNodeShape, propagateToRegion } from "./onnx/InferShapes.js";
+import { topologicalSortOperationNodes, safeWriteJson } from "./onnx/utils/index.js";
+import { initializeSchemaRegistry } from "./onnx/schema/index.js";
+import { OpRegistry } from "./onnx/schema/OpRegistry.js";
+import type { DecompositionRecipe } from "./onnx/transformation/Recipe.js";
+import type OnnxGraph from "./onnx/OnnxGraph.js";
+import { TrackedGraphBuilder } from "./onnx/transformation/tracking/TrackedGraphBuilder.js";
+import { HistoryManager } from "./onnx/transformation/tracking/HistoryManager.js";
 
 // --- 1. Core IR & Types ---
-export { default as OnnxGraph } from "./Onnx/OnnxGraph.js";
-export { default as OperationNode } from "./Onnx/OperationNode.js";
-export { default as TensorNode } from "./Onnx/TensorNode.js";
-export { default as ConstantNode } from "./Onnx/ConstantNode.js";
-export { default as RegionArgumentNode } from "./Onnx/RegionArgumentNode.js";
-export { default as OnnxEdge } from "./Onnx/OnnxEdge.js";
-export { default as OnnxInnerEdge } from "./Onnx/OnnxInnerEdge.js";
-export * from "./Onnx/OnnxTypes.js";
+export { default as OnnxGraph } from "./onnx/OnnxGraph.js";
+export { default as OperationNode } from "./onnx/OperationNode.js";
+export { default as TensorNode } from "./onnx/TensorNode.js";
+export { default as ConstantNode } from "./onnx/ConstantNode.js";
+export { default as RegionArgumentNode } from "./onnx/RegionArgumentNode.js";
+export { default as OnnxEdge } from "./onnx/OnnxEdge.js";
+export { default as OnnxInnerEdge } from "./onnx/OnnxInnerEdge.js";
+export * from "./onnx/OnnxTypes.js";
 export * from "./DecompositionOptions.js";
 
 // --- 2. Frontend, Backend & Formatters ---
 export { onnx2json, createGraph, json2onnx, convertFlowGraphToOnnxJson, prepareGraphForExport };
-export { default as OnnxDotFormatter } from "./Onnx/dot/OnnxDotFormatter.js";
+export { default as OnnxDotFormatter } from "./onnx/dot/OnnxDotFormatter.js";
 
 // --- 3. Schema, Shape Inference, Validation & Utilities ---
 export { initializeSchemaRegistry, OpRegistry, inferShapes, inferNodeShape, propagateToRegion };
@@ -36,49 +36,49 @@ export {
     getDataTypeMinIrVersion,
     getOpsetMinIrVersion,
     resolveExportVersions,
-} from "./Onnx/Schema/Versioning.js";
-export * from "./Onnx/Schema/OpSchema.js";
+} from "./onnx/schema/Versioning.js";
+export * from "./onnx/schema/OpSchema.js";
 export {
     default as validateGraph,
     type ValidationOptions,
-} from "./Onnx/validation/ValidateGraph.js";
-export { default as validateScope } from "./Onnx/validation/ValidateScope.js";
-export * from "./Onnx/Utils.js";
-export { partitionGraph } from "./Onnx/partitioning/Partition.js";
-export { splitByAncestor } from "./Onnx/partitioning/Strategies.js";
+} from "./onnx/validation/ValidateGraph.js";
+export { default as validateScope } from "./onnx/validation/ValidateScope.js";
+export * from "./onnx/utils/index.js";
+export { partitionGraph } from "./onnx/partitioning/Partition.js";
+export { splitByAncestor } from "./onnx/partitioning/Strategies.js";
 
 // --- 4. Transformation Infrastructure & Tracking ---
 export { GraphBuilder, TrackedGraphBuilder, HistoryManager };
-export * from "./Onnx/PassManager.js";
-export * from "./Onnx/transformation/Recipe.js";
-export * from "./Onnx/transformation/TransformationOpportunity.js";
-export * from "./Onnx/transformation/TransformationRegistry.js";
-export * from "./Onnx/transformation/OrchestratorPass.js";
-export * from "./Onnx/transformation/tracking/GraphActions.js";
+export * from "./onnx/PassManager.js";
+export * from "./onnx/transformation/Recipe.js";
+export * from "./onnx/transformation/TransformationOpportunity.js";
+export * from "./onnx/transformation/TransformationRegistry.js";
+export * from "./onnx/transformation/OrchestratorPass.js";
+export * from "./onnx/transformation/tracking/GraphActions.js";
 
 // --- 5. Standard Passes & Recipes Catalog (Including Metadata Helpers) ---
-export { default as OnnxGraphTransformer } from "./Onnx/transformation/index.js";
-export { CanonicalizationPass } from "./Onnx/transformation/canonicalization/CanonicalizationPass.js";
-export { InferShapesPass } from "./Onnx/transformation/InferShapesPass.js";
-export { LoopLoweringPass } from "./Onnx/transformation/loop-lowering/LoopLoweringPass.js";
+export { default as OnnxGraphTransformer } from "./onnx/transformation/index.js";
+export { CanonicalizationPass } from "./onnx/transformation/canonicalization/CanonicalizationPass.js";
+export { InferShapesPass } from "./onnx/transformation/InferShapesPass.js";
+export { LoopLoweringPass } from "./onnx/transformation/loop-lowering/LoopLoweringPass.js";
 export {
     LoopTilingPass,
     type LoopTilingOptions,
-} from "./Onnx/transformation/loop-lowering/LoopTilingPass.js";
-export { LoopFusionMatcher } from "./Onnx/transformation/loop-lowering/LoopFusionMatcher.js";
-export * from "./Onnx/transformation/loop-lowering/LoopBuilder.js";
-export * from "./Onnx/transformation/loop-lowering/LoopLoweringRecipe.js";
-export * from "./Onnx/transformation/loop-lowering/RecipeUtils.js";
-export { DeadCodeEliminationPass } from "./Onnx/transformation/optimization/DeadCodeEliminationPass.js";
-export { ShapeOptimizationPass } from "./Onnx/transformation/optimization/ShapeOptimizationPass.js";
+} from "./onnx/transformation/loop-lowering/LoopTilingPass.js";
+export { LoopFusionMatcher } from "./onnx/transformation/loop-lowering/LoopFusionMatcher.js";
+export * from "./onnx/transformation/loop-lowering/LoopBuilder.js";
+export * from "./onnx/transformation/loop-lowering/LoopLoweringRecipe.js";
+export * from "./onnx/transformation/loop-lowering/RecipeUtils.js";
+export { DeadCodeEliminationPass } from "./onnx/transformation/optimization/DeadCodeEliminationPass.js";
+export { ShapeOptimizationPass } from "./onnx/transformation/optimization/ShapeOptimizationPass.js";
 export {
     Schedule,
     LOOP_LOWERING_RECIPE_NAMES,
     type ScheduleConfig,
     type SchedulePresetName,
     type StopPhase,
-} from "./Onnx/transformation/Schedule.js";
-export * from "./Onnx/transformation/recipes.js";
+} from "./onnx/transformation/Schedule.js";
+export * from "./onnx/transformation/recipes.js";
 
 /**
  * Applies a list of decomposition recipes to an in-memory OnnxGraph.
