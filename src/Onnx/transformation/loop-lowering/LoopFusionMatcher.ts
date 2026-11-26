@@ -10,7 +10,6 @@ import {
     UNKNOWN_SHAPE,
     topologicalSortOperationNodes,
     int64Vec,
-    scalarInt64,
 } from "../../Utils.js";
 import { buildForLoopRegion, createAccumulatorCarry, type LoopScanOutput } from "./LoopBuilder.js";
 import {
@@ -54,6 +53,10 @@ import { LowerDynamicBatchedMatMulRecipe } from "./recipes/LowerDynamicBatchedMa
 import { LowerConcatLoopRecipe } from "./recipes/LowerConcatLoopRecipe.js";
 import { LowerSoftmaxLoopRecipe } from "./recipes/LowerSoftmaxLoopRecipe.js";
 import { LowerLayerNormLoopRecipe } from "./recipes/LowerLayerNormLoopRecipe.js";
+import { LowerLogSoftmaxLoopRecipe } from "./recipes/LowerLogSoftmaxLoopRecipe.js";
+import { LowerRMSNormLoopRecipe } from "./recipes/LowerRMSNormLoopRecipe.js";
+import { LowerDetLoopRecipe } from "./recipes/LowerDetLoopRecipe.js";
+import { LowerTopKScalarLoopRecipe } from "./recipes/LowerTopKScalarLoopRecipe.js";
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -105,6 +108,10 @@ export class LoopFusionMatcher {
                       new LowerConcatLoopRecipe(),
                       new LowerSoftmaxLoopRecipe(),
                       new LowerLayerNormLoopRecipe(),
+                      new LowerLogSoftmaxLoopRecipe(),
+                      new LowerRMSNormLoopRecipe(),
+                      new LowerDetLoopRecipe(),
+                      new LowerTopKScalarLoopRecipe(),
                   ];
 
         this.recipes.sort((a, b) => b.priority - a.priority);
@@ -342,27 +349,7 @@ export class LoopFusionMatcher {
             }
         } else {
             const oneShape = innerBuilder.createConstant("one_shape", int64Vec([1]));
-            let sharedStoreIdx: ConcreteValueNode = effectiveIter;
-            if (
-                !finalNextCarry &&
-                this.options.indexingMode === IndexingMode.Pointer &&
-                !axisPerm
-            ) {
-                const initOutPtr = outerBuilder.createConstant(
-                    `init_out_ptr_${rootOp.id}`,
-                    scalarInt64(0),
-                );
-                const outPtrIn = loopCtx.addCarry(
-                    `out_ptr_${rootOp.id}`,
-                    initOutPtr,
-                    DataType.INT64,
-                    [],
-                );
-                const oneConst = innerBuilder.createConstant(`out_step_1`, scalarInt64(1));
-                const [nextOutPtr] = innerBuilder.createOp("Add", [outPtrIn, oneConst]);
-                loopCtx.setNextState(outPtrIn, nextOutPtr);
-                sharedStoreIdx = outPtrIn;
-            }
+            const sharedStoreIdx: ConcreteValueNode = effectiveIter;
             const [iterUnsq] = !finalNextCarry
                 ? innerBuilder.createOp("Reshape", [sharedStoreIdx, oneShape])
                 : [sharedStoreIdx];
