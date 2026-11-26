@@ -35,9 +35,10 @@ export class LowerMinRecipe implements DecompositionRecipe {
         const Yshape: KnownShape | undefined = Y.shape as KnownShape | undefined;
         const OutShape = (Yshape ?? A.shape) as KnownShape;
         const Output = [{ type: OutType, shape: OutShape }];
+        const BoolOutput = [{ type: DataType.BOOL, shape: OutShape }];
 
         //Less(A,B)
-        const LessOut = builder.createOp("Less", [A, B], {}, Output)[0];
+        const LessOut = builder.createOp("Less", [A, B], {}, BoolOutput)[0];
 
         //Where(LessOut)
         const WhereOut = builder.createOp("Where", [LessOut, A, B], {}, Output)[0];

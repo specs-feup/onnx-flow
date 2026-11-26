@@ -66,7 +66,7 @@ export interface DecompositionOptions {
  *  - recurse: false
  *  - coalesce: true
  *  - loopLowering: true
- *  - optimize: false
+ *  - optimize: true
  *  - decomposeForCgra: false
  *  - indexingMode: "pointer"
  *  - useScanOutputs: false
@@ -77,7 +77,7 @@ export const defaultDecompositionOptions: DecompositionOptions = {
     recurse: false,
     coalesce: true,
     loopLowering: true,
-    optimize: false,
+    optimize: true,
     decomposeForCgra: false,
     indexingMode: IndexingMode.Pointer,
     tileSize: 0,
