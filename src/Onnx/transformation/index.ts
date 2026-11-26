@@ -12,6 +12,7 @@ import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
 import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
 import { ShapeOptimizationPass } from "./optimization/ShapeOptimizationPass.js";
 import { DeadCodeEliminationPass } from "./optimization/DeadCodeEliminationPass.js";
+import { Schedule, resolveScheduleConfig, type ScheduleConfig } from "./Schedule.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -28,6 +29,9 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     private tileSize?: number | undefined;
     private targetOpset?: number | undefined;
     private irVersion?: number | undefined;
+    private useScanOutputs: boolean;
+    private fuseMultiOutput: boolean;
+    private scheduleConfig?: ScheduleConfig | undefined;
 
     // Overload signatures (for TypeScript type checking)
     constructor();
@@ -65,6 +69,8 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.decomposeForCgra = decomposeForCgra;
             this.indexingMode = indexingMode;
             this.tileSize = tileSize;
+            this.useScanOutputs = defaultDecompositionOptions.useScanOutputs ?? false;
+            this.fuseMultiOutput = defaultDecompositionOptions.fuseMultiOutput ?? false;
         } else {
             this.canonicalize =
                 fuseOrOptions.canonicalize ?? defaultDecompositionOptions.canonicalize;
@@ -81,6 +87,13 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             this.tileSize = fuseOrOptions.tileSize ?? defaultDecompositionOptions.tileSize;
             this.targetOpset = fuseOrOptions.targetOpset;
             this.irVersion = fuseOrOptions.irVersion;
+            this.useScanOutputs =
+                fuseOrOptions.useScanOutputs ?? defaultDecompositionOptions.useScanOutputs ?? false;
+            this.fuseMultiOutput =
+                fuseOrOptions.fuseMultiOutput ??
+                defaultDecompositionOptions.fuseMultiOutput ??
+                false;
+            this.scheduleConfig = resolveScheduleConfig(fuseOrOptions.schedule);
         }
     }
 
@@ -111,16 +124,32 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             return graph;
         }
 
+        const scheduleCfg = this.scheduleConfig;
+        if (scheduleCfg?.cacheReads && scheduleCfg.cacheReads.length > 0) {
+            pm.addPass({
+                name: "ScheduleCacheRead",
+                run: (g, hm) => Schedule.applyCacheReads(g, scheduleCfg, hm),
+            });
+        }
+
         if (this.canonicalize) {
             // =========================================================================
             // PHASE 1: Normalization (Canonicalization)
             // =========================================================================
             // We run this first to break down complex ops (like Gemm -> MatMul + Add)
             // or Softmax into their primitive mathematical components.
-            pm.addPass(new CanonicalizationPass());
+            pm.addPass(
+                new CanonicalizationPass(undefined, {
+                    loopLowering: this.loopLowering,
+                    ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
+                }),
+            );
 
-            // Clean up any dangling nodes left over by the canonicalization rewrites
-            //pm.addPass(new DeadCodeEliminationPass());
+            // Sweep dangling dead nodes left by canonicalization (e.g. final unused bits in
+            // Exp/Reciprocal range reduction) before LoopLowering fusion inspects consumer graphs.
+            if (this.optimize) {
+                pm.addPass(new DeadCodeEliminationPass());
+            }
 
             // Ensure shapes are strictly inferred before we try to lower anything,
             // as our loop recipes rely heavily on broadcasting shape math.
@@ -138,12 +167,22 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     coalesce: this.coalesce,
                     fuse: this.fuse,
                     indexingMode: this.indexingMode,
+                    useScanOutputs: this.useScanOutputs,
+                    fuseMultiOutput: this.fuseMultiOutput,
+                    ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
                 }),
             );
 
             if (this.tileSize !== undefined && this.tileSize > 1) {
                 pm.addPass(new LoopTilingPass({ tileSize: this.tileSize }));
             }
+        }
+
+        if (scheduleCfg) {
+            pm.addPass({
+                name: "ScheduleLoopTransforms",
+                run: (g, hm) => Schedule.applyLoopTransforms(g, scheduleCfg, hm),
+            });
         }
 
         // =========================================================================

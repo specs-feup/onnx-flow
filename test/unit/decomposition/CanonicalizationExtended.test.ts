@@ -595,4 +595,42 @@ describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
         expect(mpIdx.producedOps).toContain("Loop");
         expect(mpIdx.producedOps).toContain("Expand");
     });
+
+    it("decomposes fully dynamic Flatten, LpPool, NegativeLogLikelihoodLoss, and SoftmaxCrossEntropyLoss", () => {
+        const flat = applyRecipe(
+            new Recipes.canonicalization.Flatten(),
+            "Flatten",
+            [[-1, -1, -1, -1]],
+            { axis: 2 },
+        );
+        expect(flat.producedOps).not.toContain("Flatten");
+        expect(flat.producedOps).toContain("Reshape");
+
+        const lp = applyRecipe(
+            new Recipes.canonicalization.LpPool(),
+            "LpPool",
+            [[-1, -1, -1, -1]],
+            { kernel_shape: [2, 2], strides: [2, 2], auto_pad: "SAME_UPPER", p: 2 },
+        );
+        expect(lp.producedOps).not.toContain("LpPool");
+        expect(lp.producedOps).toContain("AveragePool");
+
+        const nll = applyRecipe(
+            new Recipes.canonicalization.NegativeLogLikelihoodLoss(),
+            "NegativeLogLikelihoodLoss",
+            [[-1, -1, -1], { shape: [-1, -1], dataType: DataType.INT64 }],
+            { reduction: "mean" },
+        );
+        expect(nll.producedOps).not.toContain("NegativeLogLikelihoodLoss");
+        expect(nll.producedOps).toContain("OneHot");
+
+        const sce = applyRecipe(
+            new Recipes.canonicalization.SoftmaxCrossEntropyLoss(),
+            "SoftmaxCrossEntropyLoss",
+            [[-1, -1], { shape: [-1], dataType: DataType.INT64 }],
+            { reduction: "mean" },
+        );
+        expect(sce.producedOps).not.toContain("SoftmaxCrossEntropyLoss");
+        expect(sce.producedOps).toContain("LogSoftmax");
+    });
 });

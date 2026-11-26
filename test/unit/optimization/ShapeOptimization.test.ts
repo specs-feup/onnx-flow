@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
 import TensorNode from "../../../src/Onnx/TensorNode.js";
+import OperationNode from "../../../src/Onnx/OperationNode.js";
+import OnnxEdge from "../../../src/Onnx/OnnxEdge.js";
 import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
 import { ShapeOptimizationPass } from "../../../src/Onnx/transformation/optimization/ShapeOptimizationPass.js";
@@ -115,5 +117,64 @@ describe("ShapeOptimizationPass", () => {
             .map((o) => o.type);
         expect(opTypes).not.toContain("MatMul");
         expect(opTypes).toContain("Mul");
+    });
+
+    it("recurses into Loop subgraphs to fold static Shape nodes inside loop bodies", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph);
+
+        const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bodyBuilder = new GraphBuilder(body, "body");
+        const iterIn = body
+            .addNode("iter")
+            .init(new TensorNode.Builder(DataType.INT64, [], "input"))
+            .as(TensorNode);
+        const condIn = body
+            .addNode("cond_in")
+            .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
+            .as(TensorNode);
+        const staticInner = body
+            .addNode("InnerT")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        const [condOut] = bodyBuilder.createOp("Identity", [condIn], {}, [
+            { type: DataType.BOOL, shape: [] },
+        ]);
+        if (condOut.is(TensorNode)) condOut.as(TensorNode).setType("output");
+        const [shOut] = bodyBuilder.createOp("Shape", [staticInner], {}, [
+            { type: DataType.INT64, shape: [2] },
+        ]);
+        if (shOut.is(TensorNode)) shOut.as(TensorNode).setType("output");
+
+        const maxTrip = builder.createConstant("trip", {
+            dataType: DataType.INT64,
+            dims: [],
+            int64Data: [2],
+        });
+        const cond = builder.createConstant("cond", {
+            dataType: DataType.BOOL,
+            dims: [],
+            int32Data: [1],
+        });
+        const loopOp = graph
+            .addNode("loop_test")
+            .init(new OperationNode.Builder("Loop", [maxTrip, cond], {}, [body]))
+            .as(OperationNode);
+        const loopOut = graph
+            .addNode("loop_out")
+            .init(new TensorNode.Builder(DataType.INT64, [2, 2], "output"))
+            .as(TensorNode);
+        graph.addEdge(maxTrip, loopOp).init(new OnnxEdge.Builder(DataType.INT64, []));
+        graph.addEdge(cond, loopOp).init(new OnnxEdge.Builder(DataType.BOOL, []));
+        graph.addEdge(loopOp, loopOut).init(new OnnxEdge.Builder(DataType.INT64, [2, 2]));
+        expect(iterIn.id).toBe("iter");
+
+        const changed = new ShapeOptimizationPass().run(graph);
+        expect(changed).toBe(true);
+        const bodyOps = body
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(bodyOps).not.toContain("Shape");
     });
 });

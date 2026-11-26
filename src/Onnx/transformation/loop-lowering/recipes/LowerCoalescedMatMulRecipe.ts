@@ -11,7 +11,7 @@ import {
     scalarInt64,
     broadcastShapes,
     int64Vec,
-    UNKNOWN_SHAPE,
+    makeTensorProto,
     computeStrides,
     toStaticShape,
 } from "../../../Utils.js";
@@ -27,6 +27,10 @@ import {
     buildLinearIndex,
     decodeMixedRadix,
     buildAguPointer,
+    getOrCreateIterationSpaceCounters,
+    computeMatMulOutputDimsMixed,
+    mulMixed,
+    packShapeVector,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
@@ -102,41 +106,30 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
             return { totalIters: prodBatch * M * N * K, carryShape: [prodBatch * M * N] };
         }
 
-        // 2. Dynamic Case (Dummy tensor approach)
+        // 2. Dynamic Case: O(rank) INT64 MatMul output & contraction bounds (no dummy tensors)
         const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `coal_bounds_${op.id}`);
         const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        const [shapeA] = builder.createOp("Shape", [A]);
-        const [shapeB] = builder.createOp("Shape", [B]);
+        const { outDims, kDim } = computeMatMulOutputDimsMixed(builder, A, B, `coalb_${op.id}`);
+        const targetShapeNode =
+            outDims.length === 0
+                ? builder.createConstant(`coalb_empty_${op.id}`, int64Vec([]))
+                : packShapeVector(builder, outDims, `coalb_tsh_${op.id}`);
 
-        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyA] = builder.createOp("ConstantOfShape", [shapeA], {}, expectedCoS);
-        const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
+        const carrySize: number | ConcreteValueNode =
+            outDims.length === 0
+                ? 1
+                : builder.createOp("ReduceProd", [targetShapeNode, axes0], { keepdims: 0 })[0];
+        const carryShape =
+            typeof carrySize === "number"
+                ? builder.createConstant(`coalb_csh_${op.id}`, int64Vec([carrySize]))
+                : builder.createOp("Unsqueeze", [carrySize, axes0])[0];
 
-        const expectedMM = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyOut] = builder.createOp("MatMul", [dummyA, dummyB], {}, expectedMM);
-
-        // Get K dynamically from A
-        const [rankA] = builder.createOp("Size", [shapeA]);
-        const kOffset = builder.createConstant(`k_off_${op.id}`, scalarInt64(-1));
-        const [kAxis] = builder.createOp("Add", [rankA, kOffset]);
-        const [kValRaw] = builder.createOp(
-            "Gather",
-            [shapeA, builder.createOp("Unsqueeze", [kAxis, axes0])[0]],
-            { axis: 0 },
-        );
-        const [kVal] = builder.createOp("Squeeze", [kValRaw, axes0]);
-
-        const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
-
-        // carryShape is the output shape size (batch * M * N)
-        const [carrySize] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
-            keepdims: 0,
-        });
-        const [carryShape] = builder.createOp("Unsqueeze", [carrySize, axes0]);
-
-        // totalIters = carrySize * K
-        const [totalIters] = builder.createOp("Mul", [carrySize, kVal]);
+        const totalItersMixed = mulMixed(builder, carrySize, kDim, `coalb_it_${op.id}`);
+        const totalIters =
+            typeof totalItersMixed === "number"
+                ? builder.createConstant(`coalb_tot_${op.id}`, scalarInt64(totalItersMixed))
+                : totalItersMixed;
 
         return { totalIters, carryShape, targetShape: targetShapeNode };
     }
@@ -226,10 +219,19 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         let idxA: ConcreteValueNode;
         let idxB: ConcreteValueNode;
         let flatOutIdx: ConcreteValueNode;
+        let kIdxScalar: ConcreteValueNode;
 
         // 3. Address Generation: Pointer Mode (AGU) vs Radix Mode (Div/Mod)
         if (loopCtx && loopCtx.indexingMode === IndexingMode.Pointer) {
             const iterDims: (number | ValueNode)[] = [...batchOut, M, N, K];
+            const { counters } = getOrCreateIterationSpaceCounters(
+                builder,
+                loopCtx,
+                valueMap,
+                iterDims,
+                `mm_space_${op.id}`,
+            );
+            kIdxScalar = counters[counters.length - 1];
 
             const mulVal = (
                 a: number | ValueNode,
@@ -301,6 +303,7 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
             const [remNK] = builder.createOp("Mod", [remMNK, nkNode]);
             const [jIdx] = builder.createOp("Div", [remNK, kNode]);
             const [kIdx] = builder.createOp("Mod", [remNK, kNode]);
+            kIdxScalar = kIdx;
 
             const getFlatIdx = (
                 targetBatch: (number | ValueNode)[],
@@ -397,7 +400,33 @@ export class LowerCoalescedMatMulRecipe implements LoopLoweringRecipe {
         const valB = gatherScalar(builder, flatB, idxB);
         const [prod] = builder.createOp("Mul", [valA, valB]);
 
-        // 5. Update the accumulator (Carry state)
+        // 5. Update the accumulator (0D scalar register when loopCtx is active to avoid carry Gather)
+        const dtype = (inputs[0].literalType || DataType.FLOAT) as DataType;
+        const zeroI64 = builder.createConstant(`mm_z64_${op.id}`, scalarInt64(0));
+        const zeroVal = builder.createConstant(`mm_zval_${op.id}`, makeTensorProto(dtype, [], [0]));
+
+        let baseAcc: ConcreteValueNode;
+        if (loopCtx !== undefined) {
+            const initAcc = loopCtx.outerBuilder.createConstant(
+                `mm_init_acc_${op.id}`,
+                makeTensorProto(dtype, [], [0]),
+            );
+            const accIn = loopCtx.addCarry(`mm_acc_${op.id}`, initAcc, dtype, []);
+            const [isFirstK] = builder.createOp("Equal", [kIdxScalar, zeroI64]);
+            [baseAcc] = builder.createOp("Where", [isFirstK, zeroVal, accIn]);
+            const [newSum] = builder.createOp("Add", [baseAcc, prod]);
+            loopCtx.setNextState(accIn, newSum);
+
+            const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
+            const [scatterOut] = builder.createOp(
+                "ScatterElements",
+                [carryNode, flatOutIdxUnsq, builder.createOp("Unsqueeze", [newSum, axes])[0]],
+                { axis: 0 },
+            );
+
+            return { resultNode: newSum, nextCarry: scatterOut };
+        }
+
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
         const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
 

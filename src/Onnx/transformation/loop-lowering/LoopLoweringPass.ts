@@ -4,15 +4,25 @@ import { LoopFusionMatcher } from "./LoopFusionMatcher.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
+import type { ScheduleConfig } from "../Schedule.js";
 
 export class LoopLoweringPass implements GraphPass {
     public readonly name = "LoopLoweringV2";
 
     constructor(
-        private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode } = {
+        private options: {
+            coalesce: boolean;
+            fuse: boolean;
+            indexingMode: IndexingMode;
+            useScanOutputs?: boolean;
+            fuseMultiOutput?: boolean;
+            schedule?: ScheduleConfig;
+        } = {
             coalesce: true,
             fuse: true,
             indexingMode: IndexingMode.Pointer,
+            useScanOutputs: false,
+            fuseMultiOutput: false,
         },
     ) {}
 

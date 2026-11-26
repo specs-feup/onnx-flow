@@ -1,10 +1,13 @@
 import type OnnxGraph from "../../OnnxGraph.js";
+import type OperationNode from "../../OperationNode.js";
 import type { GraphPass } from "../../PassManager.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 import type { DecompositionRecipe } from "../Recipe.js";
 import { topologicalSortOperationNodes } from "../../Utils.js";
+
+import { LOOP_LOWERING_RECIPE_NAMES, lookupScheduleMap, type ScheduleConfig } from "../Schedule.js";
 
 import { LowerSoftmaxRecipe } from "./recipes/LowerSoftmaxRecipe.js";
 import { LowerSliceRecipe } from "./recipes/LowerSliceRecipe.js";
@@ -34,8 +37,13 @@ import { LowerCeluRecipe } from "./recipes/LowerCeluRecipe.js";
 import { LowerSeluRecipe } from "./recipes/LowerSeluRecipe.js";
 import { LowerOrRecipe } from "./recipes/LowerOrRecipe.js";
 import { LowerDivRecipe } from "./recipes/LowerDivRecipe.js";
+import { LowerDivByConstantRecipe } from "./recipes/LowerDivByConstantRecipe.js";
 import { LowerModRecipe } from "./recipes/LowerModRecipe.js";
 import { LowerPowRecipe } from "./recipes/LowerPowRecipe.js";
+import { LowerPowSmallIntRecipe } from "./recipes/LowerPowSmallIntRecipe.js";
+import { LowerConv1x1ToMatMulRecipe } from "./recipes/LowerConv1x1ToMatMulRecipe.js";
+import { DataType, type ValueNode } from "../../OnnxTypes.js";
+import { toStaticShape } from "../../Utils.js";
 import { LowerNotRecipe } from "./recipes/LowerNotRecipe.js";
 import { LowerSigmoidRecipe } from "./recipes/LowerSigmoidRecipe.js";
 import { LowerSoftsignRecipe } from "./recipes/LowerSoftsignRecipe.js";
@@ -142,7 +150,10 @@ export class CanonicalizationPass implements GraphPass {
     // Map ONNX OpTypes to ordered lists of candidate canonicalization recipes (first match wins)
     private registry = new Map<string, DecompositionRecipe[]>();
 
-    constructor(customRecipes?: DecompositionRecipe[]) {
+    constructor(
+        customRecipes?: DecompositionRecipe[],
+        private options: { loopLowering?: boolean; schedule?: ScheduleConfig } = {},
+    ) {
         const defaultRecipes: DecompositionRecipe[] = [
             new LowerSoftmaxRecipe(),
             new LowerSliceRecipe(),
@@ -154,6 +165,7 @@ export class CanonicalizationPass implements GraphPass {
             new LowerConcatRecipe(),
             new LowerClipRecipe(),
             new LowerAveragePoolRecipe(),
+            new LowerConv1x1ToMatMulRecipe(),
             new LowerRNNLoopRecipe(),
             new LowerGRULoopRecipe(),
             new LowerLSTMLoopRecipe(),
@@ -190,8 +202,10 @@ export class CanonicalizationPass implements GraphPass {
             new LowerCeluRecipe(),
             new LowerSeluRecipe(),
             new LowerOrRecipe(),
+            new LowerDivByConstantRecipe(),
             new LowerDivRecipe(),
             new LowerModRecipe(),
+            new LowerPowSmallIntRecipe(),
             new LowerPowRecipe(),
             new LowerNotRecipe(),
             new LowerSigmoidRecipe(),
@@ -295,6 +309,34 @@ export class CanonicalizationPass implements GraphPass {
         return this.registry.get(opType) ?? [];
     }
 
+    private shouldDeferToLoopLowering(op: OperationNode.Class): boolean {
+        if (this.options.loopLowering !== true) return false;
+        const ins = op.getInputs();
+        if (!ins || ins.length === 0) return false;
+
+        if (op.type === "Slice") {
+            // Defer multi-axis slices to LowerSliceLoop so all axes execute in a single Loop.
+            const rank = ins[0].shape.length;
+            const k = ins.length > 1 ? toStaticShape(ins[1].shape)[0] : -1;
+            return rank > 0 && k > 1;
+        }
+
+        if (op.type === "Concat") {
+            if (ins.length < 2 || ins.length > 8) return false;
+            const rank = ins[0].shape.length;
+            if (rank <= 0) return false;
+            const isSmallIntShape =
+                rank === 1 &&
+                (ins[0].literalType === DataType.INT64 || ins[0].literalType === DataType.INT32);
+            return (
+                !isSmallIntShape &&
+                ins.every((t: ValueNode) => Array.isArray(t.shape) && t.shape.length === rank)
+            );
+        }
+
+        return false;
+    }
+
     public run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean {
         let globalChanged = false;
         let localChanged = true;
@@ -306,11 +348,30 @@ export class CanonicalizationPass implements GraphPass {
 
             for (const op of ops) {
                 if (!graph.hasNode(op.id)) continue;
+                const stopPhase = lookupScheduleMap(this.options.schedule?.stopAt, op);
+                if (stopPhase === "none") continue;
+
+                const preferredRecipe = lookupScheduleMap(
+                    this.options.schedule?.recipeOverrides,
+                    op,
+                );
+                if (
+                    preferredRecipe !== undefined &&
+                    this.options.loopLowering !== undefined &&
+                    LOOP_LOWERING_RECIPE_NAMES.has(preferredRecipe)
+                ) {
+                    continue;
+                }
+                if (preferredRecipe === undefined && this.shouldDeferToLoopLowering(op)) continue;
 
                 const candidates = this.registry.get(op.type);
                 if (candidates === undefined) continue;
 
-                const recipe = candidates.find((candidate) => candidate.match(op));
+                const recipe =
+                    preferredRecipe !== undefined
+                        ? (candidates.find((c) => c.name === preferredRecipe && c.match(op)) ??
+                          candidates.find((c) => c.match(op)))
+                        : candidates.find((candidate) => candidate.match(op));
                 if (recipe === undefined) continue;
 
                 const opportunity = new TransformationOpportunity(
@@ -318,6 +379,21 @@ export class CanonicalizationPass implements GraphPass {
                     op.id,
                     `Apply ${recipe.name} to ${op.type}`,
                     (builder) => recipe.apply(op, builder),
+                );
+
+                const prevOps = op.getMetadata("sourceOps");
+                const prevTypes = op.getMetadata("sourceOpTypes");
+                const inheritedSrcOps = Array.from(
+                    new Set([...(Array.isArray(prevOps) ? prevOps.map(String) : []), op.id]),
+                );
+                const inheritedSrcTypes = Array.from(
+                    new Set([...(Array.isArray(prevTypes) ? prevTypes.map(String) : []), op.type]),
+                );
+                const beforeIds = new Set(
+                    graph
+                        .getOperationNodes()
+                        .toArray()
+                        .map((o) => o.id),
                 );
 
                 const builder = new TrackedGraphBuilder(
@@ -328,6 +404,13 @@ export class CanonicalizationPass implements GraphPass {
                 );
 
                 opportunity.apply(builder);
+
+                for (const newOp of graph.getOperationNodes().toArray()) {
+                    if (!beforeIds.has(newOp.id)) {
+                        newOp.setMetadata("sourceOps", inheritedSrcOps);
+                        newOp.setMetadata("sourceOpTypes", inheritedSrcTypes);
+                    }
+                }
 
                 localChanged = true;
                 globalChanged = true;

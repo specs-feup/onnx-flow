@@ -1,17 +1,18 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import {
-    type ValueNode,
-    type ConcreteValueNode,
-    type KnownShape,
-    DataType,
-} from "../../../OnnxTypes.js";
+import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
 import type { LoopCarryContext, LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
-import { resolveRecipeInput, squeezeIfLen1 } from "../RecipeUtils.js";
+import {
+    broadcastMixedShapes,
+    extractMixedDims,
+    packShapeVector,
+    resolveRecipeInput,
+    squeezeIfLen1,
+} from "../RecipeUtils.js";
 import { OpRegistry } from "../../../Schema/OpRegistry.js";
 import { OpCategory } from "../../../Schema/OpSchema.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
-import { asStaticDims, int64Vec, UNKNOWN_SHAPE } from "../../../Utils.js";
+import { asStaticDims, int64Vec, toStaticShape } from "../../../Utils.js";
 
 export class LowerElementWiseRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerElementWise";
@@ -70,30 +71,30 @@ export class LowerElementWiseRecipe implements LoopLoweringRecipe {
             return { totalIters, carryShape: staticOut };
         }
 
-        // 2. Dynamic Case (compute broadcasted shape via dummy math)
+        // 2. Dynamic Case: O(rank) INT64 shape broadcasting (zero dummy tensor allocations)
         const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `ew_bounds_${op.id}`);
         const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        let currentDummy: ValueNode | undefined = undefined;
+        if (inputs.length === 0) return { totalIters: 1, carryShape: [1] };
 
-        for (let i = 0; i < inputs.length; i++) {
-            const inp = inputs[i];
-
-            const [shapeNode] = builder.createOp("Shape", [inp]);
-            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-            const [dummy] = builder.createOp("ConstantOfShape", [shapeNode], {}, expectedCoS);
-
-            if (!currentDummy) {
-                currentDummy = dummy;
-            } else {
-                const expectedAdd = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-                [currentDummy] = builder.createOp("Add", [currentDummy, dummy], {}, expectedAdd);
+        let targetShapeNode: ConcreteValueNode;
+        if (inputs.length === 1) {
+            [targetShapeNode] = builder.createOp("Shape", [inputs[0]]);
+        } else {
+            const perInputDims = inputs.map((inp, i) =>
+                extractMixedDims(builder, inp, toStaticShape(inp.shape), `ewb_${i}_${op.id}`),
+            );
+            const outDims = broadcastMixedShapes(builder, perInputDims, `ewb_bc_${op.id}`);
+            if (outDims.length === 0) {
+                return {
+                    totalIters: 1,
+                    carryShape: [1],
+                    targetShape: int64Vec([]) as unknown as ConcreteValueNode,
+                };
             }
+            targetShapeNode = packShapeVector(builder, outDims, `ewb_tsh_${op.id}`);
         }
 
-        if (!currentDummy) return { totalIters: 1, carryShape: [1] };
-
-        const [targetShapeNode] = builder.createOp("Shape", [currentDummy]);
         const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
             keepdims: 0,
         });

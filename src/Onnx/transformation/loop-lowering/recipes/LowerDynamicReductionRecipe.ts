@@ -6,6 +6,7 @@ import {
     getIntAttr,
     getIntsAttr,
     int64Vec,
+    makeTensorProto,
     normalizeAxis,
     readConstIntegerVectorFromTensorNode,
     scalarInt64,
@@ -265,7 +266,31 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
         const flatOutIdx = buildLinearIndex(builder, outCoords, accStrides, `dredi_out_${op.id}`);
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
-        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
+        const dtype = ins[0].literalType;
+        const sortedAxes = Array.from(new Set(axesList)).sort((a, b) => a - b);
+        const isContiguousSuffix =
+            sortedAxes.length > 0 &&
+            sortedAxes.every((ax, idx) => ax === rank - sortedAxes.length + idx);
+        const canScalarAcc =
+            loopCtx !== undefined &&
+            isContiguousSuffix &&
+            (dtype === DataType.FLOAT ||
+                dtype === DataType.DOUBLE ||
+                dtype === DataType.INT32 ||
+                dtype === DataType.INT64);
+
+        let accIn: ReturnType<LoopCarryContext["addCarry"]> | undefined;
+        let currentAcc: ConcreteValueNode;
+        if (canScalarAcc) {
+            const initAcc = loopCtx!.outerBuilder.createConstant(
+                `dred_init_acc_${op.id}`,
+                makeTensorProto(dtype, [], [0]),
+            );
+            accIn = loopCtx!.addCarry(`dred_acc_${op.id}`, initAcc, dtype, []);
+            currentAcc = accIn;
+        } else {
+            currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
+        }
 
         let mathOpType = "Add";
         if (op.type === "ReduceMax") mathOpType = "Max";
@@ -280,6 +305,9 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
         }
 
         const [finalValue] = builder.createOp("Where", [isFirstHit!, val, mathOut]);
+        if (accIn !== undefined) {
+            loopCtx!.setNextState(accIn, finalValue);
+        }
         const [updateVal] = builder.createOp("Unsqueeze", [finalValue, axes]);
         const [nextCarry] = builder.createOp(
             "ScatterElements",

@@ -23,6 +23,9 @@ import { LowerOneHotLoopRecipe } from "./loop-lowering/recipes/LowerOneHotLoopRe
 import { LowerDynamicReductionRecipe } from "./loop-lowering/recipes/LowerDynamicReductionRecipe.js";
 import { LowerResizeCubicRecipe } from "./loop-lowering/recipes/LowerResizeCubicRecipe.js";
 import { LowerDynamicBatchedMatMulRecipe } from "./loop-lowering/recipes/LowerDynamicBatchedMatMulRecipe.js";
+import { LowerConcatLoopRecipe } from "./loop-lowering/recipes/LowerConcatLoopRecipe.js";
+import { LowerSoftmaxLoopRecipe } from "./loop-lowering/recipes/LowerSoftmaxLoopRecipe.js";
+import { LowerLayerNormLoopRecipe } from "./loop-lowering/recipes/LowerLayerNormLoopRecipe.js";
 
 // Canonicalization Recipes
 import { LowerSoftmaxRecipe } from "./canonicalization/recipes/LowerSoftmaxRecipe.js";
@@ -55,6 +58,7 @@ import { LowerCeluRecipe } from "./canonicalization/recipes/LowerCeluRecipe.js";
 import { LowerCoshRecipe } from "./canonicalization/recipes/LowerCoshRecipe.js";
 import { LowerCosRecipe } from "./canonicalization/recipes/LowerCosRecipe.js";
 import { LowerDivRecipe } from "./canonicalization/recipes/LowerDivRecipe.js";
+import { LowerDivByConstantRecipe } from "./canonicalization/recipes/LowerDivByConstantRecipe.js";
 import { LowerEluRecipe } from "./canonicalization/recipes/LowerEluRecipe.js";
 import { LowerHardSigmoidRecipe } from "./canonicalization/recipes/LowerHardSigmoidRecipe.js";
 import { LowerIsInfRecipe } from "./canonicalization/recipes/LowerIsInfRecipe.js";
@@ -65,6 +69,8 @@ import { LowerMishRecipe } from "./canonicalization/recipes/LowerMishRecipe.js";
 import { LowerModRecipe } from "./canonicalization/recipes/LowerModRecipe.js";
 import { LowerNotRecipe } from "./canonicalization/recipes/LowerNotRecipe.js";
 import { LowerPowRecipe } from "./canonicalization/recipes/LowerPowRecipe.js";
+import { LowerPowSmallIntRecipe } from "./canonicalization/recipes/LowerPowSmallIntRecipe.js";
+import { LowerConv1x1ToMatMulRecipe } from "./canonicalization/recipes/LowerConv1x1ToMatMulRecipe.js";
 import { LowerRoundAddRecipe } from "./canonicalization/recipes/LowerRoundAddRecipe.js";
 import { LowerRoundStepRecipe } from "./canonicalization/recipes/LowerRoundStepRecipe.js";
 import { LowerSeluRecipe } from "./canonicalization/recipes/LowerSeluRecipe.js";
@@ -183,8 +189,11 @@ export {
     LowerAbsRecipe,
     LowerSignRecipe,
     LowerDivRecipe,
+    LowerDivByConstantRecipe,
     LowerModRecipe,
     LowerPowRecipe,
+    LowerPowSmallIntRecipe,
+    LowerConv1x1ToMatMulRecipe,
     LowerNotRecipe,
     LowerSigmoidRecipe,
     LowerSoftsignRecipe,
@@ -319,6 +328,9 @@ export {
     LowerDynamicReductionRecipe,
     LowerResizeCubicRecipe,
     LowerDynamicBatchedMatMulRecipe,
+    LowerConcatLoopRecipe,
+    LowerSoftmaxLoopRecipe,
+    LowerLayerNormLoopRecipe,
 };
 
 // Export an organized catalog object for easy IDE discovery/autocomplete
@@ -343,8 +355,11 @@ export const Recipes = {
         Abs: LowerAbsRecipe,
         Sign: LowerSignRecipe,
         Div: LowerDivRecipe,
+        DivByConstant: LowerDivByConstantRecipe,
         Mod: LowerModRecipe,
         Pow: LowerPowRecipe,
+        PowSmallInt: LowerPowSmallIntRecipe,
+        Conv1x1ToMatMul: LowerConv1x1ToMatMulRecipe,
         Not: LowerNotRecipe,
         Sigmoid: LowerSigmoidRecipe,
         Softsign: LowerSoftsignRecipe,
@@ -479,5 +494,8 @@ export const Recipes = {
         DynamicReduction: LowerDynamicReductionRecipe,
         ResizeCubic: LowerResizeCubicRecipe,
         DynamicBatchedMatMul: LowerDynamicBatchedMatMulRecipe,
+        ConcatLoop: LowerConcatLoopRecipe,
+        SoftmaxLoop: LowerSoftmaxLoopRecipe,
+        LayerNormLoop: LowerLayerNormLoopRecipe,
     },
 };

@@ -10,7 +10,7 @@ import {
     scalarInt64,
     computeStrides,
     int64Vec,
-    UNKNOWN_SHAPE,
+    makeTensorProto,
     toStaticShape,
 } from "../../../Utils.js";
 import type {
@@ -28,6 +28,8 @@ import {
     buildLinearIndex,
     buildAguPointer,
     getOrCreateIterationSpaceCounters,
+    extractMixedDims,
+    packShapeVector,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import ConstantNode from "../../../ConstantNode.js";
@@ -114,23 +116,35 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
             const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `bounds_red_${op.id}`);
             const inputNode = inputs[0];
 
-            // totalIters = ReduceProd(Shape(input))
+            if (rank === 0) {
+                return { totalIters: 1, carryShape: [1], targetShape: [] };
+            }
+
             const [shapeNode] = builder.createOp("Shape", [inputNode]);
             const axesConst0 = builder.createConstant(`axes_fallback_${op.id}_0`, int64Vec([0]));
             const [totalIters] = builder.createOp("ReduceProd", [shapeNode, axesConst0], {
                 keepdims: 0,
             });
 
-            // To avoid cycle, use the dummy approach to find the output shape safely
-            const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-            const [dummyInput] = builder.createOp("ConstantOfShape", [shapeNode], {}, expectedCoS);
+            const inDims = extractMixedDims(
+                builder,
+                inputNode,
+                toStaticShape(inputNode.shape),
+                `rb_${op.id}`,
+            );
+            const keepdims = getIntAttr(op, "keepdims", 1);
+            const axesSet = new Set(axes);
+            const outDims =
+                keepdims === 1
+                    ? inDims.map((d, idx) => (axesSet.has(idx) ? 1 : d))
+                    : inDims.filter((_, idx) => !axesSet.has(idx));
 
-            const dummyInputs: ValueNode[] = [dummyInput];
-            if (inputs.length > 1) dummyInputs.push(inputs[1]); // pass axes if provided as tensor
+            if (outDims.length === 0) {
+                const emptyTsh = builder.createConstant(`rb_empty_${op.id}`, int64Vec([]));
+                return { totalIters, carryShape: [1], targetShape: emptyTsh };
+            }
 
-            const [dummyOut] = builder.createOp(op.type, dummyInputs, op.attributes);
-            const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
-
+            const targetShapeNode = packShapeVector(builder, outDims, `rb_tsh_${op.id}`);
             const [carryLen] = builder.createOp("ReduceProd", [targetShapeNode, axesConst0], {
                 keepdims: 0,
             });
@@ -247,8 +261,33 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
 
         const [flatOutIdxUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
 
-        // 4. Accumulate
-        const currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
+        // 4. Accumulate (0D scalar register carry for contiguous trailing suffix reductions)
+        const dtype = inputs[0].literalType;
+        const rank = inShape.length;
+        const sortedAxes = Array.from(new Set(axesList)).sort((a, b) => a - b);
+        const isContiguousSuffix =
+            sortedAxes.length > 0 &&
+            sortedAxes.every((ax, idx) => ax === rank - sortedAxes.length + idx);
+        const canScalarAcc =
+            loopCtx !== undefined &&
+            isContiguousSuffix &&
+            (dtype === DataType.FLOAT ||
+                dtype === DataType.DOUBLE ||
+                dtype === DataType.INT32 ||
+                dtype === DataType.INT64);
+
+        let accIn: ReturnType<LoopCarryContext["addCarry"]> | undefined;
+        let currentAcc: ConcreteValueNode;
+        if (canScalarAcc) {
+            const initAcc = loopCtx!.outerBuilder.createConstant(
+                `red_init_acc_${op.id}`,
+                makeTensorProto(dtype, [], [0]),
+            );
+            accIn = loopCtx!.addCarry(`red_acc_${op.id}`, initAcc, dtype, []);
+            currentAcc = accIn;
+        } else {
+            currentAcc = gatherScalar(builder, carryNode, flatOutIdx);
+        }
 
         let mathOpType = "Add";
         if (op.type === "ReduceMax") mathOpType = "Max";
@@ -264,6 +303,9 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         }
 
         const [finalValue] = builder.createOp("Where", [isFirstHit!, val, mathOut]);
+        if (accIn !== undefined) {
+            loopCtx!.setNextState(accIn, finalValue);
+        }
         const [updateVal] = builder.createOp("Unsqueeze", [finalValue, axes]);
         const [nextCarry] = builder.createOp(
             "ScatterElements",

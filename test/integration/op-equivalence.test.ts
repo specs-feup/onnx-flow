@@ -1902,6 +1902,264 @@ const CASES: OpEquivalenceCase[] = [
         minOpset: 21,
         tol: 1e-5,
     },
+    {
+        name: "Div_by_constant_float",
+        opType: "Div",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], gen: "negmix" }],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "divc");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                .as(TensorNode);
+            const c = b.createConstant("c", floatVec([2.0, -4.0, 0.5, 3.0]));
+            const [y] = b.createOp("Div", [x, c], {}, [{ type: DataType.FLOAT, shape: [2, 4] }]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-5,
+    },
+    {
+        name: "Pow_small_int_neg_base",
+        opType: "Pow",
+        feeds: [
+            {
+                name: "X",
+                dtype: "float32",
+                shape: [2, 4],
+                init: [-3.0, -1.5, -0.5, 0.0, 0.5, 1.0, 2.0, 3.0],
+            },
+        ],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "pown");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                .as(TensorNode);
+            const e2 = b.createConstant("e2", makeTensorProto(DataType.FLOAT, [], [2.0]));
+            const e3 = b.createConstant("e3", makeTensorProto(DataType.FLOAT, [], [3.0]));
+            const [p2] = b.createOp("Pow", [x, e2], {}, [{ type: DataType.FLOAT, shape: [2, 4] }]);
+            const [p3] = b.createOp("Pow", [x, e3], {}, [{ type: DataType.FLOAT, shape: [2, 4] }]);
+            const [y] = b.createOp("Add", [p2, p3], {}, [{ type: DataType.FLOAT, shape: [2, 4] }]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-5,
+    },
+    {
+        name: "Pow_inv_sqrt",
+        opType: "Pow",
+        feeds: [
+            {
+                name: "X",
+                dtype: "float32",
+                shape: [2, 4],
+                init: [0.25, 0.5, 1.0, 2.0, 4.0, 9.0, 16.0, 25.0],
+            },
+        ],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "powis");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                .as(TensorNode);
+            const eh = b.createConstant("eh", makeTensorProto(DataType.FLOAT, [], [-0.5]));
+            const [y] = b.createOp("Pow", [x, eh], {}, [{ type: DataType.FLOAT, shape: [2, 4] }]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "Conv_1x1_n1_pointwise",
+        opType: "Conv",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [1, 3, 4, 4], gen: "negmix" },
+            { name: "W", dtype: "float32", shape: [2, 3, 1, 1], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [2], gen: "range" },
+        ],
+        attrs: { kernel_shape: [1, 1], strides: [1, 1], pads: [0, 0, 0, 0] },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "Conv_1x1_n2_pointwise",
+        opType: "Conv",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 3, 3, 3], gen: "negmix" },
+            { name: "W", dtype: "float32", shape: [4, 3, 1, 1], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [4], gen: "negmix" },
+        ],
+        attrs: { kernel_shape: [1, 1], strides: [1, 1] },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "AveragePool_dynamic_spatial_SAME_UPPER",
+        opType: "AveragePool",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 2, 5, 5], gen: "negmix" }],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "ap_dyn");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, -1, -1], "input"))
+                .as(TensorNode);
+            const [y] = b.createOp(
+                "AveragePool",
+                [x],
+                {
+                    kernel_shape: [3, 3],
+                    strides: [2, 2],
+                    auto_pad: "SAME_UPPER",
+                    count_include_pad: 0,
+                },
+                [{ type: DataType.FLOAT, shape: [-1, 2, -1, -1] }],
+            );
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "Concat_loop_3inputs_axis1",
+        opType: "Concat",
+        feeds: [
+            { name: "A", dtype: "float32", shape: [2, 2, 3], gen: "negmix" },
+            { name: "B", dtype: "float32", shape: [2, 3, 3], gen: "range" },
+            { name: "C", dtype: "float32", shape: [2, 1, 3], gen: "negmix" },
+        ],
+        attrs: { axis: 1 },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-5,
+    },
+    {
+        name: "Slice_multiaxis_loop",
+        opType: "Slice",
+        feeds: [{ name: "X", dtype: "float32", shape: [3, 4, 5], gen: "negmix" }],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "slm");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [3, 4, 5], "input"))
+                .as(TensorNode);
+            const starts = b.createConstant("st", int64Vec([1, 1]));
+            const ends = b.createConstant("en", int64Vec([3, 4]));
+            const axes = b.createConstant("ax", int64Vec([0, 1]));
+            const [y] = b.createOp("Slice", [x, starts, ends, axes], {}, [
+                { type: DataType.FLOAT, shape: [2, 3, 5] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-5,
+    },
+    {
+        name: "Flatten_both_sides_dynamic_axis2",
+        opType: "Flatten",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3, 2, 4], gen: "negmix" }],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "fldyn");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1, -1, -1], "input"))
+                .as(TensorNode);
+            const [y] = b.createOp("Flatten", [x], { axis: 2 }, [
+                { type: DataType.FLOAT, shape: [-1, -1] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-5,
+    },
+    {
+        name: "LpPool_fully_dynamic_SAME_UPPER",
+        opType: "LpPool",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 5, 5], gen: "negmix" }],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "lpdyn");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1, -1, -1], "input"))
+                .as(TensorNode);
+            const [y] = b.createOp(
+                "LpPool",
+                [x],
+                { kernel_shape: [3, 3], strides: [2, 2], auto_pad: "SAME_UPPER", p: 2 },
+                [{ type: DataType.FLOAT, shape: [-1, -1, -1, -1] }],
+            );
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "NLLLoss_fully_dynamic_mean",
+        opType: "NegativeLogLikelihoodLoss",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 3, 2], gen: "negmix" },
+            { name: "T", dtype: "int64", shape: [2, 2], init: [0n, 2n, 1n, 0n] },
+        ],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "nlldyn");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1, -1], "input"))
+                .as(TensorNode);
+            const t = g
+                .addNode("T")
+                .init(new TensorNode.Builder(DataType.INT64, [-1, -1], "input"))
+                .as(TensorNode);
+            const [y] = b.createOp("NegativeLogLikelihoodLoss", [x, t], { reduction: "mean" }, [
+                { type: DataType.FLOAT, shape: [] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "Conv_dynamic_batch_padded_hoisted",
+        opType: "Conv",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 2, 4, 4], gen: "negmix" },
+            { name: "W", dtype: "float32", shape: [3, 2, 3, 3], gen: "negmix" },
+        ],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "cvhoist");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, 4, 4], "input"))
+                .as(TensorNode);
+            const w = g
+                .addNode("W")
+                .init(new TensorNode.Builder(DataType.FLOAT, [3, 2, 3, 3], "input"))
+                .as(TensorNode);
+            const [y] = b.createOp("Conv", [x, w], { kernel_shape: [3, 3], pads: [1, 1, 1, 1] }, [
+                { type: DataType.FLOAT, shape: [-1, 3, 4, 4] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        },
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
 ];
 
 describe("Integration: Programmatic ORT Equivalence for Operation Recipes", () => {
@@ -1938,7 +2196,9 @@ describe("Integration: Programmatic ORT Equivalence for Operation Recipes", () =
             for (const mode of modes) {
                 const loweredGraph = tc.customBuild ? tc.customBuild() : buildSyntheticGraph(tc);
                 const history = new HistoryManager(loweredGraph);
-                new CanonicalizationPass().run(loweredGraph, history);
+                new CanonicalizationPass(undefined, {
+                    loopLowering: tc.skipLoopLowering !== true,
+                }).run(loweredGraph, history);
                 inferShapes(loweredGraph);
 
                 if (tc.skipLoopLowering !== true) {

@@ -10,7 +10,6 @@ import {
     resolveAutoPads,
     scalarInt64,
     int64Vec,
-    UNKNOWN_SHAPE,
     toStaticShape,
 } from "../../../Utils.js";
 import type {
@@ -20,8 +19,13 @@ import type {
 } from "../LoopLoweringRecipe.js";
 import {
     buildAguPointer,
+    captureMixedList,
+    ensureInnerValueNode,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
+    packShapeVector,
+    resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -43,7 +47,9 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         "Size",
         "Slice",
         "Concat",
+        "Pad",
         "Gather",
+        "ScatterElements",
         "Unsqueeze",
         "Squeeze",
         "Mul",
@@ -53,6 +59,7 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         "Sub",
         "Equal",
         "And",
+        "Max",
         "Where",
         "ReduceSum",
     ];
@@ -88,28 +95,37 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             return { totalIters, carryShape: [totalIters] };
         }
 
-        // 2. Dynamic Case
+        // 2. Dynamic Case: O(rank) INT64 pooling/conv output shape math (no dummy tensors)
         const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `conv_bounds_${op.id}`);
         const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        const [shapeX] = builder.createOp("Shape", [inputs[0]]);
-        const [shapeW] = builder.createOp("Shape", [inputs[1]]);
+        const xShape = toStaticShape(inputs[0].shape);
+        const wShape = toStaticShape(inputs[1].shape);
+        const dimsX = extractMixedDims(builder, inputs[0], xShape, `cb_x_${op.id}`);
+        const dimsW = extractMixedDims(builder, inputs[1], wShape, `cb_w_${op.id}`);
 
-        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyX] = builder.createOp("ConstantOfShape", [shapeX], {}, expectedCoS);
-        const [dummyW] = builder.createOp("ConstantOfShape", [shapeW], {}, expectedCoS);
+        const strides = getIntsAttr(op, "strides", [1, 1]);
+        const dilations = getIntsAttr(op, "dilations", [1, 1]);
+        const kernelShape = getIntsAttr(op, "kernel_shape", [wShape[2], wShape[3]]);
+        const explicitPads = getIntsAttr(op, "pads", []);
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
 
-        const dummyInputs = [dummyX, dummyW];
-        if (inputs.length > 2) {
-            const [shapeB] = builder.createOp("Shape", [inputs[2]]);
-            const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
-            dummyInputs.push(dummyB);
-        }
-
-        const expectedConv = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyOut] = builder.createOp("Conv", dummyInputs, op.attributes, expectedConv);
-
-        const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
+        const { outSpatial } = resolvePoolShapeAndPadsMixed(
+            autoPad,
+            [dimsX[2], dimsX[3]],
+            kernelShape,
+            strides,
+            dilations,
+            explicitPads,
+            0,
+            builder,
+            `cb_sp_${op.id}`,
+        );
+        const targetShapeNode = packShapeVector(
+            builder,
+            [dimsX[0], dimsW[0], outSpatial[0], outSpatial[1]],
+            `cb_tsh_${op.id}`,
+        );
         const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
             keepdims: 0,
         });
@@ -131,20 +147,26 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `conv_${op.id}`);
         const inputs = op.getInputs()!;
+        const canHoistX =
+            loopCtx !== undefined &&
+            !valueMap.has(inputs[0].id) &&
+            loopCtx.outerBuilder.graph.hasNode(inputs[0].id);
 
         // 1. Resolve inputs (Captured Tensors inside body)
-        const X = resolveRecipeInput(
-            builder,
-            inputs[0],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-            targetShapeNode,
-            loopCtx,
-        );
+        const X = canHoistX
+            ? inputs[0]
+            : resolveRecipeInput(
+                  builder,
+                  inputs[0],
+                  valueMap,
+                  iter,
+                  axes,
+                  outShape,
+                  false,
+                  false,
+                  targetShapeNode,
+                  loopCtx,
+              );
         const W = resolveRecipeInput(
             builder,
             inputs[1],
@@ -173,41 +195,15 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
                   )
                 : null;
 
-        const xShape = asStaticDims(inputs[0].shape);
-        const wShape = asStaticDims(inputs[1].shape);
+        const xShape = toStaticShape(inputs[0].shape);
+        const wShape = toStaticShape(inputs[1].shape);
 
         const C = xShape[1] !== -1 ? xShape[1] : 1;
         const M = wShape[0];
 
-        // 2. Extract N_batch, H, and Win (statically or dynamically from captured X)
-        let N_batch: number | ValueNode = xShape[0];
-        let H: number | ValueNode = xShape[2];
-        let Win: number | ValueNode = xShape[3];
-
-        if (inputs[0].shape.includes(-1) || inputs[0].shape.length === 0) {
-            const [shapeX] = builder.createOp("Shape", [X]);
-            const [rankX] = builder.createOp("Size", [shapeX]);
-
-            const getSpatialDim = (offsetFromEnd: number, tag: string) => {
-                const offsetNode = builder.createConstant(
-                    `${tag}_offset`,
-                    scalarInt64(offsetFromEnd),
-                );
-                const [targetAxis] = builder.createOp("Add", [rankX, offsetNode]);
-                return gatherScalar(builder, shapeX, targetAxis);
-            };
-
-            if (inputs[0].shape[0] === -1 || typeof inputs[0].shape[0] === "string") {
-                const zeroIdx = builder.createConstant(`batch_idx_0`, scalarInt64(0));
-                N_batch = gatherScalar(builder, shapeX, zeroIdx);
-            }
-            if (inputs[0].shape[2] === -1 || typeof inputs[0].shape[2] === "string") {
-                H = getSpatialDim(-2, "H");
-            }
-            if (inputs[0].shape[3] === -1 || typeof inputs[0].shape[3] === "string") {
-                Win = getSpatialDim(-1, "Win");
-            }
-        }
+        // 2. Extract N_batch, H_out, W_out and pad X outside the loop when loopCtx is available
+        const dimBuilder = canHoistX ? loopCtx!.outerBuilder : builder;
+        const outerXRef = inputs[0];
 
         const strides = getIntsAttr(op, "strides", [1, 1]);
         const dilations = getIntsAttr(op, "dilations", [1, 1]);
@@ -224,6 +220,10 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             dW = dilations[1] ?? 1;
         const kEffH = dH * (kH - 1) + 1;
         const kEffW = dW * (kW - 1) + 1;
+
+        const dimsX = extractMixedDims(dimBuilder, outerXRef, xShape, `conv_dx_${op.id}`);
+        const H = dimsX[2];
+        const Win = dimsX[3];
 
         // 3. Handle Padding logic
         if (
@@ -249,38 +249,41 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             pR = pads[3] ?? 0;
 
         const buildOutDim = (
-            dimIn: number | ValueNode,
+            dimIn: number | ConcreteValueNode,
             pA: number,
             pB_pad: number,
             kEff: number,
             stride: number,
             tag: string,
-        ) => {
+        ): number | ConcreteValueNode => {
             if (typeof dimIn === "number") {
                 return Math.floor((dimIn + pA + pB_pad - kEff) / stride + 1);
             }
-            const numOffset = builder.createConstant(
+            const numOffset = dimBuilder.createConstant(
                 `${tag}_num_off`,
                 scalarInt64(pA + pB_pad - kEff),
             );
-            const [numAdd] = builder.createOp("Add", [dimIn, numOffset]);
-            const strideConst = builder.createConstant(`${tag}_stride`, scalarInt64(stride));
-            const [divOut] = builder.createOp("Div", [numAdd, strideConst]);
-            const oneConst = builder.createConstant(`${tag}_one`, scalarInt64(1));
-            return builder.createOp("Add", [divOut, oneConst])[0];
+            const [numAdd] = dimBuilder.createOp("Add", [dimIn, numOffset]);
+            const strideConst = dimBuilder.createConstant(`${tag}_stride`, scalarInt64(stride));
+            const [divOut] = dimBuilder.createOp("Div", [numAdd, strideConst]);
+            const oneConst = dimBuilder.createConstant(`${tag}_one`, scalarInt64(1));
+            return dimBuilder.createOp("Add", [divOut, oneConst])[0];
         };
 
-        const H_out = buildOutDim(H, pT, pB, kEffH, sH, "H_out");
-        const W_out = buildOutDim(Win, pL, pR, kEffW, sW, "W_out");
+        const rawH_out = buildOutDim(H, pT, pB, kEffH, sH, `H_out_${op.id}`);
+        const rawW_out = buildOutDim(Win, pL, pR, kEffW, sW, `W_out_${op.id}`);
+        const [N_batch, H_out, W_out] = captureMixedList(builder, [dimsX[0], rawH_out, rawW_out]);
 
-        let paddedX = X;
+        let paddedX = canHoistX ? ensureInnerValueNode(builder, outerXRef) : X;
         if (pads.some((p) => Number(p) !== 0)) {
-            const padsConst = builder.createConstant(`pads`, {
+            const padBuilder = canHoistX ? loopCtx!.outerBuilder : builder;
+            const padsConst = padBuilder.createConstant(`pads_${op.id}`, {
                 dataType: DataType.INT64,
                 dims: [8],
                 int64Data: [0, 0, Number(pT), Number(pL), 0, 0, Number(pB), Number(pR)],
             });
-            [paddedX] = builder.createOp("Pad", [X, padsConst]);
+            const [padResult] = padBuilder.createOp("Pad", [canHoistX ? outerXRef : X, padsConst]);
+            paddedX = canHoistX ? ensureInnerValueNode(builder, padResult) : padResult;
         }
 
         // 4. Coordinate & Window Bounds Generation: Pointer Mode (AGU) vs Radix Mode (Div/Mod)

@@ -20,7 +20,7 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
     public readonly phase = "canonicalization" as const;
     public readonly precision = "exact" as const;
     public readonly priority = 50;
-    public readonly shapeSupport = "dynamic-batch" as const;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["loss"];
     public readonly producedOps = [
         "Cast",
@@ -33,6 +33,9 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
         "ReduceSum",
         "Neg",
         "Div",
+        "Shape",
+        "Size",
+        "Gather",
     ];
 
     match(op: OperationNode.Class): boolean {
@@ -41,17 +44,6 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
         if (!ins || ins.length < 2 || !Array.isArray(ins[0].shape) || ins[0].shape.length < 2) {
             return false;
         }
-        const inShape = toStaticShape(ins[0].shape);
-        if (inShape[1] <= 0) return false;
-
-        const reduction = getStringAttr(op, "reduction", "mean");
-        const hasWeight = ins.length >= 3;
-        const hasIgnore = typeof getAttr(op, "ignore_index") === "number";
-        if (reduction === "mean" && !hasWeight && !hasIgnore) {
-            const targetShape = [inShape[0], ...inShape.slice(2)];
-            if (targetShape.includes(-1)) return false;
-        }
-
         return true;
     }
 
@@ -104,14 +96,25 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
         }
 
         // 2. Build one-hot class selector [N, C, d1, ...] along axis 1
-        const depthConst = builder.createConstant(`nll_depth_${op.id}`, scalarInt64(C));
+        let depthNode: ConcreteValueNode;
+        if (C > 0) {
+            depthNode = builder.createConstant(`nll_depth_${op.id}`, scalarInt64(C));
+        } else {
+            const [shapeX] = builder.createOp("Shape", [input], {}, [
+                { type: DataType.INT64, shape: [rank] },
+            ]);
+            const idx1 = builder.createConstant(`nll_cidx_${op.id}`, scalarInt64(1));
+            [depthNode] = builder.createOp("Gather", [shapeX, idx1], { axis: 0 }, [
+                { type: DataType.INT64, shape: [] },
+            ]);
+        }
         const valuesConst = builder.createConstant(
             `nll_oh_vals_${op.id}`,
             makeTensorProto(dtype, [2], [0, 1]),
         );
         const [oneHot] = builder.createOp(
             "OneHot",
-            [safeTarget, depthConst, valuesConst],
+            [safeTarget, depthNode, valuesConst],
             { axis: 1 },
             inMeta,
         );
@@ -122,7 +125,7 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
         let sampleWeight: ConcreteValueNode | undefined;
 
         if (weight) {
-            const wBcastShape = [1, C, ...new Array<number>(rank - 2).fill(1)];
+            const wBcastShape = [1, C > 0 ? C : -1, ...new Array<number>(rank - 2).fill(1)];
             const wShapeConst = builder.createConstant(
                 `nll_wshape_${op.id}`,
                 int64Vec(wBcastShape),
@@ -193,12 +196,20 @@ export class LowerNegativeLogLikelihoodLossRecipe implements DecompositionRecipe
                 { keepdims: 0 },
                 scalarMeta,
             );
-            const totalElems = targetShape.reduce((a, b) => a * b, 1);
-            const invN = builder.createConstant(
-                `nll_inv_n_${op.id}`,
-                makeTensorProto(dtype, [], [1.0 / totalElems]),
-            );
-            [finalOut] = builder.createOp("Mul", [totalLoss, invN], {}, scalarMeta);
+            if (!targetShape.includes(-1)) {
+                const totalElems = targetShape.reduce((a, b) => a * b, 1);
+                const invN = builder.createConstant(
+                    `nll_inv_n_${op.id}`,
+                    makeTensorProto(dtype, [], [1.0 / totalElems]),
+                );
+                [finalOut] = builder.createOp("Mul", [totalLoss, invN], {}, scalarMeta);
+            } else {
+                const [numI64] = builder.createOp("Size", [target64], {}, [
+                    { type: DataType.INT64, shape: [] },
+                ]);
+                const [numFloat] = builder.createOp("Cast", [numI64], { to: dtype }, scalarMeta);
+                [finalOut] = builder.createOp("Div", [totalLoss, numFloat], {}, scalarMeta);
+            }
         }
 
         builder.replaceAllUsesWith(Y, finalOut);

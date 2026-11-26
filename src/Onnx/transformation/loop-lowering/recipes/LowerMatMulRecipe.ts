@@ -1,18 +1,12 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import {
-    type ValueNode,
-    type ConcreteValueNode,
-    type KnownShape,
-    DataType,
-} from "../../../OnnxTypes.js";
+import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
 import {
     asStaticDims,
     broadcastShapes,
     scalarInt64,
     computeStrides,
     int64Vec,
-    UNKNOWN_SHAPE,
     toStaticShape,
 } from "../../../Utils.js";
 import type {
@@ -21,6 +15,8 @@ import type {
     RecipeApplyResult,
 } from "../LoopLoweringRecipe.js";
 import {
+    computeMatMulOutputDimsMixed,
+    packShapeVector,
     resolveRecipeInput,
     buildLinearIndex,
     decodeMixedRadix,
@@ -102,21 +98,20 @@ export class LowerMatMulRecipe implements LoopLoweringRecipe {
             return { totalIters, carryShape: [totalIters] };
         }
 
-        // 2. Dynamic Case
+        // 2. Dynamic Case: O(rank) INT64 shape math
         const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `mm_bounds_${op.id}`);
         const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        const [shapeA] = builder.createOp("Shape", [inputs[0]]);
-        const [shapeB] = builder.createOp("Shape", [inputs[1]]);
-
-        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyA] = builder.createOp("ConstantOfShape", [shapeA], {}, expectedCoS);
-        const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
-
-        const expectedMM = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyOut] = builder.createOp("MatMul", [dummyA, dummyB], {}, expectedMM);
-
-        const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
+        const { outDims } = computeMatMulOutputDimsMixed(
+            builder,
+            inputs[0],
+            inputs[1],
+            `mmb_${op.id}`,
+        );
+        if (outDims.length === 0) {
+            return { totalIters: 1, carryShape: [1], targetShape: [] };
+        }
+        const targetShapeNode = packShapeVector(builder, outDims, `mmb_tsh_${op.id}`);
         const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
             keepdims: 0,
         });

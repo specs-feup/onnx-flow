@@ -299,6 +299,12 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             describe: "Explicit ONNX IR version for export (up to 14)",
             type: "number",
         })
+        .option("useScanOutputs", {
+            describe:
+                "Optional Loop codegen: emit ONNX Loop scan_outputs instead of ScatterElements for non-self-carry loops",
+            type: "boolean",
+            default: defaultDecompositionOptions.useScanOutputs,
+        })
         .option("formatter", {
             alias: "fmtr",
             describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
@@ -421,6 +427,9 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
+                ...(argv.useScanOutputs !== undefined
+                    ? { useScanOutputs: argv.useScanOutputs }
+                    : {}),
                 ...(argv.tileSize !== undefined ? { tileSize: argv.tileSize } : {}),
                 ...(targetOpset !== undefined ? { targetOpset } : {}),
                 ...(irVersion !== undefined ? { irVersion } : {}),
@@ -443,6 +452,9 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 decomposeForCgra: argv.decomposeForCgra,
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
+                ...(argv.useScanOutputs !== undefined
+                    ? { useScanOutputs: argv.useScanOutputs }
+                    : {}),
                 ...(argv.tileSize !== undefined ? { tileSize: argv.tileSize } : {}),
                 ...(targetOpset !== undefined ? { targetOpset } : {}),
                 ...(irVersion !== undefined ? { irVersion } : {}),
