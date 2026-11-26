@@ -2,6 +2,7 @@ import type Graph from "@specs-feup/flow/graph/Graph";
 import type OnnxGraph from "../ir/OnnxGraph.js";
 import { initializeSchemaRegistry } from "../schema/index.js";
 import { PassManager } from "./PassManager.js";
+import type { GraphPass } from "./GraphPass.js";
 import { CanonicalizationPass } from "./canonicalization/CanonicalizationPass.js";
 import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
@@ -13,7 +14,19 @@ import type { DecompositionOptions, IndexingMode } from "../../DecompositionOpti
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
 import { ShapeOptimizationPass } from "./optimization/ShapeOptimizationPass.js";
 import { DeadCodeEliminationPass } from "./optimization/DeadCodeEliminationPass.js";
-import { Schedule, resolveScheduleConfig, type ScheduleConfig } from "./Schedule.js";
+import { resolveScheduleConfig, type ScheduleConfig } from "./Schedule.js";
+import { CacheReadPass } from "./schedule/CacheReadPass.js";
+import { ScheduleLoopTransformsPass } from "./schedule/ScheduleLoopTransformsPass.js";
+
+/** Thin pass wrapper around the standalone CGRA decomposition example. */
+class CgraDecompositionPass implements GraphPass {
+    public readonly name = "TransformForCgraExample";
+
+    public run(graph: OnnxGraph.Class): boolean {
+        transformForCgra(graph);
+        return false;
+    }
+}
 
 /**
  * Top-level compilation pipeline driving an `OnnxGraph` through:
@@ -61,7 +74,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
     }
 
     /** Executes the configured transformation pass pipeline on `graph` in place. */
-    public apply(graph: OnnxGraph.Class, printSummary: boolean = true): OnnxGraph.Class {
+    public apply(graph: OnnxGraph.Class, printSummary: boolean = false): OnnxGraph.Class {
         initializeSchemaRegistry();
         if (this.targetOpset !== undefined) {
             graph.setTargetOpset(this.targetOpset, true);
@@ -75,23 +88,14 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
 
         // Phase 0: Standalone CGRA decomposition example (mutually exclusive with standard pipeline)
         if (this.decomposeForCgra) {
-            pm.addPass({
-                name: "TransformForCgraExample",
-                run: (g) => {
-                    transformForCgra(g);
-                    return false;
-                },
-            });
+            pm.addPass(new CgraDecompositionPass());
             pm.run(graph, historyManager);
             return graph;
         }
 
         const scheduleCfg = this.scheduleConfig;
         if (scheduleCfg?.cacheReads !== undefined && scheduleCfg.cacheReads.length > 0) {
-            pm.addPass({
-                name: "ScheduleCacheRead",
-                run: (g, hm) => Schedule.applyCacheReads(g, scheduleCfg, hm),
-            });
+            pm.addPass(new CacheReadPass(scheduleCfg));
         }
 
         // Phase 1: Normalization (Canonicalization)
@@ -154,10 +158,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         }
 
         if (scheduleCfg !== undefined) {
-            pm.addPass({
-                name: "ScheduleLoopTransforms",
-                run: (g, hm) => Schedule.applyLoopTransforms(g, scheduleCfg, hm),
-            });
+            pm.addPass(new ScheduleLoopTransformsPass(scheduleCfg));
         }
 
         // Phase 3: Final Optimization & Shape Propagation

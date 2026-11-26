@@ -1,12 +1,13 @@
 import type OnnxGraph from "../../ir/OnnxGraph.js";
-import type { GraphPass } from "../PassManager.js";
+import { BaseGraphPass } from "../GraphPass.js";
 import TensorNode from "../../ir/TensorNode.js";
 import ConstantNode from "../../ir/ConstantNode.js";
 import OperationNode from "../../ir/OperationNode.js";
 import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
 
-export class DeadCodeEliminationPass implements GraphPass {
-    public readonly name = "DeadCodeElimination";
+/** Removes unreachable intermediate tensors, orphan constants, and dead operations recursively. */
+export class DeadCodeEliminationPass extends BaseGraphPass {
+    public override readonly name = "DeadCodeElimination";
 
     private collectCapturedIds(graph: OnnxGraph.Class, out: Set<string>): void {
         for (const op of graph.getOperationNodes()) {
@@ -27,17 +28,9 @@ export class DeadCodeEliminationPass implements GraphPass {
         }
     }
 
-    run(graph: OnnxGraph.Class): boolean {
-        let changed = false;
-
+    public override run(graph: OnnxGraph.Class): boolean {
         // First run DCE inside nested regions so dead captures inside regions are pruned before outer DCE
-        for (const op of graph.getOperationNodes()) {
-            for (const region of op.regions) {
-                if (this.run(region)) {
-                    changed = true;
-                }
-            }
-        }
+        let changed = this.runOnRegions(graph);
 
         const capturedIds = new Set<string>();
         this.collectCapturedIds(graph, capturedIds);

@@ -1,5 +1,5 @@
 import type OnnxGraph from "../../ir/OnnxGraph.js";
-import type { GraphPass } from "../PassManager.js";
+import { BaseGraphPass } from "../GraphPass.js";
 import type OperationNode from "../../ir/OperationNode.js";
 import { GraphBuilder } from "../../ir/GraphBuilder.js";
 import {
@@ -9,20 +9,13 @@ import {
 } from "../../utils/index.js";
 import { DataType } from "../../ir/OnnxTypes.js";
 
-export class ShapeOptimizationPass implements GraphPass {
-    public readonly name = "ShapeOptimization";
+/** Folds static `Shape` ops, eliminates single-input `Concat`s, and simplifies degenerate shape math. */
+export class ShapeOptimizationPass extends BaseGraphPass {
+    public override readonly name = "ShapeOptimization";
 
-    run(graph: OnnxGraph.Class): boolean {
-        let globalChanged = false;
-
+    public override run(graph: OnnxGraph.Class): boolean {
         // Recurse into nested Loop / If / Scan subgraphs first so inner shape math is simplified
-        for (const op of graph.getOperationNodes()) {
-            for (const region of op.regions) {
-                if (this.run(region)) {
-                    globalChanged = true;
-                }
-            }
-        }
+        let globalChanged = this.runOnRegions(graph);
 
         let localChanged = true;
 
