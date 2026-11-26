@@ -9,4 +9,4 @@ export function initializeSchemaRegistry(): void {
 }
 
 export { OpRegistry } from "./OpRegistry.js";
-export { OpSchema } from "./OpSchema.js";
+export type { OpSchema } from "./OpSchema.js";

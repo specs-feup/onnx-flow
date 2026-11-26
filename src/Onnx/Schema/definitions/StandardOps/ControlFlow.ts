@@ -21,7 +21,8 @@ export const Loop: OpSchema = {
     },
 
     inferShape: (inputs, attrs, node, graph, inferSubgraphs) => {
-        const body = node!.regions[0];
+        const body = node?.regions[0];
+        if (!body) return [];
         propagateToRegion(graph!, body);
 
         const bodyInputs = body.getInputTensorNodes().toArray();
