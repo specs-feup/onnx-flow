@@ -12,22 +12,12 @@ import {
     constI64,
     constF32,
     tensorOnesConst,
-    makeValueScalar1,
-    makeI64ShapeConst,
-    constBuilder,
     getProducer,
     getConsumers,
-    shapeOf,
-    editShapeDim,
 } from "../../../src/onnx/utils/GraphFactories.js";
 import {
-    formatId,
     addEdge,
-    toArrayLike,
-    removeInitializerByName,
-    maybeRemoveOrphanConstant,
     findTensorByOnnxName,
-    findConstantProducerAsTensor,
     isValueNode,
     asValueNode,
     tryAsValueNode,
@@ -41,7 +31,6 @@ import {
     topologicalSortOperationNodesSubset,
 } from "../../../src/onnx/utils/GraphQueries.js";
 import {
-    toScalar,
     toNumShape,
     isKnownDim,
     isNumeric,
@@ -54,8 +43,6 @@ import {
     getFloatsAttr,
     getSmallestRankShape,
     getLargestRankShape,
-    unsqueezeIdx,
-    as1D,
 } from "../../../src/onnx/utils/ShapeMath.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 
@@ -79,18 +66,9 @@ describe("GraphFactories, GraphQueries & ShapeMath", () => {
 
         const ones = tensorOnesConst(graph, "ones", DataType.FLOAT, [2, 3]);
         expect(ones.shape).toEqual([2, 3]);
-
-        const s1 = makeValueScalar1(graph, "s1", DataType.INT64, 42);
-        expect(s1.shape).toEqual([1]);
-
-        const shp = makeI64ShapeConst(graph, "shp", [4, 4]);
-        expect(shp.shape).toEqual([2]);
-
-        const builderInstance = constBuilder(99);
-        expect(builderInstance).toBeDefined();
     });
 
-    it("inspects graph producers, consumers, shapeOf, and editShapeDim", () => {
+    it("inspects graph producers and consumers", () => {
         const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const builder = new GraphBuilder(graph);
 
@@ -102,22 +80,10 @@ describe("GraphFactories, GraphQueries & ShapeMath", () => {
 
         expect(getProducer(reluOut)?.type).toBe("Relu");
         expect(getConsumers(x).length).toBe(1);
-
-        const shpNode = shapeOf(graph, x, "shape_x");
-        expect(shpNode.literalType).toBe(DataType.INT64);
-
-        const updateVal = constI64(graph, "dim_upd", [8]);
-        const edited = editShapeDim(graph, shpNode, 0, updateVal, "edit_test");
-        expect(edited).toBeDefined();
     });
 
     it("verifies GraphQueries helpers, guards, and casts", () => {
         const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
-        expect(formatId("prefix", "node")).toBe("prefix_node");
-
-        expect(toArrayLike([1, 2])).toEqual([1, 2]);
-        expect(toArrayLike({ toArray: () => [3, 4] })).toEqual([3, 4]);
-        expect(toArrayLike({})).toEqual([]);
 
         const tNode = graph
             .addNode("t1")
@@ -160,13 +126,6 @@ describe("GraphFactories, GraphQueries & ShapeMath", () => {
 
         expect(findTensorByOnnxName(graph, "t1")?.id).toBe(tNode.id);
         expect(findTensorByOnnxName(graph, "c1")?.id).toBe(cNode.id);
-        expect(findConstantProducerAsTensor(graph, "c1")?.id).toBe(cNode.id);
-
-        const orphanConst = constI64(graph, "orphan", [9]);
-        maybeRemoveOrphanConstant(graph, orphanConst);
-        expect(graph.hasNode("orphan")).toBe(false);
-
-        removeInitializerByName(graph, "unused");
     });
 
     it("slices tensors into 1D chunks using chunkTensor", () => {
@@ -182,7 +141,7 @@ describe("GraphFactories, GraphQueries & ShapeMath", () => {
         expect(chunks.length).toBe(2);
     });
 
-    it("exercises ShapeMath attribute extraction, scalar coercions, and rank comparisons", () => {
+    it("exercises ShapeMath attribute extraction and rank comparisons", () => {
         const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
 
         expect(isNumeric(DataType.FLOAT)).toBe(true);
@@ -200,10 +159,6 @@ describe("GraphFactories, GraphQueries & ShapeMath", () => {
             .addNode("t2D")
             .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
             .as(TensorNode);
-        const scalarNode = toScalar(graph, t2D, "to_scalar_test");
-        expect(scalarNode.shape).toEqual([]);
-        expect(toScalar(graph, scalarNode, "noop")).toBe(scalarNode);
-
         expect(resolveShapeToNumbers(t2D)).toEqual([2, 3]);
 
         const op = graph
@@ -234,12 +189,6 @@ describe("GraphFactories, GraphQueries & ShapeMath", () => {
         expect(getSmallestRankShape([])).toEqual([]);
         expect(getLargestRankShape([t2D, tRank1])).toEqual([2, 3]);
         expect(getLargestRankShape([])).toEqual([]);
-
-        const unsq = unsqueezeIdx(graph, tRank1, constI64(graph, "ax", [0]), "unsq_tag");
-        expect(unsq.shape).toEqual([1]);
-
-        const oneD = as1D(graph, "as1d_tag", scalarNode);
-        expect(oneD.shape).toEqual([1]);
     });
 
     it("sorts subsets of operation nodes handling dependencies and cycles", () => {

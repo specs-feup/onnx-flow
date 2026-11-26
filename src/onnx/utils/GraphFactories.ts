@@ -1,16 +1,15 @@
 import ConstantNode from "../ir/ConstantNode.js";
 import type OnnxGraph from "../ir/OnnxGraph.js";
-import type { StaticShape, TensorProto, ValueNode, ConcreteValueNode } from "../ir/OnnxTypes.js";
+import type { StaticShape, TensorProto, ValueNode } from "../ir/OnnxTypes.js";
 import { DataType } from "../ir/OnnxTypes.js";
 import OperationNode from "../ir/OperationNode.js";
-import TensorNode from "../ir/TensorNode.js";
-import { addEdge } from "./GraphQueries.js";
 import { makeTensorProto } from "./TensorData.js";
 
 const uniqNextIdxCache = new WeakMap<OnnxGraph.Class, Map<string, number>>();
 const regionScopeCache = new WeakMap<OnnxGraph.Class, string>();
 let regionScopeCounter = 0;
 
+/** Assigns (or retrieves) a unique scope prefix tag for a nested subgraph region. */
 export function assignRegionScopeTag(g: OnnxGraph.Class, prefix: string = "canon"): string {
     let tag = regionScopeCache.get(g);
     if (tag === undefined) {
@@ -20,10 +19,12 @@ export function assignRegionScopeTag(g: OnnxGraph.Class, prefix: string = "canon
     return tag;
 }
 
+/** Returns the scope tag previously assigned to `g`, or `fallback` if untagged. */
 export function getRegionScopeTag(g: OnnxGraph.Class, fallback: string): string {
     return regionScopeCache.get(g) ?? fallback;
 }
 
+/** Generates a node ID guaranteed to be unique within `g`, starting from `base`. */
 export function uniq(g: OnnxGraph.Class, base: string): string {
     if (!g.hasNode(base)) return base;
     let cache = uniqNextIdxCache.get(g);
@@ -97,29 +98,6 @@ export function makeTensorConst(
     return g.addNode(uniq(g, id)).init(new ConstantNode.Builder(proto)).as(ConstantNode);
 }
 
-export function makeValueScalar1(
-    g: OnnxGraph.Class,
-    name: string,
-    dtype: DataType,
-    v: number,
-): ConstantNode.Class {
-    const proto = makeTensorProto(dtype, [1], [v]);
-    return g.addNode(uniq(g, name)).init(new ConstantNode.Builder(proto)).as(ConstantNode);
-}
-
-export function makeI64ShapeConst(
-    g: OnnxGraph.Class,
-    name: string,
-    vals: number[],
-): ConstantNode.Class {
-    return constI64(g, name, vals);
-}
-
-// Helper to create a scalar ConstantNode Builder
-export const constBuilder = (val: number): ConstantNode.Builder => {
-    return new ConstantNode.Builder(makeTensorProto(DataType.INT64, [], [val]));
-};
-
 /** Gets the OperationNode that produced this ValueNode, if any. */
 export function getProducer(node: ValueNode): OperationNode.Class | undefined {
     return node.incomers.sources.first()?.tryAs(OperationNode);
@@ -128,58 +106,4 @@ export function getProducer(node: ValueNode): OperationNode.Class | undefined {
 /** Gets all OperationNodes that consume this ValueNode. */
 export function getConsumers(node: ValueNode): OperationNode.Class[] {
     return node.outgoers.targets.filterIs(OperationNode).toArray();
-}
-
-/** Creates a Shape op + intermediate output tensor. */
-export function shapeOf(g: OnnxGraph.Class, x: ConcreteValueNode, name: string): TensorNode.Class {
-    const sop = g
-        .addNode(uniq(g, `${name}_op`))
-        .init(new OperationNode.Builder("Shape", [x], {}))
-        .as(OperationNode);
-    const s = g
-        .addNode(uniq(g, `${name}`))
-        .init(new TensorNode.Builder(DataType.INT64, [x.shape.length], "intermediate"))
-        .as(TensorNode);
-    addEdge(g, sop, s, DataType.INT64, [x.shape.length]);
-    return s;
-}
-
-/** Creates ScatterElements to edit a specific dimension of a shape tensor. */
-export function editShapeDim(
-    g: OnnxGraph.Class,
-    baseShape: TensorNode.Class,
-    axis: number,
-    size1D: ConcreteValueNode,
-    name: string,
-): TensorNode.Class {
-    const idx = makeI64ShapeConst(g, `${name}_idx`, [axis]);
-
-    const shapeOne = makeI64ShapeConst(g, `${name}_vec_shape`, [1]);
-
-    const reshapeOp = g
-        .addNode(uniq(g, `${name}_ensure_vec_op`))
-        .init(new OperationNode.Builder("Reshape", [size1D, shapeOne]))
-        .as(OperationNode);
-
-    const updateVec = g
-        .addNode(uniq(g, `${name}_ensure_vec`))
-        .init(new TensorNode.Builder(DataType.INT64, [1], "intermediate"))
-        .as(TensorNode);
-
-    addEdge(g, reshapeOp, updateVec, DataType.INT64, [1]);
-
-    const sc = g
-        .addNode(uniq(g, `${name}_sc`))
-        .init(
-            new OperationNode.Builder("ScatterElements", [baseShape, idx, updateVec], { axis: 0 }),
-        )
-        .as(OperationNode);
-    const out = g
-        .addNode(uniq(g, `${name}_out`))
-        .init(
-            new TensorNode.Builder(DataType.INT64, [baseShape.shape[0] as number], "intermediate"),
-        )
-        .as(TensorNode);
-    addEdge(g, sc, out, DataType.INT64, [baseShape.shape[0] as number]);
-    return out;
 }

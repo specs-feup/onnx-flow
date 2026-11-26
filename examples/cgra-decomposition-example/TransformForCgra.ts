@@ -178,7 +178,6 @@ function divideMatMul(node: OperationNode.Class, g: OnnxGraph.Class): boolean {
         for (let col = 0; col < numCols; col++) {
             // Create Mul node
             const mulBuilder = new OperationNode.Builder("Mul", [newInputs1[row], newInputs2[col]]);
-            console.log(newInputs1[row].id, newInputs2[col].id);
             const mulNode = g
                 .addNode(`${node.id}_mul${row}${col}`, node.parent)
                 .init(mulBuilder)
