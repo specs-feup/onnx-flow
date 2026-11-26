@@ -75,6 +75,7 @@ export {
     Schedule,
     LOOP_LOWERING_RECIPE_NAMES,
     type ScheduleConfig,
+    type SchedulePresetName,
     type StopPhase,
 } from "./Onnx/transformation/Schedule.js";
 export * from "./Onnx/transformation/recipes.js";

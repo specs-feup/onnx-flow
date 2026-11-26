@@ -21,6 +21,8 @@ import {
 
 export type StopPhase = "none" | "canonicalization" | "loop-lowering";
 
+export type SchedulePresetName = "sfu-loops" | "flat-loops" | "cgra-tiled";
+
 export interface ScheduleConfig {
     recipeOverrides?: Record<string, string>;
     stopAt?: Record<string, StopPhase>;
@@ -122,6 +124,33 @@ export function matchesScheduleTarget(target: string, op: OperationNode.Class): 
  * loop axis permutations, strip-mined splits/tiling, unrolling, vectorization, and cache reads.
  */
 export class Schedule {
+    /** Creates a pre-configured Schedule tuned for a target execution style. */
+    public static preset(name: SchedulePresetName): Schedule {
+        const s = new Schedule();
+        switch (name) {
+            case "sfu-loops":
+                return s
+                    .useRecipe("Softmax", "LowerSoftmaxLoop")
+                    .useRecipe("LogSoftmax", "LowerLogSoftmaxLoop")
+                    .useRecipe("LayerNormalization", "LowerLayerNormLoop")
+                    .useRecipe("RMSNormalization", "LowerRMSNormLoop")
+                    .useRecipe("Det", "LowerDetLoop")
+                    .useRecipe("TopK", "LowerTopKScalarLoop")
+                    .useRecipe("AveragePool", "LowerAveragePoolLoop");
+            case "flat-loops":
+                return s
+                    .useRecipe("Softmax", "LowerSoftmax")
+                    .useRecipe("LogSoftmax", "LowerLogSoftmax")
+                    .useRecipe("LayerNormalization", "LowerLayerNormalization")
+                    .useRecipe("RMSNormalization", "LowerRMSNormalization")
+                    .useRecipe("Det", "LowerDet")
+                    .useRecipe("TopK", "LowerTopK")
+                    .useRecipe("AveragePool", "LowerAveragePool");
+            case "cgra-tiled":
+                return Schedule.preset("sfu-loops").split("MatMul", 8).split("Conv", 8);
+        }
+    }
+
     private recipeOverrides: Record<string, string> = {};
     private stopAtMap: Record<string, StopPhase> = {};
     private fuseGroups: string[][] = [];

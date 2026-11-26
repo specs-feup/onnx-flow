@@ -15,6 +15,9 @@ import { LowerRMSNormLoopRecipe } from "../../../src/Onnx/transformation/loop-lo
 import { LowerDetLoopRecipe } from "../../../src/Onnx/transformation/loop-lowering/recipes/LowerDetLoopRecipe.js";
 import { LowerTopKScalarLoopRecipe } from "../../../src/Onnx/transformation/loop-lowering/recipes/LowerTopKScalarLoopRecipe.js";
 import OnnxGraphTransformer from "../../../src/Onnx/transformation/index.js";
+import { Schedule } from "../../../src/Onnx/transformation/Schedule.js";
+import { LowerMinRecipe } from "../../../src/Onnx/transformation/canonicalization/recipes/LowerMinRecipe.js";
+import { LowerMaxRecipe } from "../../../src/Onnx/transformation/canonicalization/recipes/LowerMaxRecipe.js";
 import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
 import { floatVec, scalarFloat, scalarInt64 } from "../../../src/Onnx/Utils.js";
 
@@ -484,5 +487,64 @@ describe("LoopFusionMatcher", () => {
                 .toArray()
                 .filter((o) => o.type === "Add").length,
         ).toBe(2); // 1 compute Add + 1 input AGU Add (no out_ptr Add)
+    });
+
+    it("supports Schedule presets (sfu-loops, flat-loops, cgra-tiled) and emits BOOL predicates in LowerMin/LowerMax", () => {
+        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const b = new GraphBuilder(g, "preset_sm");
+        const x = g
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+            .as(TensorNode);
+        const [smOut] = b.createOp("Softmax", [x], { axis: -1 }, [
+            { type: DataType.FLOAT, shape: [2, 4] },
+        ]);
+        if (smOut.is(TensorNode)) smOut.as(TensorNode).setType("output");
+
+        const sfuCfg = Schedule.preset("sfu-loops").toConfig();
+        expect(sfuCfg.recipeOverrides?.["Softmax"]).toBe("LowerSoftmaxLoop");
+        expect(sfuCfg.recipeOverrides?.["LogSoftmax"]).toBe("LowerLogSoftmaxLoop");
+        expect(sfuCfg.recipeOverrides?.["Det"]).toBe("LowerDetLoop");
+        const flatCfg = Schedule.preset("flat-loops").toConfig();
+        expect(flatCfg.recipeOverrides?.["Softmax"]).toBe("LowerSoftmax");
+        const tiledCfg = Schedule.preset("cgra-tiled").toConfig();
+        expect(tiledCfg.splits?.length).toBeGreaterThanOrEqual(2);
+
+        const sfuOut = Schedule.preset("sfu-loops").apply(g);
+        expect(
+            sfuOut
+                .getOperationNodes()
+                .toArray()
+                .filter((o) => o.type === "Loop").length,
+        ).toBe(1);
+
+        // LowerMin and LowerMax must emit BOOL predicates for Where
+        for (const [opName, rec] of [
+            ["Min", new LowerMinRecipe()],
+            ["Max", new LowerMaxRecipe()],
+        ] as const) {
+            const gMM = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const bMM = new GraphBuilder(gMM, "mm_bool");
+            const aMM = gMM
+                .addNode("A")
+                .init(new TensorNode.Builder(DataType.FLOAT, [], "input"))
+                .as(TensorNode);
+            const bIn = gMM
+                .addNode("B")
+                .init(new TensorNode.Builder(DataType.FLOAT, [], "input"))
+                .as(TensorNode);
+            const [yMM] = bMM.createOp(opName, [aMM, bIn], {}, [
+                { type: DataType.FLOAT, shape: [] },
+            ]);
+            if (yMM.is(TensorNode)) yMM.as(TensorNode).setType("output");
+            rec.apply(gMM.getOperationNodes().toArray()[0], bMM);
+            const cmp = gMM
+                .getOperationNodes()
+                .toArray()
+                .find((o) => o.type === "Less" || o.type === "Greater")!;
+            expect(cmp.getOutgoers.targets.filterIs(TensorNode).first()!.literalType).toBe(
+                DataType.BOOL,
+            );
+        }
     });
 });
