@@ -6,9 +6,12 @@ import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
 import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { splitByAncestor } from "../../../src/onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../../../src/onnx/partitioning/Partition.js";
+import { PartitionedGraph } from "../../../src/onnx/partitioning/PartitionedGraph.js";
+import { GraphPartitioner } from "../../../src/onnx/partitioning/GraphPartitioner.js";
+import { AncestorSplitStrategy } from "../../../src/onnx/partitioning/PartitionStrategy.js";
 import { int64Vec } from "../../../src/onnx/utils/index.js";
 
-describe("Graph Partitioning Strategies & Splitter", () => {
+describe("Graph Partitioning Strategies, PartitionedGraph & GraphPartitioner", () => {
     function buildChainGraph() {
         const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
         const builder = new GraphBuilder(graph);
@@ -31,6 +34,16 @@ describe("Graph Partitioning Strategies & Splitter", () => {
                 .getOperationNodes()
                 .toArray()
                 .find((o) => o.type === "Relu")!,
+            absOp: graph
+                .getOperationNodes()
+                .toArray()
+                .find((o) => o.type === "Abs")!,
+            idOp: graph
+                .getOperationNodes()
+                .toArray()
+                .find((o) => o.type === "Identity")!,
+            c1,
+            c2,
         };
     }
 
@@ -44,19 +57,26 @@ describe("Graph Partitioning Strategies & Splitter", () => {
         expect(sets.head.has("X")).toBe(true);
     });
 
-    it("partitions an OnnxGraph into valid head and tail subgraphs", () => {
-        const { graph, reluOp } = buildChainGraph();
+    it("partitions an OnnxGraph into a PartitionedGraph with valid head, tail, and connections", () => {
+        const { graph, reluOp, c1 } = buildChainGraph();
         const sets = splitByAncestor(graph, reluOp.id);
-        const { head, tail } = partitionGraph(graph, sets);
+        const partitioned = partitionGraph(graph, sets);
 
-        expect(head).toBeDefined();
-        expect(tail).toBeDefined();
+        expect(partitioned).toBeInstanceOf(PartitionedGraph);
+        expect(partitioned.size).toBe(2);
 
+        const { head, tail } = partitioned;
         expect(head.hasNode("X")).toBe(true);
         expect(head.getInputTensorNodes().length).toBeGreaterThan(0);
 
         expect(tail.hasNode("Y")).toBe(true);
         expect(tail.getOutputTensorNodes().length).toBeGreaterThan(0);
+
+        expect(partitioned.connections).toEqual([
+            { fromPartition: "head", toPartition: "tail", tensorId: c1.id },
+        ]);
+        expect(partitioned.getExecutionOrder().map((p) => p.id)).toEqual(["head", "tail"]);
+        expect(partitioned.getBoundaryTensors("head", "tail")).toHaveLength(1);
     });
 
     it("handles constants and multi-input dependencies across partition boundary", () => {
@@ -75,11 +95,44 @@ describe("Graph Partitioning Strategies & Splitter", () => {
             .getOperationNodes()
             .toArray()
             .find((o) => o.type === "Add")!;
-        const sets = splitByAncestor(graph, addOp.id);
-        const { head, tail } = partitionGraph(graph, sets);
+        const partitioned = new GraphPartitioner().partition(
+            graph,
+            new AncestorSplitStrategy(addOp.id),
+        );
 
-        expect(head.hasNode(c.id)).toBe(true);
-        expect(tail.hasNode(subOut.id)).toBe(true);
-        expect(tail.getNodes().length).toBeGreaterThan(0);
+        expect(partitioned.head.hasNode(c.id)).toBe(true);
+        expect(partitioned.getPartition("head")!.inputs).toContain("X");
+        expect(partitioned.tail.hasNode(subOut.id)).toBe(true);
+        expect(partitioned.getPartition("tail")!.inputs).toContain("X");
+        expect(partitioned.getPartition("tail")!.inputs).toContain(addOut.id);
+        expect(partitioned.connections).toEqual([
+            { fromPartition: "head", toPartition: "tail", tensorId: addOut.id },
+        ]);
+    });
+
+    it("supports N-way (3-stage) partitioning with topological execution order", () => {
+        const { graph, reluOp, absOp, idOp, c1, c2 } = buildChainGraph();
+        const assignment = new Map<string, Set<string>>([
+            ["stage_2", new Set([idOp.id, "Y"])],
+            ["stage_0", new Set(["X", reluOp.id, c1.id])],
+            ["stage_1", new Set([absOp.id, c2.id])],
+        ]);
+
+        const partitioned = new GraphPartitioner().partition(graph, assignment);
+
+        expect(partitioned.size).toBe(3);
+        expect(partitioned.getExecutionOrder().map((p) => p.id)).toEqual([
+            "stage_0",
+            "stage_1",
+            "stage_2",
+        ]);
+        expect(partitioned.getBoundaryTensors("stage_0", "stage_1")).toEqual([
+            { fromPartition: "stage_0", toPartition: "stage_1", tensorId: c1.id },
+        ]);
+        expect(partitioned.getBoundaryTensors("stage_1", "stage_2")).toEqual([
+            { fromPartition: "stage_1", toPartition: "stage_2", tensorId: c2.id },
+        ]);
+        expect(partitioned.getGraph("stage_0")!.hasNode("X")).toBe(true);
+        expect(partitioned.getGraph("stage_2")!.hasNode("Y")).toBe(true);
     });
 });
