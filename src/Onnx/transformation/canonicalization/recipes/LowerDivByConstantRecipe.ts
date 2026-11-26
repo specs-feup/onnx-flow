@@ -6,7 +6,61 @@ import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
 import { DataType } from "../../../OnnxTypes.js";
 import { makeTensorProto, readTensorData, toStaticShape } from "../../../Utils.js";
 
-const FLOAT_DTYPES = new Set<DataType>([DataType.FLOAT, DataType.DOUBLE, DataType.FLOAT16]);
+const FLOAT_DTYPES = new Set<DataType>([
+    DataType.FLOAT,
+    DataType.DOUBLE,
+    DataType.FLOAT16,
+    DataType.BFLOAT16,
+]);
+
+export function isExactPowerOfTwoFloat(v: number, dt: DataType): boolean {
+    if (!Number.isFinite(v) || v === 0) return false;
+    const exp = Math.log2(Math.abs(v));
+    if (!Number.isInteger(exp)) return false;
+    // Ensure both v and 1/v stay within the finite normal mantissa exponent range of dt
+    const maxAbsExp =
+        dt === DataType.DOUBLE
+            ? 1022
+            : dt === DataType.FLOAT16
+              ? 14
+              : dt === DataType.BFLOAT16
+                ? 126
+                : 126;
+    return Math.abs(exp) <= maxAbsExp;
+}
+
+export function applyDivByReciprocalConstant(op: OperationNode.Class, builder: GraphBuilder): void {
+    const ins = op.getInputs() as ConcreteValueNode[];
+    const A = ins[0];
+    const B = ins[1] as ConstantNode.Class;
+    const Y = op.getOutputs()[0];
+
+    const tv = B.constantValue;
+    const dt = tv.dataType as DataType;
+    const dims = (tv.dims ?? []).map(Number);
+    const vals = readTensorData(B)!;
+    const output = [
+        {
+            type: (Y.literalType || dt) as DataType,
+            shape: toStaticShape(Y.shape) as KnownShape,
+        },
+    ];
+
+    // Fast-path identity division by scalar 1.0
+    if (dims.length === 0 && vals[0] === 1) {
+        const idOut = builder.createOp("Identity", [A], {}, output)[0];
+        builder.replaceAllUsesWith(Y, idOut);
+        builder.removeNode(op);
+        return;
+    }
+
+    const invVals = vals.map((v) => 1 / v);
+    const invConst = builder.createConstant(`div_inv_${op.id}`, makeTensorProto(dt, dims, invVals));
+    const mulOut = builder.createOp("Mul", [A, invConst], {}, output)[0];
+
+    builder.replaceAllUsesWith(Y, mulOut);
+    builder.removeNode(op);
+}
 
 export class LowerDivByConstantRecipe implements DecompositionRecipe {
     public readonly name = "LowerDivByConstant";
@@ -49,38 +103,6 @@ export class LowerDivByConstantRecipe implements DecompositionRecipe {
     }
 
     apply(op: OperationNode.Class, builder: GraphBuilder): void {
-        const ins = op.getInputs() as ConcreteValueNode[];
-        const A = ins[0];
-        const B = ins[1] as ConstantNode.Class;
-        const Y = op.getOutputs()[0];
-
-        const tv = B.constantValue;
-        const dt = tv.dataType as DataType;
-        const dims = (tv.dims ?? []).map(Number);
-        const vals = readTensorData(B)!;
-        const output = [
-            {
-                type: (Y.literalType || dt) as DataType,
-                shape: toStaticShape(Y.shape) as KnownShape,
-            },
-        ];
-
-        // Fast-path identity division by scalar 1.0
-        if (dims.length === 0 && vals[0] === 1) {
-            const idOut = builder.createOp("Identity", [A], {}, output)[0];
-            builder.replaceAllUsesWith(Y, idOut);
-            builder.removeNode(op);
-            return;
-        }
-
-        const invVals = vals.map((v) => 1 / v);
-        const invConst = builder.createConstant(
-            `div_inv_${op.id}`,
-            makeTensorProto(dt, dims, invVals),
-        );
-        const mulOut = builder.createOp("Mul", [A, invConst], {}, output)[0];
-
-        builder.replaceAllUsesWith(Y, mulOut);
-        builder.removeNode(op);
+        applyDivByReciprocalConstant(op, builder);
     }
 }

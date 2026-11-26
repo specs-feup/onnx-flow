@@ -38,12 +38,13 @@ import { LowerSeluRecipe } from "./recipes/LowerSeluRecipe.js";
 import { LowerOrRecipe } from "./recipes/LowerOrRecipe.js";
 import { LowerDivRecipe } from "./recipes/LowerDivRecipe.js";
 import { LowerDivByConstantRecipe } from "./recipes/LowerDivByConstantRecipe.js";
+import { LowerDivByExactPowerOfTwoRecipe } from "./recipes/LowerDivByExactPowerOfTwoRecipe.js";
 import { LowerModRecipe } from "./recipes/LowerModRecipe.js";
 import { LowerPowRecipe } from "./recipes/LowerPowRecipe.js";
 import { LowerPowSmallIntRecipe } from "./recipes/LowerPowSmallIntRecipe.js";
 import { LowerConv1x1ToMatMulRecipe } from "./recipes/LowerConv1x1ToMatMulRecipe.js";
 import { DataType, type ValueNode } from "../../OnnxTypes.js";
-import { toStaticShape } from "../../Utils.js";
+import { getIntsAttr, toStaticShape } from "../../Utils.js";
 import { LowerNotRecipe } from "./recipes/LowerNotRecipe.js";
 import { LowerSigmoidRecipe } from "./recipes/LowerSigmoidRecipe.js";
 import { LowerSoftsignRecipe } from "./recipes/LowerSoftsignRecipe.js";
@@ -273,6 +274,9 @@ export class CanonicalizationPass implements GraphPass {
             new LowerEinsumRecipe(),
             new LowerDetRecipe(),
 
+            // Exact Constant Strength Reduction (higher priority than approx DivByConstant)
+            new LowerDivByExactPowerOfTwoRecipe(),
+
             // Normalization Operations
             new LowerBatchNormalizationRecipe(),
             new LowerLayerNormalizationRecipe(),
@@ -331,6 +335,33 @@ export class CanonicalizationPass implements GraphPass {
             return (
                 !isSmallIntShape &&
                 ins.every((t: ValueNode) => Array.isArray(t.shape) && t.shape.length === rank)
+            );
+        }
+
+        if (op.type === "AveragePool") {
+            const rank = ins[0].shape.length;
+            if (rank < 3) return false;
+            const kernel = getIntsAttr(op, "kernel_shape", []);
+            return kernel.length === rank - 2;
+        }
+
+        if (op.type === "Det") {
+            const dims = toStaticShape(ins[0].shape);
+            if (dims.length < 2) return false;
+            const n = dims[dims.length - 1];
+            const m = dims[dims.length - 2];
+            if ((n !== -1 && n < 1) || (m !== -1 && m < 1)) return false;
+            if (n !== -1 && m !== -1 && n !== m) return false;
+            // Keep algebraic closed-form LowerDet for static 1x1..3x3; defer N >= 4 or dynamic dims to LowerDetLoop.
+            return n === -1 || m === -1 || n >= 4 || dims.slice(0, -2).includes(-1);
+        }
+
+        if (op.type === "TopK") {
+            return (
+                ins.length >= 2 &&
+                Array.isArray(ins[0].shape) &&
+                ins[0].shape.length >= 1 &&
+                op.getOutputs().length >= 2
             );
         }
 

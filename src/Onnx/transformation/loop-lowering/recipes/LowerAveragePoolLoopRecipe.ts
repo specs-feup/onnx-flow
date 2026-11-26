@@ -1,11 +1,7 @@
 import type OnnxGraph from "../../../OnnxGraph.js";
 import type OperationNode from "../../../OperationNode.js";
-import {
-    type ValueNode,
-    type ConcreteValueNode,
-    type KnownShape,
-    DataType,
-} from "../../../OnnxTypes.js";
+import type { DataType } from "../../../OnnxTypes.js";
+import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
 import {
     getIntAttr,
     getIntsAttr,
@@ -38,6 +34,7 @@ import {
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
+import { isExactPowerOfTwoFloat } from "../../canonicalization/recipes/LowerDivByConstantRecipe.js";
 
 export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerAveragePoolLoop";
@@ -182,21 +179,6 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
             `apb_it_${op.id}`,
         ) as ConcreteValueNode;
         return { totalIters, carryShape, targetShape };
-    }
-
-    postProcess(op: OperationNode.Class, builder: GraphBuilder, loopOut: ValueNode): ValueNode {
-        const inDims = toStaticShape(op.getInputs()![0].shape);
-        if (!this.usesConstantDivisor(op, inDims)) {
-            return loopOut;
-        }
-        const kernel = getIntsAttr(op, "kernel_shape", []);
-        const kTotal = kernel.reduce((a, b) => a * b, 1);
-        const dtype = (loopOut.literalType || DataType.FLOAT) as DataType;
-        const divConst = builder.createConstant(
-            `ap_ktotal_${op.id}`,
-            makeTensorProto(dtype, [], [kTotal]),
-        );
-        return builder.createOp("Div", [loopOut, divConst])[0];
     }
 
     apply(
@@ -420,6 +402,25 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
             const [safeCnt] = builder.createOp("Max", [newCnt, oneVal]);
             const [avg] = builder.createOp("Div", [newSum, safeCnt]);
             [storeVal] = builder.createOp("Where", [isLastTap!, avg, newSum]);
+        } else if (constDivisor) {
+            const kTotal = kernel.reduce((a, b) => a * b, 1);
+            if (kTotal > 1) {
+                let avg: ConcreteValueNode;
+                if (isExactPowerOfTwoFloat(kTotal, dtype)) {
+                    const invConst = builder.createConstant(
+                        `ap_invk_${op.id}`,
+                        makeTensorProto(dtype, [], [1 / kTotal]),
+                    );
+                    [avg] = builder.createOp("Mul", [newSum, invConst]);
+                } else {
+                    const kConst = builder.createConstant(
+                        `ap_ktotal_${op.id}`,
+                        makeTensorProto(dtype, [], [kTotal]),
+                    );
+                    [avg] = builder.createOp("Div", [newSum, kConst]);
+                }
+                [storeVal] = builder.createOp("Where", [isLastTap!, avg, newSum]);
+            }
         }
 
         const [storeUnsq] = builder.createOp("Unsqueeze", [storeVal, axes]);

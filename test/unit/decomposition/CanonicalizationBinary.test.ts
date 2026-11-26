@@ -239,4 +239,38 @@ describe("Canonicalization - Binary & Comparison Recipes", () => {
         const { op: opNonInt } = buildPow(2.7);
         expect(recipe.match(opNonInt)).toBe(false);
     });
+
+    it("lowers Div by exact power-of-two constants as exact precision via LowerDivByExactPowerOfTwo", () => {
+        const buildDiv = (val: number) => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "divp2");
+            const a = g
+                .addNode("A")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 2], "input"))
+                .as(TensorNode);
+            const c = b.createConstant("c", scalarFloat(val));
+            b.createOp("Div", [a, c], {}, [{ type: DataType.FLOAT, shape: [2, 2] }]);
+            const op = g
+                .getOperationNodes()
+                .toArray()
+                .find((o) => o.type === "Div")!;
+            return { g, b, op };
+        };
+
+        const exactRecipe = new Recipes.canonicalization.DivByExactPowerOfTwo();
+        expect(exactRecipe.precision).toBe("exact");
+
+        const { g: g4, b: b4, op: op4 } = buildDiv(4.0);
+        expect(exactRecipe.match(op4)).toBe(true);
+        exactRecipe.apply(op4, b4);
+        expect(
+            g4
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).toEqual(["Mul"]);
+
+        const { op: op3 } = buildDiv(3.0);
+        expect(exactRecipe.match(op3)).toBe(false);
+    });
 });
