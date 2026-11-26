@@ -97,22 +97,7 @@ export function startExplorerServer(session: ExplorerSession, port: number = 300
         }
     });
 
-    // 8. Start the API
-    app.listen(port, () => {
-        console.log(`\n======================================================`);
-        console.log(`🚀 ONNX-Flow Explorer Server running on port ${port}`);
-        console.log(`📡 API Endpoints available:`);
-        console.log(`   GET  http://localhost:${port}/api/graph`);
-        console.log(`   GET  http://localhost:${port}/api/opportunities`);
-        console.log(`   POST http://localhost:${port}/api/apply/:id`);
-        console.log(`   POST http://localhost:${port}/api/undo`);
-        console.log(`   POST http://localhost:${port}/api/redo`);
-        console.log(`   GET http://localhost:${port}/api/export/onnx-json`);
-        console.log(`   GET http://localhost:${port}/api/export/unified-json`);
-        console.log(`======================================================\n`);
-    });
-
-    // 9. Download standard ONNX JSON (.json)
+    // 8. Download standard ONNX JSON (.json)
     app.get("/api/export/onnx-json", (req: Request, res: Response) => {
         try {
             // Get the raw JSON object from the session
@@ -130,7 +115,7 @@ export function startExplorerServer(session: ExplorerSession, port: number = 300
         }
     });
 
-    // 10. Download Cytoscape Unified JSON (.json)
+    // 9. Download Cytoscape Unified JSON (.json)
     app.get("/api/export/unified-json", (req: Request, res: Response) => {
         try {
             // Get the Cytoscape-ready object
@@ -147,5 +132,20 @@ export function startExplorerServer(session: ExplorerSession, port: number = 300
             console.error("\n💥 Error exporting Unified JSON:", error);
             res.status(500).json({ success: false, error: String(error) });
         }
+    });
+
+    // 10. Start the API after all routes are registered
+    app.listen(port, () => {
+        console.log(`\n======================================================`);
+        console.log(`🚀 ONNX-Flow Explorer Server running on port ${port}`);
+        console.log(`📡 API Endpoints available:`);
+        console.log(`   GET  http://localhost:${port}/api/graph`);
+        console.log(`   GET  http://localhost:${port}/api/opportunities`);
+        console.log(`   POST http://localhost:${port}/api/apply/:id`);
+        console.log(`   POST http://localhost:${port}/api/undo`);
+        console.log(`   POST http://localhost:${port}/api/redo`);
+        console.log(`   GET http://localhost:${port}/api/export/onnx-json`);
+        console.log(`   GET http://localhost:${port}/api/export/unified-json`);
+        console.log(`======================================================\n`);
     });
 }

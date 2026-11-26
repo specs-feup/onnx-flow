@@ -11,6 +11,7 @@ import { TrackedGraphBuilder } from "./tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "./tracking/HistoryManager.js";
 import OnnxGraphTransformer from "./index.js";
 import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
+import { Recipes } from "./recipes.js";
 import {
     int64Vec,
     readScalarFromTensorNode,
@@ -35,39 +36,10 @@ export interface ScheduleConfig {
     cacheReads?: Array<{ tensor: string; consumer?: string }>;
 }
 
-export const LOOP_LOWERING_RECIPE_NAMES = new Set<string>([
-    "LowerElementWise",
-    "LowerReduction",
-    "LowerDynamicReduction",
-    "LowerTranspose",
-    "LowerRange",
-    "LowerMatMul",
-    "LowerCoalescedMatMul",
-    "LowerDynamicBatchedMatMul",
-    "LowerConv",
-    "LowerConvND",
-    "LowerConvTranspose",
-    "LowerMaxPool",
-    "LowerAveragePoolLoop",
-    "LowerCumSum",
-    "LowerReverseSequence",
-    "LowerGatherElements",
-    "LowerGatherND",
-    "LowerScatterND",
-    "LowerResize",
-    "LowerResizeCubic",
-    "LowerSliceLoop",
-    "LowerPadLoop",
-    "LowerTileLoop",
-    "LowerOneHotLoop",
-    "LowerConcatLoop",
-    "LowerSoftmaxLoop",
-    "LowerLayerNormLoop",
-    "LowerLogSoftmaxLoop",
-    "LowerRMSNormLoop",
-    "LowerDetLoop",
-    "LowerTopKScalarLoop",
-]);
+/** Set of all registered loop-lowering recipe names, derived from the recipe catalog. */
+export const LOOP_LOWERING_RECIPE_NAMES = new Set<string>(
+    Object.values(Recipes.loopLowering).map((RecipeClass) => new RecipeClass().name),
+);
 
 export function resolveScheduleConfig(
     schedule?: Schedule | ScheduleConfig,

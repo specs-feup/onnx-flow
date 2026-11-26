@@ -1,90 +1,63 @@
 import fs from "fs";
 import type { DecompositionOptions } from "../DecompositionOptions.js";
 import { createGraph } from "../io/OnnxGraphLoader.js";
+import { onnx2json } from "../io/OnnxToJson.js";
+import { convertFlowGraphToOnnxJson } from "../io/OnnxGraphExporter.js";
 import type OnnxGraph from "../onnx/OnnxGraph.js";
-import { LowerAveragePoolRecipe } from "../onnx/transformation/canonicalization/recipes/LowerAveragePoolRecipe.js";
-import { LowerClipRecipe } from "../onnx/transformation/canonicalization/recipes/LowerClipRecipe.js";
-import { LowerConcatRecipe } from "../onnx/transformation/canonicalization/recipes/LowerConcatRecipe.js";
-import { LowerDequantizeLinearRecipe } from "../onnx/transformation/canonicalization/recipes/LowerDequantizeLinearRecipe.js";
-import { LowerExpandRecipe } from "../onnx/transformation/canonicalization/recipes/LowerExpandRecipe.js";
-import { LowerGemmRecipe } from "../onnx/transformation/canonicalization/recipes/LowerGemmRecipe.js";
-import { LowerPadRecipe } from "../onnx/transformation/canonicalization/recipes/LowerPadRecipe.js";
-import { LowerQuantizeLinearRecipe } from "../onnx/transformation/canonicalization/recipes/LowerQuantizeLinearRecipe.js";
-import { LowerReluRecipe } from "../onnx/transformation/canonicalization/recipes/LowerReluRecipe.js";
-import { LowerSliceRecipe } from "../onnx/transformation/canonicalization/recipes/LowerSliceRecipe.js";
-import { LowerSoftmaxRecipe } from "../onnx/transformation/canonicalization/recipes/LowerSoftmaxRecipe.js";
-import { LowerSubRecipe } from "../onnx/transformation/canonicalization/recipes/LowerSubRecipe.js";
+import type { RawOnnxModel } from "../onnx/OnnxTypes.js";
+import type { DecompositionRecipe } from "../onnx/transformation/Recipe.js";
+import { createDefaultCanonicalizationRecipes } from "../onnx/transformation/recipes.js";
 import { LoopFusionMatcher } from "../onnx/transformation/loop-lowering/LoopFusionMatcher.js";
 import type { MutationPatch } from "../onnx/transformation/tracking/GraphActions.js";
 import { HistoryManager } from "../onnx/transformation/tracking/HistoryManager.js";
 import { TrackedGraphBuilder } from "../onnx/transformation/tracking/TrackedGraphBuilder.js";
 import type { TransformationOpportunity } from "../onnx/transformation/TransformationOpportunity.js";
 import { TransformationRegistry } from "../onnx/transformation/TransformationRegistry.js";
-import { parseOnnxFile } from "../index.js";
-import type { RawOnnxModel } from "../onnx/OnnxTypes.js";
-import { convertFlowGraphToOnnxJson } from "../io/OnnxGraphExporter.js";
 import type { UnifiedExplorerJson } from "./ExplorerSerializer.js";
 import { generateUnifiedExplorerJson } from "./ExplorerSerializer.js";
 
+/**
+ * Interactive graph exploration session managing transformation discovery,
+ * tracked application, undo/redo history, and JSON export.
+ */
 export class ExplorerSession {
     public history: HistoryManager;
     public registry: TransformationRegistry;
 
+    /** Loads a `.onnx` or `.json` model from disk into a fresh `ExplorerSession`. */
     public static async fromFile(
         filePath: string,
         options: DecompositionOptions,
     ): Promise<ExplorerSession> {
         console.log(`[ExplorerSession] Loading graph from ${filePath}...`);
-        let onnxObject;
+        const onnxObject: RawOnnxModel = filePath.endsWith(".json")
+            ? (JSON.parse(fs.readFileSync(filePath, "utf8")) as RawOnnxModel)
+            : await onnx2json(filePath);
 
-        // 1. Read the file (Replace this with the exact logic from your index.ts!)
-        if (filePath.endsWith(".json")) {
-            onnxObject = JSON.parse(fs.readFileSync(filePath, "utf8"));
-        } else {
-            onnxObject = await parseOnnxFile(filePath);
-        }
-
-        // 2. Create the graph
         const graph = createGraph(onnxObject);
-
-        // 3. Return a fully initialized session
         return new ExplorerSession(graph, options);
     }
 
     constructor(
         public graph: OnnxGraph.Class,
         public options: DecompositionOptions,
+        customRecipes?: DecompositionRecipe[],
     ) {
         this.history = new HistoryManager(graph);
-
-        // 1. Initialize Orchestrator A: The Registry for Canonicalization Recipes
-        this.registry = new TransformationRegistry([
-            new LowerSoftmaxRecipe(),
-            new LowerSliceRecipe(),
-            new LowerGemmRecipe(),
-            new LowerQuantizeLinearRecipe(),
-            new LowerDequantizeLinearRecipe(),
-            new LowerPadRecipe(),
-            new LowerExpandRecipe(),
-            new LowerConcatRecipe(),
-            new LowerClipRecipe(),
-            new LowerAveragePoolRecipe(),
-            new LowerReluRecipe(),
-            new LowerSubRecipe(),
-        ]);
+        this.registry = new TransformationRegistry(
+            customRecipes ?? createDefaultCanonicalizationRecipes(),
+        );
     }
 
     /**
-     * Scans the current graph topology and yields a comprehensive list of
-     * every available transformation (Canonicalization + Loop Lowering).
+     * Scans the current graph topology and yields all available transformation
+     * opportunities (canonicalization, single-op loop lowering, and fused loops).
      */
     public getOpportunities(): TransformationOpportunity[] {
         const opportunities: TransformationOpportunity[] = [];
 
-        // A. Ask the Registry for macro-level canonicalizations
         opportunities.push(...this.registry.findAllOpportunities(this.graph));
 
-        // B. Ask the Matcher for Single-Op loop lowerings
         const singleOpMatcher = new LoopFusionMatcher({
             coalesce: this.options.coalesce,
             fuse: false,
@@ -92,7 +65,6 @@ export class ExplorerSession {
         });
         opportunities.push(...singleOpMatcher.findOpportunities(this.graph));
 
-        // C. Ask the Matcher for Multi-Op (Fused) loop lowerings
         if (this.options.fuse) {
             const fusionMatcher = new LoopFusionMatcher({
                 coalesce: this.options.coalesce,
@@ -111,11 +83,9 @@ export class ExplorerSession {
     }
 
     /**
-     * Executes an opportunity by ID, wrapping it in the TrackedGraphBuilder
-     * so it can be perfectly undone later.
+     * Executes an opportunity by ID via `TrackedGraphBuilder` so it can be undone/redone.
      */
     public applyOpportunity(opportunityId: string): boolean {
-        // Regenerate the list to ensure the target is still valid for the current topology
         const opps = this.getOpportunities();
         const targetOpp = opps.find((o) => o.id === opportunityId);
 
@@ -126,7 +96,6 @@ export class ExplorerSession {
             return false;
         }
 
-        // Initialize the Tracker for this specific action
         const builder = new TrackedGraphBuilder(
             this.graph,
             targetOpp.id,
@@ -134,13 +103,8 @@ export class ExplorerSession {
             "explorer_interactive",
         );
 
-        // Execute! The callback will route to either the Registry or the LoopFusionMatcher
         targetOpp.apply(builder);
-
-        // Commit the recorded actions to the timeline
-        const patch = builder.commitPatch();
-        this.history.pushPatch(patch);
-
+        this.history.pushPatch(builder.commitPatch());
         return true;
     }
 
@@ -152,18 +116,12 @@ export class ExplorerSession {
         return this.history.redo();
     }
 
-    /**
-     * Converts the current state of the output graph back into
-     * a standard ONNX JSON representation.
-     */
+    /** Exports the current graph state as a standard ONNX JSON model. */
     public getOutputOnnxJson(): RawOnnxModel {
         return convertFlowGraphToOnnxJson(this.graph);
     }
 
-    /**
-     * Generates a unified JSON payload of the output graph that Cytoscape can render visually,
-     * but contains the exact ONNX-Flow data needed to reconstruct the graph.
-     */
+    /** Exports the current graph state as a Cytoscape-compatible unified explorer payload. */
     public getOutputUnifiedJson(): UnifiedExplorerJson {
         return generateUnifiedExplorerJson(this.graph);
     }
