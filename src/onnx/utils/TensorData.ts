@@ -288,69 +288,11 @@ export function readScalarFromTensorNode(node?: BaseNode.Class): number | undefi
 
 /**
  * Universal helper to read ANY numeric tensor as a JavaScript number array.
- * Handles Float, Double, Int32, Int64, and raw byte buffers.
+ * Delegates to `readTensorData` to support all ONNX numeric data types uniformly.
  */
 export function readVectorFromTensorNode(node?: BaseNode.Class): number[] | undefined {
-    if (!node) return undefined;
-
-    // 1. Get the TensorProto
-    let tv: TensorProto | undefined;
-    if (node.is(ConstantNode)) {
-        tv = node.as(ConstantNode).constantValue;
-    }
-
-    if (!tv) return undefined;
-
-    // 2. Try explicit fields first (Fastest)
-    if (Array.isArray(tv.floatData) && tv.floatData.length) return tv.floatData.map(Number);
-    if (Array.isArray(tv.doubleData) && tv.doubleData.length) return tv.doubleData.map(Number);
-    if (Array.isArray(tv.int64Data) && tv.int64Data.length) return tv.int64Data.map(Number);
-    if (Array.isArray(tv.int32Data) && tv.int32Data.length) return tv.int32Data.map(Number);
-    if (Array.isArray(tv.uint64Data) && tv.uint64Data.length) return tv.uint64Data.map(Number);
-
-    // 3. Fallback to Raw Data Parsing
-    const u8 = toU8(tv.rawData ?? undefined);
-    if (!u8) return undefined;
-
-    const dt = tv.dataType;
-    const len = totalSizeFromDims(0, tv.dims);
-    // If dims is missing/empty, try to guess from byte length for common types
-    const elemCount = len > 0 ? len : 0;
-
-    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-    const out: number[] = [];
-
-    // Helper to estimate count if unknown
-    const getCount = (bytes: number) =>
-        elemCount > 0 ? elemCount : Math.floor(u8.byteLength / bytes);
-
-    // 1 = FLOAT
-    if (dt === 1) {
-        const n = getCount(4);
-        for (let i = 0; i < n; i++) out.push(dv.getFloat32(i * 4, true));
-    }
-    // 11 = DOUBLE
-    else if (dt === 11) {
-        const n = getCount(8);
-        for (let i = 0; i < n; i++) out.push(dv.getFloat64(i * 8, true));
-    }
-    // 7 = INT64
-    else if (dt === 7) {
-        const n = getCount(8);
-        for (let i = 0; i < n; i++) out.push(Number(dv.getBigInt64(i * 8, true)));
-    }
-    // 6 = INT32
-    else if (dt === 6) {
-        const n = getCount(4);
-        for (let i = 0; i < n; i++) out.push(dv.getInt32(i * 4, true));
-    }
-    // 2 = UINT8
-    else if (dt === 2) {
-        return Array.from(u8);
-    }
-    // Add others if needed (Float16, Int8, etc)
-
-    return out.length > 0 ? out : undefined;
+    const data = readTensorData(node);
+    return data !== undefined && data.length > 0 ? data : undefined;
 }
 
 // Helper for Float16 decoding (IEEE 754 half-precision)
@@ -366,27 +308,18 @@ function decodeFloat16(binary: number): number {
 
 /**
  * Reads any numeric tensor (Scalar or Vector) into a JavaScript number array.
- * Automatically handles Float vs Int parsing based on the node's stored DataType.
+ * Automatically handles explicit typed arrays and raw little-endian byte buffers.
  */
 export function readTensorData(node?: BaseNode.Class): number[] | undefined {
-    if (!node) return undefined;
+    if (!node || !node.is(ConstantNode)) return undefined;
+    const tv = node.as(ConstantNode).constantValue;
 
-    // 1. Get TensorProto
-    let tv: TensorProto | undefined;
-    if (node.is(ConstantNode)) {
-        tv = node.as(ConstantNode).constantValue;
-    }
+    if (Array.isArray(tv.floatData) && tv.floatData.length > 0) return tv.floatData.map(Number);
+    if (Array.isArray(tv.int64Data) && tv.int64Data.length > 0) return tv.int64Data.map(Number);
+    if (Array.isArray(tv.int32Data) && tv.int32Data.length > 0) return tv.int32Data.map(Number);
+    if (Array.isArray(tv.doubleData) && tv.doubleData.length > 0) return tv.doubleData.map(Number);
+    if (Array.isArray(tv.uint64Data) && tv.uint64Data.length > 0) return tv.uint64Data.map(Number);
 
-    if (!tv) return undefined;
-
-    // 2. Try explicit fields (Fastest)
-    if (Array.isArray(tv.floatData) && tv.floatData.length) return tv.floatData.map(Number);
-    if (Array.isArray(tv.int64Data) && tv.int64Data.length) return tv.int64Data.map(Number);
-    if (Array.isArray(tv.int32Data) && tv.int32Data.length) return tv.int32Data.map(Number);
-    if (Array.isArray(tv.doubleData) && tv.doubleData.length) return tv.doubleData.map(Number);
-    if (Array.isArray(tv.uint64Data) && tv.uint64Data.length) return tv.uint64Data.map(Number);
-
-    // 3. Fallback: Parse Raw Bytes
     const u8 = toU8(tv.rawData ?? undefined);
     if (!u8) return undefined;
 
@@ -413,73 +346,65 @@ export function readTensorData(node?: BaseNode.Class): number[] | undefined {
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
     const out: number[] = [];
 
-    // Calculate count
     let count = totalSizeFromDims(0, tv.dims);
     if (count <= 0) {
-        // Estimate based on type size
         const bytesPerElem =
-            dt === 1 || dt === 6 || dt === 12
-                ? 4 // 32-bit
-                : dt === 7 || dt === 11 || dt === 13
-                  ? 8 // 64-bit
-                  : dt === 4 || dt === 5 || dt === 10 || dt === 16
-                    ? 2 // 16-bit
-                    : 1; // 8-bit
+            dt === DataType.FLOAT || dt === DataType.INT32 || dt === DataType.UINT32
+                ? 4
+                : dt === DataType.INT64 || dt === DataType.DOUBLE || dt === DataType.UINT64
+                  ? 8
+                  : dt === DataType.UINT16 ||
+                      dt === DataType.INT16 ||
+                      dt === DataType.FLOAT16 ||
+                      dt === DataType.BFLOAT16
+                    ? 2
+                    : 1;
         count = Math.floor(u8.byteLength / bytesPerElem);
     }
 
     for (let i = 0; i < count; i++) {
         switch (dt) {
-            // --- 32-bit ---
-            case 1: // FLOAT
+            case DataType.FLOAT:
                 out.push(dv.getFloat32(i * 4, true));
                 break;
-            case 6: // INT32
+            case DataType.INT32:
                 out.push(dv.getInt32(i * 4, true));
                 break;
-            case 12: // UINT32
+            case DataType.UINT32:
                 out.push(dv.getUint32(i * 4, true));
                 break;
-
-            // --- 64-bit ---
-            case 7: // INT64
+            case DataType.INT64:
                 out.push(Number(dv.getBigInt64(i * 8, true)));
                 break;
-            case 11: // DOUBLE
+            case DataType.DOUBLE:
                 out.push(dv.getFloat64(i * 8, true));
                 break;
-            case 13: // UINT64
+            case DataType.UINT64:
                 out.push(Number(dv.getBigUint64(i * 8, true)));
                 break;
-
-            // --- 16-bit ---
-            case 5: // INT16
+            case DataType.INT16:
                 out.push(dv.getInt16(i * 2, true));
                 break;
-            case 4: // UINT16
+            case DataType.UINT16:
                 out.push(dv.getUint16(i * 2, true));
                 break;
-            case 10: // FLOAT16
+            case DataType.FLOAT16:
                 out.push(decodeFloat16(dv.getUint16(i * 2, true)));
                 break;
-            case 16: // BFLOAT16 (Rough approximation: high 16 bits of F32)
-                // JS doesn't have native BFloat16, usually we treat as Float32 truncated
+            case DataType.BFLOAT16:
                 out.push(dv.getUint16(i * 2, true));
                 break;
-
-            // --- 8-bit ---
-            case 2: // UINT8
+            case DataType.UINT8:
                 out.push(u8[i]);
                 break;
-            case 3: // INT8
+            case DataType.INT8:
                 out.push(new Int8Array(u8.buffer, u8.byteOffset)[i]);
                 break;
-            case 9: // BOOL
+            case DataType.BOOL:
                 out.push(u8[i] ? 1 : 0);
                 break;
-
             default:
-                return undefined; // Complex, String, or 4-bit types not supported for numeric array
+                return undefined;
         }
     }
 

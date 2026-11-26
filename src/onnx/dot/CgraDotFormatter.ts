@@ -1,4 +1,3 @@
-import DefaultDotFormatter from "@specs-feup/flow/graph/dot/DefaultDotFormatter";
 import type OnnxGraph from "../OnnxGraph.js";
 import type { DotGraph, DotStatement } from "@specs-feup/flow/graph/dot/dot";
 import Dot, { DotEdge, DotNode } from "@specs-feup/flow/graph/dot/dot";
@@ -8,8 +7,12 @@ import Node from "@specs-feup/flow/graph/Node";
 import TensorNode from "../TensorNode.js";
 import ConstantNode from "../ConstantNode.js";
 import OperationNode from "../OperationNode.js";
-import { readConstIntegerVectorFromTensorNode, readTensorData, TYPE_SIZE_MAP } from "../utils/index.js";
-import type { KnownShape } from "../OnnxTypes.js";
+import {
+    readConstIntegerVectorFromTensorNode,
+    readTensorData,
+    TYPE_SIZE_MAP,
+} from "../utils/index.js";
+import BaseOnnxDotFormatter from "./BaseOnnxDotFormatter.js";
 
 type ClusterInfo = {
     idPrefix: string;
@@ -19,75 +22,49 @@ type ClusterInfo = {
 };
 
 /**
- * @class CgraDotFormatter
- * @extends DefaultDotFormatter
- *
- * @brief A DOT formatter specialized for exporting ONNX graphs to the DOT
- * specification of the STRELA CGRA mapper.
- *
- * By design, the formatter requires the graph to be already in a CGRA-compatible
- * form, meaning that all operations must be supported by the CGRA and all tensors
- * must not have more than one dimension.
+ * DOT formatter specialized for exporting 1D CGRA-compatible ONNX graphs to the
+ * DOT specification expected by the STRELA CGRA mapper.
  */
 export default class CgraDotFormatter<
     G extends OnnxGraph.Class = OnnxGraph.Class,
-> extends DefaultDotFormatter<G> {
-    private idPrefix: string;
+> extends BaseOnnxDotFormatter<G> {
     private clusterInfos: Record<string, ClusterInfo> = {};
 
     static override defaultGetNodeAttrs(node: BaseNode.Class): Record<string, string> {
         const attrs = super.defaultGetNodeAttrs(node);
-        delete attrs["shape"]; // Remove default shape attribute
+        delete attrs["shape"];
 
         node.switch(
-            Node.Case(TensorNode, (node) => {
-                // In case the node has more than one dimension (which it
-                // shouldn't!), use the combined element count as the size
-                const size = (node.shape as number[]).reduce((a, b) => a * b, 1);
+            Node.Case(TensorNode, (tn) => {
+                const size = (tn.shape as number[]).reduce((a, b) => a * b, 1);
 
-                if (node.type === "input") {
+                if (tn.type === "input") {
                     attrs["size"] = size.toString();
-                    attrs["stride"] = TYPE_SIZE_MAP[node.literalType as number]!.toString();
-                } else if (node.type === "output") {
+                    attrs["stride"] = TYPE_SIZE_MAP[tn.literalType as number]!.toString();
+                } else if (tn.type === "output") {
                     attrs["size"] = size.toString();
                 }
             }),
-            Node.Case(ConstantNode, (node) => {
-                const val = readTensorData(node);
+            Node.Case(ConstantNode, (cn) => {
+                const val = readTensorData(cn);
                 attrs["label"] = val!.slice(0, 5).toString();
-                // attrs.size = node;
             }),
-            Node.Case(OperationNode, (node) => {
-                attrs["label"] = node.type;
-                attrs["type"] = node.type.toLowerCase();
-
+            Node.Case(OperationNode, (op) => {
+                attrs["label"] = op.type;
+                attrs["type"] = op.type.toLowerCase();
                 attrs["feedback"] = "0";
-                // attrs.constant = '0';
-                // attrs.constant_fu_input = '0';
-                // attrs.initial_value = '0';
-                // attrs.initial_valid = '0';
-                // attrs.delay_value = '0';
             }),
         );
 
         return attrs;
     }
 
-    static shapeToLabel(shape: KnownShape): string {
-        const shapeString = `{${shape.join(",")}}`;
-        return shapeString === "{}" ? "sc" : shapeString;
-    }
-
     static override defaultGetEdgeAttrs(_edge: BaseEdge.Class): Record<string, string> {
-        const attrs = {};
-
-        return attrs;
+        return {};
     }
 
     static override defaultGetGraphAttrs(): Record<string, string> {
-        const attrs = super.defaultGetGraphAttrs();
-
-        return attrs;
+        return super.defaultGetGraphAttrs();
     }
 
     constructor(
@@ -97,24 +74,16 @@ export default class CgraDotFormatter<
         getContainer?: (node: BaseNode.Class) => BaseNode.Class | undefined,
         getGraphAttrs?: () => Record<string, string>,
     ) {
-        getNodeAttrs ??= CgraDotFormatter.defaultGetNodeAttrs;
-        getEdgeAttrs ??= CgraDotFormatter.defaultGetEdgeAttrs;
-        getContainer ??= CgraDotFormatter.defaultGetContainer; // Method not implemented, add if needed
-        getGraphAttrs ??= CgraDotFormatter.defaultGetGraphAttrs;
-
-        super(getNodeAttrs, getEdgeAttrs, getContainer, getGraphAttrs);
-
-        this.idPrefix = idPrefix;
+        super(
+            idPrefix,
+            getNodeAttrs ?? CgraDotFormatter.defaultGetNodeAttrs,
+            getEdgeAttrs ?? CgraDotFormatter.defaultGetEdgeAttrs,
+            getContainer ?? CgraDotFormatter.defaultGetContainer,
+            getGraphAttrs ?? CgraDotFormatter.defaultGetGraphAttrs,
+        );
     }
 
-    override nodeToDot(node: BaseNode.Class): DotNode {
-        const id = this.idPrefix + node.id;
-        const attrs = this.getNodeAttrs(node);
-
-        return Dot.node(id, attrs);
-    }
-
-    createDotEdge(
+    public override createDotEdge(
         sourceId: string,
         targetId: string,
         attrs: Record<string, string> = {},
@@ -125,8 +94,6 @@ export default class CgraDotFormatter<
 
         if (sourceId in this.clusterInfos) {
             const sourceCluster = this.clusterInfos[sourceId];
-
-            // Map all references to the cluster to an appropriate inner node
             for (const [prefix, newSource] of Object.entries(sourceCluster.sourceMapping)) {
                 if (target.startsWith(prefix)) {
                     source = sourceCluster.idPrefix + newSource;
@@ -137,8 +104,6 @@ export default class CgraDotFormatter<
 
         if (targetId in this.clusterInfos) {
             const targetCluster = this.clusterInfos[targetId];
-
-            // Map all references to the cluster to an appropriate inner node
             for (const [prefix, newTarget] of Object.entries(targetCluster.targetMapping)) {
                 if (source.startsWith(prefix)) {
                     target = targetCluster.idPrefix + newTarget;
@@ -150,130 +115,62 @@ export default class CgraDotFormatter<
         return Dot.edge(source, target, attrs);
     }
 
-    override edgeToDot(edge: BaseEdge.Class): DotEdge {
-        const sourceId = edge.source.id;
-        const targetId = edge.target.id;
-        const attrs = this.getEdgeAttrs(edge);
-
-        return this.createDotEdge(sourceId, targetId, attrs);
-    }
-
-    ifToDot(_node: OperationNode.Class): DotStatement[] {
-        // Implementing the transformation of If is possible using a "branch" and
-        // a "merge" node, but since it is not generated for the tested examples
-        // and the representation in ONNX is non-trivial, we leave it unimplemented for now
+    public ifToDot(_node: OperationNode.Class): DotStatement[] {
         throw new Error("If node conversion to DOT is not implemented.");
     }
 
-    /**
-     * @brief Tries to turn a node as an intermediate tensor.
-     *
-     * @param node The node to convert.
-     * @returns The intermediate tensor node if compatible, otherwise undefined.
-     */
-    tryAsIntermediateTensor(node: BaseNode.Class): TensorNode.Class | undefined {
-        const tensorNode = node.tryAs(TensorNode);
-        if (tensorNode === undefined) return undefined;
-
-        if (tensorNode.type !== "intermediate") return undefined;
-
-        return tensorNode;
-    }
-
-    validateTensorNode(node: TensorNode.Class): void {
+    public validateTensorNode(node: TensorNode.Class): void {
         if (node.shape.length > 1) {
             throw new Error("CGRA supports only 1D tensors.");
         }
     }
 
-    /**
-     * @brief Converts an intermediate tensor node into DOT statements.
-     * This method short-circuits edges that connect through intermediate
-     * tensors, to hide the respective tensor nodes from the graph.
-     *
-     * @param node The intermediate tensor node to convert.
-     * @returns The resulting DOT statements.
-     */
-    intermediateTensorToDot(node: TensorNode.Class): DotStatement[] {
-        const statements: DotEdge[] = [];
-
-        const incomers = node.getIncomers;
-        const outgoers = node.getOutgoers;
-
-        for (const inEdge of incomers) {
-            const source = inEdge.source;
-            const edgeAttrs = this.getEdgeAttrs(inEdge);
-
-            for (const outEdge of outgoers) {
-                const target = outEdge.target;
-                const newEdge = this.createDotEdge(source.id, target.id, edgeAttrs);
-                statements.push(newEdge);
-            }
-        }
-
-        return statements;
+    public addToDot(node: OperationNode.Class): DotStatement[] {
+        return [this.nodeToDot(node).attr("label", "Add").attr("type", "add")];
     }
 
-    addToDot(node: OperationNode.Class): DotStatement[] {
-        const dotNode = this.nodeToDot(node).attr("label", "Add").attr("type", "add");
-
-        return [dotNode];
+    public mulToDot(node: OperationNode.Class): DotStatement[] {
+        return [this.nodeToDot(node).attr("label", "Mul").attr("type", "mul")];
     }
 
-    mulToDot(node: OperationNode.Class): DotStatement[] {
-        const dotNode = this.nodeToDot(node).attr("label", "Mul").attr("type", "mul");
-
-        return [dotNode];
-    }
-
-    reduceSumToDot(node: OperationNode.Class): DotStatement[] {
+    public reduceSumToDot(node: OperationNode.Class): DotStatement[] {
         const dotNode = this.nodeToDot(node)
             .attr("label", "Add")
             .attr("type", "add")
             .attr("feedback", "1");
-
         const loopEdge = this.createDotEdge(node.id, node.id, {});
-
         return [dotNode, loopEdge];
     }
 
-    greaterToDot(node: OperationNode.Class): DotStatement[] {
-        if (!node.getInputs() || node.getInputs()!.length !== 2) {
+    public greaterToDot(node: OperationNode.Class): DotStatement[] {
+        const inputs = node.getInputs();
+        if (!inputs || inputs.length !== 2) {
             throw new Error("Greater node must have two inputs.");
         }
 
         const isZeroConstVector = (tensor: BaseNode.Class): boolean => {
             if (!tensor.is(ConstantNode)) return false;
-
-            // TODO(Process-ing): STRELA only supports operations on integers, but add support to other types if needed
             return readConstIntegerVectorFromTensorNode(tensor)!.every((val) => val === 0);
         };
 
-        const secondInput = node.getInputs()![1];
-        if (!isZeroConstVector(secondInput)) {
+        if (!isZeroConstVector(inputs[1])) {
             throw new Error(
                 "All Greater nodes must compare against a zero constant vector on the left-hand side.",
             );
         }
 
-        const dotNode = this.nodeToDot(node).attr("label", ">0").attr("type", ">0");
-
-        return [dotNode];
+        return [this.nodeToDot(node).attr("label", ">0").attr("type", ">0")];
     }
 
-    whereToDot(node: OperationNode.Class): DotStatement[] {
-        const dotNode = this.nodeToDot(node).attr("label", "Mux").attr("type", "mux");
-
-        return [dotNode];
+    public whereToDot(node: OperationNode.Class): DotStatement[] {
+        return [this.nodeToDot(node).attr("label", "Mux").attr("type", "mux")];
     }
 
-    toSkipNode(node: OperationNode.Class): DotStatement[] {
-        const dotNode = this.nodeToDot(node).attr("type", "skip");
-
-        return [dotNode];
+    public toSkipNode(node: OperationNode.Class): DotStatement[] {
+        return [this.nodeToDot(node).attr("type", "skip")];
     }
 
-    safeNodeToDot(node: BaseNode.Class): DotStatement[] {
+    public safeNodeToDot(node: BaseNode.Class): DotStatement[] {
         if (node.is(ConstantNode)) {
             return [this.nodeToDot(node.as(ConstantNode))];
         }
@@ -281,11 +178,9 @@ export default class CgraDotFormatter<
         const tensorNode = node.tryAs(TensorNode);
         if (tensorNode !== undefined) {
             this.validateTensorNode(tensorNode);
-
-            if (tensorNode.type == "intermediate") {
+            if (tensorNode.type === "intermediate") {
                 return this.intermediateTensorToDot(tensorNode);
             }
-
             return [this.nodeToDot(tensorNode)];
         }
 
@@ -306,13 +201,8 @@ export default class CgraDotFormatter<
                     return this.ifToDot(opNode);
                 case "Unsqueeze":
                     return this.toSkipNode(opNode);
-
-                // Assume the is a Concat node to join results
-                // In principle, joining results in the CGRA is done by manipulating addresses,
-                // but that will generate an incorrect ONNX model, so this operation is needed
                 case "Concat":
                     return [this.nodeToDot(opNode)];
-
                 default:
                     throw new Error(
                         `Operation node of type "${opNode.type}" is not supported in CGRA DOT formatter.`,
@@ -323,34 +213,14 @@ export default class CgraDotFormatter<
         return [];
     }
 
-    /**
-     * @brief Handles special cases in the conversion from edge to DOT.
-     *
-     * @param edge The edge to convert.
-     * @returns The resulting DOT statements.
-     */
-    specialEdgeToDot(edge: BaseEdge.Class): DotStatement[] | null {
-        // Ignore original edges from and to intermediate tensors
-        if (
-            this.tryAsIntermediateTensor(edge.source) !== undefined ||
-            this.tryAsIntermediateTensor(edge.target) !== undefined
-        ) {
-            return [];
-        }
-
-        return null;
-    }
-
-    override toDot(graph: G): DotGraph {
-        // Reset state
+    public override toDot(graph: G): DotGraph {
         this.clusterInfos = {};
 
         const dot = Dot.graph().graphAttrs(this.getGraphAttrs());
-        const nodes = graph.nodes;
         const dotNodes: DotNode[] = [];
-        const dotEdges: Map<string, DotEdge> = new Map<string, DotEdge>();
+        const dotEdges = new Map<string, DotEdge>();
 
-        function addNodeStatements(...statements: (DotStatement | DotNode | DotEdge)[]) {
+        const addNodeStatements = (...statements: (DotStatement | DotNode | DotEdge)[]): void => {
             const edges = statements.filter((s) => s instanceof DotEdge) as DotEdge[];
             const nodes = statements.filter((s) => s instanceof DotNode) as DotNode[];
             const others = statements.filter(
@@ -358,13 +228,13 @@ export default class CgraDotFormatter<
             );
 
             dotNodes.push(...nodes);
-            edges.forEach((edge) =>
-                dotEdges.set(((edge.source as string) + ":" + edge.target) as string, edge),
-            );
+            for (const edge of edges) {
+                dotEdges.set(`${edge.source as string}:${edge.target as string}`, edge);
+            }
             dot.statements(...others);
-        }
+        };
 
-        for (const node of nodes.filter((node) => !this.isContained(node))) {
+        for (const node of graph.nodes.filter((n) => !this.isContained(n))) {
             if (this.isContainer(node)) {
                 addNodeStatements(this.clusterNodeToDot(node));
             } else {
@@ -378,12 +248,11 @@ export default class CgraDotFormatter<
                 addNodeStatements(...statements);
                 continue;
             }
-
             addNodeStatements(this.edgeToDot(edge));
         }
 
+        // Collapse "skip" nodes (e.g., Unsqueeze) by bridging incoming edges to outgoing targets
         const nextTargets = new Map<string, string[]>();
-
         for (const node of dotNodes) {
             if (node.attrList["type"] === "skip") {
                 nextTargets.set(node.id as string, []);
@@ -396,7 +265,6 @@ export default class CgraDotFormatter<
 
         for (const edge of dotEdges.values()) {
             const targetSkip = nextTargets.get(edge.target as string);
-
             if (targetSkip !== undefined) {
                 for (const nextTarget of targetSkip) {
                     const newEdge = this.createDotEdge(
@@ -405,9 +273,8 @@ export default class CgraDotFormatter<
                         edge.attrList,
                         false,
                     );
-
                     dotEdges.set(
-                        ((newEdge.source as string) + ":" + newEdge.target) as string,
+                        `${newEdge.source as string}:${newEdge.target as string}`,
                         newEdge,
                     );
                 }
@@ -415,7 +282,6 @@ export default class CgraDotFormatter<
         }
 
         dot.statements(...dotNodes.filter((node) => node.attrList["type"] !== "skip"));
-
         for (const edge of dotEdges.values()) {
             if (
                 !nextTargets.has(edge.source as string) &&

@@ -26,7 +26,7 @@ export class PassManager {
         graph: OnnxGraph.Class,
         historyManager: HistoryManager = new HistoryManager(graph),
         maxIterations: number = 1,
-        verbose: boolean = true,
+        verbose: boolean = false,
     ): HistoryManager {
         for (let i = 0; i < maxIterations; i++) {
             let changed = false;

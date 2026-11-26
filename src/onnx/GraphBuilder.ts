@@ -20,6 +20,21 @@ import { inferNodeShape } from "./InferShapes.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 
+const LOGICAL_BOOL_OPS = new Set([
+    "Equal",
+    "Greater",
+    "Less",
+    "And",
+    "Or",
+    "Not",
+    "GreaterOrEqual",
+    "LessOrEqual",
+]);
+
+/**
+ * Cached structural metadata for a subgraph region, invalidated whenever its
+ * node count changes or nodes are added/removed through `GraphBuilder`.
+ */
 export interface SubgraphMeta {
     nodeCount: number;
     hasNestedRegions: boolean;
@@ -28,6 +43,7 @@ export interface SubgraphMeta {
 
 export const subgraphMetaCache = new WeakMap<OnnxGraph.Class, SubgraphMeta>();
 
+/** Returns cached region metadata to avoid redundant full scans during `replaceAllUsesWith`. */
 export function getSubgraphMeta(g: OnnxGraph.Class): SubgraphMeta {
     const nodeCount = g.nodes.length;
     const cached = subgraphMetaCache.get(g);
@@ -136,6 +152,51 @@ export class GraphBuilder {
     }
 
     /**
+     * Wires incoming edges from every input value node belonging to `this.graph` into `op`.
+     */
+    private wireInputEdges(op: OperationNode.Class, inputs: ValueNode[]): void {
+        for (const input of inputs) {
+            if (this.graph.hasNode(input.id)) {
+                this.addEdge(input, op, input.literalType, input.shape);
+            }
+        }
+    }
+
+    /**
+     * Computes initial fallback output dtype and shape prior to schema-based shape inference.
+     */
+    private inferInitialOutputSpec(
+        type: string,
+        inputs: ValueNode[],
+        attributes: AttributeMap,
+        expectedOutput?: { type: DataType; shape?: KnownShape },
+    ): { type: DataType; shape: KnownShape } {
+        if (expectedOutput !== undefined) {
+            return { type: expectedOutput.type, shape: expectedOutput.shape ?? [] };
+        }
+        if (inputs.length === 0) {
+            return { type: DataType.UNDEFINED, shape: [] };
+        }
+
+        let inferredType: DataType = inputs[0].literalType;
+        let inferredShape: KnownShape = [];
+
+        if (LOGICAL_BOOL_OPS.has(type)) {
+            inferredType = DataType.BOOL;
+        } else if (type === "Shape") {
+            inferredType = DataType.INT64;
+            inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
+        } else if (type === "Size") {
+            inferredType = DataType.INT64;
+            inferredShape = [];
+        } else if (type === "Cast" && "to" in attributes) {
+            inferredType = attributes["to"] as DataType;
+        }
+
+        return { type: inferredType, shape: inferredShape };
+    }
+
+    /**
      * Creates an OperationNode, wires its inputs, and provisions its output tensors.
      */
     public createOp(
@@ -145,25 +206,16 @@ export class GraphBuilder {
         expectedOutputs?: { type: DataType; shape?: KnownShape }[],
         regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
-        // 1. Build Operation Node
         const op = this.addNode(
             uniq(this.graph, `${this.scopeTag}_${type}`),
             new OperationNode.Builder(type, inputs, attributes, regions),
         ).as(OperationNode);
 
-        // 2. Wire incoming edges using the resolved proxy nodes
-        for (const input of inputs) {
-            if (this.graph.hasNode(input.id)) {
-                this.addEdge(input, op, input.literalType, input.shape);
-            }
-        }
+        this.wireInputEdges(op, inputs);
 
-        // 3. Provision Output Tensors
-        // Look up the schema to know how many outputs to generate (default to 1)
         const schema = OpRegistry.getInstance().get(type, this.graph.getTargetOpset());
         let numOutputs = schema ? schema.outputs.length : 1;
 
-        // Override output count for variadic ops like Split
         if (expectedOutputs !== undefined && expectedOutputs.length > numOutputs) {
             numOutputs = expectedOutputs.length;
         } else if ("num_outputs" in attributes) {
@@ -172,55 +224,25 @@ export class GraphBuilder {
 
         const outputs: ConcreteValueNode[] = [];
         for (let i = 0; i < numOutputs; i++) {
-            // Basic inference for types/shapes to keep the graph valid before a full pass
-            let inferredType = DataType.UNDEFINED;
-            let inferredShape: KnownShape = [];
-
-            if (expectedOutputs !== undefined && i in expectedOutputs) {
-                inferredType = expectedOutputs[i].type;
-                inferredShape = expectedOutputs[i].shape ?? [];
-            } else if (inputs.length > 0) {
-                inferredType = inputs[0].literalType;
-
-                // Inherit bool for logical ops
-                if (
-                    [
-                        "Equal",
-                        "Greater",
-                        "Less",
-                        "And",
-                        "Or",
-                        "Not",
-                        "GreaterOrEqual",
-                        "LessOrEqual",
-                    ].includes(type)
-                ) {
-                    inferredType = DataType.BOOL;
-                } else if (type === "Shape") {
-                    inferredType = DataType.INT64;
-                    inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
-                } else if (type === "Size") {
-                    inferredType = DataType.INT64;
-                    inferredShape = [];
-                } else if (type === "Cast" && "to" in attributes) {
-                    inferredType = attributes["to"] as DataType;
-                }
-            }
+            const expected =
+                expectedOutputs !== undefined && i in expectedOutputs
+                    ? expectedOutputs[i]
+                    : undefined;
+            const initial = this.inferInitialOutputSpec(type, inputs, attributes, expected);
 
             const outTensor = this.addNode(
                 uniq(this.graph, `${this.scopeTag}_${type}_out${i}`),
-                new TensorNode.Builder(inferredType, inferredShape, "intermediate"),
+                new TensorNode.Builder(initial.type, initial.shape, "intermediate"),
             ).as(TensorNode);
 
             this.addEdge(op, outTensor, outTensor.literalType, outTensor.shape);
             outputs.push(outTensor);
         }
 
-        // 4. Automatically infer shapes for the newly created operation
         inferNodeShape(op, this.graph);
 
-        // 5. Explicitly specified expectedOutputs take ultimate precedence
-        if (expectedOutputs) {
+        // Explicitly specified expectedOutputs take ultimate precedence
+        if (expectedOutputs !== undefined) {
             for (let i = 0; i < expectedOutputs.length; i++) {
                 const expectedShape = expectedOutputs[i].shape;
                 if (i in outputs && expectedShape !== undefined && expectedShape.length > 0) {
@@ -245,7 +267,7 @@ export class GraphBuilder {
 
     /**
      * Creates an OperationNode and its outputs using exactly specified IDs.
-     * Crucial for frontend parsing (initGraph) and deterministic pass generation.
+     * Crucial for frontend parsing (`OnnxGraphLoader`) and deterministic pass generation.
      */
     public createOpWithExact(
         opId: string,
@@ -256,66 +278,30 @@ export class GraphBuilder {
         expectedOutputs?: { type: DataType; shape?: KnownShape }[],
         regions?: OnnxGraph.Class[],
     ): ConcreteValueNode[] {
-        // 1. Build Operation Node with exact ID
         const op = this.addNode(
             opId,
             new OperationNode.Builder(type, inputs, attributes, regions),
         ).as(OperationNode);
 
-        // 2. Wire incoming edges
-        for (const input of inputs) {
-            if (this.graph.hasNode(input.id)) {
-                this.addEdge(input, op, input.literalType, input.shape);
-            }
-        }
+        this.wireInputEdges(op, inputs);
 
-        // 3. Provision Output Tensors using exact IDs
         const outputs: ConcreteValueNode[] = [];
         for (let i = 0; i < outputIds.length; i++) {
-            let inferredType = DataType.UNDEFINED;
-            let inferredShape: KnownShape = [];
-
-            if (expectedOutputs !== undefined && i in expectedOutputs) {
-                inferredType = expectedOutputs[i].type;
-                inferredShape = expectedOutputs[i].shape ?? [];
-            } else if (inputs.length > 0) {
-                inferredType = inputs[0].literalType;
-
-                // Inherit bool for logical ops
-                if (
-                    [
-                        "Equal",
-                        "Greater",
-                        "Less",
-                        "And",
-                        "Or",
-                        "Not",
-                        "GreaterOrEqual",
-                        "LessOrEqual",
-                    ].includes(type)
-                ) {
-                    inferredType = DataType.BOOL;
-                } else if (type === "Shape") {
-                    inferredType = DataType.INT64;
-                    inferredShape = [(inputs[0].shape.length as number | undefined) ?? 1];
-                } else if (type === "Size") {
-                    inferredType = DataType.INT64;
-                    inferredShape = [];
-                } else if (type === "Cast" && "to" in attributes) {
-                    inferredType = attributes["to"] as DataType;
-                }
-            }
+            const expected =
+                expectedOutputs !== undefined && i in expectedOutputs
+                    ? expectedOutputs[i]
+                    : undefined;
+            const initial = this.inferInitialOutputSpec(type, inputs, attributes, expected);
 
             let outTensor: TensorNode.Class;
             if (this.graph.hasNode(outputIds[i])) {
                 outTensor = this.graph.getNodeById(outputIds[i])!.as(TensorNode);
-                if (inferredType !== DataType.UNDEFINED) outTensor.setLiteralType(inferredType);
-                if (inferredShape.length > 0) outTensor.setShape(inferredShape);
+                if (initial.type !== DataType.UNDEFINED) outTensor.setLiteralType(initial.type);
+                if (initial.shape.length > 0) outTensor.setShape(initial.shape);
             } else {
-                // Create new node
                 outTensor = this.addNode(
                     outputIds[i],
-                    new TensorNode.Builder(inferredType, inferredShape, "intermediate"),
+                    new TensorNode.Builder(initial.type, initial.shape, "intermediate"),
                 ).as(TensorNode);
             }
 
@@ -323,9 +309,7 @@ export class GraphBuilder {
             outputs.push(outTensor);
         }
 
-        // 4. Run shape inference
         inferNodeShape(op, this.graph);
-
         return outputs;
     }
 
