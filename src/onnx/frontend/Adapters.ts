@@ -571,7 +571,14 @@ function adaptGraph(
     graph.node = updatedNodes;
 }
 
-// --- Main Entry Point ---
+/**
+ * Main frontend normalization entry point.
+ *
+ * Recursively upgrades legacy ONNX model constructs (overridable initializers,
+ * attribute-encoded inputs from older opsets, pre-Opset 7 broadcasting, legacy
+ * `Upsample`/`Resize`, and pre-Opset 13 `Softmax` flattening) to modern ONNX
+ * conventions before graph ingestion by `OnnxGraphLoader`.
+ */
 export function applyAdapters(data: RawOnnxModel, targetOpset: number = LATEST_ONNX_OPSET): void {
     if (!data.graph) return;
     const sourceOpset = resolveSourceOpset(data);

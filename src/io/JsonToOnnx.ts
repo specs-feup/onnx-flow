@@ -1,20 +1,19 @@
 import fs from "fs";
 import path from "path";
-import protobuf from "protobufjs";
-import Long from "long";
-import { fileURLToPath } from "url";
 import type {
     RawOnnxAttribute,
     RawOnnxGraph,
     RawOnnxModel,
     RawOnnxNode,
 } from "../onnx/OnnxTypes.js";
+import { DataType } from "../onnx/OnnxTypes.js";
 import { BASE_TEN } from "../onnx/utils/index.js";
 import {
     DEFAULT_COMPAT_IR_VERSION,
     DEFAULT_COMPAT_OPSET,
     getOpsetMinIrVersion,
 } from "../onnx/schema/Versioning.js";
+import { OnnxProtobufCodec } from "./OnnxProtobufCodec.js";
 
 /**
  * Toggle strict behavior for Reshape shape constants:
@@ -22,12 +21,18 @@ import {
  * - true: throw when there are 2+ nulls
  */
 const STRICT_RESHAPE_NULLS = false as boolean;
-
 const MODEL_VERSION = 1;
 
+const INT_ARRAY_KEYS = new Set(["ints", "axes", "perm", "pads", "dims", "int64s"]);
+const FLOAT_ARRAY_KEYS = new Set(["floats"]);
+const INT_SCALAR_KEYS = new Set(["i", "axis", "group", "value", "size"]);
+const FLOAT_SCALAR_KEYS = new Set(["f"]);
+const TENSOR_INT_ARRAYS = new Set(["int32Data", "int64Data", "uint64Data"]);
+const TENSOR_FLOAT_ARRAYS = new Set(["floatData", "doubleData"]);
+
 /**
- * Recursively traverses an object and converts any { type: 'Buffer', data: [...] }
- * back into actual Node.js Buffers for protobuf compatibility.
+ * Recursively converts JSON-serialized `{ type: "Buffer", data: [...] }` objects
+ * back into Node.js `Buffer` instances required by protobufjs encoding.
  */
 function fixBuffers(obj: unknown): unknown {
     if (Array.isArray(obj)) {
@@ -42,7 +47,7 @@ function fixBuffers(obj: unknown): unknown {
             "data" in record &&
             Array.isArray(record["data"])
         ) {
-            return Buffer.from(record["data"]);
+            return Buffer.from(record["data"] as number[]);
         }
         for (const key of Object.keys(record)) {
             record[key] = fixBuffers(record[key]);
@@ -53,32 +58,24 @@ function fixBuffers(obj: unknown): unknown {
 }
 
 /**
- * Resilient pre-pass for Reshape shapes produced by Constant with INT64 tensors.
- *
- * Policy:
- * - If the int64Data contains:
- *   - 0 nulls: leave as-is.
- *   - 1 null: set it to -1 (infer that dimension).
- *   - 2+ nulls:
- *      * STRICT_RESHAPE_NULLS === true  -> throw (ask user to build shapes dynamically).
- *      * STRICT_RESHAPE_NULLS === false -> first null -> -1, remaining nulls -> 0 (copy-dim).
- *
- * Notes:
- * - We only touch Constant-fed shapes with explicit int64Data arrays (not rawData).
- * - This keeps within ONNX Reshape semantics: one -1 allowed, 0 means "copy from input".
+ * Pre-pass that repairs null entries inside Constant-fed `Reshape` shape tensors
+ * (replacing the first unknown dim with `-1` and remaining ones with `0`).
  */
 function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
     const nodes: RawOnnxNode[] = graph.node ?? [];
-    // Map output name → producer node
     const byOutput: Record<string, RawOnnxNode> = {};
-    for (const n of nodes) for (const o of n.output ?? []) byOutput[o] = n;
+    for (const n of nodes) {
+        for (const o of n.output ?? []) {
+            byOutput[o] = n;
+        }
+    }
 
     for (const n of nodes) {
-        // --- Recurse into subgraphs first
         for (const a of n.attribute ?? []) {
-            if (a.g) fixSingleNullReshapeShapesInGraph(a.g);
-            if (Array.isArray(a.graphs))
+            if (a.g != null) fixSingleNullReshapeShapesInGraph(a.g);
+            if (Array.isArray(a.graphs)) {
                 for (const sg of a.graphs) fixSingleNullReshapeShapesInGraph(sg);
+            }
         }
 
         if (n.opType !== "Reshape") continue;
@@ -89,58 +86,80 @@ function fixSingleNullReshapeShapesInGraph(graph: RawOnnxGraph): void {
         const shapeProducer = byOutput[shapeInput];
         if (shapeProducer.opType !== "Constant") continue;
 
-        // Find Constant’s tensor attribute (commonly "value" or unnamed)
         const attrs = shapeProducer.attribute ?? [];
-        const tensorAttr = attrs.find((a: RawOnnxAttribute) => a.t?.dataType === /* INT64 */ 7);
+        const tensorAttr = attrs.find((a: RawOnnxAttribute) => a.t?.dataType === DataType.INT64);
         const t = tensorAttr?.t;
-        if (!t) continue;
-
-        // Only handle explicit int64Data
-        if (!Array.isArray(t.int64Data)) continue;
+        if (!t || !Array.isArray(t.int64Data)) continue;
 
         const data = t.int64Data.map((v: unknown) => (v === "null" || v === undefined ? null : v));
         const nullIdxs: number[] = [];
-        for (let i = 0; i < data.length; i++) if (data[i] == null) nullIdxs.push(i);
+        for (let i = 0; i < data.length; i++) {
+            if (data[i] == null) nullIdxs.push(i);
+        }
 
         if (nullIdxs.length === 0) continue;
 
         if (nullIdxs.length === 1) {
             const out = data.slice();
-            out[nullIdxs[0]] = -1; // ONNX Reshape: one unknown → -1
+            out[nullIdxs[0]] = -1;
             t.int64Data = out as (number | bigint)[];
             continue;
         }
 
+        const cname = shapeProducer.name !== undefined ? shapeProducer.name : shapeInput;
         if (STRICT_RESHAPE_NULLS) {
-            const cname = shapeProducer.name !== undefined ? shapeProducer.name : shapeInput;
             throw new Error(
                 `Reshape shape Constant(${cname}) has ${nullIdxs.length} unknown dims. ` +
                     `ONNX allows only one -1. Build shape dynamically with Shape/Gather/Concat.`,
             );
-        } else {
-            // Heuristic: first unknown → -1, the rest → 0 (copy-dim)
-            const out = data.slice();
-            out[nullIdxs[0]] = -1;
-            for (let k = 1; k < nullIdxs.length; k++) out[nullIdxs[k]] = 0;
-            const cname = shapeProducer.name !== undefined ? shapeProducer.name : shapeInput;
-            console.warn(
-                `[json2onnx] Reshape(${n.name !== undefined ? n.name : ""}) shape Constant(${cname}) had ${nullIdxs.length} unknown dims; ` +
-                    `converted first -> -1, others -> 0 (copy dim).`,
-            );
-            t.int64Data = out as (number | bigint)[];
         }
+
+        const out = data.slice();
+        out[nullIdxs[0]] = -1;
+        for (let k = 1; k < nullIdxs.length; k++) out[nullIdxs[k]] = 0;
+        console.warn(
+            `[json2onnx] Reshape(${n.name !== undefined ? n.name : ""}) shape Constant(${cname}) had ${nullIdxs.length} unknown dims; ` +
+                `converted first -> -1, others -> 0 (copy dim).`,
+        );
+        t.int64Data = out as (number | bigint)[];
     }
 }
 
-// OLD entry point now delegates to the recursive walker
-function fixSingleNullReshapeShapes(model: RawOnnxModel): void {
-    const graph = model.graph;
-    if (!graph) return;
-    fixSingleNullReshapeShapesInGraph(graph);
+function toInt(x: unknown): number {
+    if (x == null) return 0;
+    if (typeof x === "string") {
+        const s = x.trim().toLowerCase();
+        if (s === "" || s === "null" || s === "nan" || s === "undefined") return 0;
+        const n = parseInt(x, BASE_TEN);
+        return Number.isFinite(n) ? n : 0;
+    }
+    if (typeof x === "number") {
+        return Number.isFinite(x) ? Math.trunc(x) : 0;
+    }
+    if (typeof x === "bigint") {
+        const n = Number(x);
+        return Number.isFinite(n) ? n : parseInt(x.toString(), BASE_TEN);
+    }
+    return 0;
 }
 
-// Coerce numeric-like strings to numbers for fields protobuf expects as ints/floats.
-// Also normalizes common ONNX numeric array fields (ints, floats, dims, etc.).
+function toFloat(x: unknown): number {
+    if (x == null) return 0;
+    if (typeof x === "string") {
+        const s = x.trim().toLowerCase();
+        if (s === "" || s === "null" || s === "nan" || s === "undefined") return 0;
+        const n = parseFloat(x);
+        return Number.isFinite(n) ? n : 0;
+    }
+    if (typeof x === "number") return Number.isFinite(x) ? x : 0;
+    if (typeof x === "bigint") return Number(x);
+    return 0;
+}
+
+/**
+ * Recursively coerces numeric-like strings and bigints into JS numbers for fields
+ * that protobufjs expects as ints/floats, normalizing scalar tensor payloads to arrays.
+ */
 export function coerceNumericFields(obj: unknown): unknown {
     if (obj == null) return obj;
 
@@ -151,119 +170,58 @@ export function coerceNumericFields(obj: unknown): unknown {
 
     if (typeof obj !== "object") return obj;
 
-    const intArrayKeys = new Set(["ints", "axes", "perm", "pads", "dims", "int64s"]);
-    const floatArrayKeys = new Set(["floats"]);
-    const intScalarKeys = new Set(["i", "axis", "group", "value", "size"]);
-    const floatScalarKeys = new Set(["f"]);
-
-    const tensorIntArrays = new Set(["int32Data", "int64Data", "uint64Data"]);
-    const tensorFloatArrays = new Set(["floatData", "doubleData"]);
-
-    // Helpers
-    const toInt = (x: unknown) => {
-        if (x == null) return 0;
-        if (typeof x === "string") {
-            const s = x.trim().toLowerCase();
-            if (s === "" || s === "null" || s === "nan" || s === "undefined") return 0;
-            const n = parseInt(x, BASE_TEN);
-            return Number.isFinite(n) ? n : 0;
-        }
-        if (typeof x === "number") {
-            return Number.isFinite(x) ? Math.trunc(x) : 0;
-        }
-        if (typeof x === "bigint") {
-            const n = Number(x);
-            return Number.isFinite(n) ? n : parseInt(x.toString(), BASE_TEN);
-        }
-        return 0;
-    };
-
-    const toFloat = (x: unknown) => {
-        if (x == null) return 0;
-        if (typeof x === "string") {
-            const s = x.trim().toLowerCase();
-            if (s === "" || s === "null" || s === "nan" || s === "undefined") return 0;
-            const n = parseFloat(x);
-            return Number.isFinite(n) ? n : 0;
-        }
-        if (typeof x === "number") return Number.isFinite(x) ? x : 0;
-        if (typeof x === "bigint") return Number(x);
-        return 0;
-    };
-
-    // Normalize scalar → array for tensor payloads
-    const ensureArray = (v: unknown) => (Array.isArray(v) ? v : [v]);
-
     const record = obj as Record<string, unknown>;
     for (const k of Object.keys(record)) {
         const v = record[k];
         if (v == null) continue;
 
-        // Known int[] fields
-        if (intArrayKeys.has(k) && Array.isArray(v)) {
+        if (INT_ARRAY_KEYS.has(k) && Array.isArray(v)) {
             record[k] = v.map(toInt);
             continue;
         }
-
-        // Known float[] fields
-        if (floatArrayKeys.has(k) && Array.isArray(v)) {
+        if (FLOAT_ARRAY_KEYS.has(k) && Array.isArray(v)) {
             record[k] = v.map(toFloat);
             continue;
         }
-
-        // Known int scalar fields
         if (
-            intScalarKeys.has(k) &&
+            INT_SCALAR_KEYS.has(k) &&
             (typeof v === "string" || typeof v === "number" || typeof v === "bigint")
         ) {
             record[k] = toInt(v);
             continue;
         }
-
-        // Known float scalar fields
         if (
-            floatScalarKeys.has(k) &&
+            FLOAT_SCALAR_KEYS.has(k) &&
             (typeof v === "string" || typeof v === "number" || typeof v === "bigint")
         ) {
             record[k] = toFloat(v);
             continue;
         }
-
-        // TensorProto payloads (accept scalar or array)
-        if (tensorIntArrays.has(k)) {
-            const arr = ensureArray(v);
-            record[k] = arr.map(toInt);
+        if (TENSOR_INT_ARRAYS.has(k)) {
+            record[k] = (Array.isArray(v) ? v : [v]).map(toInt);
             continue;
         }
-        if (tensorFloatArrays.has(k)) {
-            const arr = ensureArray(v);
-            record[k] = arr.map(toFloat);
+        if (TENSOR_FLOAT_ARRAYS.has(k)) {
+            record[k] = (Array.isArray(v) ? v : [v]).map(toFloat);
             continue;
         }
 
-        // Recurse into nested objects (attributes, tensors, graphs, etc.)
         coerceNumericFields(v);
     }
 
     return obj;
 }
 
+/**
+ * Encodes a JSON ONNX model file back into binary `.onnx` protobuf format.
+ */
 export async function json2onnx(
     jsonFilePath: string,
     outputOnnxPath: string,
     options?: { targetOpset?: number; irVersion?: number },
 ): Promise<void> {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const protoPath = path.join(__dirname, "../onnx/onnx.proto");
-
     try {
-        // Make protobufjs accept Longs for int64/uint64 fields
-        (protobuf.util as Record<string, unknown>)["Long"] = Long;
-        protobuf.configure();
-
-        // Load the ONNX protobuf definition
-        const root = await protobuf.load(protoPath);
-        const ModelProto = root.lookupType("onnx.ModelProto");
+        const modelProto = await OnnxProtobufCodec.loadModelProto();
 
         if (path.extname(jsonFilePath) !== ".json") {
             throw new Error(
@@ -294,7 +252,7 @@ export async function json2onnx(
                 ? [{ domain: "", version: options.targetOpset }]
                 : rawOpsets;
 
-        const completeJson = {
+        const completeJson: RawOnnxModel = {
             ...defaultFields,
             ...jsonData,
             irVersion: resolvedIr,
@@ -305,20 +263,20 @@ export async function json2onnx(
             },
         };
 
-        const fixedJson = fixBuffers(completeJson);
+        const fixedJson = fixBuffers(completeJson) as RawOnnxModel;
+        if (fixedJson.graph !== undefined) {
+            fixSingleNullReshapeShapesInGraph(fixedJson.graph);
+        }
 
-        // Resilient Reshape shape fix runs BEFORE numeric coercion
-        fixSingleNullReshapeShapes(fixedJson!);
+        const normalizedJson = coerceNumericFields(fixedJson) as Record<string, unknown>;
 
-        const normalizedJson = coerceNumericFields(fixedJson);
-
-        const errMsg = ModelProto.verify(normalizedJson!);
+        const errMsg = modelProto.verify(normalizedJson);
         if (errMsg !== null) {
             throw new Error("Validation error: " + errMsg);
         }
 
-        const message = ModelProto.create(normalizedJson!);
-        const buffer = ModelProto.encode(message).finish();
+        const message = modelProto.create(normalizedJson);
+        const buffer = modelProto.encode(message).finish();
 
         fs.writeFileSync(outputOnnxPath, buffer);
         console.log(`ONNX model successfully written to ${outputOnnxPath}`);
