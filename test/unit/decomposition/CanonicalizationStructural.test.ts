@@ -226,4 +226,64 @@ describe("Canonicalization - Structural & Normalization Recipes", () => {
             .map((o) => o.type);
         expect(producedOps).not.toContain("Slice");
     });
+
+    it("decomposes pointwise 1x1 Conv to MatMul (transpose-free when N=1 and general when N>1)", () => {
+        const recipe = new Recipes.canonicalization.Conv1x1ToMatMul();
+
+        // N = 1: transpose-free path
+        const g1 = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const b1 = new GraphBuilder(g1, "c1");
+        const x1 = g1
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 3, 4, 4], "input"))
+            .as(TensorNode);
+        const w1 = g1
+            .addNode("W")
+            .init(new TensorNode.Builder(DataType.FLOAT, [5, 3, 1, 1], "input"))
+            .as(TensorNode);
+        b1.createOp("Conv", [x1, w1], { kernel_shape: [1, 1] }, [
+            { type: DataType.FLOAT, shape: [1, 5, 4, 4] },
+        ]);
+        const op1 = g1
+            .getOperationNodes()
+            .toArray()
+            .find((o) => o.type === "Conv")!;
+        expect(recipe.match(op1)).toBe(true);
+        recipe.apply(op1, b1);
+        const ops1 = g1
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(ops1).toContain("MatMul");
+        expect(ops1).not.toContain("Transpose");
+        expect(ops1).not.toContain("Conv");
+
+        // N = -1, spatial = [-1, -1]: dynamic general path
+        const gDyn = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bDyn = new GraphBuilder(gDyn, "cdyn");
+        const xDyn = gDyn
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, -1, -1], "input"))
+            .as(TensorNode);
+        const wDyn = gDyn
+            .addNode("W")
+            .init(new TensorNode.Builder(DataType.FLOAT, [4, 3, 1, 1], "input"))
+            .as(TensorNode);
+        bDyn.createOp("Conv", [xDyn, wDyn], { kernel_shape: [1, 1], auto_pad: "SAME_UPPER" }, [
+            { type: DataType.FLOAT, shape: [-1, 4, -1, -1] },
+        ]);
+        const opDyn = gDyn
+            .getOperationNodes()
+            .toArray()
+            .find((o) => o.type === "Conv")!;
+        expect(recipe.match(opDyn)).toBe(true);
+        recipe.apply(opDyn, bDyn);
+        const opsDyn = gDyn
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(opsDyn).toContain("MatMul");
+        expect(opsDyn).toContain("Transpose");
+        expect(opsDyn).not.toContain("Conv");
+    });
 });

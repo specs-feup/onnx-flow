@@ -7,11 +7,10 @@ import {
     DataType,
 } from "../../../OnnxTypes.js";
 import {
-    computeStrides,
     getIntAttr,
     getIntsAttr,
     getStringAttr,
-    inferPoolDim,
+    int64Vec,
     makeTensorProto,
     resolveAutoPads,
     scalarInt64,
@@ -25,10 +24,16 @@ import type {
 import {
     buildAguPointer,
     buildLinearIndex,
+    buildMixedStrides,
+    captureMixedList,
     decodeMixedRadix,
     ensureFlatInput,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
+    mulMixed,
+    packShapeVector,
+    resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -39,13 +44,16 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
     public readonly targetOp = "AveragePool";
     public readonly phase = "loop-lowering" as const;
     public readonly precision = "exact" as const;
-    public readonly priority = 10;
-    public readonly shapeSupport = "static" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["pooling", "nd", "self-carry"] as const;
     public readonly exposesControlFlow = true;
     public readonly exposesDataAccess = true;
     public readonly producedOps = [
         "Loop",
+        "Shape",
+        "Concat",
+        "ReduceProd",
         "Reshape",
         "Gather",
         "ScatterElements",
@@ -68,15 +76,16 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
         if (op.type !== "AveragePool") return false;
         const X = op.getInputs()?.[0];
         if (!X || !Array.isArray(X.shape) || X.shape.length < 3) return false;
-        const dims = toStaticShape(X.shape);
         const kernel = getIntsAttr(op, "kernel_shape", []);
-        return !dims.includes(-1) && kernel.length === dims.length - 2;
+        return kernel.length === X.shape.length - 2;
     }
 
-    private resolvePadsAndOutSpatial(
+    private resolveMixedPadsAndOutSpatial(
         op: OperationNode.Class,
-        inDims: number[],
-    ): { pads: number[]; outSpatial: number[] } {
+        builder: GraphBuilder,
+        inDims: (number | ConcreteValueNode)[],
+        tag: string,
+    ): { pHeads: (number | ConcreteValueNode)[]; outSpatial: (number | ConcreteValueNode)[] } {
         const spatialRank = inDims.length - 2;
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
@@ -85,54 +94,99 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
         const explicitPads = getIntsAttr(op, "pads", []);
 
-        const pads = resolveAutoPads(
+        return resolvePoolShapeAndPadsMixed(
             autoPad,
             inDims.slice(2),
             kernel,
             strides,
             dilations,
             explicitPads,
+            ceilMode,
+            builder,
+            tag,
         );
-        const outSpatial = inDims
-            .slice(2)
-            .map((inD, d) =>
-                inferPoolDim(
-                    inD,
-                    kernel[d],
-                    strides[d] ?? 1,
-                    pads[d] ?? 0,
-                    pads[spatialRank + d] ?? 0,
-                    dilations[d] ?? 1,
-                    ceilMode,
-                ),
-            );
-
-        return { pads, outSpatial };
     }
 
-    private usesConstantDivisor(op: OperationNode.Class, pads: number[]): boolean {
+    private usesConstantDivisor(op: OperationNode.Class, rawInDims: number[]): boolean {
         const countIncludePad = getIntAttr(op, "count_include_pad", 0);
+        if (countIncludePad === 1) return true;
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
-        return countIncludePad === 1 || (ceilMode === 0 && pads.every((p) => p === 0));
+        if (ceilMode !== 0) return false;
+
+        const spatialRank = rawInDims.length - 2;
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
+        const explicitPads = getIntsAttr(op, "pads", []);
+
+        if (!rawInDims.slice(2).includes(-1)) {
+            const kernel = getIntsAttr(op, "kernel_shape", []);
+            const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
+            const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
+            const pads = resolveAutoPads(
+                autoPad,
+                rawInDims.slice(2),
+                kernel,
+                strides,
+                dilations,
+                explicitPads,
+            );
+            return pads.every((p) => p === 0);
+        }
+
+        if (autoPad === "VALID") return true;
+        if (autoPad === "NOTSET") return explicitPads.every((p) => p === 0);
+        return false;
     }
 
     getLoopBounds(
         op: OperationNode.Class,
         _outShape: KnownShape,
-    ): { totalIters: number; carryShape: number[] } {
-        const inDims = toStaticShape(op.getInputs()![0].shape);
+    ): {
+        totalIters: number | ConcreteValueNode;
+        carryShape: number[] | ConcreteValueNode;
+        targetShape?: ConcreteValueNode;
+    } {
+        const X = op.getInputs()![0];
+        const rawInDims = toStaticShape(X.shape);
         const kernel = getIntsAttr(op, "kernel_shape", []);
-        const { outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
-        const outDims = [inDims[0], inDims[1], ...outSpatial];
-        const outTotal = outDims.reduce((a, b) => a * b, 1);
         const kTotal = kernel.reduce((a, b) => a * b, 1);
-        return { totalIters: outTotal * kTotal, carryShape: outDims };
+
+        const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `ap_bounds_${op.id}`);
+        if (!rawInDims.includes(-1)) {
+            const { outSpatial } = this.resolveMixedPadsAndOutSpatial(
+                op,
+                builder,
+                rawInDims,
+                "aps",
+            );
+            const outDims = [rawInDims[0], rawInDims[1], ...(outSpatial as number[])];
+            const outTotal = outDims.reduce((a, b) => a * b, 1);
+            return { totalIters: outTotal * kTotal, carryShape: outDims };
+        }
+
+        const inDims = extractMixedDims(builder, X, rawInDims, `apb_${op.id}`);
+        const { outSpatial } = this.resolveMixedPadsAndOutSpatial(
+            op,
+            builder,
+            inDims,
+            `apb_${op.id}`,
+        );
+        const outDims = [inDims[0], inDims[1], ...outSpatial];
+        const targetShape = packShapeVector(builder, outDims, `apb_tsh_${op.id}`);
+        const ax0 = builder.createConstant(`apb_ax0_${op.id}`, int64Vec([0]));
+        const [outTotal] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
+        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0]);
+        const totalIters = mulMixed(
+            builder,
+            outTotal,
+            kTotal,
+            `apb_it_${op.id}`,
+        ) as ConcreteValueNode;
+        return { totalIters, carryShape, targetShape };
     }
 
     postProcess(op: OperationNode.Class, builder: GraphBuilder, loopOut: ValueNode): ValueNode {
         const inDims = toStaticShape(op.getInputs()![0].shape);
-        const { pads } = this.resolvePadsAndOutSpatial(op, inDims);
-        if (!this.usesConstantDivisor(op, pads)) {
+        if (!this.usesConstantDivisor(op, inDims)) {
             return loopOut;
         }
         const kernel = getIntsAttr(op, "kernel_shape", []);
@@ -158,20 +212,18 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `avgpool_${op.id}`);
         const X = op.getInputs()![0];
-        const inDims = toStaticShape(X.shape);
+        const rawInDims = toStaticShape(X.shape);
         const dtype = X.literalType as DataType;
-        const spatialRank = inDims.length - 2;
+        const spatialRank = rawInDims.length - 2;
 
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
-        const { pads, outSpatial } = this.resolvePadsAndOutSpatial(op, inDims);
-        const constDivisor = this.usesConstantDivisor(op, pads);
-
-        const outDims = [inDims[0], inDims[1], ...outSpatial];
-        const iterDims = [...outDims, ...kernel];
-        const inStrides = computeStrides(inDims);
-        const outStrides = computeStrides(outDims);
+        const constDivisor = this.usesConstantDivisor(op, rawInDims);
+        const canHoist =
+            loopCtx !== undefined &&
+            !valueMap.has(X.id) &&
+            loopCtx.outerBuilder.graph.hasNode(X.id);
 
         const rawX = resolveRecipeInput(
             builder,
@@ -185,6 +237,27 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
             targetShapeNode,
             loopCtx,
         );
+        const dimBuilder = canHoist ? loopCtx!.outerBuilder : builder;
+        const dimSource = canHoist ? X : rawX;
+        const rawInDimsList = extractMixedDims(dimBuilder, dimSource, rawInDims, `ap_id_${op.id}`);
+        const { pHeads: rawPHeads, outSpatial: rawOutSpatial } = this.resolveMixedPadsAndOutSpatial(
+            op,
+            dimBuilder,
+            rawInDimsList,
+            `ap_sh_${op.id}`,
+        );
+
+        const rawOutDims = [rawInDimsList[0], rawInDimsList[1], ...rawOutSpatial];
+        const rawInStrides = buildMixedStrides(dimBuilder, rawInDimsList);
+        const rawOutStrides = buildMixedStrides(dimBuilder, rawOutDims);
+
+        const inDims = canHoist ? captureMixedList(builder, rawInDimsList) : rawInDimsList;
+        const pHeads = canHoist ? captureMixedList(builder, rawPHeads) : rawPHeads;
+        const outSpatial = canHoist ? captureMixedList(builder, rawOutSpatial) : rawOutSpatial;
+        const outDims = [inDims[0], inDims[1], ...outSpatial];
+        const iterDims = [...outDims, ...kernel];
+        const inStrides = canHoist ? captureMixedList(builder, rawInStrides) : rawInStrides;
+        const outStrides = canHoist ? captureMixedList(builder, rawOutStrides) : rawOutStrides;
         const flatX = ensureFlatInput(builder, rawX);
 
         let coords: ConcreteValueNode[];
@@ -253,7 +326,7 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
             isLastTap = isLastTap ? builder.createOp("And", [isLastTap, kIsLast])[0] : kIsLast;
 
             const sVal = strides[d] ?? 1;
-            const pVal = pads[d] ?? 0;
+            const pVal = pHeads[d] ?? 0;
             const dilVal = dilations[d] ?? 1;
 
             let inCoord: ConcreteValueNode =
@@ -273,32 +346,39 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
                       ])[0];
 
             [inCoord] = builder.createOp("Add", [inCoord, kOff]);
-            if (pVal !== 0) {
+            if (typeof pVal !== "number") {
+                [inCoord] = builder.createOp("Sub", [inCoord, pVal]);
+            } else if (pVal !== 0) {
                 [inCoord] = builder.createOp("Sub", [
                     inCoord,
                     builder.createConstant(`ap_pad_${d}_${op.id}`, scalarInt64(pVal)),
                 ]);
             }
 
-            const dimConst = builder.createConstant(
-                `ap_dim_${d}_${op.id}`,
-                scalarInt64(inDims[2 + d]),
-            );
+            const dimNode =
+                typeof inDims[2 + d] === "number"
+                    ? builder.createConstant(
+                          `ap_dim_${d}_${op.id}`,
+                          scalarInt64(inDims[2 + d] as number),
+                      )
+                    : (inDims[2 + d] as ConcreteValueNode);
             const [ltZero] = builder.createOp("Less", [inCoord, zeroI64]);
             const [geZero] = builder.createOp("Not", [ltZero]);
-            const [ltDim] = builder.createOp("Less", [inCoord, dimConst]);
+            const [ltDim] = builder.createOp("Less", [inCoord, dimNode]);
             const [dimValid] = builder.createOp("And", [geZero, ltDim]);
             isValid = isValid ? builder.createOp("And", [isValid, dimValid])[0] : dimValid;
 
             const [safeCoord] = builder.createOp("Where", [dimValid, inCoord, zeroI64]);
             const str = inStrides[2 + d];
             const term =
-                str === 1
-                    ? safeCoord
-                    : builder.createOp("Mul", [
-                          safeCoord,
-                          builder.createConstant(`ap_istr_${d}_${op.id}`, scalarInt64(str)),
-                      ])[0];
+                typeof str !== "number"
+                    ? builder.createOp("Mul", [safeCoord, str])[0]
+                    : str === 1
+                      ? safeCoord
+                      : builder.createOp("Mul", [
+                            safeCoord,
+                            builder.createConstant(`ap_istr_${d}_${op.id}`, scalarInt64(str)),
+                        ])[0];
             [flatInIdx] = builder.createOp("Add", [flatInIdx, term]);
         }
 
@@ -306,9 +386,24 @@ export class LowerAveragePoolLoopRecipe implements LoopLoweringRecipe {
         const [effVal] = builder.createOp("Where", [isValid!, xVal, zeroVal]);
 
         const [outUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const prevAcc = gatherScalar(builder, carryNode, flatOutIdx);
+        let prevAcc: ConcreteValueNode;
+        let sumIn: ReturnType<LoopCarryContext["addCarry"]> | undefined;
+        if (loopCtx !== undefined) {
+            const initAcc = loopCtx.outerBuilder.createConstant(
+                `ap_init_acc_${op.id}`,
+                makeTensorProto(dtype, [], [0]),
+            );
+            sumIn = loopCtx.addCarry(`ap_acc_${op.id}`, initAcc, dtype, []);
+            prevAcc = sumIn;
+        } else {
+            prevAcc = gatherScalar(builder, carryNode, flatOutIdx);
+        }
 
-        const [newSum] = builder.createOp("Add", [prevAcc, effVal]);
+        const [baseAcc] = builder.createOp("Where", [isFirstTap!, zeroVal, prevAcc]);
+        const [newSum] = builder.createOp("Add", [baseAcc, effVal]);
+        if (sumIn !== undefined) {
+            loopCtx!.setNextState(sumIn, newSum);
+        }
         let storeVal: ConcreteValueNode = newSum;
 
         if (!constDivisor && loopCtx !== undefined) {

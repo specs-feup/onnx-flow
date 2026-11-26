@@ -44,19 +44,16 @@ export class LowerAveragePoolRecipe implements DecompositionRecipe {
         const ceilMode = getIntAttr(op, "ceil_mode", 0);
 
         const hasStaticSpatial = xShape[2] > 0 && xShape[3] > 0;
-        if (ceilMode === 1 && !hasStaticSpatial) return false;
+        if (!hasStaticSpatial) return false;
 
-        const pads =
-            hasStaticSpatial || autoPad === "NOTSET" || autoPad === "VALID"
-                ? resolveAutoPads(
-                      autoPad,
-                      hasStaticSpatial ? [xShape[2], xShape[3]] : [1, 1],
-                      kernelShape,
-                      strides.map(Number),
-                      [1, 1],
-                      padsAttr,
-                  )
-                : [];
+        const pads = resolveAutoPads(
+            autoPad,
+            [xShape[2], xShape[3]],
+            kernelShape,
+            strides.map(Number),
+            [1, 1],
+            padsAttr,
+        );
 
         if (
             autoPad === "NOTSET" &&
