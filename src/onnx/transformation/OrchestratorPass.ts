@@ -10,10 +10,12 @@ import type { HistoryManager } from "./tracking/HistoryManager.js";
 export class OrchestratorPass implements GraphPass {
     public readonly name: string;
     private recipes: DecompositionRecipe[];
+    private verbose: boolean;
 
-    constructor(name: string, recipes: DecompositionRecipe[]) {
+    constructor(name: string, recipes: DecompositionRecipe[], verbose: boolean = false) {
         this.name = name;
         this.recipes = recipes;
+        this.verbose = verbose;
     }
 
     run(graph: OnnxGraph.Class, historyManager?: HistoryManager): boolean {
@@ -46,7 +48,9 @@ export class OrchestratorPass implements GraphPass {
                         (builder) => recipe.apply(op, builder),
                     );
 
-                    console.log(`[${this.name}] Applying opportunity '${opp.id}'`);
+                    if (this.verbose) {
+                        console.log(`[${this.name}] Applying opportunity '${opp.id}'`);
+                    }
                     const trackedBuilder = new TrackedGraphBuilder(
                         graph,
                         opp.id,

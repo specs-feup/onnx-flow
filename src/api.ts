@@ -43,13 +43,19 @@ export {
 } from "./onnx/validation/ValidateGraph.js";
 export { default as validateScope } from "./onnx/validation/ValidateScope.js";
 export * from "./onnx/utils/index.js";
-export { partitionGraph } from "./onnx/partitioning/Partition.js";
-export { splitByAncestor } from "./onnx/partitioning/Strategies.js";
+export * from "./onnx/partitioning/index.js";
+export {
+    OnnxOpsetAdapter,
+    applyAdapters,
+    freezeOverridableInputs,
+} from "./onnx/frontend/Adapters.js";
 
 // --- 4. Transformation Infrastructure & Tracking ---
 export { GraphBuilder, TrackedGraphBuilder, HistoryManager };
-export * from "./onnx/transformation/PassManager.js";
+export * from "./onnx/transformation/GraphPass.js";
+export { PassManager } from "./onnx/transformation/PassManager.js";
 export * from "./onnx/transformation/Recipe.js";
+export { BaseCanonicalizationRecipe } from "./onnx/transformation/canonicalization/BaseCanonicalizationRecipe.js";
 export * from "./onnx/transformation/TransformationOpportunity.js";
 export * from "./onnx/transformation/TransformationRegistry.js";
 export * from "./onnx/transformation/OrchestratorPass.js";
@@ -65,7 +71,13 @@ export {
     LoopTilingPass,
     type LoopTilingOptions,
 } from "./onnx/transformation/loop-lowering/LoopTilingPass.js";
-export { LoopFusionMatcher } from "./onnx/transformation/loop-lowering/LoopFusionMatcher.js";
+export {
+    LoopFusionMatcher,
+    LoopChainFinder,
+    LoopChainLowerer,
+    type LoopFusionOptions,
+    type LoopBounds,
+} from "./onnx/transformation/loop-lowering/LoopFusionMatcher.js";
 export * from "./onnx/transformation/loop-lowering/LoopBuilder.js";
 export * from "./onnx/transformation/loop-lowering/LoopLoweringRecipe.js";
 export * from "./onnx/transformation/loop-lowering/RecipeUtils.js";
@@ -78,6 +90,9 @@ export {
     type SchedulePresetName,
     type StopPhase,
 } from "./onnx/transformation/Schedule.js";
+export { CacheReadPass } from "./onnx/transformation/schedule/CacheReadPass.js";
+export { LoopUnrollingPass } from "./onnx/transformation/schedule/LoopUnrollingPass.js";
+export { ScheduleLoopTransformsPass } from "./onnx/transformation/schedule/ScheduleLoopTransformsPass.js";
 export * from "./onnx/transformation/recipes.js";
 
 /**

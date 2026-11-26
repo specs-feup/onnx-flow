@@ -1,11 +1,12 @@
 import { OpRegistry } from "./OpRegistry.js";
 import { StandardOps } from "./definitions/standard-ops/index.js";
 
-export function initializeSchemaRegistry(): void {
+export function initializeSchemaRegistry(verbose: boolean = false): void {
     const registry = OpRegistry.getInstance();
     registry.registerAll(StandardOps);
-    // Add other ops here
-    console.log(`[Schema] Registered ${StandardOps.length} Standard Ops.`);
+    if (verbose) {
+        console.log(`[Schema] Registered ${StandardOps.length} Standard Ops.`);
+    }
 }
 
 export { OpRegistry } from "./OpRegistry.js";

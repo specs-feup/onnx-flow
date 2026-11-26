@@ -218,7 +218,7 @@ export function coerceNumericFields(obj: unknown): unknown {
 export async function json2onnx(
     jsonFilePath: string,
     outputOnnxPath: string,
-    options?: { targetOpset?: number; irVersion?: number },
+    options?: { targetOpset?: number; irVersion?: number; verbose?: boolean },
 ): Promise<void> {
     try {
         const modelProto = await OnnxProtobufCodec.loadModelProto();
@@ -279,7 +279,9 @@ export async function json2onnx(
         const buffer = modelProto.encode(message).finish();
 
         fs.writeFileSync(outputOnnxPath, buffer);
-        console.log(`ONNX model successfully written to ${outputOnnxPath}`);
+        if (options?.verbose === true) {
+            console.log(`ONNX model successfully written to ${outputOnnxPath}`);
+        }
     } catch (error) {
         console.error("Failed to convert JSON to ONNX:");
         if (error instanceof Error) {

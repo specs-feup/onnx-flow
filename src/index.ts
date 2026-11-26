@@ -13,15 +13,17 @@ import CgraDotFormatter from "./onnx/dot/CgraDotFormatter.js";
 import { BASE_TEN, safeWriteJson } from "./onnx/utils/index.js";
 import type { DecompositionOptions, IndexingMode } from "./DecompositionOptions.js";
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
-import { splitByAncestor } from "./onnx/partitioning/Strategies.js";
-import { partitionGraph } from "./onnx/partitioning/Partition.js";
+import {
+    AncestorSplitStrategy,
+    GraphPartitioner,
+    type PartitionedGraph,
+} from "./onnx/partitioning/index.js";
 import type OnnxGraph from "./onnx/ir/OnnxGraph.js";
 import validateGraph from "./onnx/validation/ValidateGraph.js";
 import type { RawOnnxModel } from "./onnx/ir/OnnxTypes.js";
 import OnnxGraphTransformer from "./onnx/transformation/index.js";
 import { startExplorerServer } from "./explorer/ExplorerServer.js";
 import { ExplorerSession } from "./explorer/ExplorerSession.js";
-import inferShapes from "./onnx/schema/InferShapes.js";
 import { generateUnifiedExplorerJson } from "./explorer/ExplorerSerializer.js";
 import { CliParser } from "./cli/CliOptions.js";
 import { GraphvizVisualizer } from "./cli/GraphvizServer.js";
@@ -217,7 +219,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
 
     // 4. Transformation pipeline
     if (!noLowLevel) {
-        graph.apply(new OnnxGraphTransformer(decompOptions));
+        new OnnxGraphTransformer(decompOptions).apply(graph, verbosity > 0);
 
         if (validate) {
             try {
@@ -235,32 +237,29 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
         logGraphRepresentation("Low-level Graph", graph, outputFormat, dotFormatter);
     }
 
-    // 5. Optional partitioning into head / tail graphs
-    let partitions: { head: OnnxGraph.Class; tail: OnnxGraph.Class } | undefined;
+    // 5. Optional partitioning into multi-graph PartitionedGraph
+    let partitions: PartitionedGraph | undefined;
     if (isPartitioning && argv.partition !== undefined) {
         const targetNodeId = resolvePartitionTargetNodeId(graph, argv.partition);
         if (verbosity > 0) console.log(`Partitioning graph at node: ${targetNodeId}`);
 
-        const sets = splitByAncestor(graph, targetNodeId);
-        partitions = partitionGraph(graph, sets);
+        partitions = new GraphPartitioner().partition(
+            graph,
+            new AncestorSplitStrategy(targetNodeId),
+        );
+        partitions.inferAllShapes();
 
-        const exportPartition = async (g: OnnxGraph.Class, suffix: string): Promise<void> => {
-            const base = getBasePath(outputFilePath ?? inputFilePath);
-            const fileName = `${base}_${suffix}`;
-            inferShapes(g);
-
+        const base = getBasePath(outputFilePath ?? inputFilePath);
+        for (const part of partitions.getExecutionOrder()) {
+            const fileName = `${base}_${part.id}`;
             if (!argv.noReconversion) {
-                const onnxJson = convertFlowGraphToOnnxJson(g, `${suffix}_graph`);
+                const onnxJson = convertFlowGraphToOnnxJson(part.graph, `${part.id}_graph`);
                 safeWriteJson(`${fileName}.onnx.json`, onnxJson);
                 await jsonToOnnx(`${fileName}.onnx.json`, `${fileName}.onnx`);
                 if (verbosity > 0) console.log(`Created ONNX partition: ${fileName}.onnx`);
             }
-
-            writeGraphOutput(`${fileName}.${outputFormat}`, g, outputFormat, dotFormatter);
-        };
-
-        await exportPartition(partitions.head, "head");
-        await exportPartition(partitions.tail, "tail");
+            writeGraphOutput(`${fileName}.${outputFormat}`, part.graph, outputFormat, dotFormatter);
+        }
     }
 
     // 6. Write unpartitioned output file
@@ -374,7 +373,14 @@ async function runOptionalEquivalenceCheck(
     }
 
     try {
-        const { runEquivalenceForOriginalPath } = await import("../test/helpers/modelRegistry.js");
+        // Dev-only hook: relies on repository test helpers (not included in published npm tarballs).
+        const registryModulePath = "../test/helpers/modelRegistry.js";
+        const { runEquivalenceForOriginalPath } = (await import(registryModulePath)) as {
+            runEquivalenceForOriginalPath: (
+                path: string,
+                opts?: { skipCli?: boolean },
+            ) => Promise<string>;
+        };
         const result = await runEquivalenceForOriginalPath(inputFilePath, { skipCli: true });
 
         if (result === "no-config") {
