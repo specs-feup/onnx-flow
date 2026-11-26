@@ -170,4 +170,53 @@ describe("Transformation Pipeline & Passes", () => {
         expect(outerOps).toContain("Loop");
         expect(outerOps).toContain("Reshape");
     });
+
+    it("lowers 0D scalar Exp/Div/Sqrt inside Loop bodies when recurse=true and runs optimize by default", () => {
+        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const b = new GraphBuilder(g, "rec_sm");
+        const x = g
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2], "input"))
+            .as(TensorNode);
+        const [out] = b.createOp("Det", [x], {}, [{ type: DataType.FLOAT, shape: [] }]);
+        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+
+        // Verify optimize=true runs in default OnnxGraphTransformer() without leaving orphaned ops
+        const defOut = new OnnxGraphTransformer().apply(g, false);
+        expect(
+            defOut
+                .getOperationNodes()
+                .toArray()
+                .some((o) => o.type === "Det"),
+        ).toBe(false);
+
+        // Build 4x4 Det with recurse=true: inner scalar Div inside Loop must be canonicalized away
+        const gRec = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bRec = new GraphBuilder(gRec, "rec_det");
+        const xRec = gRec
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [4, 4], "input"))
+            .as(TensorNode);
+        const [detOut] = bRec.createOp("Det", [xRec], {}, [{ type: DataType.FLOAT, shape: [] }]);
+        if (detOut.is(TensorNode)) detOut.as(TensorNode).setType("output");
+
+        const lowered = new OnnxGraphTransformer({
+            canonicalize: true,
+            loopLowering: true,
+            fuse: true,
+            recurse: true,
+            optimize: true,
+        }).apply(gRec, false);
+
+        const collectTypes = (gr: OnnxGraph.Class, acc: string[] = []): string[] => {
+            for (const op of gr.getOperationNodes()) {
+                acc.push(op.type);
+                for (const reg of op.regions) collectTypes(reg, acc);
+            }
+            return acc;
+        };
+        const allTypes = collectTypes(lowered);
+        expect(allTypes).not.toContain("Div");
+        expect(allTypes).not.toContain("Reciprocal");
+    });
 });

@@ -1832,6 +1832,49 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
                         expect(topOps).not.toContain("Div");
                     },
                 );
+
+                // 6. recurse=true lowers nested 0D Exp/Div/Sqrt inside standalone loops & matches ORT
+                await assertTransformMatchesOrt(
+                    "recurse_strict_cgra_softmax_preset",
+                    {
+                        label: "rec_sm_cgra",
+                        tol: 1e-2,
+                        feeds: [{ name: "X", dtype: "float32", shape: [2, 5], gen: "negmix" }],
+                        build: () => {
+                            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                            const b = new GraphBuilder(g, "rsm");
+                            const x = g
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [2, 5], "input"))
+                                .as(TensorNode);
+                            const [out] = b.createOp("Softmax", [x], { axis: -1 }, [
+                                { type: DataType.FLOAT, shape: [2, 5] },
+                            ]);
+                            if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                            return g;
+                        },
+                    },
+                    {
+                        ...fullOpts,
+                        recurse: true,
+                        schedule: Schedule.preset("sfu-loops"),
+                    },
+                    (g) => {
+                        const collectTypes = (
+                            gr: OnnxGraph.Class,
+                            acc: string[] = [],
+                        ): string[] => {
+                            for (const op of gr.getOperationNodes()) {
+                                acc.push(op.type);
+                                for (const reg of op.regions) collectTypes(reg, acc);
+                            }
+                            return acc;
+                        };
+                        const allTypes = collectTypes(g);
+                        expect(allTypes).not.toContain("Exp");
+                        expect(allTypes).not.toContain("Div");
+                    },
+                );
             },
             TEST_TIMEOUT,
         );

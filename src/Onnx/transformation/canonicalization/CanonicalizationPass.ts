@@ -1,11 +1,16 @@
 import type OnnxGraph from "../../OnnxGraph.js";
 import type OperationNode from "../../OperationNode.js";
+import TensorNode from "../../TensorNode.js";
 import type { GraphPass } from "../../PassManager.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 import type { DecompositionRecipe } from "../Recipe.js";
-import { topologicalSortOperationNodes } from "../../Utils.js";
+import {
+    assignRegionScopeTag,
+    getRegionScopeTag,
+    topologicalSortOperationNodes,
+} from "../../Utils.js";
 
 import { LOOP_LOWERING_RECIPE_NAMES, lookupScheduleMap, type ScheduleConfig } from "../Schedule.js";
 
@@ -152,8 +157,14 @@ export class CanonicalizationPass implements GraphPass {
     private registry = new Map<string, DecompositionRecipe[]>();
 
     constructor(
-        customRecipes?: DecompositionRecipe[],
-        private options: { loopLowering?: boolean; schedule?: ScheduleConfig } = {},
+        private customRecipes?: DecompositionRecipe[],
+        private options: {
+            loopLowering?: boolean;
+            recurse?: boolean;
+            regionOnly?: boolean;
+            scalar0DOnly?: boolean;
+            schedule?: ScheduleConfig;
+        } = {},
     ) {
         const defaultRecipes: DecompositionRecipe[] = [
             new LowerSoftmaxRecipe(),
@@ -370,6 +381,43 @@ export class CanonicalizationPass implements GraphPass {
 
     public run(graph: OnnxGraph.Class, historyManager: HistoryManager): boolean {
         let globalChanged = false;
+
+        if (this.options.recurse === true) {
+            const innerLoopLowering =
+                this.options.regionOnly === true ? false : this.options.loopLowering;
+            const innerPass = new CanonicalizationPass(this.customRecipes, {
+                ...(innerLoopLowering !== undefined ? { loopLowering: innerLoopLowering } : {}),
+                recurse: true,
+                regionOnly: false,
+                ...(this.options.scalar0DOnly !== undefined
+                    ? { scalar0DOnly: this.options.scalar0DOnly }
+                    : {}),
+                ...(this.options.schedule !== undefined ? { schedule: this.options.schedule } : {}),
+            });
+            for (const op of graph.getOperationNodes()) {
+                for (const region of op.regions) {
+                    assignRegionScopeTag(region, "canon");
+                    if (innerPass.run(region, historyManager)) {
+                        globalChanged = true;
+                    }
+                }
+            }
+        }
+
+        if (this.options.regionOnly === true) {
+            return globalChanged;
+        }
+
+        const isScalar0DOp = (op: OperationNode.Class): boolean => {
+            const ins = op.getInputs() ?? [];
+            const outs = op.getOutgoers.targets.filterIs(TensorNode).toArray();
+            if (outs.length === 0) return false;
+            return (
+                ins.every((v) => Array.isArray(v.shape) && v.shape.length === 0) &&
+                outs.every((v) => Array.isArray(v.shape) && v.shape.length === 0)
+            );
+        };
+
         let localChanged = true;
 
         while (localChanged) {
@@ -379,6 +427,24 @@ export class CanonicalizationPass implements GraphPass {
 
             for (const op of ops) {
                 if (!graph.hasNode(op.id)) continue;
+                if (this.options.scalar0DOnly === true) {
+                    if (!isScalar0DOp(op)) continue;
+                    // Preserve integer index Mod arithmetic inside Loop bodies
+                    const dt = op.getInputs()?.[0]?.literalType as DataType | undefined;
+                    if (
+                        op.type === "Mod" &&
+                        (dt === DataType.INT64 ||
+                            dt === DataType.INT32 ||
+                            dt === DataType.INT16 ||
+                            dt === DataType.INT8 ||
+                            dt === DataType.UINT64 ||
+                            dt === DataType.UINT32 ||
+                            dt === DataType.UINT16 ||
+                            dt === DataType.UINT8)
+                    ) {
+                        continue;
+                    }
+                }
                 const stopPhase = lookupScheduleMap(this.options.schedule?.stopAt, op);
                 if (stopPhase === "none") continue;
 
@@ -431,7 +497,7 @@ export class CanonicalizationPass implements GraphPass {
                     graph,
                     opportunity.id,
                     opportunity.description,
-                    "canonicalization",
+                    getRegionScopeTag(graph, "canonicalization"),
                 );
 
                 opportunity.apply(builder);

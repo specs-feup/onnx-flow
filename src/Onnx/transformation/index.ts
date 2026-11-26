@@ -141,6 +141,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             pm.addPass(
                 new CanonicalizationPass(undefined, {
                     loopLowering: this.loopLowering,
+                    recurse: this.recurse,
                     ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
                 }),
             );
@@ -172,6 +173,21 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
                 }),
             );
+
+            if (this.canonicalize && this.recurse) {
+                // Infer 0D shapes inside newly emitted Loop bodies, then recursively canonicalize
+                // any remaining non-native scalar compute ops (Exp, Div, Sqrt, Log, etc.).
+                pm.addPass(new InferShapesPass());
+                pm.addPass(
+                    new CanonicalizationPass(undefined, {
+                        loopLowering: false,
+                        recurse: true,
+                        regionOnly: true,
+                        scalar0DOnly: true,
+                        ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
+                    }),
+                );
+            }
 
             if (this.tileSize !== undefined && this.tileSize > 1) {
                 pm.addPass(new LoopTilingPass({ tileSize: this.tileSize }));
