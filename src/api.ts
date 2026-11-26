@@ -60,6 +60,7 @@ export * from "./onnx/transformation/tracking/GraphActions.js";
 export { default as OnnxGraphTransformer } from "./onnx/transformation/index.js";
 export { CanonicalizationPass } from "./onnx/transformation/canonicalization/CanonicalizationPass.js";
 export { InferShapesPass } from "./onnx/transformation/InferShapesPass.js";
+export { PostLoopLoweringPass } from "./onnx/transformation/PostLoopLoweringPass.js";
 export { LoopLoweringPass } from "./onnx/transformation/loop-lowering/LoopLoweringPass.js";
 export {
     LoopTilingPass,

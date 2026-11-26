@@ -39,6 +39,10 @@ export interface LoopRegionResult {
     ) => OperationNode.Class;
 }
 
+/**
+ * Allocates a zero-initialized 1D flat accumulator carry buffer (`ConstantNode`
+ * for static shapes, or `Expand(0, flatLen)` for dynamic shapes).
+ */
 export function createAccumulatorCarry(
     outerBuilder: GraphBuilder,
     elemTy: DataType,
@@ -97,6 +101,11 @@ export function createAccumulatorCarry(
     return { tag, initialVal, elemTy, shape: internalShape };
 }
 
+/**
+ * Scaffolds an ONNX `Loop` subgraph with `(iter, cond_in, ...carries)` boundary
+ * nodes, condition passthrough, AGU carry registration hooks (`loopCtx`), and a
+ * `finalize()` callback that wires carry/scan outputs and emits the outer `Loop` op.
+ */
 export function buildForLoopRegion(
     outerBuilder: GraphBuilder,
     totalIters: number | ValueNode,

@@ -23,41 +23,15 @@ import { OpCategory } from "../../schema/OpSchema.js";
 import { OpRegistry } from "../../schema/OpRegistry.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 
-// Loop Lowering Recipes
-import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
-import { LowerTransposeRecipe } from "./recipes/LowerTransposeRecipe.js";
-import { LowerElementWiseRecipe } from "./recipes/LowerElementWiseRecipe.js";
-import { LowerRangeRecipe } from "./recipes/LowerRangeRecipe.js";
-import { LowerReductionRecipe } from "./recipes/LowerReductionRecipe.js";
-import { LowerMatMulRecipe } from "./recipes/LowerMatMulRecipe.js";
-import { LowerConvRecipe } from "./recipes/LowerConvRecipe.js";
-import { LowerCoalescedMatMulRecipe } from "./recipes/LowerCoalescedMatMulRecipe.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
-import { LowerCumSumRecipe } from "./recipes/LowerCumSumRecipe.js";
-import { LowerReverseSequenceRecipe } from "./recipes/LowerReverseSequenceRecipe.js";
-import { LowerGatherElementsRecipe } from "./recipes/LowerGatherElementsRecipe.js";
-import { LowerGatherNDRecipe } from "./recipes/LowerGatherNDRecipe.js";
-import { LowerMaxPoolRecipe } from "./recipes/LowerMaxPoolRecipe.js";
-import { LowerScatterNDRecipe } from "./recipes/LowerScatterNDRecipe.js";
-import { LowerConvTransposeRecipe } from "./recipes/LowerConvTransposeRecipe.js";
-import { LowerResizeRecipe } from "./recipes/LowerResizeRecipe.js";
-import { LowerAveragePoolLoopRecipe } from "./recipes/LowerAveragePoolLoopRecipe.js";
-import { LowerConvNDRecipe } from "./recipes/LowerConvNDRecipe.js";
-import { LowerSliceLoopRecipe } from "./recipes/LowerSliceLoopRecipe.js";
-import { LowerPadLoopRecipe } from "./recipes/LowerPadLoopRecipe.js";
-import { LowerTileLoopRecipe } from "./recipes/LowerTileLoopRecipe.js";
-import { LowerDynamicReductionRecipe } from "./recipes/LowerDynamicReductionRecipe.js";
-import { LowerOneHotLoopRecipe } from "./recipes/LowerOneHotLoopRecipe.js";
-import { LowerResizeCubicRecipe } from "./recipes/LowerResizeCubicRecipe.js";
-import { LowerDynamicBatchedMatMulRecipe } from "./recipes/LowerDynamicBatchedMatMulRecipe.js";
-import { LowerConcatLoopRecipe } from "./recipes/LowerConcatLoopRecipe.js";
-import { LowerSoftmaxLoopRecipe } from "./recipes/LowerSoftmaxLoopRecipe.js";
-import { LowerLayerNormLoopRecipe } from "./recipes/LowerLayerNormLoopRecipe.js";
-import { LowerLogSoftmaxLoopRecipe } from "./recipes/LowerLogSoftmaxLoopRecipe.js";
-import { LowerRMSNormLoopRecipe } from "./recipes/LowerRMSNormLoopRecipe.js";
-import { LowerDetLoopRecipe } from "./recipes/LowerDetLoopRecipe.js";
-import { LowerTopKScalarLoopRecipe } from "./recipes/LowerTopKScalarLoopRecipe.js";
+import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
+import { createDefaultLoopLoweringRecipes } from "../recipes.js";
 
+/**
+ * Discovers single-op and fused multi-op loop-lowering chains in an `OnnxGraph`
+ * and lowers each chain into a single ONNX `Loop` (supporting AGU pointer vs.
+ * radix indexing, schedule axis permutations, and carry-tensor vs. scan outputs).
+ */
 export class LoopFusionMatcher {
     private boundsCache = new Map<
         string,
@@ -79,40 +53,7 @@ export class LoopFusionMatcher {
         this.recipes =
             customRecipes !== undefined
                 ? [...customRecipes]
-                : [
-                      new LowerElementWiseRecipe(),
-                      new LowerReductionRecipe(),
-                      new LowerTransposeRecipe(),
-                      new LowerRangeRecipe(),
-                      this.options.coalesce
-                          ? new LowerCoalescedMatMulRecipe()
-                          : new LowerMatMulRecipe(),
-                      new LowerConvRecipe(),
-                      new LowerConvNDRecipe(),
-                      new LowerAveragePoolLoopRecipe(),
-                      new LowerCumSumRecipe(),
-                      new LowerReverseSequenceRecipe(),
-                      new LowerGatherElementsRecipe(),
-                      new LowerGatherNDRecipe(),
-                      new LowerMaxPoolRecipe(),
-                      new LowerScatterNDRecipe(),
-                      new LowerConvTransposeRecipe(),
-                      new LowerResizeRecipe(),
-                      new LowerSliceLoopRecipe(),
-                      new LowerPadLoopRecipe(),
-                      new LowerTileLoopRecipe(),
-                      new LowerOneHotLoopRecipe(),
-                      new LowerDynamicReductionRecipe(),
-                      new LowerResizeCubicRecipe(),
-                      new LowerDynamicBatchedMatMulRecipe(),
-                      new LowerConcatLoopRecipe(),
-                      new LowerSoftmaxLoopRecipe(),
-                      new LowerLayerNormLoopRecipe(),
-                      new LowerLogSoftmaxLoopRecipe(),
-                      new LowerRMSNormLoopRecipe(),
-                      new LowerDetLoopRecipe(),
-                      new LowerTopKScalarLoopRecipe(),
-                  ];
+                : createDefaultLoopLoweringRecipes(this.options.coalesce);
 
         this.recipes.sort((a, b) => b.priority - a.priority);
     }
@@ -146,52 +87,41 @@ export class LoopFusionMatcher {
         return opportunities;
     }
 
-    private lowerFlatLoopChain(
-        graph: OnnxGraph.Class,
-        chain: OperationNode.Class[],
-        outerBuilder: GraphBuilder,
-    ): void {
-        const rootOp = chain[chain.length - 1];
-        const rootRecipe = this.getRecipeFor(rootOp)!;
-        const stampLoopMetadata = (loops: OperationNode.Class[]) => {
-            const srcOpsSet = new Set<string>();
-            const srcTypesSet = new Set<string>();
-            for (const o of chain) {
-                srcOpsSet.add(o.id);
-                srcTypesSet.add(o.type);
-                const prevOps = o.getMetadata("sourceOps");
-                if (Array.isArray(prevOps)) prevOps.forEach((s) => srcOpsSet.add(String(s)));
-                const prevTypes = o.getMetadata("sourceOpTypes");
-                if (Array.isArray(prevTypes)) prevTypes.forEach((s) => srcTypesSet.add(String(s)));
-            }
-            const srcOps = Array.from(srcOpsSet);
-            const srcTypes = Array.from(srcTypesSet);
-            for (const l of loops) {
-                l.setMetadata("sourceOps", srcOps);
-                l.setMetadata("sourceOpTypes", srcTypes);
-            }
-        };
-        if (chain.length === 1 && rootRecipe.lowerStandalone) {
-            const prevLoops = new Set(
-                graph
-                    .getOperationNodes()
-                    .toArray()
-                    .filter((o) => o.type === "Loop")
-                    .map((o) => o.id),
-            );
-            rootRecipe.lowerStandalone(rootOp, outerBuilder, this.options.indexingMode);
-            const newLoops = graph
-                .getOperationNodes()
-                .toArray()
-                .filter((o) => o.type === "Loop" && !prevLoops.has(o.id));
-            stampLoopMetadata(newLoops);
-            return;
+    /**
+     * Stamps provenance metadata (`sourceOps`, `sourceOpTypes`) onto newly emitted
+     * `Loop` nodes so downstream `Schedule` passes can match them by original op ID/type.
+     */
+    private stampLoopMetadata(chain: OperationNode.Class[], loops: OperationNode.Class[]): void {
+        const srcOpsSet = new Set<string>();
+        const srcTypesSet = new Set<string>();
+        for (const o of chain) {
+            srcOpsSet.add(o.id);
+            srcTypesSet.add(o.type);
+            const prevOps = o.getMetadata("sourceOps");
+            if (Array.isArray(prevOps)) prevOps.forEach((s) => srcOpsSet.add(String(s)));
+            const prevTypes = o.getMetadata("sourceOpTypes");
+            if (Array.isArray(prevTypes)) prevTypes.forEach((s) => srcTypesSet.add(String(s)));
         }
+        const srcOps = Array.from(srcOpsSet);
+        const srcTypes = Array.from(srcTypesSet);
+        for (const l of loops) {
+            l.setMetadata("sourceOps", srcOps);
+            l.setMetadata("sourceOpTypes", srcTypes);
+        }
+    }
 
-        const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;
-        const chainSet = new Set(chain.map((o) => o.id));
-        const chainOutputs: TensorNode.Class[] = [rootOutNodeRaw];
-        const seenOutIds = new Set<string>([rootOutNodeRaw.id]);
+    /**
+     * Collects all tensors produced inside `chain` that must remain live after fusion
+     * (always starting with `rootOutNode`, plus any graph output or externally consumed tensor).
+     */
+    private collectExternalChainOutputs(
+        chain: OperationNode.Class[],
+        chainSet: Set<string>,
+        rootOutNode: TensorNode.Class,
+    ): { chainOutputs: TensorNode.Class[]; seenOutIds: Set<string> } {
+        const chainOutputs: TensorNode.Class[] = [rootOutNode];
+        const seenOutIds = new Set<string>([rootOutNode.id]);
+
         for (const op of chain) {
             for (const t of op.getOutgoers.targets.filterIs(TensorNode).toArray()) {
                 if (seenOutIds.has(t.id)) continue;
@@ -206,22 +136,22 @@ export class LoopFusionMatcher {
             }
         }
 
-        const originalOutShape: KnownShape = [...(rootOutNodeRaw.shape as KnownShape)];
-        const elemTy = rootOutNodeRaw.literalType || DataType.FLOAT;
+        return { chainOutputs, seenOutIds };
+    }
 
-        const bounds = this.getBoundsFor(rootOp);
-        const totalIters = bounds.totalIters;
-        const carryShape = bounds.carryShape as StaticShape;
-        const isSelfCarry = rootRecipe.tags?.includes("self-carry") === true;
-        const useScan = this.options.useScanOutputs === true && !isSelfCarry;
+    /** Resolves and validates any `Schedule.reorder(...)` axis permutation targeting `chain`. */
+    private resolveAxisPermutation(
+        chain: OperationNode.Class[],
+        originalOutShape: KnownShape,
+        isSelfCarry: boolean,
+    ): number[] | undefined {
+        if (isSelfCarry || originalOutShape.length <= 1) return undefined;
 
-        const rawAxisPerm =
-            !isSelfCarry && originalOutShape.length > 1
-                ? (chain
-                      .map((o) => lookupScheduleMap(this.options.schedule?.axisPerms, o))
-                      .find((p) => p !== undefined) ?? undefined)
-                : undefined;
-        const axisPerm =
+        const rawAxisPerm = chain
+            .map((o) => lookupScheduleMap(this.options.schedule?.axisPerms, o))
+            .find((p) => p !== undefined);
+
+        if (
             rawAxisPerm &&
             rawAxisPerm.length === originalOutShape.length &&
             rawAxisPerm.every(
@@ -231,10 +161,142 @@ export class LoopFusionMatcher {
                     p < originalOutShape.length &&
                     arr.indexOf(p) === idx,
             )
-                ? rawAxisPerm
-                : undefined;
+        ) {
+            return rawAxisPerm;
+        }
+        return undefined;
+    }
 
-        // 1. Initialize Loop Region via GraphBuilder helper
+    /**
+     * Maps the flat loop iteration counter `trip` through a permuted axis order
+     * back to the canonical row-major linear offset expected by body recipes.
+     */
+    private buildPermutedIter(
+        innerBuilder: GraphBuilder,
+        trip: ConcreteValueNode,
+        axisPerm: number[],
+        originalOutShape: KnownShape,
+        targetShape: ValueNode | undefined,
+        rootOpId: string,
+    ): ConcreteValueNode {
+        const innerOutDims: (number | ConcreteValueNode)[] = targetShape
+            ? extractMixedDims(
+                  innerBuilder,
+                  targetShape as ConcreteValueNode,
+                  [originalOutShape.length],
+                  `perm_t_${rootOpId}`,
+              )
+            : originalOutShape.map((d) => (typeof d === "number" && d > 0 ? d : 1));
+        const permDims = axisPerm.map((p) => innerOutDims[p]);
+        const origStrides = buildMixedStrides(innerBuilder, innerOutDims);
+        const permCoords = decodeMixedRadix(innerBuilder, trip, permDims, `perm_dec_${rootOpId}`);
+        const origCoords: ConcreteValueNode[] = new Array(axisPerm.length);
+        axisPerm.forEach((p, idx) => {
+            origCoords[p] = permCoords[idx];
+        });
+        return buildLinearIndex(innerBuilder, origCoords, origStrides, `perm_idx_${rootOpId}`);
+    }
+
+    /**
+     * Redirects surviving external `Shape` probes on absorbed intermediate tensors
+     * to an equivalent same-shape external input before removing fused chain ops.
+     */
+    private rewireAbsorbedShapeProbes(
+        chain: OperationNode.Class[],
+        chainSet: Set<string>,
+        rootOp: OperationNode.Class,
+        seenOutIds: Set<string>,
+        outerBuilder: GraphBuilder,
+    ): void {
+        const findExternalShapeSource = (
+            t: TensorNode.Class,
+            seen = new Set<string>(),
+        ): ValueNode | undefined => {
+            if (seen.has(t.id)) return undefined;
+            seen.add(t.id);
+            const prod = t.incomers.sources.filterIs(OperationNode).first();
+            if (!prod || !chainSet.has(prod.id)) return t;
+            const outRank = (t.shape as unknown[] | undefined)?.length ?? 0;
+            const tSig = toStaticShape(t.shape).join(",");
+            const nonScalar = (prod.getInputs() ?? []).filter((inp) => {
+                const sh = inp.shape as (number | string)[] | undefined;
+                if (!sh || sh.length === 0) return false;
+                if (sh.length <= outRank && sh.every((d) => d === 1)) return false;
+                return toStaticShape(sh).join(",") === tSig;
+            });
+            for (const inp of nonScalar) {
+                if (inp.is(TensorNode)) {
+                    const ext = findExternalShapeSource(inp.as(TensorNode), seen);
+                    if (ext) return ext;
+                } else {
+                    return inp;
+                }
+            }
+            return undefined;
+        };
+
+        for (const op of chain) {
+            if (op.id === rootOp.id) continue;
+            for (const t of op.getOutgoers.targets.filterIs(TensorNode).toArray()) {
+                if (seenOutIds.has(t.id)) continue;
+                const remaining = t.outgoers.targets.filterIs(OperationNode).toArray();
+                if (remaining.some((c) => !chainSet.has(c.id))) {
+                    const ext = findExternalShapeSource(t);
+                    if (ext) outerBuilder.replaceAllUsesWith(t, ext);
+                }
+            }
+        }
+    }
+
+    /**
+     * Lowers a topologically ordered `chain` of fuseable ops into a single ONNX `Loop`,
+     * post-processing and reshaping all live cluster outputs back to their original shapes.
+     */
+    private lowerFlatLoopChain(
+        graph: OnnxGraph.Class,
+        chain: OperationNode.Class[],
+        outerBuilder: GraphBuilder,
+    ): void {
+        const rootOp = chain[chain.length - 1];
+        const rootRecipe = this.getRecipeFor(rootOp)!;
+
+        // Fast-path for standalone recipes (e.g., SoftmaxLoop, DetLoop, TopKScalarLoop)
+        if (chain.length === 1 && rootRecipe.lowerStandalone) {
+            const prevLoops = new Set(
+                graph
+                    .getOperationNodes()
+                    .toArray()
+                    .filter((o) => o.type === "Loop")
+                    .map((o) => o.id),
+            );
+            rootRecipe.lowerStandalone(rootOp, outerBuilder, this.options.indexingMode);
+            const newLoops = graph
+                .getOperationNodes()
+                .toArray()
+                .filter((o) => o.type === "Loop" && !prevLoops.has(o.id));
+            this.stampLoopMetadata(chain, newLoops);
+            return;
+        }
+
+        const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;
+        const chainSet = new Set(chain.map((o) => o.id));
+        const { chainOutputs, seenOutIds } = this.collectExternalChainOutputs(
+            chain,
+            chainSet,
+            rootOutNodeRaw,
+        );
+
+        const originalOutShape: KnownShape = [...(rootOutNodeRaw.shape as KnownShape)];
+        const elemTy = rootOutNodeRaw.literalType || DataType.FLOAT;
+
+        const bounds = this.getBoundsFor(rootOp);
+        const totalIters = bounds.totalIters;
+        const carryShape = bounds.carryShape as StaticShape;
+        const isSelfCarry = rootRecipe.tags?.includes("self-carry") === true;
+        const useScan = this.options.useScanOutputs === true && !isSelfCarry;
+        const axisPerm = this.resolveAxisPermutation(chain, originalOutShape, isSelfCarry);
+
+        // 1. Initialize Loop region
         const effectiveIndexingMode =
             axisPerm !== undefined ? IndexingMode.Radix : this.options.indexingMode;
         const { innerBuilder, trip, vInitial, loopOutput, loopOutputs, loopCtx, finalize } =
@@ -250,50 +312,23 @@ export class LoopFusionMatcher {
             );
         const body = innerBuilder.graph;
 
-        let effectiveIter: ConcreteValueNode = trip;
-        if (axisPerm !== undefined) {
-            const innerOutDims = bounds.targetShape
-                ? extractMixedDims(
+        const effectiveIter: ConcreteValueNode =
+            axisPerm !== undefined
+                ? this.buildPermutedIter(
                       innerBuilder,
-                      bounds.targetShape as ConcreteValueNode,
-                      [originalOutShape.length],
-                      `perm_t_${rootOp.id}`,
+                      trip,
+                      axisPerm,
+                      originalOutShape,
+                      bounds.targetShape as ValueNode | undefined,
+                      rootOp.id,
                   )
-                : (originalOutShape as (number | ConcreteValueNode)[]).map((d, di) =>
-                      typeof d === "number" && d > 0
-                          ? d
-                          : extractMixedDims(
-                                innerBuilder,
-                                bounds.targetShape as ConcreteValueNode,
-                                [originalOutShape.length],
-                                `perm_d_${rootOp.id}`,
-                            )[di],
-                  );
-            const permDims = axisPerm.map((p) => innerOutDims[p]);
-            const origStrides = buildMixedStrides(innerBuilder, innerOutDims);
-            const permCoords = decodeMixedRadix(
-                innerBuilder,
-                trip,
-                permDims,
-                `perm_dec_${rootOp.id}`,
-            );
-            const origCoords: ConcreteValueNode[] = new Array(axisPerm.length);
-            axisPerm.forEach((p, idx) => {
-                origCoords[p] = permCoords[idx];
-            });
-            effectiveIter = buildLinearIndex(
-                innerBuilder,
-                origCoords,
-                origStrides,
-                `perm_idx_${rootOp.id}`,
-            );
-        }
+                : trip;
 
         const axes = innerBuilder.createConstant("axes", int64Vec([0]));
         const valueMap = new Map<string, ValueNode>();
         let finalNextCarry: ValueNode | null = null;
 
-        // 2. Execute the strategies (Recipes) inside the loop body
+        // 2. Lower each operation in the chain into the loop body
         for (const op of chain) {
             const recipe = this.getRecipeFor(op)!;
             const applyRes = recipe.apply(
@@ -322,9 +357,10 @@ export class LoopFusionMatcher {
             }
         }
 
-        // 3. Finalize Loop Body result (single or multi-output; ScatterElements carry mode vs native ONNX scan_outputs)
+        // 3. Finalize Loop outputs (native scan_outputs vs ScatterElements carry buffers)
         const rawLoopOutputs: ValueNode[] = new Array(chainOutputs.length);
         let emittedLoopOp: OperationNode.Class;
+
         if (useScan && finalNextCarry === null) {
             const scanOutputs: LoopScanOutput[] = chainOutputs.map((outT, idx) => {
                 const scalar = valueMap.get(outT.id)!;
@@ -402,48 +438,11 @@ export class LoopFusionMatcher {
                 rawLoopOutputs[k + 1] = loopOutputs[outIdx];
             });
         }
-        stampLoopMetadata([emittedLoopOp]);
 
-        // Rewire surviving external shape probes on absorbed intermediate tensors BEFORE final integration
-        const findExternalShapeSource = (
-            t: TensorNode.Class,
-            seen = new Set<string>(),
-        ): ValueNode | undefined => {
-            if (seen.has(t.id)) return undefined;
-            seen.add(t.id);
-            const prod = t.incomers.sources.filterIs(OperationNode).first();
-            if (!prod || !chainSet.has(prod.id)) return t;
-            const outRank = (t.shape as unknown[] | undefined)?.length ?? 0;
-            const tSig = toStaticShape(t.shape).join(",");
-            const nonScalar = (prod.getInputs() ?? []).filter((inp) => {
-                const sh = inp.shape as (number | string)[] | undefined;
-                if (!sh || sh.length === 0) return false;
-                if (sh.length <= outRank && sh.every((d) => d === 1)) return false;
-                return toStaticShape(sh).join(",") === tSig;
-            });
-            for (const inp of nonScalar) {
-                if (inp.is(TensorNode)) {
-                    const ext = findExternalShapeSource(inp.as(TensorNode), seen);
-                    if (ext) return ext;
-                } else {
-                    return inp;
-                }
-            }
-            return undefined;
-        };
-        for (const op of chain) {
-            if (op.id === rootOp.id) continue;
-            for (const t of op.getOutgoers.targets.filterIs(TensorNode).toArray()) {
-                if (seenOutIds.has(t.id)) continue;
-                const remaining = t.outgoers.targets.filterIs(OperationNode).toArray();
-                if (remaining.some((c) => !chainSet.has(c.id))) {
-                    const ext = findExternalShapeSource(t);
-                    if (ext) outerBuilder.replaceAllUsesWith(t, ext);
-                }
-            }
-        }
+        this.stampLoopMetadata(chain, [emittedLoopOp]);
+        this.rewireAbsorbedShapeProbes(chain, chainSet, rootOp, seenOutIds, outerBuilder);
 
-        // 4-6. Post-process, reshape, and reconnect each output of the cluster
+        // 4. Post-process, reshape, and reconnect each output of the cluster
         for (let j = 0; j < chainOutputs.length; j++) {
             const outT = chainOutputs[j];
             const outShapeJ: KnownShape = [...(outT.shape as KnownShape)];
@@ -459,8 +458,8 @@ export class LoopFusionMatcher {
             const isScalarOutput = outShapeJ.length === 0 && staticCarryTotal === 1;
             const outIsDynamic =
                 outShapeJ.includes(-1) || (outShapeJ.length === 0 && !isScalarOutput);
-            let targetShapeNode: ValueNode;
 
+            let targetShapeNode: ValueNode;
             if (j === 0 && bounds.targetShape) {
                 targetShapeNode = bounds.targetShape as ValueNode;
             } else if (Array.isArray(carryShape)) {
@@ -483,7 +482,6 @@ export class LoopFusionMatcher {
                     { type: outTyJ, shape: [] },
                 ]);
             } else if (useScan && axisPerm !== undefined) {
-                // Scan output was stacked in permuted order; reshape to permShape and inverse-Transpose back
                 const permShapeKnown = axisPerm.map((p) => outShapeJ[p]) as KnownShape;
                 const invPerm: number[] = new Array(axisPerm.length);
                 axisPerm.forEach((p, idx) => {
@@ -517,6 +515,7 @@ export class LoopFusionMatcher {
 
             outerBuilder.replaceAllUsesWith(outT, finalOutput);
         }
+
         chain.forEach((op) => outerBuilder.removeNode(op));
     }
 

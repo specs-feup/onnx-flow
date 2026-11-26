@@ -24,6 +24,11 @@ export interface LoopTilingOptions {
     tileSize: number;
 }
 
+/**
+ * Strip-mines flat ONNX `Loop` operations into a two-level `(outerTileLoop, innerTileLoop)`
+ * nest with tile size `T`, bubbling inner `RegionArgumentNode` captures upward and
+ * remapping `iter -> outerIter * T + innerIter` when the inner body reads the loop index.
+ */
 export class LoopTilingPass implements GraphPass {
     public readonly name = "LoopTiling";
     private tileSize: number;
