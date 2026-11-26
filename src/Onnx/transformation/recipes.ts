@@ -26,6 +26,10 @@ import { LowerDynamicBatchedMatMulRecipe } from "./loop-lowering/recipes/LowerDy
 import { LowerConcatLoopRecipe } from "./loop-lowering/recipes/LowerConcatLoopRecipe.js";
 import { LowerSoftmaxLoopRecipe } from "./loop-lowering/recipes/LowerSoftmaxLoopRecipe.js";
 import { LowerLayerNormLoopRecipe } from "./loop-lowering/recipes/LowerLayerNormLoopRecipe.js";
+import { LowerLogSoftmaxLoopRecipe } from "./loop-lowering/recipes/LowerLogSoftmaxLoopRecipe.js";
+import { LowerRMSNormLoopRecipe } from "./loop-lowering/recipes/LowerRMSNormLoopRecipe.js";
+import { LowerDetLoopRecipe } from "./loop-lowering/recipes/LowerDetLoopRecipe.js";
+import { LowerTopKScalarLoopRecipe } from "./loop-lowering/recipes/LowerTopKScalarLoopRecipe.js";
 
 // Canonicalization Recipes
 import { LowerSoftmaxRecipe } from "./canonicalization/recipes/LowerSoftmaxRecipe.js";
@@ -59,6 +63,7 @@ import { LowerCoshRecipe } from "./canonicalization/recipes/LowerCoshRecipe.js";
 import { LowerCosRecipe } from "./canonicalization/recipes/LowerCosRecipe.js";
 import { LowerDivRecipe } from "./canonicalization/recipes/LowerDivRecipe.js";
 import { LowerDivByConstantRecipe } from "./canonicalization/recipes/LowerDivByConstantRecipe.js";
+import { LowerDivByExactPowerOfTwoRecipe } from "./canonicalization/recipes/LowerDivByExactPowerOfTwoRecipe.js";
 import { LowerEluRecipe } from "./canonicalization/recipes/LowerEluRecipe.js";
 import { LowerHardSigmoidRecipe } from "./canonicalization/recipes/LowerHardSigmoidRecipe.js";
 import { LowerIsInfRecipe } from "./canonicalization/recipes/LowerIsInfRecipe.js";
@@ -331,6 +336,11 @@ export {
     LowerConcatLoopRecipe,
     LowerSoftmaxLoopRecipe,
     LowerLayerNormLoopRecipe,
+    LowerLogSoftmaxLoopRecipe,
+    LowerRMSNormLoopRecipe,
+    LowerDetLoopRecipe,
+    LowerTopKScalarLoopRecipe,
+    LowerDivByExactPowerOfTwoRecipe,
 };
 
 // Export an organized catalog object for easy IDE discovery/autocomplete
@@ -356,6 +366,7 @@ export const Recipes = {
         Sign: LowerSignRecipe,
         Div: LowerDivRecipe,
         DivByConstant: LowerDivByConstantRecipe,
+        DivByExactPowerOfTwo: LowerDivByExactPowerOfTwoRecipe,
         Mod: LowerModRecipe,
         Pow: LowerPowRecipe,
         PowSmallInt: LowerPowSmallIntRecipe,
@@ -497,5 +508,9 @@ export const Recipes = {
         ConcatLoop: LowerConcatLoopRecipe,
         SoftmaxLoop: LowerSoftmaxLoopRecipe,
         LayerNormLoop: LowerLayerNormLoopRecipe,
+        LogSoftmaxLoop: LowerLogSoftmaxLoopRecipe,
+        RMSNormLoop: LowerRMSNormLoopRecipe,
+        DetLoop: LowerDetLoopRecipe,
+        TopKScalarLoop: LowerTopKScalarLoopRecipe,
     },
 };

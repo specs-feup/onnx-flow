@@ -61,6 +61,10 @@ export const LOOP_LOWERING_RECIPE_NAMES = new Set<string>([
     "LowerConcatLoop",
     "LowerSoftmaxLoop",
     "LowerLayerNormLoop",
+    "LowerLogSoftmaxLoop",
+    "LowerRMSNormLoop",
+    "LowerDetLoop",
+    "LowerTopKScalarLoop",
 ]);
 
 export function resolveScheduleConfig(

@@ -1632,5 +1632,208 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
             },
             TEST_TIMEOUT,
         );
+
+        it(
+            "matches ORT for LowerDetLoop, LowerTopKScalarLoop, LowerLogSoftmaxLoop, LowerRMSNormLoop, and deferred AveragePool",
+            async () => {
+                const { Schedule } = await import("../../src/Onnx/transformation/Schedule.js");
+
+                // 1. Dynamic 4x4 & 5x5 Det via LowerDetLoop
+                await assertTransformMatchesOrt(
+                    "det_loop_dynamic_4x4",
+                    {
+                        label: "detl_4x4",
+                        tol: 1e-3,
+                        feeds: [{ name: "X", dtype: "float32", shape: [2, 4, 4], gen: "negmix" }],
+                        build: () => {
+                            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                            const b = new GraphBuilder(g, "dl");
+                            const x = g
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1, -1], "input"))
+                                .as(TensorNode);
+                            const [out] = b.createOp("Det", [x], {}, [
+                                { type: DataType.FLOAT, shape: [-1] },
+                            ]);
+                            if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                            return g;
+                        },
+                    },
+                    { ...fullOpts },
+                    (g) => {
+                        const loops = g
+                            .getOperationNodes()
+                            .toArray()
+                            .filter((o) => o.type === "Loop");
+                        expect(loops.length).toBe(1);
+                    },
+                );
+
+                // 2. TopK with ties, smallest, non-trailing axis, and dynamic K
+                await assertTransformMatchesOrt(
+                    "topk_scalar_loop_axis0_ties",
+                    {
+                        label: "topkl_ties",
+                        feeds: [
+                            {
+                                name: "X",
+                                dtype: "float32",
+                                shape: [4, 2],
+                                init: [3, 1, 5, -2, -1, 4, 5, -2],
+                            },
+                            { name: "K", dtype: "int64", shape: [1], init: [3n] },
+                        ],
+                        build: () => {
+                            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                            const b = new GraphBuilder(g, "tkl");
+                            const x = g
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2], "input"))
+                                .as(TensorNode);
+                            const k = g
+                                .addNode("K")
+                                .init(new TensorNode.Builder(DataType.INT64, [1], "input"))
+                                .as(TensorNode);
+                            const [vals, idxs] = b.createOp(
+                                "TopK",
+                                [x, k],
+                                { axis: 0, largest: 0 },
+                                [
+                                    { type: DataType.FLOAT, shape: [-1, 2] },
+                                    { type: DataType.INT64, shape: [-1, 2] },
+                                ],
+                            );
+                            if (vals.is(TensorNode)) vals.as(TensorNode).setType("output");
+                            if (idxs.is(TensorNode)) idxs.as(TensorNode).setType("output");
+                            return g;
+                        },
+                    },
+                    { ...fullOpts },
+                    (g) => {
+                        const topOps = g
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type);
+                        expect(topOps).not.toContain("ArgMax");
+                        expect(topOps).not.toContain("ArgMin");
+                    },
+                );
+
+                // 3. LogSoftmax via LowerLogSoftmaxLoop Schedule
+                await assertTransformMatchesOrt(
+                    "schedule_logsoftmax_loop",
+                    {
+                        label: "sched_lsm",
+                        tol: 1e-3,
+                        feeds: [{ name: "X", dtype: "float32", shape: [2, 3, 4], gen: "negmix" }],
+                        build: () => {
+                            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                            const b = new GraphBuilder(g, "lsm");
+                            const x = g
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, 4], "input"))
+                                .as(TensorNode);
+                            const [out] = b.createOp("LogSoftmax", [x], { axis: 1 }, [
+                                { type: DataType.FLOAT, shape: [-1, 3, 4] },
+                            ]);
+                            if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                            return g;
+                        },
+                    },
+                    {
+                        ...fullOpts,
+                        schedule: new Schedule().useRecipe("LogSoftmax", "LowerLogSoftmaxLoop"),
+                    },
+                    (g) => {
+                        const loops = g
+                            .getOperationNodes()
+                            .toArray()
+                            .filter((o) => o.type === "Loop");
+                        expect(loops.length).toBe(1);
+                    },
+                );
+
+                // 4. RMSNormalization via LowerRMSNormLoop Schedule
+                await assertTransformMatchesOrt(
+                    "schedule_rmsnorm_loop",
+                    {
+                        label: "sched_rms",
+                        tol: 1e-4,
+                        feeds: [
+                            { name: "X", dtype: "float32", shape: [2, 3, 4], gen: "negmix" },
+                            { name: "S", dtype: "float32", shape: [4], gen: "random" },
+                        ],
+                        build: () => {
+                            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                            const b = new GraphBuilder(g, "rms");
+                            const x = g
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, 4], "input"))
+                                .as(TensorNode);
+                            const s = g
+                                .addNode("S")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [4], "input"))
+                                .as(TensorNode);
+                            const [out] = b.createOp(
+                                "RMSNormalization",
+                                [x, s],
+                                { axis: -1, epsilon: 1e-5 },
+                                [{ type: DataType.FLOAT, shape: [-1, 3, 4] }],
+                            );
+                            if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                            return g;
+                        },
+                    },
+                    {
+                        ...fullOpts,
+                        schedule: new Schedule().useRecipe("RMSNormalization", "LowerRMSNormLoop"),
+                    },
+                    (g) => {
+                        const loops = g
+                            .getOperationNodes()
+                            .toArray()
+                            .filter((o) => o.type === "Loop");
+                        expect(loops.length).toBe(1);
+                    },
+                );
+
+                // 5. AveragePool with overlapping kernel & constant power-of-2 kernel defers cleanly to 1 Loop
+                await assertTransformMatchesOrt(
+                    "avgpool_deferred_pow2",
+                    {
+                        label: "ap_pow2",
+                        feeds: [
+                            { name: "X", dtype: "float32", shape: [1, 2, 6, 6], gen: "negmix" },
+                        ],
+                        build: () => {
+                            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                            const b = new GraphBuilder(g, "ap2");
+                            const x = g
+                                .addNode("X")
+                                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 6, 6], "input"))
+                                .as(TensorNode);
+                            const [out] = b.createOp(
+                                "AveragePool",
+                                [x],
+                                { kernel_shape: [2, 2], strides: [1, 1], pads: [0, 0, 0, 0] },
+                                [{ type: DataType.FLOAT, shape: [1, 2, 5, 5] }],
+                            );
+                            if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                            return g;
+                        },
+                    },
+                    { ...fullOpts },
+                    (g) => {
+                        const topOps = g
+                            .getOperationNodes()
+                            .toArray()
+                            .map((o) => o.type);
+                        expect(topOps.filter((t) => t === "Loop").length).toBe(1);
+                        expect(topOps).not.toContain("Div");
+                    },
+                );
+            },
+            TEST_TIMEOUT,
+        );
     });
 });
