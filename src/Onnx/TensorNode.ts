@@ -8,6 +8,7 @@ import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
 namespace TensorNode {
     export const TAG = "__specs-onnx__tensor_node";
     export const VERSION = "4"; // Bumped version
+    let nextCreationSeq = 1;
 
     export type TensorKind = "input" | "output" | "intermediate" | "index" | "index_aux";
 
@@ -15,6 +16,10 @@ namespace TensorNode {
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseNode.Class<D, S> {
+        get creationSeq(): number {
+            return this.data[TAG].creationSeq ?? 0;
+        }
+
         get literalType(): number {
             return this.data[TAG].literalType;
         }
@@ -110,6 +115,7 @@ namespace TensorNode {
                 ...data,
                 [TAG]: {
                     version: VERSION,
+                    creationSeq: nextCreationSeq++,
                     literalType: this.literalType,
                     shape: this.shape,
                     type: this.type,
@@ -131,6 +137,7 @@ namespace TensorNode {
     export interface Data extends BaseNode.Data {
         [TAG]: {
             version: typeof VERSION;
+            creationSeq?: number;
             literalType: DataType;
             shape: Shape;
             type: TensorKind;

@@ -1,25 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as ort from "onnxruntime-web";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import Graph from "@specs-feup/flow/graph/Graph";
 import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
 import TensorNode from "../../src/Onnx/TensorNode.js";
+import OperationNode from "../../src/Onnx/OperationNode.js";
+import OnnxEdge from "../../src/Onnx/OnnxEdge.js";
 import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
-import type { KnownShape } from "../../src/Onnx/OnnxTypes.js";
-import { DataType, type AttributeMap, type TensorProto } from "../../src/Onnx/OnnxTypes.js";
+import { DataType } from "../../src/Onnx/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../src/Onnx/Schema/index.js";
 import inferShapes from "../../src/Onnx/InferShapes.js";
-import { convertFlowGraphToOnnxJson, prepareGraphForExport } from "../../src/flow2json.js";
-import { json2onnx } from "../../src/json2onnx.js";
-import {
-    safeWriteJson,
-    int64Vec,
-    scalarInt64,
-    floatVec,
-    makeTensorProto,
-} from "../../src/Onnx/Utils.js";
+import { int64Vec, scalarInt64, floatVec, makeTensorProto } from "../../src/Onnx/Utils.js";
 import { CanonicalizationPass } from "../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
 import { LoopLoweringPass } from "../../src/Onnx/transformation/loop-lowering/LoopLoweringPass.js";
 import { HistoryManager } from "../../src/Onnx/transformation/tracking/HistoryManager.js";
@@ -28,29 +21,83 @@ import {
     buildFeeds,
     compareOrtOutputs,
     ensureProtoExists,
-    type FeedSpec,
-} from "../compatibility_test.js";
+    exportGraphToOnnx,
+    runOrtChecked,
+} from "../helpers/ortHarness.js";
+import { buildSyntheticGraph, type SyntheticCase } from "../helpers/modelFactory.js";
 
-interface SyntheticCase {
-    name: string;
-    opType: string;
-    feeds: FeedSpec[];
-    constInputs?: { index: number; proto: TensorProto }[];
-    inputShapes?: KnownShape[];
-    attrs?: AttributeMap;
-    outputNames?: string[];
-    outputSpecs?: { type: DataType; shape: KnownShape }[];
-    tol?: number | Record<string, number>;
-    rtol?: number;
-    exact?: boolean;
+const TEST_TIMEOUT = 150000; //ms
+
+interface OpEquivalenceCase extends SyntheticCase {
     indexingModes?: IndexingMode[];
-    /** Optional ORT graph optimization level override (defaults to ORT's default when omitted) */
+    /** Optional ORT graph optimization level override */
     graphOptimizationLevel?: ort.InferenceSession.SessionOptions["graphOptimizationLevel"];
-    /** Skip LoopLoweringPass and verify canonicalized graph directly in ORT (for very large unrolled canonicalizations) */
-    skipLoopLowering?: boolean;
+    /** Minimum ONNX opset version for original & lowered export (e.g., 21 for blocked QDQ) */
+    minOpset?: number;
+    /** Optional opset override only for original reference export (e.g., 10 for legacy Scatter) */
+    origOpset?: number;
+    /** Optional custom graph builder (e.g., Scan with body subgraph) */
+    customBuild?: () => OnnxGraph.Class;
+    /** Optional precomputed reference outputs when ORT lacks a reference kernel (e.g. LpNormalization p=3) */
+    expectedOutputs?: Record<string, ort.Tensor>;
 }
 
-const CASES: SyntheticCase[] = [
+function buildScanGraph(): OnnxGraph.Class {
+    const body = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const bodyBuilder = new GraphBuilder(body, "scan_body");
+    const sIn = body
+        .addNode("s_in")
+        .init(new TensorNode.Builder(DataType.FLOAT, [2], "input"))
+        .as(TensorNode);
+    const xIn = body
+        .addNode("x_in")
+        .init(new TensorNode.Builder(DataType.FLOAT, [2], "input"))
+        .as(TensorNode);
+    const [sum] = bodyBuilder.createOp("Add", [sIn, xIn], {}, [
+        { type: DataType.FLOAT, shape: [2] },
+    ]);
+    const [sOut] = bodyBuilder.createOp("Identity", [sum], {}, [
+        { type: DataType.FLOAT, shape: [2] },
+    ]);
+    const [yOut] = bodyBuilder.createOp("Identity", [sum], {}, [
+        { type: DataType.FLOAT, shape: [2] },
+    ]);
+    if (sOut.is(TensorNode)) sOut.as(TensorNode).setType("output");
+    if (yOut.is(TensorNode)) yOut.as(TensorNode).setType("output");
+
+    const outer = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const initState = outer
+        .addNode("init_s")
+        .init(new TensorNode.Builder(DataType.FLOAT, [2], "input"))
+        .as(TensorNode);
+    const scanIn = outer
+        .addNode("scan_x")
+        .init(new TensorNode.Builder(DataType.FLOAT, [3, 2], "input"))
+        .as(TensorNode);
+
+    const scanOp = outer
+        .addNode("scan_0")
+        .init(
+            new OperationNode.Builder("Scan", [initState, scanIn], { num_scan_inputs: 1 }, [body]),
+        )
+        .as(OperationNode);
+    outer.addEdge(initState, scanOp).init(new OnnxEdge.Builder(DataType.FLOAT, [2]));
+    outer.addEdge(scanIn, scanOp).init(new OnnxEdge.Builder(DataType.FLOAT, [3, 2]));
+
+    const outS = outer
+        .addNode("final_s")
+        .init(new TensorNode.Builder(DataType.FLOAT, [2], "output"))
+        .as(TensorNode);
+    const outY = outer
+        .addNode("scan_y")
+        .init(new TensorNode.Builder(DataType.FLOAT, [3, 2], "output"))
+        .as(TensorNode);
+    outer.addEdge(scanOp, outS).init(new OnnxEdge.Builder(DataType.FLOAT, [2]));
+    outer.addEdge(scanOp, outY).init(new OnnxEdge.Builder(DataType.FLOAT, [3, 2]));
+    return outer;
+}
+
+const CASES: OpEquivalenceCase[] = [
     // Layer A
     {
         name: "Neg",
@@ -478,7 +525,6 @@ const CASES: SyntheticCase[] = [
         outputSpecs: [{ type: DataType.INT64, shape: [4] }],
         exact: true,
     },
-
     {
         name: "TopK_largest",
         opType: "TopK",
@@ -630,7 +676,6 @@ const CASES: SyntheticCase[] = [
         tol: 1e-4,
         indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
     },
-
     {
         name: "RNNLoop_bidir_seqlen_clip",
         opType: "RNN",
@@ -997,7 +1042,6 @@ const CASES: SyntheticCase[] = [
         tol: 1e-4,
         skipLoopLowering: true,
     },
-    // Auto-pad / padding coverage across canonicalization & loop-lowering recipes
     {
         name: "Conv_2D_SAME_UPPER_asym",
         opType: "Conv",
@@ -1166,8 +1210,6 @@ const CASES: SyntheticCase[] = [
         outputSpecs: [{ type: DataType.FLOAT, shape: [1, 2, 2, 2] }],
         tol: 1e-4,
     },
-
-    // --- Dynamic Shape (-1) Equivalence Tests for Batch 1-3 ---
     {
         name: "CumSum_dynamic_rev",
         opType: "CumSum",
@@ -1342,160 +1384,312 @@ const CASES: SyntheticCase[] = [
         outputSpecs: [{ type: DataType.FLOAT, shape: [-1, -1] }],
         tol: 1e-5,
     },
+
+    // ===== Previously Missing Recipe Coverage =====
+    {
+        name: "BatchNormalization",
+        opType: "BatchNormalization",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [1, 3, 2, 2], gen: "negmix" },
+            { name: "scale", dtype: "float32", shape: [3], init: [1.0, 0.5, 2.0] },
+            { name: "B", dtype: "float32", shape: [3], init: [0.1, -0.2, 0.3] },
+            { name: "mean", dtype: "float32", shape: [3], init: [0.0, 0.5, -0.5] },
+            { name: "var", dtype: "float32", shape: [3], init: [1.0, 2.0, 0.5] },
+        ],
+        attrs: { epsilon: 1e-5 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 3, 2, 2] }],
+        tol: 1e-4,
+    },
+    {
+        name: "LayerNormalization",
+        opType: "LayerNormalization",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [2, 4], gen: "negmix" },
+            { name: "scale", dtype: "float32", shape: [4], init: [1.0, 1.5, 0.5, 2.0] },
+            { name: "B", dtype: "float32", shape: [4], init: [0.0, 0.1, -0.1, 0.2] },
+        ],
+        attrs: { axis: -1, epsilon: 1e-5 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 4] }],
+        tol: 1e-4,
+    },
+    {
+        name: "InstanceNormalization",
+        opType: "InstanceNormalization",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [1, 3, 2, 2], gen: "negmix" },
+            { name: "scale", dtype: "float32", shape: [3], init: [1.0, 0.5, 2.0] },
+            { name: "B", dtype: "float32", shape: [3], init: [0.1, -0.2, 0.3] },
+        ],
+        attrs: { epsilon: 1e-5 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 3, 2, 2] }],
+        tol: 1e-4,
+    },
+    {
+        name: "GroupNormalization",
+        opType: "GroupNormalization",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [1, 4, 2, 2], gen: "negmix" },
+            { name: "scale", dtype: "float32", shape: [4], init: [1.0, 0.5, 2.0, 1.2] },
+            { name: "bias", dtype: "float32", shape: [4], init: [0.1, -0.1, 0.2, 0.0] },
+        ],
+        attrs: { num_groups: 2, epsilon: 1e-5 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 4, 2, 2] }],
+        minOpset: 21,
+        tol: 1e-4,
+    },
+    {
+        name: "Ceil",
+        opType: "Ceil",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [6], init: [-2.7, -2.0, -0.1, 0.0, 0.9, 3.4] },
+        ],
+        tol: 1e-6,
+    },
+    {
+        name: "SqrtPC",
+        opType: "Sqrt",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [6], init: [0.0, 0.25, 1.0, 2.0, 9.0, 100.0] },
+        ],
+        tol: 1e-3,
+    },
+    {
+        name: "SinPC",
+        opType: "Sin",
+        feeds: [{ name: "X", dtype: "float32", shape: [4], init: [-0.8, -0.2, 0.3, 0.9] }],
+        tol: 1e-4,
+    },
+    {
+        name: "CosPC",
+        opType: "Cos",
+        feeds: [{ name: "X", dtype: "float32", shape: [4], init: [-0.8, -0.2, 0.3, 0.9] }],
+        tol: 1e-4,
+    },
+    {
+        name: "LogPC",
+        opType: "Log",
+        feeds: [{ name: "X", dtype: "float32", shape: [4], init: [0.4, 0.75, 1.0, 2.5] }],
+        tol: 1e-3,
+    },
+    {
+        name: "Erf",
+        opType: "Erf",
+        feeds: [{ name: "X", dtype: "float32", shape: [4], init: [-0.5, -0.2, 0.2, 0.5] }],
+        tol: 5e-3,
+    },
+    {
+        name: "IsNaN",
+        opType: "IsNaN",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [4], init: [0.0, Number.NaN, -1.5, Number.NaN] },
+        ],
+        outputSpecs: [{ type: DataType.BOOL, shape: [4] }],
+        exact: true,
+    },
+    {
+        name: "IsInf",
+        opType: "IsInf",
+        feeds: [
+            {
+                name: "X",
+                dtype: "float32",
+                shape: [4],
+                init: [0.0, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 3.5],
+            },
+        ],
+        outputSpecs: [{ type: DataType.BOOL, shape: [4] }],
+        exact: true,
+    },
+    {
+        name: "RoundAdd",
+        opType: "Round",
+        feeds: [
+            { name: "X", dtype: "float32", shape: [6], init: [-2.7, -1.5, -0.4, 0.4, 1.5, 2.7] },
+        ],
+        tol: 1e-6,
+    },
+    {
+        name: "QuantizeLinear_uint8",
+        opType: "QuantizeLinear",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3], gen: "negmix" }],
+        constInputs: [
+            { index: 1, proto: makeTensorProto(DataType.FLOAT, [], [0.1]) },
+            { index: 2, proto: makeTensorProto(DataType.UINT8, [], [128]) },
+        ],
+        outputSpecs: [{ type: DataType.UINT8, shape: [2, 3] }],
+        tol: 1,
+    },
+    {
+        name: "QuantizeLinearExtended_int16",
+        opType: "QuantizeLinear",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], gen: "negmix" }],
+        constInputs: [
+            { index: 1, proto: makeTensorProto(DataType.FLOAT, [], [0.01]) },
+            { index: 2, proto: makeTensorProto(DataType.INT16, [], [0]) },
+        ],
+        outputSpecs: [{ type: DataType.INT16, shape: [2, 4] }],
+        minOpset: 21,
+        tol: 1,
+    },
+    {
+        name: "QuantizeLinearBlocked_int8",
+        opType: "QuantizeLinear",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 6], gen: "negmix" }],
+        constInputs: [
+            {
+                index: 1,
+                proto: makeTensorProto(DataType.FLOAT, [2, 3], [0.1, 0.2, 0.5, 0.1, 0.2, 0.5]),
+            },
+            { index: 2, proto: makeTensorProto(DataType.INT8, [2, 3], [0, 1, -1, 0, 1, -1]) },
+        ],
+        attrs: { axis: 1, block_size: 2 },
+        outputSpecs: [{ type: DataType.INT8, shape: [2, 6] }],
+        minOpset: 21,
+        tol: 1,
+    },
+    {
+        name: "DequantizeLinearBlocked_int8",
+        opType: "DequantizeLinear",
+        feeds: [
+            {
+                name: "X",
+                dtype: "int8",
+                shape: [2, 6],
+                init: [-10, 5, 20, -5, 0, 15, 1, 2, 3, 4, 5, 6],
+            },
+        ],
+        constInputs: [
+            {
+                index: 1,
+                proto: makeTensorProto(DataType.FLOAT, [2, 3], [0.1, 0.2, 0.5, 0.1, 0.2, 0.5]),
+            },
+            { index: 2, proto: makeTensorProto(DataType.INT8, [2, 3], [0, 1, -1, 0, 1, -1]) },
+        ],
+        attrs: { axis: 1, block_size: 2 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 6] }],
+        minOpset: 21,
+        tol: 1e-5,
+    },
+    {
+        name: "ConvInteger",
+        opType: "ConvInteger",
+        feeds: [
+            {
+                name: "X",
+                dtype: "uint8",
+                shape: [1, 1, 4, 4],
+                init: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            },
+            { name: "W", dtype: "uint8", shape: [1, 1, 2, 2], init: [1, 0, 0, 2] },
+        ],
+        attrs: { kernel_shape: [2, 2], strides: [1, 1], pads: [0, 0, 0, 0] },
+        outputSpecs: [{ type: DataType.INT32, shape: [1, 1, 3, 3] }],
+        exact: true,
+    },
+    {
+        name: "QLinearMatMul",
+        opType: "QLinearMatMul",
+        feeds: [
+            { name: "a", dtype: "uint8", shape: [2, 3], init: [10, 20, 30, 40, 50, 60] },
+            { name: "b", dtype: "uint8", shape: [3, 2], init: [1, 2, 3, 4, 5, 6] },
+        ],
+        constInputs: [
+            { index: 1, proto: makeTensorProto(DataType.FLOAT, [], [0.1]) },
+            { index: 2, proto: makeTensorProto(DataType.UINT8, [], [0]) },
+            { index: 4, proto: makeTensorProto(DataType.FLOAT, [], [0.2]) },
+            { index: 5, proto: makeTensorProto(DataType.UINT8, [], [0]) },
+            { index: 6, proto: makeTensorProto(DataType.FLOAT, [], [0.5]) },
+            { index: 7, proto: makeTensorProto(DataType.UINT8, [], [0]) },
+        ],
+        outputSpecs: [{ type: DataType.UINT8, shape: [2, 2] }],
+        tol: 1,
+    },
+    {
+        name: "QLinearConv",
+        opType: "QLinearConv",
+        feeds: [
+            {
+                name: "x",
+                dtype: "uint8",
+                shape: [1, 1, 4, 4],
+                init: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            },
+            { name: "w", dtype: "uint8", shape: [1, 1, 2, 2], init: [1, 2, 3, 4] },
+        ],
+        constInputs: [
+            { index: 1, proto: makeTensorProto(DataType.FLOAT, [], [0.1]) },
+            { index: 2, proto: makeTensorProto(DataType.UINT8, [], [0]) },
+            { index: 4, proto: makeTensorProto(DataType.FLOAT, [], [0.1]) },
+            { index: 5, proto: makeTensorProto(DataType.UINT8, [], [0]) },
+            { index: 6, proto: makeTensorProto(DataType.FLOAT, [], [0.2]) },
+            { index: 7, proto: makeTensorProto(DataType.UINT8, [], [0]) },
+        ],
+        attrs: { kernel_shape: [2, 2], strides: [1, 1], pads: [0, 0, 0, 0] },
+        outputSpecs: [{ type: DataType.UINT8, shape: [1, 1, 3, 3] }],
+        tol: 1,
+    },
+    {
+        name: "LpNormalizationGeneral_L3",
+        opType: "LpNormalization",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], init: [1, -2, 3, -1, 2, 2, -1, 0] }],
+        attrs: { p: 3, axis: -1 },
+        // ORT CPU kernel only implements p=1 and p=2; verify lowered graph against exact L3 math
+        expectedOutputs: {
+            Y: new ort.Tensor(
+                "float32",
+                new Float32Array([
+                    1 / Math.cbrt(37),
+                    -2 / Math.cbrt(37),
+                    3 / Math.cbrt(37),
+                    -1 / Math.cbrt(37),
+                    2 / Math.cbrt(17),
+                    2 / Math.cbrt(17),
+                    -1 / Math.cbrt(17),
+                    0,
+                ]),
+                [2, 4],
+            ),
+        },
+        tol: 1e-3,
+    },
+    {
+        name: "Scan_stateful_sum",
+        opType: "Scan",
+        feeds: [
+            { name: "init_s", dtype: "float32", shape: [2], init: [1.0, 2.0] },
+            {
+                name: "scan_x",
+                dtype: "float32",
+                shape: [3, 2],
+                init: [0.5, 1.0, 2.0, 3.0, -1.0, 0.5],
+            },
+        ],
+        outputNames: ["final_s", "scan_y"],
+        customBuild: buildScanGraph,
+        tol: 1e-5,
+    },
+    {
+        name: "Scatter_legacy_to_ScatterElements",
+        opType: "Scatter",
+        feeds: [
+            { name: "D", dtype: "float32", shape: [2, 4] },
+            { name: "I", dtype: "int64", shape: [2, 2], init: [0n, 2n, 1n, 3n] },
+            { name: "U", dtype: "float32", shape: [2, 2] },
+        ],
+        attrs: { axis: 1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 4] }],
+        origOpset: 10,
+        tol: 1e-6,
+    },
 ];
 
-const DTYPE_MAP: Record<FeedSpec["dtype"], DataType> = {
-    float32: DataType.FLOAT,
-    int32: DataType.INT32,
-    int64: DataType.INT64,
-    uint8: DataType.UINT8,
-    int8: DataType.INT8,
-    bool: DataType.BOOL,
-};
-
-function buildSyntheticGraph(c: SyntheticCase): OnnxGraph.Class {
-    const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
-    const builder = new GraphBuilder(graph, "synth");
-
-    const totalInputs = Math.max(
-        c.feeds.length,
-        ...(c.constInputs?.map((ci) => ci.index + 1) ?? [0]),
-    );
-
-    const constByIdx = new Map(c.constInputs?.map((ci) => [ci.index, ci.proto]) ?? []);
-    const opInputs = [];
-    let feedCursor = 0;
-
-    for (let i = 0; i < totalInputs; i++) {
-        const constProto = constByIdx.get(i);
-        if (constProto) {
-            opInputs.push(builder.createConstant(`c_${i}`, constProto));
-        } else {
-            const feedIdx = feedCursor++;
-            const f = c.feeds[feedIdx];
-            const graphShape = c.inputShapes?.[feedIdx] ?? f.shape;
-            opInputs.push(
-                graph
-                    .addNode(f.name)
-                    .init(new TensorNode.Builder(DTYPE_MAP[f.dtype], graphShape, "input"))
-                    .as(TensorNode),
-            );
-        }
-    }
-
-    const outNames = c.outputNames ?? ["Y"];
-    builder.createOpWithExact("target_op", c.opType, opInputs, outNames, c.attrs ?? {});
-    inferShapes(graph);
-
-    const outNodes = graph.getNodeById("target_op")!.outgoers.targets.toArray();
-    outNodes.forEach((out, idx) => {
-        if (out.is(TensorNode)) {
-            const tn = out.as(TensorNode);
-            tn.setType("output");
-            const spec = c.outputSpecs?.[idx];
-            if (spec) {
-                tn.setLiteralType(spec.type);
-                tn.setShape(spec.shape);
-            }
-        }
-    });
-    return graph;
-}
-
-async function exportGraph(
-    graph: OnnxGraph.Class,
-    onnxPath: string,
-    minOpset?: number,
-): Promise<void> {
-    prepareGraphForExport(graph);
-    const json = convertFlowGraphToOnnxJson(graph) as {
-        irVersion?: number;
-        opsetImport?: { domain?: string; version?: number }[];
-    };
-    if (minOpset !== undefined && json.opsetImport?.[0]) {
-        json.opsetImport[0].version = Math.max(json.opsetImport[0].version ?? 13, minOpset);
-        if (minOpset >= 20) {
-            json.irVersion = Math.max(json.irVersion ?? 7, 9);
-        }
-    }
-    const tmpJson = `${onnxPath}.json`;
-    safeWriteJson(tmpJson, json);
-    await json2onnx(tmpJson, onnxPath);
-}
-
-async function runOrtChecked(
-    stage: string,
-    modelPath: string,
-    feeds: Record<string, ort.Tensor>,
-    sessionOptions?: ort.InferenceSession.SessionOptions,
-): Promise<Record<string, ort.Tensor>> {
-    try {
-        const session = sessionOptions
-            ? await ort.InferenceSession.create(modelPath, sessionOptions)
-            : await ort.InferenceSession.create(modelPath);
-        return await session.run(feeds);
-    } catch (e) {
-        const prevDebug = ort.env.debug;
-        const prevLogLevel = ort.env.logLevel;
-        ort.env.debug = true;
-        ort.env.logLevel = "verbose";
-        console.error(
-            `\n[ORT Diagnostic] Re-running ${stage} (${modelPath}) with verbose logging...`,
-        );
-        const jsonPath = `${modelPath}.json`;
-        if (fs.existsSync(jsonPath)) {
-            const m = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-            console.error(`[Model Summary ${stage}] opset=`, m.opsetImport, "ir=", m.irVersion);
-            console.error(`[Model Summary ${stage}] outputs=`, m.graph?.output);
-            console.error(
-                `[Model Summary ${stage}] nodes=`,
-                (m.graph?.node ?? []).map(
-                    (n: { opType: string; input: string[]; output: string[] }) =>
-                        `${n.opType}(${n.input.join(",")})->(${n.output.join(",")})`,
-                ),
-            );
-            const lastLoop = [...(m.graph?.node ?? [])]
-                .reverse()
-                .find((n: { opType: string }) => n.opType === "Loop");
-            const bodyGraph = lastLoop?.attribute?.find(
-                (a: { name: string }) => a.name === "body",
-            )?.g;
-            if (bodyGraph !== undefined) {
-                console.error(`[Loop Body ${stage}] inputs=`, JSON.stringify(bodyGraph.input));
-                console.error(`[Loop Body ${stage}] outputs=`, JSON.stringify(bodyGraph.output));
-                console.error(
-                    `[Loop Body ${stage}] nodes=`,
-                    (bodyGraph.node ?? []).map(
-                        (n: { opType: string; input: string[]; output: string[] }) =>
-                            `${n.opType}(${n.input.join(",")})->(${n.output.join(",")})`,
-                    ),
-                );
-            }
-        }
-        try {
-            const sess = await ort.InferenceSession.create(modelPath, {
-                executionProviders: ["wasm"],
-                logSeverityLevel: 0,
-                logVerbosityLevel: 4,
-            });
-            await sess.run(feeds);
-        } catch (verboseErr) {
-            console.error(`[ORT Diagnostic] ${stage} error:`, verboseErr);
-        } finally {
-            ort.env.debug = prevDebug!;
-            ort.env.logLevel = prevLogLevel!;
-        }
-        throw new Error(`[${stage}] ORT failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-}
-
-describe("Integration: Programmatic ORT Equivalence for New Recipes", () => {
+describe("Integration: Programmatic ORT Equivalence for Operation Recipes", () => {
     let tmpDir: string;
 
     beforeAll(() => {
         initializeSchemaRegistry();
         ensureProtoExists();
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-new-recipes-"));
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-op-equiv-"));
     });
 
     afterAll(() => {
@@ -1510,20 +1704,23 @@ describe("Integration: Programmatic ORT Equivalence for New Recipes", () => {
             const modes = tc.indexingModes ?? [IndexingMode.Pointer];
             const feeds = buildFeeds(tc.feeds, tc.name);
 
-            // 1. Export & run original reference graph
-            const origGraph = buildSyntheticGraph(tc);
-            const origPath = path.join(tmpDir, `${tc.name}_orig.onnx`);
-            await exportGraph(origGraph, origPath);
-            const origOuts = await runOrtChecked(`${tc.name}:orig`, origPath, feeds);
+            let origOuts: Record<string, ort.Tensor>;
+            if (tc.expectedOutputs !== undefined) {
+                origOuts = tc.expectedOutputs;
+            } else {
+                const origGraph = tc.customBuild ? tc.customBuild() : buildSyntheticGraph(tc);
+                const origPath = path.join(tmpDir, `${tc.name}_orig.onnx`);
+                await exportGraphToOnnx(origGraph, origPath, tc.minOpset, tc.origOpset);
+                origOuts = await runOrtChecked(`${tc.name}:orig`, origPath, feeds);
+            }
 
             for (const mode of modes) {
-                // 2. Lower graph (Canonicalization -> InferShapes -> LoopLowering)
-                const loweredGraph = buildSyntheticGraph(tc);
+                const loweredGraph = tc.customBuild ? tc.customBuild() : buildSyntheticGraph(tc);
                 const history = new HistoryManager(loweredGraph);
                 new CanonicalizationPass().run(loweredGraph, history);
                 inferShapes(loweredGraph);
 
-                if (tc.skipLoopLowering === undefined || !tc.skipLoopLowering) {
+                if (tc.skipLoopLowering !== true) {
                     new LoopLoweringPass({ coalesce: true, fuse: true, indexingMode: mode }).run(
                         loweredGraph,
                         history,
@@ -1532,15 +1729,13 @@ describe("Integration: Programmatic ORT Equivalence for New Recipes", () => {
                 }
 
                 const loweredPath = path.join(tmpDir, `${tc.name}_lowered_${mode}.onnx`);
-                await exportGraph(loweredGraph, loweredPath);
+                await exportGraphToOnnx(loweredGraph, loweredPath, tc.minOpset);
                 const recOuts = await runOrtChecked(
                     `${tc.name}:lowered(${mode})`,
                     loweredPath,
                     feeds,
                 );
 
-                // 3. Compare EVERY output tensor (handles multi-output ops)
-                // Guard against silent no-op (match() returning false)
                 const topLevelOps = loweredGraph
                     .getOperationNodes()
                     .toArray()
@@ -1557,6 +1752,6 @@ describe("Integration: Programmatic ORT Equivalence for New Recipes", () => {
                 expect(cmp.passed, `${tc.name} (${mode}): ${cmp.message ?? ""}`).toBe(true);
             }
         },
-        100000,
+        TEST_TIMEOUT,
     );
 });

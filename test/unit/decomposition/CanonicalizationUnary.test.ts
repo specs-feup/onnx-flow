@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { applyRecipe } from "./harness.js";
+import { applyRecipe } from "../../helpers/recipeHarness.js";
 import { LowerExpRecipe } from "../../../src/Onnx/transformation/canonicalization/recipes/LowerExpRecipe.js";
 import { LowerReciprocalRecipe } from "../../../src/Onnx/transformation/canonicalization/recipes/LowerReciprocalRecipe.js";
 
@@ -34,7 +34,7 @@ describe("Canonicalization - Unary & Activation Recipes", () => {
         expect(producedOps).not.toContain("Log");
     });
 
-    it("decomposes Trigonometric ops (Sin, Cos, Tan)", () => {
+    it("decomposes Trigonometric ops (Sin, Cos, Tan, SinPC, CosPC)", () => {
         expect(applyRecipe(new Recipes.canonicalization.Sin(), "Sin").producedOps).not.toContain(
             "Sin",
         );
@@ -44,6 +44,21 @@ describe("Canonicalization - Unary & Activation Recipes", () => {
         expect(applyRecipe(new Recipes.canonicalization.Tan(), "Tan").producedOps).not.toContain(
             "Tan",
         );
+        expect(applyRecipe(new Recipes.canonicalization.SinPC(), "Sin").producedOps).not.toContain(
+            "Sin",
+        );
+        expect(applyRecipe(new Recipes.canonicalization.CosPC(), "Cos").producedOps).not.toContain(
+            "Cos",
+        );
+    });
+
+    it("decomposes LogPC and SqrtPC polynomial/Newton-Raphson recipes", () => {
+        expect(applyRecipe(new Recipes.canonicalization.LogPC(), "Log").producedOps).not.toContain(
+            "Log",
+        );
+        expect(
+            applyRecipe(new Recipes.canonicalization.SqrtPC(), "Sqrt").producedOps,
+        ).not.toContain("Sqrt");
     });
 
     it("decomposes Hyperbolic ops (Sinh, Cosh)", () => {

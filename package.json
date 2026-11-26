@@ -9,8 +9,7 @@
     },
     "description": "Tool to convert an ONNX graph into a data-flow graph (DFG), decomposing its high-level operations into low-level operations and performing a set of optimizations.",
     "bin": {
-        "onnx-flow": "./out/src/index.js",
-        "onnx-flow-testcomp": "./out/test/compatibility_test.js"
+        "onnx-flow": "./out/src/index.js"
     },
     "keywords": [
         "onnx",
@@ -47,12 +46,10 @@
         "test:ci": "vitest run --coverage",
         "testcomp": "vitest run test/integration/compatibility.test.ts",
         "testpartition": "vitest run test/integration/partitioning.test.ts",
-        "dev": "npm-run-all --parallel build:watch dev:testcomp",
-        "dev:testcomp": "nodemon -e js -w out/test -x \"node ./out/test/compatibility_test.js\"",
+        "testops": "vitest run test/integration/op-equivalence.test.ts",
+        "testopts": "vitest run test/integration/compiler-options.test.ts",
         "prepare": "npm run build && husky install",
-        "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
-        "demo:core": "COMPAT_MODE=core node ./out/test/compatibility_test.js",
-        "demo:all": "COMPAT_MODE=all node ./out/test/compatibility_test.js"
+        "prepublishOnly": "npm run clean && npm run build && npm run typecheck"
     },
     "author": "José Pedro Ferreira, Bruno Oliveira, Nelson Neto, António Abílio",
     "repository": {
@@ -119,10 +116,6 @@
         "./recipes": {
             "types": "./out/src/recipes.d.ts",
             "default": "./out/src/recipes.js"
-        },
-        "./test": {
-            "types": "./out/test/compatibility_test.d.ts",
-            "default": "./out/test/compatibility_test.js"
         },
         "./*": {
             "types": "./out/src/*.d.ts",

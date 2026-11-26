@@ -22,6 +22,7 @@ function splitInput(input: ValueNode, g: OnnxGraph.Class, rowWise: boolean): Val
             // Need to split input into multiple parts
             const splitBuilder = new OperationNode.Builder("Split", [input], {
                 axis: rowWise ? 0 : 1,
+                num_outputs: numDivs,
             });
             const split = g.addNode(`${input.id}_split`).init(splitBuilder).as(OperationNode);
 
@@ -98,8 +99,11 @@ function mergeOutputs(
 
     const edgeBuilder = new OnnxEdge.Builder(literalType, []);
 
-    const oneConstBuilder = new ConstantNode.Builder(int64Vec([1]));
-    const oneConst = g.addNode(`${originalOutput.id}_one`).init(oneConstBuilder).as(ConstantNode);
+    const zeroAxisConstBuilder = new ConstantNode.Builder(int64Vec([0]));
+    const zeroAxisConst = g
+        .addNode(`${originalOutput.id}_zero_axis`)
+        .init(zeroAxisConstBuilder)
+        .as(ConstantNode);
 
     const shapeBuilder = new ConstantNode.Builder(int64Vec(originalOutput.shape as number[]));
     const shapeConst = g.addNode(`${originalOutput.id}_shape`).init(shapeBuilder).as(ConstantNode);
@@ -107,13 +111,16 @@ function mergeOutputs(
     // Add Unsqueeze nodes
     const unsqOuts: TensorNode.Class[] = [];
     for (let i = 0; i < outputs.length; i++) {
-        const unsqueezeBuilder = new OperationNode.Builder("Unsqueeze", [outputs[i], oneConst]);
+        const unsqueezeBuilder = new OperationNode.Builder("Unsqueeze", [
+            outputs[i],
+            zeroAxisConst,
+        ]);
         const unsqueeze = g
             .addNode(`${outputs[i].id}_unsqueeze`)
             .init(unsqueezeBuilder)
             .as(OperationNode);
 
-        const unsqOutBuilder = new TensorNode.Builder(literalType, [1, 1], "intermediate");
+        const unsqOutBuilder = new TensorNode.Builder(literalType, [1], "intermediate");
         const unsqOut = g.addNode(`${outputs[i].id}_unsq_out`).init(unsqOutBuilder).as(TensorNode);
         g.addEdge(unsqueeze, unsqOut).init(edgeBuilder);
 

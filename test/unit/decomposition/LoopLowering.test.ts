@@ -7,9 +7,15 @@ import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
 import { LoopLoweringPass } from "../../../src/Onnx/transformation/loop-lowering/LoopLoweringPass.js";
 import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { scalarFloat } from "../../../src/Onnx/utils/TensorData.js";
+import {
+    scalarFloat,
+    int64Vec,
+    floatVec,
+    scalarInt64,
+} from "../../../src/Onnx/utils/TensorData.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
+import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
 
 describe("Loop Lowering - Multi-Operation Passes", () => {
@@ -235,5 +241,149 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         });
         new LoopLoweringPass().run(gCt, new HistoryManager(gCt));
         assertLoweredToLoop(gCt, "ConvTranspose");
+    });
+
+    it("matches and lowers SliceLoop, PadLoop, TileLoop, OneHotLoop, DynamicReduction, ResizeCubic, and DynamicBatchedMatMul", () => {
+        // Negative match check
+        const gNeg = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bNeg = new GraphBuilder(gNeg);
+        const xNeg = gNeg
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        bNeg.createOp("Relu", [xNeg]);
+        const reluOp = gNeg.getOperationNodes().toArray()[0];
+        expect(new Recipes.loopLowering.SliceLoop().match(reluOp)).toBe(false);
+        expect(new Recipes.loopLowering.PadLoop().match(reluOp)).toBe(false);
+        expect(new Recipes.loopLowering.TileLoop().match(reluOp)).toBe(false);
+        expect(new Recipes.loopLowering.OneHotLoop().match(reluOp)).toBe(false);
+        expect(new Recipes.loopLowering.DynamicReduction().match(reluOp)).toBe(false);
+        expect(new Recipes.loopLowering.ResizeCubic().match(reluOp)).toBe(false);
+        expect(new Recipes.loopLowering.DynamicBatchedMatMul().match(reluOp)).toBe(false);
+
+        // Positive lowering via LoopLoweringPass
+        const cases: (() => { g: OnnxGraph.Class; op: string })[] = [
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const x = g
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [4, 5], "input"))
+                    .as(TensorNode);
+                const s = g
+                    .addNode("s")
+                    .init(new TensorNode.Builder(DataType.INT64, [1], "input"))
+                    .as(TensorNode);
+                const e = g
+                    .addNode("e")
+                    .init(new TensorNode.Builder(DataType.INT64, [1], "input"))
+                    .as(TensorNode);
+                b.createOp("Slice", [x, s, e], {}, [{ type: DataType.FLOAT, shape: [-1, 5] }]);
+                return { g, op: "Slice" };
+            },
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const x = g
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+                    .as(TensorNode);
+                const p = g
+                    .addNode("p")
+                    .init(new TensorNode.Builder(DataType.INT64, [4], "input"))
+                    .as(TensorNode);
+                b.createOp("Pad", [x, p], { mode: "reflect" }, [
+                    { type: DataType.FLOAT, shape: [-1, -1] },
+                ]);
+                return { g, op: "Pad" };
+            },
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const x = g
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+                    .as(TensorNode);
+                const r = g
+                    .addNode("r")
+                    .init(new TensorNode.Builder(DataType.INT64, [2], "input"))
+                    .as(TensorNode);
+                b.createOp("Tile", [x, r], {}, [{ type: DataType.FLOAT, shape: [-1, -1] }]);
+                return { g, op: "Tile" };
+            },
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const idx = g
+                    .addNode("I")
+                    .init(new TensorNode.Builder(DataType.INT64, [2, 2], "input"))
+                    .as(TensorNode);
+                const depth = g
+                    .addNode("D")
+                    .init(new TensorNode.Builder(DataType.INT64, [], "input"))
+                    .as(TensorNode);
+                const vals = g
+                    .addNode("V")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [2], "input"))
+                    .as(TensorNode);
+                b.createOp("OneHot", [idx, depth, vals], { axis: 1 }, [
+                    { type: DataType.FLOAT, shape: [2, -1, 2] },
+                ]);
+                return { g, op: "OneHot" };
+            },
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const x = g
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, 4], "input"))
+                    .as(TensorNode);
+                const ax = b.createConstant("ax", int64Vec([1]));
+                b.createOp("ReduceSum", [x, ax], { keepdims: 1 }, [
+                    { type: DataType.FLOAT, shape: [-1, 1, 4] },
+                ]);
+                return { g, op: "ReduceSum" };
+            },
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const x = g
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [1, 1, 3, 3], "input"))
+                    .as(TensorNode);
+                const roi = b.createConstant("roi", floatVec([]));
+                const scales = b.createConstant("sc", floatVec([1, 1, 2, 2]));
+                b.createOp("Resize", [x, roi, scales], { mode: "cubic" }, [
+                    { type: DataType.FLOAT, shape: [1, 1, 6, 6] },
+                ]);
+                return { g, op: "Resize" };
+            },
+            () => {
+                const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const b = new GraphBuilder(g);
+                const a = g
+                    .addNode("A")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3, 4], "input"))
+                    .as(TensorNode);
+                const bIn = g
+                    .addNode("B")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [4, -1], "input"))
+                    .as(TensorNode);
+                b.createOp("MatMul", [a, bIn], {}, [{ type: DataType.FLOAT, shape: [-1, 3, -1] }]);
+                return { g, op: "MatMul" };
+            },
+        ];
+
+        for (const make of cases) {
+            const { g, op } = make();
+            new LoopLoweringPass({
+                coalesce: true,
+                fuse: false,
+                indexingMode: IndexingMode.Pointer,
+            }).run(g, new HistoryManager(g));
+            assertLoweredToLoop(g, op);
+        }
+        // Keep scalarInt64 import exercised for future cases
+        expect(scalarInt64(1).int64Data).toEqual([1]);
     });
 });

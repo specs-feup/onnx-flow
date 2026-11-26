@@ -1,24 +1,43 @@
-import { describe, it, expect } from "vitest";
-import fs from "fs";
-import { executeEquivalenceTest, TESTS, resolveModelPath } from "../compatibility_test.js";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { executeEquivalenceTest } from "../helpers/ortHarness.js";
+import { COMPATIBILITY_TESTS } from "../helpers/modelRegistry.js";
+import { ensureModelExists } from "../helpers/modelFactory.js";
+
+const TEST_TIMEOUT = 150000; //ms
 
 describe("Integration: ONNX Model Compatibility & Lowering Equivalence", () => {
-    it.each(TESTS)(
+    let tmpDir: string;
+
+    beforeAll(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-compat-"));
+    });
+
+    afterAll(() => {
+        if (tmpDir && fs.existsSync(tmpDir)) {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it.each(COMPATIBILITY_TESTS)(
         "produces equivalent outputs for: $label",
         async (config) => {
-            const absOrig = resolveModelPath(config.originalPath);
-            if (!fs.existsSync(absOrig)) {
-                throw new Error(`Model not found at resolved path: ${absOrig}`);
-            }
+            const absOrig = await ensureModelExists(config.originalPath);
+            expect(fs.existsSync(absOrig), `Model not found at resolved path: ${absOrig}`).toBe(
+                true,
+            );
 
             const result = await executeEquivalenceTest(config, {
                 skipCli: false,
                 showStats: process.env["TEST_STATS"] === "true",
                 verboseOnFailure: true,
+                workDir: tmpDir,
             });
 
             expect(result.status, result.message ?? "Expected model outputs to match").toBe("pass");
         },
-        30000,
+        TEST_TIMEOUT,
     );
 });

@@ -1,42 +1,45 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { runCli } from "../../../src/index.js";
 import { onnx2json } from "../../../src/onnx2json.js";
-import { ensureProtoExists, PROJECT_ROOT, resolveModelPath } from "../../compatibility_test.js";
+import { ensureProtoExists } from "../../helpers/ortHarness.js";
+import { ensureModelExists } from "../../helpers/modelFactory.js";
 
 describe("CLI in-process execution & partition verification", () => {
-    const testModel = resolveModelPath("examples/onnx/add_chain_standard.onnx");
-    const testJsonModel = resolveModelPath("examples/onnx/vector_add_standard.onnx");
-    const cleanupFiles: string[] = [];
+    let testModel = "";
+    let testJsonModel = "";
+    let tmpDir = "";
 
-    beforeAll(() => {
+    beforeAll(async () => {
         ensureProtoExists();
+        testModel = await ensureModelExists("examples/onnx/add_chain_standard.onnx");
+        testJsonModel = await ensureModelExists("examples/onnx/vector_add_standard.onnx");
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-cli-unit-"));
     });
 
     afterEach(() => {
-        for (const file of cleanupFiles) {
-            if (fs.existsSync(file)) {
-                try {
-                    fs.unlinkSync(file);
-                } catch {
-                    /* cleanup */
-                }
+        if (tmpDir && fs.existsSync(tmpDir)) {
+            for (const entry of fs.readdirSync(tmpDir)) {
+                fs.rmSync(path.join(tmpDir, entry), { recursive: true, force: true });
             }
         }
-        cleanupFiles.length = 0;
     });
 
+    function stageModel(srcPath: string = testModel): string {
+        const dst = path.join(tmpDir, `${Date.now()}_${path.basename(srcPath)}`);
+        fs.copyFileSync(srcPath, dst);
+        return dst;
+    }
+
     it("verifies partition files do not clobber each other and suppresses unpartitioned output", async () => {
-        const outBase = path.resolve(PROJECT_ROOT, "temp_unit_part_test");
+        const outBase = path.join(tmpDir, "temp_unit_part_test");
         const outJson = `${outBase}.json`;
         const headOnnx = `${outBase}_head.onnx`;
         const tailOnnx = `${outBase}_tail.onnx`;
         const headJson = `${outBase}_head.json`;
-        const tailJson = `${outBase}_tail.json`;
         const headOnnxJson = `${outBase}_head.onnx.json`;
-
-        cleanupFiles.push(outJson, headOnnx, tailOnnx, headJson, tailJson, headOnnxJson);
 
         await runCli([
             testModel,
@@ -74,13 +77,9 @@ describe("CLI in-process execution & partition verification", () => {
     });
 
     it("partitions correctly with valid single-argument node ID in DOT format", async () => {
-        const outBase = path.resolve(PROJECT_ROOT, "temp_unit_part_dot");
+        const outBase = path.join(tmpDir, "temp_unit_part_dot");
         const headDot = `${outBase}_head.dot`;
         const tailDot = `${outBase}_tail.dot`;
-        const headOnnx = `${outBase}_head.onnx`;
-        const tailOnnx = `${outBase}_tail.onnx`;
-
-        cleanupFiles.push(headDot, tailDot, headOnnx, tailOnnx);
 
         await runCli([
             testModel,
@@ -104,9 +103,7 @@ describe("CLI in-process execution & partition verification", () => {
     });
 
     it("executes default flow with verbose logging and without reconversion", async () => {
-        const outBase = path.resolve(PROJECT_ROOT, "temp_unit_verbose");
-        const outJson = `${outBase}.json`;
-        cleanupFiles.push(outJson);
+        const outJson = path.join(tmpDir, "temp_unit_verbose.json");
 
         await runCli([
             testModel,
@@ -125,9 +122,7 @@ describe("CLI in-process execution & partition verification", () => {
     });
 
     it("executes with DOT formatter and online visualization link option", async () => {
-        const outBase = path.resolve(PROJECT_ROOT, "temp_unit_dot_link");
-        const outDot = `${outBase}.dot`;
-        cleanupFiles.push(outDot);
+        const outDot = path.join(tmpDir, "temp_unit_dot_link.dot");
 
         await runCli([
             testModel,
@@ -149,11 +144,14 @@ describe("CLI in-process execution & partition verification", () => {
     });
 
     it("executes with --noLowLevel flag and partition verbose branch", async () => {
+        const outBase = path.join(tmpDir, "temp_unit_part_verbose");
         await runCli([
             testModel,
             "--partition",
             "Add",
             "1",
+            "-o",
+            `${outBase}.dot`,
             "--format",
             "dot",
             "-v",
@@ -162,31 +160,27 @@ describe("CLI in-process execution & partition verification", () => {
             "0",
             "--noReconversion",
         ]);
+        expect(fs.existsSync(`${outBase}_head.dot`)).toBe(true);
     });
 
     it("handles pre-parsed JSON input file as input path", async () => {
-        const outBase = path.resolve(PROJECT_ROOT, "temp_unit_raw_json");
-        const rawJsonPath = path.resolve(PROJECT_ROOT, "temp_vector_add_input.json");
-        const outJson = `${outBase}_out.json`;
-        cleanupFiles.push(rawJsonPath, outJson);
+        const rawJsonPath = path.join(tmpDir, "temp_vector_add_input.json");
+        const outJson = path.join(tmpDir, "temp_unit_raw_json_out.json");
 
-        // Ingest into a raw ONNX JSON structure
         const rawModel = await onnx2json(testJsonModel);
         fs.writeFileSync(rawJsonPath, JSON.stringify(rawModel, null, 2));
 
-        // Pass .json input path directly to CLI
         await runCli([rawJsonPath, "-o", outJson, "-vz", "0", "-v", "0", "--noReconversion"]);
 
         expect(fs.existsSync(outJson)).toBe(true);
     });
 
     it("supports --indexingMode pointer and radix flags via CLI", async () => {
-        const outPointer = path.resolve(PROJECT_ROOT, "temp_unit_im_pointer.json");
-        const outRadix = path.resolve(PROJECT_ROOT, "temp_unit_im_radix.json");
-        cleanupFiles.push(outPointer, outRadix);
+        const outPointer = path.join(tmpDir, "temp_unit_im_pointer.json");
+        const outRadix = path.join(tmpDir, "temp_unit_im_radix.json");
 
         await runCli([
-            testModel,
+            stageModel(),
             "--indexingMode",
             "pointer",
             "-o",
@@ -198,7 +192,7 @@ describe("CLI in-process execution & partition verification", () => {
             "--noReconversion",
         ]);
         await runCli([
-            testModel,
+            stageModel(),
             "-im",
             "radix",
             "-o",

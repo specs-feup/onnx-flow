@@ -12,6 +12,7 @@ import { DataType } from "./OnnxTypes.js";
 import OperationNode from "./OperationNode.js";
 import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
+import RegionArgumentNode from "./RegionArgumentNode.js";
 import OnnxEdge from "./OnnxEdge.js";
 import { uniq } from "./Utils.js";
 import { OpRegistry } from "./Schema/OpRegistry.js";
@@ -298,35 +299,83 @@ export class GraphBuilder {
         }
 
         // 1. Recursive helper to update uses inside the current graph AND subgraphs
+        const ensureReplacementInGraph = (g: OnnxGraph.Class): ValueNode => {
+            if (g === this.graph) return newNode;
+            if (g.hasNode(newNode.id)) {
+                const existing = g.getNodeById(newNode.id)!;
+                if (existing.is(TensorNode)) return existing.as(TensorNode);
+                if (existing.is(ConstantNode)) return existing.as(ConstantNode);
+                if (existing.is(RegionArgumentNode)) return existing.as(RegionArgumentNode);
+            }
+            if (newNode.is(ConstantNode)) {
+                const c = newNode.as(ConstantNode);
+                return new GraphBuilder(g, this.scopeTag).createConstant(c.id, c.constantValue);
+            }
+            const origName = newNode.is(RegionArgumentNode)
+                ? newNode.as(RegionArgumentNode).originalName
+                : newNode.id;
+            return g
+                .addNode(newNode.id)
+                .init(
+                    new RegionArgumentNode.Builder(0, origName, newNode.literalType, newNode.shape),
+                )
+                .as(RegionArgumentNode);
+        };
+
         const updateUsesInGraph = (g: OnnxGraph.Class) => {
+            const matchesOld = (input: ValueNode): boolean =>
+                input.id === oldNode.id ||
+                (input.is(RegionArgumentNode) &&
+                    input.as(RegionArgumentNode).originalName === oldNode.id);
+
+            let replacementInG: ValueNode | undefined = g === this.graph ? newNode : undefined;
+
             for (const op of g.getOperationNodes().toArray()) {
                 const currentInputs = op.getInputs() ?? [];
+                const matchedOldNodes = currentInputs.filter(matchesOld);
 
-                // Use .some() to cleanly check if we need to make a change
-                const changed = currentInputs.some((input) => input.id === oldNode.id);
-
-                if (changed) {
-                    // Only run .map() if we know a change is happening
+                if (matchedOldNodes.length > 0) {
+                    if (!replacementInG) {
+                        replacementInG = ensureReplacementInGraph(g);
+                    }
+                    const targetRep = replacementInG;
                     const updatedInputs = currentInputs.map((input) =>
-                        input.id === oldNode.id ? newNode : input,
+                        matchesOld(input) ? targetRep : input,
                     );
 
                     op.setInputs(updatedInputs);
 
-                    // Disconnect old edge if it exists at this graph level
-                    const existingEdge = g.getEdge(oldNode.id, op.id);
-                    if (existingEdge) this.removeEdge(existingEdge);
+                    // Disconnect old edges in g and wire replacement node
+                    for (const oldInp of matchedOldNodes) {
+                        const existingEdge = g.getEdge(oldInp.id, op.id);
+                        if (existingEdge) {
+                            if (g === this.graph) this.removeEdge(existingEdge);
+                            else existingEdge.remove();
+                        }
+                    }
 
-                    // Connect new edge (only if newNode is visible/accessible in this scope)
-                    if (g.hasNode(newNode.id) || g === this.graph) {
-                        this.addEdge(newNode, op, newNode.literalType, newNode.shape);
+                    if (!g.getEdge(targetRep.id, op.id)) {
+                        if (g === this.graph) {
+                            this.addEdge(targetRep, op, targetRep.literalType, targetRep.shape);
+                        } else {
+                            g.addEdge(targetRep, op).init(
+                                new OnnxEdge.Builder(targetRep.literalType, targetRep.shape),
+                            );
+                        }
                     }
                 }
 
                 // Recursively update control-flow subgraphs (Loop, If, Scan bodies)
-                // Assuming OperationNode stores subgraphs in an accessible array:
                 for (const sub of op.regions) {
                     updateUsesInGraph(sub as OnnxGraph.Class);
+                }
+            }
+
+            // Clean up orphaned RegionArgumentNode in subgraphs after re-capturing to newNode
+            if (g !== this.graph && replacementInG !== undefined) {
+                const staleArg = g.getNodeById(oldNode.id);
+                if (staleArg && staleArg.is(RegionArgumentNode) && staleArg.outgoers.length === 0) {
+                    staleArg.remove();
                 }
             }
         };

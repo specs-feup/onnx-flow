@@ -194,9 +194,16 @@ export class LoopTilingPass implements GraphPass {
             }
         }
 
-        // 4. Compute baseIdx = outerIter * T and Inner Loop Trip Count inside Outer Body
+        // 4. Compute baseIdx = outerIter * T (only when needed) and Inner Loop Trip Count inside Outer Body
         const tileSizeOuterConst = outerBodyBuilder.createConstant(`tile_size`, scalarInt64(T));
-        const [baseIdx] = outerBodyBuilder.createOp("Mul", [outerIter, tileSizeOuterConst]);
+        const iterConsumers = innerIterNode.getOutgoers.targets.filterIs(OperationNode).toArray();
+        const needsBaseIdx =
+            iterConsumers.length > 0 ||
+            staticTotalTrips === undefined ||
+            staticTotalTrips % T !== 0;
+        const baseIdx = needsBaseIdx
+            ? outerBodyBuilder.createOp("Mul", [outerIter, tileSizeOuterConst])[0]
+            : undefined;
 
         let innerTripInput: ValueNode;
         if (staticTotalTrips !== undefined && staticTotalTrips % T === 0) {
@@ -207,7 +214,7 @@ export class LoopTilingPass implements GraphPass {
                 `total_trips`,
                 scalarInt64(staticTotalTrips),
             );
-            const [rem] = outerBodyBuilder.createOp("Sub", [totalConst, baseIdx]);
+            const [rem] = outerBodyBuilder.createOp("Sub", [totalConst, baseIdx!]);
             [innerTripInput] = outerBodyBuilder.createOp("Min", [tileSizeOuterConst, rem]);
         } else {
             // Capture dynamic totalTripNode into outerBody
@@ -224,14 +231,13 @@ export class LoopTilingPass implements GraphPass {
                           ),
                       )
                       .as(RegionArgumentNode);
-            const [rem] = outerBodyBuilder.createOp("Sub", [capturedTotal, baseIdx]);
+            const [rem] = outerBodyBuilder.createOp("Sub", [capturedTotal, baseIdx!]);
             [innerTripInput] = outerBodyBuilder.createOp("Min", [tileSizeOuterConst, rem]);
         }
 
         // 5. Rewire `innerIterNode` in `innerBody` to `global_iter = baseIdx + innerIterNode`
         // (Only needed if the inner body actually uses `iter`, e.g., in Radix mode)
-        const iterConsumers = innerIterNode.getOutgoers.targets.filterIs(OperationNode).toArray();
-        if (iterConsumers.length > 0) {
+        if (iterConsumers.length > 0 && baseIdx) {
             const innerBuilder = new GraphBuilder(innerBody, `tile_inner_${loopOp.id}`);
             const capturedBaseIdx = innerBody
                 .addNode(baseIdx.id)

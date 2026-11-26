@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { coerceNumericFields, json2onnx } from "../../../src/json2onnx.js";
 import { onnx2json } from "../../../src/onnx2json.js";
 import { applyRecipes, transformModel } from "../../../src/api.js";
@@ -10,9 +10,7 @@ import { convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
 import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
 import { ensureProtoExists } from "../../setup.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { ensureModelExists } from "../../helpers/modelFactory.js";
 
 describe("json2onnx, onnx2json & Public API", () => {
     beforeAll(() => {
@@ -50,22 +48,19 @@ describe("json2onnx, onnx2json & Public API", () => {
     });
 
     it("executes end-to-end onnx2json, json2onnx, and applyRecipes", async () => {
-        const sampleModelPath = path.resolve("examples/onnx/vector_add_standard.onnx");
-        if (!fs.existsSync(sampleModelPath)) return;
+        const sampleModelPath = await ensureModelExists("examples/onnx/vector_add_standard.onnx");
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-api-unit-"));
 
-        // 1. onnx2json
-        const rawJson = await onnx2json(sampleModelPath);
-        expect(rawJson.graph?.node?.length).toBeGreaterThan(0);
-
-        // 2. applyRecipes via in-memory graph
-        const graph = createGraph(rawJson);
-        const count = applyRecipes(graph, [new Recipes.canonicalization.Relu()]);
-        expect(typeof count).toBe("number");
-
-        // 3. json2onnx roundtrip with serialized Buffer for fixBuffers coverage
-        const tmpJson = path.resolve("temp_vector_add.json");
-        const tmpOnnx = path.resolve("temp_vector_add_roundtrip.onnx");
         try {
+            const rawJson = await onnx2json(sampleModelPath);
+            expect(rawJson.graph?.node?.length).toBeGreaterThan(0);
+
+            const graph = createGraph(rawJson);
+            const count = applyRecipes(graph, [new Recipes.canonicalization.Relu()]);
+            expect(typeof count).toBe("number");
+
+            const tmpJson = path.join(tmpDir, "vector_add.json");
+            const tmpOnnx = path.join(tmpDir, "vector_add_roundtrip.onnx");
             const onnxJson = convertFlowGraphToOnnxJson(graph);
             const testJson = {
                 ...onnxJson,
@@ -86,16 +81,14 @@ describe("json2onnx, onnx2json & Public API", () => {
             await json2onnx(tmpJson, tmpOnnx);
             expect(fs.existsSync(tmpOnnx)).toBe(true);
         } finally {
-            if (fs.existsSync(tmpJson)) fs.unlinkSync(tmpJson);
-            if (fs.existsSync(tmpOnnx)) fs.unlinkSync(tmpOnnx);
+            fs.rmSync(tmpDir, { recursive: true, force: true });
         }
     });
 
     it("transforms an onnx file directly via transformModel in api.ts", async () => {
-        const sampleModelPath = path.resolve("examples/onnx/relu_standard.onnx");
-        if (!fs.existsSync(sampleModelPath)) return;
-
-        const outOnnx = path.resolve("temp_relu_transformed.onnx");
+        const sampleModelPath = await ensureModelExists("examples/onnx/relu_standard.onnx");
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-api-xform-"));
+        const outOnnx = path.join(tmpDir, "relu_transformed.onnx");
         try {
             const count = await transformModel(sampleModelPath, outOnnx, [
                 new Recipes.canonicalization.Relu(),
@@ -103,7 +96,7 @@ describe("json2onnx, onnx2json & Public API", () => {
             expect(count).toBeGreaterThan(0);
             expect(fs.existsSync(outOnnx)).toBe(true);
         } finally {
-            if (fs.existsSync(outOnnx)) fs.unlinkSync(outOnnx);
+            fs.rmSync(tmpDir, { recursive: true, force: true });
         }
     });
 });
