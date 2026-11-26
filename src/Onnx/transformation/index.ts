@@ -13,6 +13,13 @@ import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
 import { ShapeOptimizationPass } from "./optimization/ShapeOptimizationPass.js";
 import { DeadCodeEliminationPass } from "./optimization/DeadCodeEliminationPass.js";
 import { Schedule, resolveScheduleConfig, type ScheduleConfig } from "./Schedule.js";
+import { DataType, type ConcreteValueNode, type KnownShape } from "../OnnxTypes.js";
+import type OperationNode from "../OperationNode.js";
+import ConstantNode from "../ConstantNode.js";
+import { OpRegistry } from "../Schema/OpRegistry.js";
+import { OpCategory } from "../Schema/OpSchema.js";
+import { TrackedGraphBuilder } from "./tracking/TrackedGraphBuilder.js";
+import { readTensorData, toStaticShape } from "../Utils.js";
 
 export default class OnnxGraphTransformer implements Graph.Transformation<
     OnnxGraph.Class,
@@ -175,6 +182,135 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             );
 
             if (this.canonicalize && this.recurse) {
+                pm.addPass({
+                    name: "PostLoopDepth0Lower",
+                    run: (g, hm) => {
+                        const POST_LOOP_SCALAR_OPS = new Set([
+                            "Div",
+                            "Reciprocal",
+                            "Sqrt",
+                            "Log",
+                            "Ceil",
+                        ]);
+                        const POST_LOOP_TENSOR_OPS = new Set(["Mul", "Add", "Sub", "Pad"]);
+                        const isFloat = (dt?: DataType): boolean =>
+                            dt === undefined ||
+                            dt === DataType.UNDEFINED ||
+                            dt === DataType.FLOAT ||
+                            dt === DataType.DOUBLE ||
+                            dt === DataType.FLOAT16 ||
+                            dt === DataType.BFLOAT16;
+                        const isNon0D = (op: OperationNode.Class): boolean =>
+                            (op.getInputs() ?? []).some(
+                                (inp) => Array.isArray(inp.shape) && inp.shape.length > 0,
+                            );
+                        const isZeroFillExpand = (op: OperationNode.Class): boolean => {
+                            if (op.type !== "Expand") return false;
+                            const ins = op.getInputs() ?? [];
+                            if (ins.length < 2 || !ins[0].is(ConstantNode)) return false;
+                            const vals = readTensorData(ins[0].as(ConstantNode));
+                            return Boolean(vals && vals.length > 0 && vals.every((v) => v === 0));
+                        };
+
+                        let changed = false;
+
+                        const hasPostLoopTarget = g
+                            .getOperationNodes()
+                            .toArray()
+                            .some((op) => {
+                                if (POST_LOOP_SCALAR_OPS.has(op.type)) {
+                                    return isFloat(op.getInputs()?.[0]?.literalType);
+                                }
+                                if (POST_LOOP_TENSOR_OPS.has(op.type)) {
+                                    return isFloat(op.getInputs()?.[0]?.literalType) && isNon0D(op);
+                                }
+                                if (op.type === "Expand" && !isZeroFillExpand(op)) {
+                                    return true;
+                                }
+                                return false;
+                            });
+
+                        if (hasPostLoopTarget) {
+                            const cPass = new CanonicalizationPass(undefined, {
+                                loopLowering: this.loopLowering,
+                                recurse: false,
+                                ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
+                            });
+                            if (cPass.run(g, hm)) changed = true;
+                            new InferShapesPass().run(g);
+
+                            const registry = OpRegistry.getInstance();
+                            const opset = g.getTargetOpset();
+                            const needsSecondLoop = g
+                                .getOperationNodes()
+                                .toArray()
+                                .some((op) => {
+                                    if (
+                                        op.type === "Loop" ||
+                                        op.type === "If" ||
+                                        op.type === "Scan"
+                                    ) {
+                                        return false;
+                                    }
+                                    if (!isNon0D(op)) return false;
+                                    if (op.type === "Pad") return true;
+                                    const cat = registry.get(op.type, opset)?.category;
+                                    return (
+                                        cat === OpCategory.ElementWise &&
+                                        isFloat(op.getInputs()?.[0]?.literalType)
+                                    );
+                                });
+                            if (needsSecondLoop) {
+                                const lPass = new LoopLoweringPass({
+                                    coalesce: this.coalesce,
+                                    fuse: this.fuse,
+                                    indexingMode: this.indexingMode,
+                                    useScanOutputs: this.useScanOutputs,
+                                    fuseMultiOutput: this.fuseMultiOutput,
+                                    ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
+                                });
+                                if (lPass.run(g, hm)) changed = true;
+                            }
+                        }
+
+                        // Lower zero-fill Expand(zeros, shape) -> ConstantOfShape (+Cast) last
+                        // so both Phase 2 and second-pass carry buffers use native primitives.
+                        for (const op of g.getOperationNodes().toArray()) {
+                            if (!isZeroFillExpand(op)) continue;
+                            const ins = op.getInputs()!;
+                            const outs = op.getOutputs();
+                            if (outs.length === 0) continue;
+                            const out = outs[0];
+                            const dt =
+                                (ins[0].literalType as DataType | undefined) ??
+                                (out.literalType as DataType | undefined) ??
+                                DataType.FLOAT;
+                            const outShape = toStaticShape(out.shape) as KnownShape;
+                            const tb = new TrackedGraphBuilder(
+                                g,
+                                `PostLoopExpand_${op.id}`,
+                                `Lower zero-fill Expand ${op.id} to ConstantOfShape`,
+                                "post_loop",
+                            );
+                            let rep: ConcreteValueNode = tb.createOp(
+                                "ConstantOfShape",
+                                [ins[1] as ConcreteValueNode],
+                                {},
+                                [{ type: DataType.FLOAT, shape: outShape }],
+                            )[0];
+                            if (dt !== DataType.FLOAT) {
+                                [rep] = tb.createOp("Cast", [rep], { to: dt }, [
+                                    { type: dt, shape: outShape },
+                                ]);
+                            }
+                            tb.replaceAllUsesWith(out, rep);
+                            tb.removeNode(op);
+                            hm.pushPatch(tb.commitPatch());
+                            changed = true;
+                        }
+                        return changed;
+                    },
+                });
                 // Infer 0D shapes inside newly emitted Loop bodies, then recursively canonicalize
                 // any remaining non-native scalar compute ops (Exp, Div, Sqrt, Log, etc.).
                 pm.addPass(new InferShapesPass());
