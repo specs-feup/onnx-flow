@@ -1,8 +1,8 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../onnx/OnnxGraph.js";
-import TensorNode from "../onnx/TensorNode.js";
-import ConstantNode from "../onnx/ConstantNode.js";
-import RegionArgumentNode from "../onnx/RegionArgumentNode.js";
+import OnnxGraph from "../onnx/ir/OnnxGraph.js";
+import TensorNode from "../onnx/ir/TensorNode.js";
+import ConstantNode from "../onnx/ir/ConstantNode.js";
+import RegionArgumentNode from "../onnx/ir/RegionArgumentNode.js";
 import type {
     AttributeMap,
     KnownDim,
@@ -17,13 +17,13 @@ import type {
     Shape,
     TensorProto,
     ValueNode,
-} from "../onnx/OnnxTypes.js";
-import { AttributeType, DataType } from "../onnx/OnnxTypes.js";
+} from "../onnx/ir/OnnxTypes.js";
+import { AttributeType, DataType } from "../onnx/ir/OnnxTypes.js";
 import { LATEST_ONNX_OPSET } from "../onnx/utils/Constants.js";
-import inferShapes from "../onnx/InferShapes.js";
+import inferShapes from "../onnx/schema/InferShapes.js";
 import { applyAdapters } from "../onnx/frontend/Adapters.js";
 import { tryAsValueNode, uniq, UNKNOWN_SHAPE } from "../onnx/utils/index.js";
-import { GraphBuilder } from "../onnx/GraphBuilder.js";
+import { GraphBuilder } from "../onnx/ir/GraphBuilder.js";
 
 interface GraphVersionMeta {
     irVersion?: number;

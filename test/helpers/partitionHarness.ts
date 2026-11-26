@@ -8,7 +8,7 @@ import { convertFlowGraphToOnnxJson } from "../../src/io/OnnxGraphExporter.js";
 import { json2onnx } from "../../src/io/JsonToOnnx.js";
 import { splitByAncestor } from "../../src/onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../../src/onnx/partitioning/Partition.js";
-import type OnnxGraph from "../../src/onnx/OnnxGraph.js";
+import type OnnxGraph from "../../src/onnx/ir/OnnxGraph.js";
 import { buildFeeds, compareOrtOutputs, ensureProtoExists, type FeedSpec } from "./ortHarness.js";
 
 export interface PartitionTestCase {

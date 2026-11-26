@@ -1,16 +1,16 @@
-import type OnnxGraph from "../../../OnnxGraph.js";
-import type OperationNode from "../../../OperationNode.js";
-import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
+import type OnnxGraph from "../../../ir/OnnxGraph.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../ir/OnnxTypes.js";
+import { DataType } from "../../../ir/OnnxTypes.js";
 import type {
     LoopCarryContext,
     LoopLoweringRecipe,
     RecipeApplyResult,
 } from "../LoopLoweringRecipe.js";
 import { resolveRecipeInput } from "../RecipeUtils.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import { int64Vec, scalarInt64, readScalarFromTensorNode } from "../../../utils/index.js";
-import ConstantNode from "../../../ConstantNode.js";
+import ConstantNode from "../../../ir/ConstantNode.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerRangeRecipe implements LoopLoweringRecipe {

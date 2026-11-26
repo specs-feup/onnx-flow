@@ -1,8 +1,8 @@
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import ConstantNode from "../ConstantNode.js";
-import type OperationNode from "../OperationNode.js";
-import type { TensorProto, KnownShape, AttributeMap } from "../OnnxTypes.js";
-import { DataType } from "../OnnxTypes.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import type OperationNode from "../ir/OperationNode.js";
+import type { TensorProto, KnownShape, AttributeMap } from "../ir/OnnxTypes.js";
+import { DataType } from "../ir/OnnxTypes.js";
 
 export function bool(v: boolean): TensorProto {
     return { dataType: DataType.BOOL, dims: [], int32Data: [v ? 1 : 0] };

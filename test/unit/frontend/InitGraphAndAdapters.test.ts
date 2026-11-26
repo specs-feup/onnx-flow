@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { applyAdapters } from "../../../src/onnx/frontend/Adapters.js";
 import { createGraph } from "../../../src/io/OnnxGraphLoader.js";
-import { DataType, AttributeType, type RawOnnxModel } from "../../../src/onnx/OnnxTypes.js";
+import { DataType, AttributeType, type RawOnnxModel } from "../../../src/onnx/ir/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import { makeTensorProto } from "../../../src/onnx/utils/index.js";
-import RegionArgumentNode from "../../../src/onnx/RegionArgumentNode.js";
-import ConstantNode from "../../../src/onnx/ConstantNode.js";
+import RegionArgumentNode from "../../../src/onnx/ir/RegionArgumentNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
 
 describe("Frontend Adapters & Graph Ingestion (initGraph)", () => {
     initializeSchemaRegistry();

@@ -1,6 +1,6 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import type { GraphPass } from "../PassManager.js";
-import inferShapes from "../InferShapes.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import type { GraphPass } from "./PassManager.js";
+import inferShapes from "../schema/InferShapes.js";
 
 export class InferShapesPass implements GraphPass {
     public readonly name = "InferShapes";

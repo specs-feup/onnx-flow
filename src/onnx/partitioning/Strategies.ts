@@ -1,6 +1,6 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import OperationNode from "../OperationNode.js";
-import TensorNode from "../TensorNode.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import OperationNode from "../ir/OperationNode.js";
+import TensorNode from "../ir/TensorNode.js";
 
 export interface PartitionSets {
     head: Set<string>;

@@ -3,7 +3,7 @@ import Node from "@specs-feup/flow/graph/Node";
 import type { DataType, Shape } from "./OnnxTypes.js";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
+import type { NodeSnapshot } from "../transformation/tracking/GraphActions.js";
 
 namespace RegionArgumentNode {
     export const TAG = "__specs-onnx__region_argument_node";

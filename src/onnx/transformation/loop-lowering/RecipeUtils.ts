@@ -1,10 +1,10 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import type { ValueNode, ConcreteValueNode, KnownShape, Shape } from "../../OnnxTypes.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type { ValueNode, ConcreteValueNode, KnownShape, Shape } from "../../ir/OnnxTypes.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import ConstantNode from "../../ConstantNode.js";
-import RegionArgumentNode from "../../RegionArgumentNode.js";
+import ConstantNode from "../../ir/ConstantNode.js";
+import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
 import { asValueNode, int64Vec } from "../../utils/index.js";
-import type { GraphBuilder } from "../../GraphBuilder.js";
+import type { GraphBuilder } from "../../ir/GraphBuilder.js";
 import type { LoopCarryContext } from "./LoopLoweringRecipe.js";
 import { resolveGatherScalarIndex } from "./LoopIndexing.js";
 

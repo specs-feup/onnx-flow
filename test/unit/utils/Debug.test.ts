@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import ConstantNode from "../../../src/onnx/ConstantNode.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { scalarFloat } from "../../../src/onnx/utils/TensorData.js";
 import { dbg, dbgTensor, safeWriteJson } from "../../../src/onnx/utils/Debug.js";
 

@@ -1,10 +1,10 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import TensorNode from "../../TensorNode.js";
-import OperationNode from "../../OperationNode.js";
-import OnnxEdge from "../../OnnxEdge.js";
-import { int64Vec } from "../../utils/index.js";
-import ConstantNode from "../../ConstantNode.js";
-import type { ValueNode } from "../../OnnxTypes.js";
+import type OnnxGraph from "../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../src/onnx/ir/TensorNode.js";
+import OperationNode from "../../src/onnx/ir/OperationNode.js";
+import OnnxEdge from "../../src/onnx/ir/OnnxEdge.js";
+import { int64Vec } from "../../src/onnx/utils/index.js";
+import ConstantNode from "../../src/onnx/ir/ConstantNode.js";
+import type { ValueNode } from "../../src/onnx/ir/OnnxTypes.js";
 
 function splitInput(input: ValueNode, g: OnnxGraph.Class, rowWise: boolean): ValueNode[] {
     const newInputs: ValueNode[] = [];

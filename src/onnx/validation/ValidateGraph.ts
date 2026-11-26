@@ -1,8 +1,8 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import TensorNode from "../TensorNode.js";
-import OperationNode from "../OperationNode.js";
-import ConstantNode from "../ConstantNode.js";
-import { DataType } from "../OnnxTypes.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import TensorNode from "../ir/TensorNode.js";
+import OperationNode from "../ir/OperationNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import { DataType } from "../ir/OnnxTypes.js";
 import validateScope from "./ValidateScope.js";
 
 /**

@@ -1,7 +1,7 @@
-import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode } from "../../../ir/OnnxTypes.js";
 import { int64Vec } from "../../../utils/index.js";
 
 export class LowerGlobalAveragePoolRecipe implements DecompositionRecipe {

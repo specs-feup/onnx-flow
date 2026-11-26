@@ -1,5 +1,5 @@
-import type OnnxGraph from "../onnx/OnnxGraph.js";
-import TensorNode from "../onnx/TensorNode.js";
+import type OnnxGraph from "../onnx/ir/OnnxGraph.js";
+import TensorNode from "../onnx/ir/TensorNode.js";
 import type { NodeSnapshot, EdgeSnapshot } from "../onnx/transformation/tracking/GraphActions.js";
 import { isOnnxNode, asOnnxNode } from "../onnx/utils/index.js";
 

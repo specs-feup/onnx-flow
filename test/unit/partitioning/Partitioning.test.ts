@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { splitByAncestor } from "../../../src/onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../../../src/onnx/partitioning/Partition.js";
 import { int64Vec } from "../../../src/onnx/utils/index.js";

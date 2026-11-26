@@ -1,8 +1,8 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import type { GraphPass } from "../PassManager.js";
-import type OperationNode from "../OperationNode.js";
-import ConstantNode from "../ConstantNode.js";
-import { DataType, type ConcreteValueNode, type KnownShape } from "../OnnxTypes.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import type { GraphPass } from "./PassManager.js";
+import type OperationNode from "../ir/OperationNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import { DataType, type ConcreteValueNode, type KnownShape } from "../ir/OnnxTypes.js";
 import { OpRegistry } from "../schema/OpRegistry.js";
 import { OpCategory } from "../schema/OpSchema.js";
 import type { IndexingMode } from "../../DecompositionOptions.js";

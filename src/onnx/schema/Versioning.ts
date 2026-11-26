@@ -1,6 +1,6 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import type OperationNode from "../OperationNode.js";
-import { DataType } from "../OnnxTypes.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import type OperationNode from "../ir/OperationNode.js";
+import { DataType } from "../ir/OnnxTypes.js";
 import { LATEST_ONNX_IR_VERSION, LATEST_ONNX_OPSET } from "../utils/Constants.js";
 import { OpRegistry } from "./OpRegistry.js";
 

@@ -1,11 +1,11 @@
-import type OnnxGraph from "../../../OnnxGraph.js";
-import type OperationNode from "../../../OperationNode.js";
+import type OnnxGraph from "../../../ir/OnnxGraph.js";
+import type OperationNode from "../../../ir/OperationNode.js";
 import {
     type ValueNode,
     type ConcreteValueNode,
     type KnownShape,
     DataType,
-} from "../../../OnnxTypes.js";
+} from "../../../ir/OnnxTypes.js";
 import { getStringAttr, int64Vec, scalarInt64, toStaticShape } from "../../../utils/index.js";
 import type {
     LoopCarryContext,
@@ -22,7 +22,7 @@ import {
     gatherScalar,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerScatterNDRecipe implements LoopLoweringRecipe {

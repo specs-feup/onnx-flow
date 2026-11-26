@@ -1,9 +1,9 @@
-import OnnxEdge from "../OnnxEdge.js";
-import type OnnxGraph from "../OnnxGraph.js";
-import type { Dim, ValueNode, Shape, StaticShape, ConcreteValueNode } from "../OnnxTypes.js";
-import { DataType } from "../OnnxTypes.js";
-import OperationNode from "../OperationNode.js";
-import TensorNode from "../TensorNode.js";
+import OnnxEdge from "../ir/OnnxEdge.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import type { Dim, ValueNode, Shape, StaticShape, ConcreteValueNode } from "../ir/OnnxTypes.js";
+import { DataType } from "../ir/OnnxTypes.js";
+import OperationNode from "../ir/OperationNode.js";
+import TensorNode from "../ir/TensorNode.js";
 import { UNKNOWN_SHAPE } from "./Constants.js";
 import { makeTensorConst, uniq } from "./GraphFactories.js";
 import { int64Vec } from "./TensorData.js";

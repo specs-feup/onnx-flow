@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import RegionArgumentNode from "../../../src/onnx/RegionArgumentNode.js";
-import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import RegionArgumentNode from "../../../src/onnx/ir/RegionArgumentNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import inferShapes, { inferNodeShape, propagateToRegion } from "../../../src/onnx/InferShapes.js";
+import inferShapes, {
+    inferNodeShape,
+    propagateToRegion,
+} from "../../../src/onnx/schema/InferShapes.js";
 import { int64Vec } from "../../../src/onnx/utils/index.js";
 
 describe("Shape Inference (InferShapes, inferNodeShape, propagateToRegion)", () => {

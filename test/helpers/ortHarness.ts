@@ -11,7 +11,7 @@ import {
 } from "../../src/io/OnnxGraphExporter.js";
 import { json2onnx } from "../../src/io/JsonToOnnx.js";
 import { safeWriteJson } from "../../src/onnx/utils/index.js";
-import type OnnxGraph from "../../src/onnx/OnnxGraph.js";
+import type OnnxGraph from "../../src/onnx/ir/OnnxGraph.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

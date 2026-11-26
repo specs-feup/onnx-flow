@@ -4,7 +4,7 @@ import type { AttributeMap, AttributeValue, KnownShape, TensorProto } from "./On
 import { DataType } from "./OnnxTypes.js";
 import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
-import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
+import type { NodeSnapshot } from "../transformation/tracking/GraphActions.js";
 
 namespace ConstantNode {
     export const TAG = "__specs-onnx__constant_node";

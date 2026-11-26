@@ -1,16 +1,16 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../OnnxGraph.js";
-import type { GraphPass } from "../../PassManager.js";
-import OperationNode from "../../OperationNode.js";
-import TensorNode from "../../TensorNode.js";
-import ConstantNode from "../../ConstantNode.js";
-import RegionArgumentNode from "../../RegionArgumentNode.js";
-import OnnxEdge from "../../OnnxEdge.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
+import OnnxGraph from "../../ir/OnnxGraph.js";
+import type { GraphPass } from "../PassManager.js";
+import OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import ConstantNode from "../../ir/ConstantNode.js";
+import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
+import OnnxEdge from "../../ir/OnnxEdge.js";
+import { GraphBuilder } from "../../ir/GraphBuilder.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
-import { DataType, type AttributeMap, type ValueNode } from "../../OnnxTypes.js";
+import { DataType, type AttributeMap, type ValueNode } from "../../ir/OnnxTypes.js";
 import {
     bool,
     readScalarFromTensorNode,

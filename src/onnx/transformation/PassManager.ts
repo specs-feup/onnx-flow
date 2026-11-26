@@ -1,5 +1,5 @@
-import type OnnxGraph from "./OnnxGraph.js";
-import { HistoryManager } from "./transformation/tracking/HistoryManager.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import { HistoryManager } from "./tracking/HistoryManager.js";
 
 export interface GraphPass {
     readonly name: string;

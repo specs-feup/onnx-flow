@@ -4,8 +4,8 @@ import type {
     RawOnnxNode,
     RawOnnxTensorType,
     TensorProto,
-} from "../OnnxTypes.js";
-import { AttributeType, DataType } from "../OnnxTypes.js";
+} from "../ir/OnnxTypes.js";
+import { AttributeType, DataType } from "../ir/OnnxTypes.js";
 import { LATEST_ONNX_OPSET } from "../utils/Constants.js";
 
 // --- Helpers ---

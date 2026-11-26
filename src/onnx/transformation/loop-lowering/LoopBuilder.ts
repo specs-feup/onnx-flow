@@ -1,11 +1,11 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../OnnxGraph.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
-import type { ValueNode, StaticShape, KnownShape, ConcreteValueNode } from "../../OnnxTypes.js";
-import { DataType } from "../../OnnxTypes.js";
-import OperationNode from "../../OperationNode.js";
-import TensorNode from "../../TensorNode.js";
-import OnnxEdge from "../../OnnxEdge.js";
+import OnnxGraph from "../../ir/OnnxGraph.js";
+import { GraphBuilder } from "../../ir/GraphBuilder.js";
+import type { ValueNode, StaticShape, KnownShape, ConcreteValueNode } from "../../ir/OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
+import OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import OnnxEdge from "../../ir/OnnxEdge.js";
 import { bool, int64Vec, scalarInt64, uniq, UNKNOWN_SHAPE, zeroTensor } from "../../utils/index.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
 import type { LoopCarryContext } from "./LoopLoweringRecipe.js";

@@ -3,25 +3,24 @@ import { onnx2json } from "./io/OnnxToJson.js";
 import { createGraph } from "./io/OnnxGraphLoader.js";
 import { convertFlowGraphToOnnxJson, prepareGraphForExport } from "./io/OnnxGraphExporter.js";
 import { json2onnx } from "./io/JsonToOnnx.js";
-import { GraphBuilder } from "./onnx/GraphBuilder.js";
-import inferShapes, { inferNodeShape, propagateToRegion } from "./onnx/InferShapes.js";
+import { GraphBuilder } from "./onnx/ir/GraphBuilder.js";
+import inferShapes, { inferNodeShape, propagateToRegion } from "./onnx/schema/InferShapes.js";
 import { topologicalSortOperationNodes, safeWriteJson } from "./onnx/utils/index.js";
 import { initializeSchemaRegistry } from "./onnx/schema/index.js";
 import { OpRegistry } from "./onnx/schema/OpRegistry.js";
 import type { DecompositionRecipe } from "./onnx/transformation/Recipe.js";
-import type OnnxGraph from "./onnx/OnnxGraph.js";
+import type OnnxGraph from "./onnx/ir/OnnxGraph.js";
 import { TrackedGraphBuilder } from "./onnx/transformation/tracking/TrackedGraphBuilder.js";
 import { HistoryManager } from "./onnx/transformation/tracking/HistoryManager.js";
 
 // --- 1. Core IR & Types ---
-export { default as OnnxGraph } from "./onnx/OnnxGraph.js";
-export { default as OperationNode } from "./onnx/OperationNode.js";
-export { default as TensorNode } from "./onnx/TensorNode.js";
-export { default as ConstantNode } from "./onnx/ConstantNode.js";
-export { default as RegionArgumentNode } from "./onnx/RegionArgumentNode.js";
-export { default as OnnxEdge } from "./onnx/OnnxEdge.js";
-export { default as OnnxInnerEdge } from "./onnx/OnnxInnerEdge.js";
-export * from "./onnx/OnnxTypes.js";
+export { default as OnnxGraph } from "./onnx/ir/OnnxGraph.js";
+export { default as OperationNode } from "./onnx/ir/OperationNode.js";
+export { default as TensorNode } from "./onnx/ir/TensorNode.js";
+export { default as ConstantNode } from "./onnx/ir/ConstantNode.js";
+export { default as RegionArgumentNode } from "./onnx/ir/RegionArgumentNode.js";
+export { default as OnnxEdge } from "./onnx/ir/OnnxEdge.js";
+export * from "./onnx/ir/OnnxTypes.js";
 export * from "./DecompositionOptions.js";
 
 // --- 2. Frontend, Backend & Formatters ---
@@ -49,7 +48,7 @@ export { splitByAncestor } from "./onnx/partitioning/Strategies.js";
 
 // --- 4. Transformation Infrastructure & Tracking ---
 export { GraphBuilder, TrackedGraphBuilder, HistoryManager };
-export * from "./onnx/PassManager.js";
+export * from "./onnx/transformation/PassManager.js";
 export * from "./onnx/transformation/Recipe.js";
 export * from "./onnx/transformation/TransformationOpportunity.js";
 export * from "./onnx/transformation/TransformationRegistry.js";

@@ -1,8 +1,8 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import type OperationNode from "../../OperationNode.js";
-import TensorNode from "../../TensorNode.js";
-import type { GraphPass } from "../../PassManager.js";
-import { DataType, type ValueNode } from "../../OnnxTypes.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import type { GraphPass } from "../PassManager.js";
+import { DataType, type ValueNode } from "../../ir/OnnxTypes.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";

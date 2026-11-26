@@ -1,7 +1,7 @@
-import type OnnxGraph from "../../../OnnxGraph.js";
-import type OperationNode from "../../../OperationNode.js";
-import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
+import type OnnxGraph from "../../../ir/OnnxGraph.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../ir/OnnxTypes.js";
+import { DataType } from "../../../ir/OnnxTypes.js";
 import {
     asStaticDims,
     getIntsAttr,
@@ -37,7 +37,7 @@ import {
     resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerConvRecipe implements LoopLoweringRecipe {

@@ -1,4 +1,4 @@
-import type OnnxGraph from "../OnnxGraph.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
 import type { DecompositionRecipe } from "./Recipe.js";
 import { topologicalSortOperationNodes } from "../utils/index.js";
 import { OpRegistry } from "../schema/OpRegistry.js";

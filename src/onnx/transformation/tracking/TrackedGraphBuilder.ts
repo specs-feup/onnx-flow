@@ -1,9 +1,9 @@
-import { GraphBuilder, getDirectReplaceSources, getSubgraphMeta } from "../../GraphBuilder.js";
+import { GraphBuilder, getDirectReplaceSources, getSubgraphMeta } from "../../ir/GraphBuilder.js";
 import type Node from "@specs-feup/flow/graph/Node";
-import type OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import OnnxEdge from "../../OnnxEdge.js";
-import type { DataType, KnownShape, ValueNode } from "../../OnnxTypes.js";
+import OnnxEdge from "../../ir/OnnxEdge.js";
+import type { DataType, KnownShape, ValueNode } from "../../ir/OnnxTypes.js";
 import type { GraphAction, NodeSnapshot } from "./GraphActions.js";
 import {
     AddNodeAction,
@@ -14,8 +14,8 @@ import {
     UpdateNodeInputsAction,
 } from "./GraphActions.js";
 import { isOnnxNode, asOnnxNode } from "../../utils/index.js";
-import OperationNode from "../../OperationNode.js";
-import RegionArgumentNode from "../../RegionArgumentNode.js";
+import OperationNode from "../../ir/OperationNode.js";
+import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
 
 export class TrackedGraphBuilder extends GraphBuilder {
     private actions: GraphAction[] = [];

@@ -1,5 +1,5 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import OperationNode from "../OperationNode.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import OperationNode from "../ir/OperationNode.js";
 
 /**
  * Validates that all edges in the graph stay within the graph's scope.

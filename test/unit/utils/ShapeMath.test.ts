@@ -12,9 +12,9 @@ import {
     shapesEqual,
 } from "../../../src/onnx/utils/ShapeMath.js";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 
 describe("ShapeMath Utilities", () => {
     it("converts dimension values and shapes to numbers and static forms", () => {

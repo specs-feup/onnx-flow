@@ -1,5 +1,5 @@
-import type OperationNode from "../OperationNode.js";
-import type { GraphBuilder } from "../GraphBuilder.js";
+import type OperationNode from "../ir/OperationNode.js";
+import type { GraphBuilder } from "../ir/GraphBuilder.js";
 import type { OpCategory } from "../schema/OpSchema.js";
 
 export type RecipePhase = "canonicalization" | "loop-lowering" | "optimization" | "custom";

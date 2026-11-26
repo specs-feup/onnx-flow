@@ -5,8 +5,8 @@ import type {
     RawOnnxGraph,
     RawOnnxModel,
     RawOnnxNode,
-} from "../onnx/OnnxTypes.js";
-import { DataType } from "../onnx/OnnxTypes.js";
+} from "../onnx/ir/OnnxTypes.js";
+import { DataType } from "../onnx/ir/OnnxTypes.js";
 import { BASE_TEN } from "../onnx/utils/index.js";
 import {
     DEFAULT_COMPAT_IR_VERSION,

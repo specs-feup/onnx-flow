@@ -1,9 +1,9 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import OperationNode from "../../OperationNode.js";
-import TensorNode from "../../TensorNode.js";
-import type { GraphBuilder } from "../../GraphBuilder.js";
-import type { ValueNode, KnownShape, StaticShape, ConcreteValueNode } from "../../OnnxTypes.js";
-import { DataType } from "../../OnnxTypes.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import type { GraphBuilder } from "../../ir/GraphBuilder.js";
+import type { ValueNode, KnownShape, StaticShape, ConcreteValueNode } from "../../ir/OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
 import {
     asStaticDims,
     toStaticShape,

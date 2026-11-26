@@ -1,13 +1,13 @@
 import type Graph from "@specs-feup/flow/graph/Graph";
-import type OnnxGraph from "../OnnxGraph.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
 import { initializeSchemaRegistry } from "../schema/index.js";
-import { PassManager } from "../PassManager.js";
+import { PassManager } from "./PassManager.js";
 import { CanonicalizationPass } from "./canonicalization/CanonicalizationPass.js";
 import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
 import { PostLoopLoweringPass } from "./PostLoopLoweringPass.js";
-import transformForCgra from "./cgra-decomposition-example/TransformForCgra.js";
+import transformForCgra from "../../../examples/cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
 import type { DecompositionOptions, IndexingMode } from "../../DecompositionOptions.js";
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";

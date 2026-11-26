@@ -1,13 +1,13 @@
-import OnnxGraph from "../OnnxGraph.js";
+import OnnxGraph from "../ir/OnnxGraph.js";
 import type { DotEdge, DotGraph, DotNode, DotStatement } from "@specs-feup/flow/graph/dot/dot";
 import Dot, { DotSubgraph } from "@specs-feup/flow/graph/dot/dot";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Node from "@specs-feup/flow/graph/Node";
-import TensorNode from "../TensorNode.js";
-import ConstantNode from "../ConstantNode.js";
-import OperationNode from "../OperationNode.js";
-import OnnxEdge from "../OnnxEdge.js";
+import TensorNode from "../ir/TensorNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import OperationNode from "../ir/OperationNode.js";
+import OnnxEdge from "../ir/OnnxEdge.js";
 import { readTensorData } from "../utils/index.js";
 import BaseOnnxDotFormatter from "./BaseOnnxDotFormatter.js";
 

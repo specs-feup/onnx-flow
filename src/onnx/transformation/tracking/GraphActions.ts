@@ -1,9 +1,9 @@
-import type OnnxGraph from "../../OnnxGraph.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import OnnxEdge from "../../OnnxEdge.js";
-import OperationNode from "../../OperationNode.js";
-import TensorNode from "../../TensorNode.js";
-import ConstantNode from "../../ConstantNode.js";
+import OnnxEdge from "../../ir/OnnxEdge.js";
+import OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import ConstantNode from "../../ir/ConstantNode.js";
 import type {
     AttributeMap,
     AttributeProto,
@@ -12,8 +12,8 @@ import type {
     Shape,
     TensorProto,
     ValueNode,
-} from "../../OnnxTypes.js";
-import RegionArgumentNode from "../../RegionArgumentNode.js";
+} from "../../ir/OnnxTypes.js";
+import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
 
 /** * Represents an atomic change to the graph.
  * Can be serialized to JSON for history exports.

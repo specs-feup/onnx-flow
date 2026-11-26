@@ -1,7 +1,7 @@
-import { AttributeType, DataType } from "../../../../onnx/OnnxTypes.js";
+import { AttributeType, DataType } from "../../../ir/OnnxTypes.js";
 import type { OpSchema, TensorInfo } from "../../OpSchema.js";
 import { OpCategory, T_ANY } from "../../OpSchema.js";
-import { propagateToRegion } from "../../../../onnx/InferShapes.js";
+import { propagateToRegion } from "../../InferShapes.js";
 import { UNKNOWN_SHAPE } from "../../../../onnx/utils/index.js";
 
 export const Loop: OpSchema = {

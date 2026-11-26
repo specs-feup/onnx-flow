@@ -1,11 +1,11 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../OnnxGraph.js";
-import OperationNode from "../../../OperationNode.js";
-import TensorNode from "../../../TensorNode.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import OnnxGraph from "../../../ir/OnnxGraph.js";
+import OperationNode from "../../../ir/OperationNode.js";
+import TensorNode from "../../../ir/TensorNode.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, KnownShape, ValueNode } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape, ValueNode } from "../../../ir/OnnxTypes.js";
+import { DataType } from "../../../ir/OnnxTypes.js";
 import {
     asConcreteValueNode,
     bool,

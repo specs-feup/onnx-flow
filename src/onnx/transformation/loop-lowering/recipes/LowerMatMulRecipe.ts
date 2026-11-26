@@ -1,6 +1,6 @@
-import type OnnxGraph from "../../../OnnxGraph.js";
-import type OperationNode from "../../../OperationNode.js";
-import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../OnnxTypes.js";
+import type OnnxGraph from "../../../ir/OnnxGraph.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import { type ValueNode, type ConcreteValueNode, type KnownShape } from "../../../ir/OnnxTypes.js";
 import {
     asStaticDims,
     broadcastShapes,
@@ -24,7 +24,7 @@ import {
     buildAguPointer,
     getOrCreateIterationSpaceCounters,
 } from "../RecipeUtils.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerMatMulRecipe implements LoopLoweringRecipe {

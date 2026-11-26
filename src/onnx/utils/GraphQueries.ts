@@ -1,13 +1,13 @@
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import ConstantNode from "../ConstantNode.js";
-import type { GraphBuilder } from "../GraphBuilder.js";
-import OnnxEdge from "../OnnxEdge.js";
-import type OnnxGraph from "../OnnxGraph.js";
-import type { ValueNode, Dim, ConcreteValueNode, OnnxNode } from "../OnnxTypes.js";
-import { DataType } from "../OnnxTypes.js";
-import OperationNode from "../OperationNode.js";
-import RegionArgumentNode from "../RegionArgumentNode.js";
-import TensorNode from "../TensorNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import type { GraphBuilder } from "../ir/GraphBuilder.js";
+import OnnxEdge from "../ir/OnnxEdge.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import type { ValueNode, Dim, ConcreteValueNode, OnnxNode } from "../ir/OnnxTypes.js";
+import { DataType } from "../ir/OnnxTypes.js";
+import OperationNode from "../ir/OperationNode.js";
+import RegionArgumentNode from "../ir/RegionArgumentNode.js";
+import TensorNode from "../ir/TensorNode.js";
 import { toStaticShape } from "./ShapeMath.js";
 import { makeTensorProto } from "./TensorData.js";
 

@@ -1,12 +1,12 @@
 import Graph from "@specs-feup/flow/graph/Graph";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import OnnxGraph from "../OnnxGraph.js";
-import TensorNode from "../TensorNode.js";
-import OperationNode from "../OperationNode.js";
-import OnnxEdge from "../OnnxEdge.js";
-import ConstantNode from "../ConstantNode.js";
-import RegionArgumentNode from "../RegionArgumentNode.js";
-import type { ValueNode } from "../OnnxTypes.js";
+import OnnxGraph from "../ir/OnnxGraph.js";
+import TensorNode from "../ir/TensorNode.js";
+import OperationNode from "../ir/OperationNode.js";
+import OnnxEdge from "../ir/OnnxEdge.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import RegionArgumentNode from "../ir/RegionArgumentNode.js";
+import type { ValueNode } from "../ir/OnnxTypes.js";
 import { asValueNode } from "../utils/index.js";
 import type { PartitionSets } from "./Strategies.js";
 

@@ -1,5 +1,5 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import type { GraphPass } from "../../PassManager.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type { GraphPass } from "../PassManager.js";
 import { LoopFusionMatcher } from "./LoopFusionMatcher.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";

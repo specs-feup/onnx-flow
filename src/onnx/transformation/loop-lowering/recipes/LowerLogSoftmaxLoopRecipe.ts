@@ -1,6 +1,6 @@
-import type OperationNode from "../../../OperationNode.js";
+import type OperationNode from "../../../ir/OperationNode.js";
 import type { LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { IndexingMode } from "../../../../DecompositionOptions.js";
 import { lowerOnlineSoftmaxFamily } from "./LowerSoftmaxLoopRecipe.js";
 

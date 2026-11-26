@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { RawOnnxModel } from "../onnx/OnnxTypes.js";
+import type { RawOnnxModel } from "../onnx/ir/OnnxTypes.js";
 import { OnnxProtobufCodec } from "./OnnxProtobufCodec.js";
 
 /**

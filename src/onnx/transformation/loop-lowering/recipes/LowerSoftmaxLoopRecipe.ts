@@ -1,6 +1,6 @@
-import type OperationNode from "../../../OperationNode.js";
-import TensorNode from "../../../TensorNode.js";
-import { type ConcreteValueNode, type KnownShape, DataType } from "../../../OnnxTypes.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import TensorNode from "../../../ir/TensorNode.js";
+import { type ConcreteValueNode, type KnownShape, DataType } from "../../../ir/OnnxTypes.js";
 import {
     getIntAttr,
     makeTensorProto,
@@ -17,7 +17,7 @@ import {
     packShapeVector,
     extractMixedDims,
 } from "../RecipeUtils.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { IndexingMode } from "../../../../DecompositionOptions.js";
 
 export class LowerSoftmaxLoopRecipe implements LoopLoweringRecipe {

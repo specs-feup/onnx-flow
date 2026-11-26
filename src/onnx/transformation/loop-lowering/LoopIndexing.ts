@@ -1,7 +1,7 @@
-import type { ValueNode, ConcreteValueNode, KnownShape, Shape } from "../../OnnxTypes.js";
-import { DataType } from "../../OnnxTypes.js";
+import type { ValueNode, ConcreteValueNode, KnownShape, Shape } from "../../ir/OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
 import { toStaticShape, scalarInt64 } from "../../utils/index.js";
-import type { GraphBuilder } from "../../GraphBuilder.js";
+import type { GraphBuilder } from "../../ir/GraphBuilder.js";
 import type { LoopCarryContext } from "./LoopLoweringRecipe.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
 import { ensureInnerValueNode, gatherScalar } from "./RecipeUtils.js";

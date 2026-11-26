@@ -1,10 +1,10 @@
-import type OperationNode from "../../OperationNode.js";
-import type OnnxGraph from "../../OnnxGraph.js";
-import type { ConcreteValueNode, ValueNode, KnownShape, DataType } from "../../OnnxTypes.js";
-import type { GraphBuilder } from "../../GraphBuilder.js";
+import type OperationNode from "../../ir/OperationNode.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type { ConcreteValueNode, ValueNode, KnownShape, DataType } from "../../ir/OnnxTypes.js";
+import type { GraphBuilder } from "../../ir/GraphBuilder.js";
 import type { BaseRecipe } from "../Recipe.js";
 import type { IndexingMode } from "../../../DecompositionOptions.js";
-import type TensorNode from "../../TensorNode.js";
+import type TensorNode from "../../ir/TensorNode.js";
 
 export type RecipeApplyResult = ValueNode | { resultNode: ValueNode; nextCarry: ValueNode };
 

@@ -1,9 +1,9 @@
-import type OperationNode from "../../OperationNode.js";
-import type { GraphBuilder } from "../../GraphBuilder.js";
-import type { DecompositionRecipe } from "../Recipe.js";
-import type { ConcreteValueNode } from "../../OnnxTypes.js";
-import { DataType } from "../../OnnxTypes.js";
-import { chunkTensor, makeTensorProto, toStaticShape } from "../../utils/index.js";
+import type OperationNode from "../../src/onnx/ir/OperationNode.js";
+import type { GraphBuilder } from "../../src/onnx/ir/GraphBuilder.js";
+import type { DecompositionRecipe } from "../../src/onnx/transformation/Recipe.js";
+import type { ConcreteValueNode } from "../../src/onnx/ir/OnnxTypes.js";
+import { DataType } from "../../src/onnx/ir/OnnxTypes.js";
+import { chunkTensor, makeTensorProto, toStaticShape } from "../../src/onnx/utils/index.js";
 
 export class ReluGridDecompositionRecipe implements DecompositionRecipe {
     public readonly name = "ReluDecomposition";

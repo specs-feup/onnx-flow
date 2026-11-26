@@ -1,9 +1,9 @@
-import type OperationNode from "../../../OperationNode.js";
-import ConstantNode from "../../../ConstantNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import ConstantNode from "../../../ir/ConstantNode.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
-import { DataType } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape } from "../../../ir/OnnxTypes.js";
+import { DataType } from "../../../ir/OnnxTypes.js";
 import { makeTensorProto, readTensorData, toStaticShape } from "../../../utils/index.js";
 
 const FLOAT_DTYPES = new Set<DataType>([

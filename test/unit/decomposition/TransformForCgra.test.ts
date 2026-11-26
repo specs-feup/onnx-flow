@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import transformForCgra from "../../../src/onnx/transformation/cgra-decomposition-example/TransformForCgra.js";
-import { AddGridDecompositionRecipe } from "../../../src/onnx/transformation/cgra-decomposition-example/Add.js";
-import { ReluGridDecompositionRecipe } from "../../../src/onnx/transformation/cgra-decomposition-example/Relu.js";
+import transformForCgra from "../../../examples/cgra-decomposition-example/TransformForCgra.js";
+import { AddGridDecompositionRecipe } from "../../../examples/cgra-decomposition-example/Add.js";
+import { ReluGridDecompositionRecipe } from "../../../examples/cgra-decomposition-example/Relu.js";
 import { applyRecipe } from "../../helpers/recipeHarness.js";
 
 describe("CGRA Example Grid Decomposition", () => {

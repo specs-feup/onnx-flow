@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import OperationNode from "../../../src/onnx/OperationNode.js";
-import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import { OpRegistry } from "../../../src/onnx/schema/OpRegistry.js";
 import { resolveExportVersions } from "../../../src/onnx/schema/Versioning.js";
 import { int64Vec, floatVec } from "../../../src/onnx/utils/index.js";
-import { inferNodeShape } from "../../../src/onnx/InferShapes.js";
+import { inferNodeShape } from "../../../src/onnx/schema/InferShapes.js";
 
 describe("StandardOps Schema & Shape Inference", () => {
     initializeSchemaRegistry();

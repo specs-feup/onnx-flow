@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import OperationNode from "../../../src/onnx/OperationNode.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { TrackedGraphBuilder } from "../../../src/onnx/transformation/tracking/TrackedGraphBuilder.js";
 import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";

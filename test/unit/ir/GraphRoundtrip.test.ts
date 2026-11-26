@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createGraph } from "../../../src/io/OnnxGraphLoader.js";
 import { convertFlowGraphToOnnxJson } from "../../../src/io/OnnxGraphExporter.js";
-import { DataType, type RawOnnxModel } from "../../../src/onnx/OnnxTypes.js";
+import { DataType, type RawOnnxModel } from "../../../src/onnx/ir/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 
 describe("Graph Ingestion and Export Roundtrip", () => {

@@ -1,9 +1,9 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import type { GraphPass } from "../../PassManager.js";
-import TensorNode from "../../TensorNode.js";
-import ConstantNode from "../../ConstantNode.js";
-import OperationNode from "../../OperationNode.js";
-import RegionArgumentNode from "../../RegionArgumentNode.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type { GraphPass } from "../PassManager.js";
+import TensorNode from "../../ir/TensorNode.js";
+import ConstantNode from "../../ir/ConstantNode.js";
+import OperationNode from "../../ir/OperationNode.js";
+import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
 
 export class DeadCodeEliminationPass implements GraphPass {
     public readonly name = "DeadCodeElimination";

@@ -1,5 +1,5 @@
-import type { ValueNode, ConcreteValueNode } from "../../OnnxTypes.js";
-import { DataType } from "../../OnnxTypes.js";
+import type { ValueNode, ConcreteValueNode } from "../../ir/OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
 import {
     inferPoolDim,
     resolveAutoPads,
@@ -7,7 +7,7 @@ import {
     scalarInt64,
     int64Vec,
 } from "../../utils/index.js";
-import type { GraphBuilder } from "../../GraphBuilder.js";
+import type { GraphBuilder } from "../../ir/GraphBuilder.js";
 import { ensureInnerValueNode, gatherScalar } from "./RecipeUtils.js";
 
 /**

@@ -4,8 +4,8 @@ import type { EdgeCollection } from "@specs-feup/flow/graph/EdgeCollection";
 import OnnxEdge from "./OnnxEdge.js";
 import type OnnxGraph from "./OnnxGraph.js";
 import type { AttributeMap, AttributeValue, ValueNode } from "./OnnxTypes.js";
-import { isValueNode } from "./utils/index.js";
-import type { NodeSnapshot } from "./transformation/tracking/GraphActions.js";
+import { isValueNode } from "../utils/index.js";
+import type { NodeSnapshot } from "../transformation/tracking/GraphActions.js";
 
 namespace OperationNode {
     export const TAG = "__specs-onnx__operation_node";

@@ -1,11 +1,11 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import { GraphBuilder } from "../../GraphBuilder.js";
-import OnnxEdge from "../../OnnxEdge.js";
-import OnnxGraph from "../../OnnxGraph.js";
-import type { ValueNode, ConcreteValueNode, KnownShape } from "../../OnnxTypes.js";
-import { DataType } from "../../OnnxTypes.js";
-import OperationNode from "../../OperationNode.js";
-import TensorNode from "../../TensorNode.js";
+import { GraphBuilder } from "../../ir/GraphBuilder.js";
+import OnnxEdge from "../../ir/OnnxEdge.js";
+import OnnxGraph from "../../ir/OnnxGraph.js";
+import type { ValueNode, ConcreteValueNode, KnownShape } from "../../ir/OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
+import OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
 import {
     getAttr,
     getIntAttr,

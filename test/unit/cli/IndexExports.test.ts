@@ -6,7 +6,7 @@ import {
     generateGraphvizOnlineLink,
     generateGraphCode,
 } from "../../../src/index.js";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
 import { ensureProtoExists } from "../../helpers/ortHarness.js";
 import { ensureModelExists } from "../../helpers/modelFactory.js";
 

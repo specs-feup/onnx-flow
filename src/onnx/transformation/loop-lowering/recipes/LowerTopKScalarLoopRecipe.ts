@@ -1,5 +1,5 @@
-import type OperationNode from "../../../OperationNode.js";
-import { type ConcreteValueNode, type KnownShape, DataType } from "../../../OnnxTypes.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import { type ConcreteValueNode, type KnownShape, DataType } from "../../../ir/OnnxTypes.js";
 import {
     bool,
     getIntAttr,
@@ -18,7 +18,7 @@ import {
     mulMixed,
     packShapeVector,
 } from "../RecipeUtils.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { IndexingMode } from "../../../../DecompositionOptions.js";
 
 /**

@@ -1,7 +1,7 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { graphviz } from "node-graphviz";
-import type OnnxGraph from "../onnx/OnnxGraph.js";
+import type OnnxGraph from "../onnx/ir/OnnxGraph.js";
 import type OnnxDotFormatter from "../onnx/dot/OnnxDotFormatter.js";
 import type CgraDotFormatter from "../onnx/dot/CgraDotFormatter.js";
 

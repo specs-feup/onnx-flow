@@ -1,11 +1,11 @@
-import type OnnxGraph from "../../../OnnxGraph.js";
-import type OperationNode from "../../../OperationNode.js";
+import type OnnxGraph from "../../../ir/OnnxGraph.js";
+import type OperationNode from "../../../ir/OperationNode.js";
 import {
     DataType,
     type ValueNode,
     type ConcreteValueNode,
     type KnownShape,
-} from "../../../OnnxTypes.js";
+} from "../../../ir/OnnxTypes.js";
 import type { LoopCarryContext, LoopLoweringRecipe } from "../LoopLoweringRecipe.js";
 import {
     broadcastMixedShapes,
@@ -17,7 +17,7 @@ import {
 } from "../RecipeUtils.js";
 import { OpRegistry } from "../../../schema/OpRegistry.js";
 import { OpCategory } from "../../../schema/OpSchema.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import { asStaticDims, int64Vec, toStaticShape } from "../../../utils/index.js";
 
 export class LowerElementWiseRecipe implements LoopLoweringRecipe {

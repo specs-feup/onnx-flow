@@ -7,7 +7,7 @@ import OnnxEdge from "./OnnxEdge.js";
 import ConstantNode from "./ConstantNode.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type { OpsetImport } from "./OnnxTypes.js";
-import { LATEST_ONNX_IR_VERSION, LATEST_ONNX_OPSET } from "./utils/Constants.js";
+import { LATEST_ONNX_IR_VERSION, LATEST_ONNX_OPSET } from "../utils/Constants.js";
 
 namespace OnnxGraph {
     export const TAG = "__specs-onnx__onnx_graph";

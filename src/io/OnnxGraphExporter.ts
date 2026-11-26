@@ -1,5 +1,5 @@
-import OnnxEdge from "../onnx/OnnxEdge.js";
-import type OnnxGraph from "../onnx/OnnxGraph.js";
+import OnnxEdge from "../onnx/ir/OnnxEdge.js";
+import type OnnxGraph from "../onnx/ir/OnnxGraph.js";
 import type {
     ConcreteValueNode,
     RawOnnxAttribute,
@@ -7,12 +7,12 @@ import type {
     RawOnnxNode,
     RawOnnxValueInfo,
     TensorProto,
-} from "../onnx/OnnxTypes.js";
-import { AttributeType, DataType } from "../onnx/OnnxTypes.js";
-import type OperationNode from "../onnx/OperationNode.js";
-import TensorNode from "../onnx/TensorNode.js";
-import ConstantNode from "../onnx/ConstantNode.js";
-import RegionArgumentNode from "../onnx/RegionArgumentNode.js";
+} from "../onnx/ir/OnnxTypes.js";
+import { AttributeType, DataType } from "../onnx/ir/OnnxTypes.js";
+import type OperationNode from "../onnx/ir/OperationNode.js";
+import TensorNode from "../onnx/ir/TensorNode.js";
+import ConstantNode from "../onnx/ir/ConstantNode.js";
+import RegionArgumentNode from "../onnx/ir/RegionArgumentNode.js";
 import { toU8, topologicalSortOperationNodes } from "../onnx/utils/index.js";
 import { OpRegistry } from "../onnx/schema/OpRegistry.js";
 import { resolveExportVersions } from "../onnx/schema/Versioning.js";

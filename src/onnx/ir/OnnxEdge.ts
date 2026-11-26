@@ -1,34 +1,47 @@
 import BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 import Edge from "@specs-feup/flow/graph/Edge";
-import { DataType } from "./OnnxTypes.js";
-import type { EdgeSnapshot } from "./transformation/tracking/GraphActions.js";
+import type { DataType, Shape } from "./OnnxTypes.js";
+import type { EdgeSnapshot } from "../transformation/tracking/GraphActions.js";
 
-namespace OnnxInnerEdge {
-    export const TAG = "__specs-onnx__onnx_inner_edge";
+namespace OnnxEdge {
+    export const TAG = "__specs-onnx__onnx_edge";
     export const VERSION = "1";
 
     export class Class<
         D extends Data = Data,
         S extends ScratchData = ScratchData,
     > extends BaseEdge.Class<D, S> {
-        get order(): number {
-            return this.data[TAG].order;
+        get literalType(): DataType {
+            return this.data[TAG].type;
+        }
+
+        get shape(): Shape {
+            return this.data[TAG].shape;
+        }
+
+        setLiteralType(dtype: DataType): void {
+            this.data[TAG].type = dtype;
+        }
+
+        setShape(shape: Shape): void {
+            this.data[TAG].shape = shape;
         }
 
         public toSnapshot(): EdgeSnapshot {
             return {
-                literalType: DataType.UNDEFINED,
-                shape: [],
-                order: this.order,
+                literalType: this.literalType,
+                shape: this.shape,
             };
         }
     }
 
     export class Builder implements Edge.Builder<Data, ScratchData> {
-        private order: number;
+        private type: DataType;
+        private shape: Shape;
 
-        constructor(order: number) {
-            this.order = order;
+        constructor(type: DataType, shape: Shape) {
+            this.type = type;
+            this.shape = shape;
         }
 
         buildData(data: BaseEdge.Data): Data {
@@ -36,7 +49,8 @@ namespace OnnxInnerEdge {
                 ...data,
                 [TAG]: {
                     version: VERSION,
-                    order: this.order,
+                    type: this.type,
+                    shape: this.shape,
                 },
             };
         }
@@ -53,10 +67,12 @@ namespace OnnxInnerEdge {
     export interface Data extends BaseEdge.Data {
         [TAG]: {
             version: typeof VERSION;
-            order: number;
+            type: DataType;
+            shape: Shape;
         };
     }
 
     export interface ScratchData extends BaseEdge.ScratchData {}
 }
-export default OnnxInnerEdge;
+
+export default OnnxEdge;

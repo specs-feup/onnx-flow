@@ -15,13 +15,13 @@ import type { DecompositionOptions, IndexingMode } from "./DecompositionOptions.
 import { defaultDecompositionOptions } from "./DecompositionOptions.js";
 import { splitByAncestor } from "./onnx/partitioning/Strategies.js";
 import { partitionGraph } from "./onnx/partitioning/Partition.js";
-import type OnnxGraph from "./onnx/OnnxGraph.js";
+import type OnnxGraph from "./onnx/ir/OnnxGraph.js";
 import validateGraph from "./onnx/validation/ValidateGraph.js";
-import type { RawOnnxModel } from "./onnx/OnnxTypes.js";
+import type { RawOnnxModel } from "./onnx/ir/OnnxTypes.js";
 import OnnxGraphTransformer from "./onnx/transformation/index.js";
 import { startExplorerServer } from "./explorer/ExplorerServer.js";
 import { ExplorerSession } from "./explorer/ExplorerSession.js";
-import inferShapes from "./onnx/InferShapes.js";
+import inferShapes from "./onnx/schema/InferShapes.js";
 import { generateUnifiedExplorerJson } from "./explorer/ExplorerSerializer.js";
 import { CliParser } from "./cli/CliOptions.js";
 import { GraphvizVisualizer } from "./cli/GraphvizServer.js";

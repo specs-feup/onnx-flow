@@ -1,7 +1,7 @@
-import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
+import type { ConcreteValueNode, KnownShape } from "../../../ir/OnnxTypes.js";
 import { getAttr, getStringAttr, makeTensorProto } from "../../../utils/index.js";
 import { createCapturedInput } from "../../loop-lowering/RecipeUtils.js";
 import {

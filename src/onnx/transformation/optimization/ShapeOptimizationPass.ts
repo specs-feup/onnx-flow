@@ -1,13 +1,13 @@
-import type OnnxGraph from "../../OnnxGraph.js";
-import type { GraphPass } from "../../PassManager.js";
-import type OperationNode from "../../OperationNode.js";
-import { GraphBuilder } from "../../GraphBuilder.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type { GraphPass } from "../PassManager.js";
+import type OperationNode from "../../ir/OperationNode.js";
+import { GraphBuilder } from "../../ir/GraphBuilder.js";
 import {
     topologicalSortOperationNodes,
     toStaticShape,
     makeTensorProto,
 } from "../../utils/index.js";
-import { DataType } from "../../OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
 
 export class ShapeOptimizationPass implements GraphPass {
     public readonly name = "ShapeOptimization";

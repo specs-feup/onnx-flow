@@ -1,4 +1,4 @@
-import { DataType, AttributeType } from "../../../OnnxTypes.js";
+import { DataType, AttributeType } from "../../../ir/OnnxTypes.js";
 import { toStaticShape, broadcastShapes } from "../../../utils/index.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_FLOAT, T_INT, T_BOOL } from "../../OpSchema.js";

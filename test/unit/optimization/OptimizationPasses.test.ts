@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
-import ConstantNode from "../../../src/onnx/ConstantNode.js";
-import RegionArgumentNode from "../../../src/onnx/RegionArgumentNode.js";
-import { GraphBuilder } from "../../../src/onnx/GraphBuilder.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import RegionArgumentNode from "../../../src/onnx/ir/RegionArgumentNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { scalarInt64 } from "../../../src/onnx/utils/TensorData.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import { DeadCodeEliminationPass } from "../../../src/onnx/transformation/optimization/DeadCodeEliminationPass.js";

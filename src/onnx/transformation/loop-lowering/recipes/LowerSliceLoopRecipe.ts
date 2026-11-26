@@ -1,11 +1,11 @@
-import type OnnxGraph from "../../../OnnxGraph.js";
-import type OperationNode from "../../../OperationNode.js";
+import type OnnxGraph from "../../../ir/OnnxGraph.js";
+import type OperationNode from "../../../ir/OperationNode.js";
 import {
     type ValueNode,
     type ConcreteValueNode,
     type KnownShape,
     DataType,
-} from "../../../OnnxTypes.js";
+} from "../../../ir/OnnxTypes.js";
 import {
     int64Vec,
     makeTensorProto,
@@ -31,10 +31,10 @@ import {
     productMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
-import { GraphBuilder } from "../../../GraphBuilder.js";
+import { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
-import ConstantNode from "../../../ConstantNode.js";
-import TensorNode from "../../../TensorNode.js";
+import ConstantNode from "../../../ir/ConstantNode.js";
+import TensorNode from "../../../ir/TensorNode.js";
 
 const isPresent = (n?: ValueNode): n is ValueNode => n !== undefined && n.id !== "";
 

@@ -1,11 +1,11 @@
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../src/onnx/OnnxGraph.js";
-import TensorNode from "../../src/onnx/TensorNode.js";
-import { GraphBuilder } from "../../src/onnx/GraphBuilder.js";
-import type { AttributeMap, TensorProto, ConcreteValueNode } from "../../src/onnx/OnnxTypes.js";
-import { DataType, type KnownShape } from "../../src/onnx/OnnxTypes.js";
+import OnnxGraph from "../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../src/onnx/ir/GraphBuilder.js";
+import type { AttributeMap, TensorProto, ConcreteValueNode } from "../../src/onnx/ir/OnnxTypes.js";
+import { DataType, type KnownShape } from "../../src/onnx/ir/OnnxTypes.js";
 import type { DecompositionRecipe } from "../../src/onnx/transformation/Recipe.js";
-import inferShapes from "../../src/onnx/InferShapes.js";
+import inferShapes from "../../src/onnx/schema/InferShapes.js";
 import { expect } from "vitest";
 import validateGraph from "../../src/onnx/validation/ValidateGraph.js";
 

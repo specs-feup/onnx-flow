@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/onnx/OnnxGraph.js";
-import { DataType } from "../../../src/onnx/OnnxTypes.js";
-import OperationNode from "../../../src/onnx/OperationNode.js";
-import type { GraphPass } from "../../../src/onnx/PassManager.js";
-import { PassManager } from "../../../src/onnx/PassManager.js";
-import TensorNode from "../../../src/onnx/TensorNode.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import type { GraphPass } from "../../../src/onnx/transformation/PassManager.js";
+import { PassManager } from "../../../src/onnx/transformation/PassManager.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
 import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
 import { topologicalSortOperationNodes } from "../../../src/onnx/utils/index.js";
 

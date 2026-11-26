@@ -1,6 +1,6 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import type { AttributeType, AttributeValue, DataType, Shape } from "../OnnxTypes.js";
-import type OperationNode from "../OperationNode.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import type { AttributeType, AttributeValue, DataType, Shape } from "../ir/OnnxTypes.js";
+import type OperationNode from "../ir/OperationNode.js";
 
 // Helper interfaces for inference
 export interface TensorInfo {

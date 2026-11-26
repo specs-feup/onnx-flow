@@ -1,4 +1,4 @@
-import { DataType, AttributeType } from "../../../OnnxTypes.js";
+import { DataType, AttributeType } from "../../../ir/OnnxTypes.js";
 import type { OpSchema } from "../../OpSchema.js";
 import { OpCategory, T_ANY, T_INT } from "../../OpSchema.js";
 

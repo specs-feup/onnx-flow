@@ -1,8 +1,8 @@
-import type OperationNode from "../../../OperationNode.js";
-import type { GraphBuilder } from "../../../GraphBuilder.js";
+import type OperationNode from "../../../ir/OperationNode.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
 import type { DecompositionRecipe } from "../../Recipe.js";
-import type { AttributeMap, ConcreteValueNode, KnownShape } from "../../../OnnxTypes.js";
-import type { DataType } from "../../../OnnxTypes.js";
+import type { AttributeMap, ConcreteValueNode, KnownShape } from "../../../ir/OnnxTypes.js";
+import type { DataType } from "../../../ir/OnnxTypes.js";
 import { getAttr, getStringAttr } from "../../../utils/index.js";
 
 export class LowerSoftmaxCrossEntropyLossRecipe implements DecompositionRecipe {

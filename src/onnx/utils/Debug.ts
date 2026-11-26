@@ -1,7 +1,7 @@
 import fs from "fs";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import ConstantNode from "../ConstantNode.js";
-import TensorNode from "../TensorNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import TensorNode from "../ir/TensorNode.js";
 
 export function dbg(...args: unknown[]): void {
     console.log("[loop-debug]", ...args);

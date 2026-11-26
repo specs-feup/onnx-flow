@@ -14,9 +14,9 @@ import TensorNode from "./TensorNode.js";
 import ConstantNode from "./ConstantNode.js";
 import RegionArgumentNode from "./RegionArgumentNode.js";
 import OnnxEdge from "./OnnxEdge.js";
-import { uniq } from "./utils/index.js";
-import { OpRegistry } from "./schema/OpRegistry.js";
-import { inferNodeShape } from "./InferShapes.js";
+import { uniq } from "../utils/index.js";
+import { OpRegistry } from "../schema/OpRegistry.js";
+import { inferNodeShape } from "../schema/InferShapes.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 

@@ -1,4 +1,4 @@
-import type { GraphBuilder } from "../GraphBuilder.js";
+import type { GraphBuilder } from "../ir/GraphBuilder.js";
 
 export class TransformationOpportunity {
     public readonly id: string;

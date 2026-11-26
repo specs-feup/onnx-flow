@@ -1,11 +1,11 @@
-import type OnnxGraph from "../OnnxGraph.js";
-import OperationNode from "../OperationNode.js";
-import TensorNode from "../TensorNode.js";
-import ConstantNode from "../ConstantNode.js";
-import RegionArgumentNode from "../RegionArgumentNode.js";
-import type { ConcreteValueNode, KnownShape, ValueNode } from "../OnnxTypes.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import OperationNode from "../ir/OperationNode.js";
+import TensorNode from "../ir/TensorNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import RegionArgumentNode from "../ir/RegionArgumentNode.js";
+import type { ConcreteValueNode, KnownShape, ValueNode } from "../ir/OnnxTypes.js";
 import type { DecompositionOptions } from "../../DecompositionOptions.js";
-import { GraphBuilder } from "../GraphBuilder.js";
+import { GraphBuilder } from "../ir/GraphBuilder.js";
 import type { TrackedGraphBuilder as TrackedGraphBuilderType } from "./tracking/TrackedGraphBuilder.js";
 import { TrackedGraphBuilder } from "./tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "./tracking/HistoryManager.js";

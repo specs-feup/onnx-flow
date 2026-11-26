@@ -1,15 +1,15 @@
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
-import type OnnxGraph from "./OnnxGraph.js";
-import TensorNode from "./TensorNode.js";
-import ConstantNode from "./ConstantNode.js";
-import RegionArgumentNode from "./RegionArgumentNode.js";
-import type { Shape, ValueNode } from "./OnnxTypes.js";
-import { DataType } from "./OnnxTypes.js";
-import { readTensorData, topologicalSortOperationNodes } from "./utils/index.js";
-import OnnxEdge from "./OnnxEdge.js";
-import type OperationNode from "./OperationNode.js";
-import { OpRegistry } from "./schema/OpRegistry.js";
-import type { TensorInfo } from "./schema/OpSchema.js";
+import type OnnxGraph from "../ir/OnnxGraph.js";
+import TensorNode from "../ir/TensorNode.js";
+import ConstantNode from "../ir/ConstantNode.js";
+import RegionArgumentNode from "../ir/RegionArgumentNode.js";
+import type { Shape, ValueNode } from "../ir/OnnxTypes.js";
+import { DataType } from "../ir/OnnxTypes.js";
+import { readTensorData, topologicalSortOperationNodes } from "../utils/index.js";
+import OnnxEdge from "../ir/OnnxEdge.js";
+import type OperationNode from "../ir/OperationNode.js";
+import { OpRegistry } from "./OpRegistry.js";
+import type { TensorInfo } from "./OpSchema.js";
 
 /** Helper: resolve a tensor's shape from its node or incoming edge */
 function resolveTensorShape(t: BaseNode.Class): Shape {
