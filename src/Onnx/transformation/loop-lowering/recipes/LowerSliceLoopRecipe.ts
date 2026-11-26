@@ -6,7 +6,13 @@ import {
     type KnownShape,
     DataType,
 } from "../../../OnnxTypes.js";
-import { int64Vec, scalarInt64, toStaticShape } from "../../../Utils.js";
+import {
+    int64Vec,
+    makeTensorProto,
+    readConstIntegerVectorFromTensorNode,
+    scalarInt64,
+    toStaticShape,
+} from "../../../Utils.js";
 import type {
     LoopCarryContext,
     LoopLoweringRecipe,
@@ -14,17 +20,30 @@ import type {
 } from "../LoopLoweringRecipe.js";
 import {
     buildLinearIndex,
+    captureMixedList,
     decodeMixedRadix,
     ensureFlatInput,
     ensureInnerValueNode,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
+    mulMixed,
+    packShapeVector,
+    productMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
 import { IndexingMode } from "../../../../DecompositionOptions.js";
+import ConstantNode from "../../../ConstantNode.js";
+import TensorNode from "../../../TensorNode.js";
 
 const isPresent = (n?: ValueNode): n is ValueNode => n !== undefined && n.id !== "";
+
+const readConstVec = (n?: ValueNode): number[] | undefined => {
+    if (!isPresent(n)) return undefined;
+    if (n.is(ConstantNode)) return readConstIntegerVectorFromTensorNode(n.as(ConstantNode));
+    if (n.is(TensorNode)) return readConstIntegerVectorFromTensorNode(n.as(TensorNode));
+    return undefined;
+};
 
 export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
     public readonly name = "LowerSliceLoop";
@@ -43,21 +62,17 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
         "Gather",
         "ScatterElements",
         "Unsqueeze",
-        "Squeeze",
         "Add",
         "Sub",
         "Mul",
         "Div",
         "Mod",
-        "Min",
-        "Max",
         "Less",
         "Greater",
         "Equal",
         "And",
         "Where",
         "Cast",
-        "ReduceProd",
     ];
 
     match(op: OperationNode.Class): boolean {
@@ -161,25 +176,38 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
         const [posStep] = builder.createOp("Greater", [fullSteps, zeroSc]);
         const [maxIdx] = builder.createOp("Sub", [shapeData, oneSc]);
 
+        const clampMax = (
+            a: ConcreteValueNode,
+            b: ConcreteValueNode,
+            outShape: KnownShape = [rank],
+        ): ConcreteValueNode => {
+            const [gt] = builder.createOp("Greater", [a, b], {}, [
+                { type: DataType.BOOL, shape: outShape },
+            ]);
+            return builder.createOp("Where", [gt, a, b], {}, [
+                { type: DataType.INT64, shape: outShape },
+            ])[0];
+        };
+        const clampMin = (
+            a: ConcreteValueNode,
+            b: ConcreteValueNode,
+            outShape: KnownShape = [rank],
+        ): ConcreteValueNode => {
+            const [lt] = builder.createOp("Less", [a, b], {}, [
+                { type: DataType.BOOL, shape: outShape },
+            ]);
+            return builder.createOp("Where", [lt, a, b], {}, [
+                { type: DataType.INT64, shape: outShape },
+            ])[0];
+        };
+
         // Positive step: clamp to [0, dim]
-        const [sClampPos] = builder.createOp("Min", [
-            builder.createOp("Max", [sWrap, zeroSc])[0],
-            shapeData,
-        ]);
-        const [eClampPos] = builder.createOp("Min", [
-            builder.createOp("Max", [eWrap, zeroSc])[0],
-            shapeData,
-        ]);
+        const sClampPos = clampMin(clampMax(sWrap, zeroSc), shapeData);
+        const eClampPos = clampMin(clampMax(eWrap, zeroSc), shapeData);
 
         // Negative step: clamp to [-1, dim - 1]
-        const [sClampNeg] = builder.createOp("Min", [
-            builder.createOp("Max", [sWrap, negOneSc])[0],
-            maxIdx,
-        ]);
-        const [eClampNeg] = builder.createOp("Min", [
-            builder.createOp("Max", [eWrap, negOneSc])[0],
-            maxIdx,
-        ]);
+        const sClampNeg = clampMin(clampMax(sWrap, negOneSc), maxIdx);
+        const eClampNeg = clampMin(clampMax(eWrap, negOneSc), maxIdx);
 
         const [effStarts] = builder.createOp("Where", [posStep, sClampPos, sClampNeg]);
         const [effEnds] = builder.createOp("Where", [posStep, eClampPos, eClampNeg]);
@@ -213,39 +241,123 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
         );
 
         const zeroSc = builder.createConstant(`slb_z_${op.id}`, scalarInt64(0));
-        const oneSc = builder.createConstant(`slb_o_${op.id}`, scalarInt64(1));
-        const negOneSc = builder.createConstant(`slb_m1_${op.id}`, scalarInt64(-1));
 
-        // Positive step: ceil(max(0, effEnds - effStarts) / fullSteps)
-        const [spanPos] = builder.createOp("Max", [
-            builder.createOp("Sub", [effEnds, effStarts])[0],
-            zeroSc,
-        ]);
-        const [posDenom] = builder.createOp("Where", [posStep, fullSteps, oneSc]);
-        const [dimPos] = builder.createOp("Div", [
-            builder.createOp("Sub", [builder.createOp("Add", [spanPos, posDenom])[0], oneSc])[0],
-            posDenom,
-        ]);
+        const clampZero = (v: ConcreteValueNode): ConcreteValueNode => {
+            const [gt] = builder.createOp("Greater", [v, zeroSc], {}, [
+                { type: DataType.BOOL, shape: [rank] },
+            ]);
+            return builder.createOp("Where", [gt, v, zeroSc], {}, [
+                { type: DataType.INT64, shape: [rank] },
+            ])[0];
+        };
 
-        // Negative step: ceil(max(0, effStarts - effEnds) / (-fullSteps))
-        const [spanNeg] = builder.createOp("Max", [
-            builder.createOp("Sub", [effStarts, effEnds])[0],
-            zeroSc,
-        ]);
-        const [negSteps] = builder.createOp("Mul", [fullSteps, negOneSc]);
-        const [negDenom] = builder.createOp("Where", [posStep, oneSc, negSteps]);
-        const [dimNeg] = builder.createOp("Div", [
-            builder.createOp("Sub", [builder.createOp("Add", [spanNeg, negDenom])[0], oneSc])[0],
-            negDenom,
-        ]);
+        const spanPos = clampZero(builder.createOp("Sub", [effEnds, effStarts])[0]);
+        const spanNeg = clampZero(builder.createOp("Sub", [effStarts, effEnds])[0]);
 
-        const [targetShape] = builder.createOp("Where", [posStep, dimPos, dimNeg], {}, [
-            { type: DataType.INT64, shape: [rank] },
-        ]);
+        const rawStepsConst = readConstVec(ins[4]);
+        const rawAxesConst = readConstVec(ins[3]);
+        const hasKnownPerAxisSteps =
+            !isPresent(ins[4]) ||
+            (rawStepsConst !== undefined && (!isPresent(ins[3]) || rawAxesConst !== undefined));
+
+        let fullConstSteps: number[] | undefined;
+        if (hasKnownPerAxisSteps) {
+            fullConstSteps = new Array(rank).fill(1);
+            if (rawStepsConst !== undefined) {
+                const axesList =
+                    rawAxesConst ?? Array.from({ length: rawStepsConst.length }, (_, i) => i);
+                for (let i = 0; i < axesList.length; i++) {
+                    const ax = axesList[i] < 0 ? axesList[i] + rank : axesList[i];
+                    if (ax >= 0 && ax < rank) {
+                        fullConstSteps[ax] = Number(rawStepsConst[i]);
+                    }
+                }
+            }
+        }
+
+        const isAllUnitSteps =
+            fullConstSteps !== undefined && fullConstSteps.every((s) => Math.abs(s) === 1);
+        const isAllPow2Steps =
+            fullConstSteps !== undefined &&
+            fullConstSteps.every((s) => {
+                const a = Math.abs(s);
+                return a > 0 && (a & (a - 1)) === 0;
+            });
+
+        let targetShape: ConcreteValueNode;
+        if (isAllUnitSteps) {
+            [targetShape] = builder.createOp("Where", [posStep, spanPos, spanNeg], {}, [
+                { type: DataType.INT64, shape: [rank] },
+            ]);
+        } else if (isAllPow2Steps && fullConstSteps !== undefined) {
+            const perAxisDims: ConcreteValueNode[] = [];
+            for (let d = 0; d < rank; d++) {
+                const st = fullConstSteps[d];
+                const absSt = Math.abs(st);
+                const spanVec = st > 0 ? spanPos : spanNeg;
+                const dIdx = builder.createConstant(`slb_didx_${d}_${op.id}`, scalarInt64(d));
+                const spanD = gatherScalar(builder, spanVec, dIdx);
+                if (absSt === 1) {
+                    perAxisDims.push(spanD);
+                } else {
+                    const shiftK = Math.round(Math.log2(absSt));
+                    const roundUp = builder.createConstant(
+                        `slb_ru_${d}_${op.id}`,
+                        scalarInt64(absSt - 1),
+                    );
+                    const [num] = builder.createOp("Add", [spanD, roundUp]);
+                    const [numU64] = builder.createOp("Cast", [num], { to: DataType.UINT64 });
+                    const shiftC = builder.createConstant(
+                        `slb_sh_${d}_${op.id}`,
+                        makeTensorProto(DataType.UINT64, [], [shiftK]),
+                    );
+                    const [shifted] = builder.createOp("BitShift", [numU64, shiftC], {
+                        direction: "RIGHT",
+                    });
+                    const [dimD] = builder.createOp("Cast", [shifted], { to: DataType.INT64 });
+                    perAxisDims.push(dimD);
+                }
+            }
+            targetShape = packShapeVector(builder, perAxisDims, `slb_tsh_${op.id}`);
+        } else {
+            const oneSc = builder.createConstant(`slb_o_${op.id}`, scalarInt64(1));
+            const negOneSc = builder.createConstant(`slb_m1_${op.id}`, scalarInt64(-1));
+            // Positive step: ceil(max(0, effEnds - effStarts) / fullSteps)
+            const [posDenom] = builder.createOp("Where", [posStep, fullSteps, oneSc]);
+            const [dimPos] = builder.createOp("Div", [
+                builder.createOp("Sub", [
+                    builder.createOp("Add", [spanPos, posDenom])[0],
+                    oneSc,
+                ])[0],
+                posDenom,
+            ]);
+
+            // Negative step: ceil(max(0, effStarts - effEnds) / (-fullSteps))
+            const [negSteps] = builder.createOp("Mul", [fullSteps, negOneSc]);
+            const [negDenom] = builder.createOp("Where", [posStep, oneSc, negSteps]);
+            const [dimNeg] = builder.createOp("Div", [
+                builder.createOp("Sub", [
+                    builder.createOp("Add", [spanNeg, negDenom])[0],
+                    oneSc,
+                ])[0],
+                negDenom,
+            ]);
+
+            [targetShape] = builder.createOp("Where", [posStep, dimPos, dimNeg], {}, [
+                { type: DataType.INT64, shape: [rank] },
+            ]);
+        }
 
         const axes0 = builder.createConstant(`slb_ax0_${op.id}`, int64Vec([0]));
-        const [totalIters] = builder.createOp("ReduceProd", [targetShape, axes0], { keepdims: 0 });
-        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0]);
+        const targetDimsForProd: ConcreteValueNode[] = [];
+        for (let d = 0; d < rank; d++) {
+            const dIdx = builder.createConstant(`slb_pidx_${d}_${op.id}`, scalarInt64(d));
+            targetDimsForProd.push(gatherScalar(builder, targetShape, dIdx));
+        }
+        const totalIters = productMixed(builder, targetDimsForProd, `slb_tot_${op.id}`);
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
 
         return { totalIters, carryShape, targetShape };
     }
@@ -266,46 +378,20 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
         const rank = ins[0].shape.length;
         const k = toStaticShape(ins[1].shape)[0];
 
-        const rawData = resolveRecipeInput(
-            builder,
-            ins[0],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-            targetShapeNode,
-            loopCtx,
-        );
-        const rawStarts = resolveRecipeInput(
-            builder,
-            ins[1],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-            targetShapeNode,
-            loopCtx,
-        );
-        const rawEnds = resolveRecipeInput(
-            builder,
-            ins[2],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-            targetShapeNode,
-            loopCtx,
-        );
-        const rawAxes = isPresent(ins[3])
-            ? resolveRecipeInput(
+        const canHoist =
+            loopCtx !== undefined &&
+            ins.every(
+                (inp) =>
+                    !isPresent(inp) ||
+                    (!valueMap.has(inp.id) && loopCtx.outerBuilder.graph.hasNode(inp.id)),
+            );
+
+        const paramBuilder = canHoist ? loopCtx!.outerBuilder : builder;
+        const rawData = canHoist
+            ? (ins[0] as ConcreteValueNode)
+            : resolveRecipeInput(
                   builder,
-                  ins[3],
+                  ins[0],
                   valueMap,
                   iter,
                   axes,
@@ -314,25 +400,70 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
                   false,
                   targetShapeNode,
                   loopCtx,
-              )
+              );
+        const rawStarts = canHoist
+            ? (ins[1] as ConcreteValueNode)
+            : resolveRecipeInput(
+                  builder,
+                  ins[1],
+                  valueMap,
+                  iter,
+                  axes,
+                  outShape,
+                  false,
+                  false,
+                  targetShapeNode,
+                  loopCtx,
+              );
+        const rawEnds = canHoist
+            ? (ins[2] as ConcreteValueNode)
+            : resolveRecipeInput(
+                  builder,
+                  ins[2],
+                  valueMap,
+                  iter,
+                  axes,
+                  outShape,
+                  false,
+                  false,
+                  targetShapeNode,
+                  loopCtx,
+              );
+        const rawAxes = isPresent(ins[3])
+            ? canHoist
+                ? (ins[3] as ConcreteValueNode)
+                : resolveRecipeInput(
+                      builder,
+                      ins[3],
+                      valueMap,
+                      iter,
+                      axes,
+                      outShape,
+                      false,
+                      false,
+                      targetShapeNode,
+                      loopCtx,
+                  )
             : undefined;
         const rawSteps = isPresent(ins[4])
-            ? resolveRecipeInput(
-                  builder,
-                  ins[4],
-                  valueMap,
-                  iter,
-                  axes,
-                  outShape,
-                  false,
-                  false,
-                  targetShapeNode,
-                  loopCtx,
-              )
+            ? canHoist
+                ? (ins[4] as ConcreteValueNode)
+                : resolveRecipeInput(
+                      builder,
+                      ins[4],
+                      valueMap,
+                      iter,
+                      axes,
+                      outShape,
+                      false,
+                      false,
+                      targetShapeNode,
+                      loopCtx,
+                  )
             : undefined;
 
         const { shapeData, effStarts, fullSteps } = this.normalizeSliceParams(
-            builder,
+            paramBuilder,
             rawData,
             rawStarts,
             rawEnds,
@@ -343,24 +474,57 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
             `sli_${op.id}`,
         );
 
-        const innerTargetShape = ensureInnerValueNode(builder, targetShapeNode!);
-        const flatData = ensureFlatInput(builder, rawData);
+        const paramTargetShape = canHoist
+            ? (targetShapeNode! as ConcreteValueNode)
+            : ensureInnerValueNode(paramBuilder, targetShapeNode!);
+        const flatDataOuter = ensureFlatInput(paramBuilder, rawData);
 
-        const gatherElem = (vec: ValueNode, idx: number, tag: string): ConcreteValueNode => {
-            const idxC = builder.createConstant(`${tag}_${idx}`, scalarInt64(idx));
-            return gatherScalar(builder, vec, idxC);
+        const gatherElem = (
+            b: GraphBuilder,
+            vec: ValueNode,
+            idx: number,
+            tag: string,
+        ): ConcreteValueNode => {
+            const idxC = b.createConstant(`${tag}_${idx}`, scalarInt64(idx));
+            return gatherScalar(b, vec, idxC);
         };
 
-        const inDims: ConcreteValueNode[] = [];
-        const outDims: ConcreteValueNode[] = [];
-        const startDims: ConcreteValueNode[] = [];
-        const stepDims: ConcreteValueNode[] = [];
+        const rawInDims: ConcreteValueNode[] = [];
+        const rawOutDims: ConcreteValueNode[] = [];
+        const rawStartDims: ConcreteValueNode[] = [];
+        const rawStepDims: ConcreteValueNode[] = [];
         for (let d = 0; d < rank; d++) {
-            inDims.push(gatherElem(shapeData, d, `sli_id_${op.id}`));
-            outDims.push(gatherElem(innerTargetShape, d, `sli_od_${op.id}`));
-            startDims.push(gatherElem(effStarts, d, `sli_st_${op.id}`));
-            stepDims.push(gatherElem(fullSteps, d, `sli_sp_${op.id}`));
+            rawInDims.push(gatherElem(paramBuilder, shapeData, d, `sli_id_${op.id}`));
+            rawOutDims.push(gatherElem(paramBuilder, paramTargetShape, d, `sli_od_${op.id}`));
+            rawStartDims.push(gatherElem(paramBuilder, effStarts, d, `sli_st_${op.id}`));
+            rawStepDims.push(gatherElem(paramBuilder, fullSteps, d, `sli_sp_${op.id}`));
         }
+
+        const rawInStrides: (number | ConcreteValueNode)[] = new Array(rank).fill(1);
+        let curStride: number | ConcreteValueNode = 1;
+        for (let d = rank - 1; d >= 0; d--) {
+            rawInStrides[d] = curStride;
+            if (d > 0) {
+                curStride = mulMixed(
+                    paramBuilder,
+                    curStride,
+                    rawInDims[d],
+                    `sli_str_${d}_${op.id}`,
+                );
+            }
+        }
+
+        const flatData = canHoist ? ensureInnerValueNode(builder, flatDataOuter) : flatDataOuter;
+        const outDims = (
+            canHoist ? captureMixedList(builder, rawOutDims) : rawOutDims
+        ) as ConcreteValueNode[];
+        const startDims = (
+            canHoist ? captureMixedList(builder, rawStartDims) : rawStartDims
+        ) as ConcreteValueNode[];
+        const stepDims = (
+            canHoist ? captureMixedList(builder, rawStepDims) : rawStepDims
+        ) as ConcreteValueNode[];
+        const inStrides = canHoist ? captureMixedList(builder, rawInStrides) : rawInStrides;
 
         const outCoords: ConcreteValueNode[] =
             loopCtx && loopCtx.indexingMode === IndexingMode.Pointer
@@ -378,18 +542,6 @@ export class LowerSliceLoopRecipe implements LoopLoweringRecipe {
             const [scaled] = builder.createOp("Mul", [outCoords[d], stepDims[d]]);
             const [coord] = builder.createOp("Add", [startDims[d], scaled]);
             inCoords.push(coord);
-        }
-
-        const inStrides: (number | ValueNode)[] = new Array(rank).fill(1);
-        let curStride: number | ValueNode = 1;
-        for (let d = rank - 1; d >= 0; d--) {
-            inStrides[d] = curStride;
-            if (d > 0) {
-                curStride =
-                    typeof curStride === "number"
-                        ? inDims[d]
-                        : builder.createOp("Mul", [curStride, inDims[d]])[0];
-            }
         }
 
         const flatInIdx = buildLinearIndex(builder, inCoords, inStrides, `sli_lin_${op.id}`);
