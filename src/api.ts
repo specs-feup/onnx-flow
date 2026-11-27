@@ -71,6 +71,13 @@ export * from "./Onnx/transformation/loop-lowering/LoopLoweringRecipe.js";
 export * from "./Onnx/transformation/loop-lowering/RecipeUtils.js";
 export { DeadCodeEliminationPass } from "./Onnx/transformation/optimization/DeadCodeEliminationPass.js";
 export { ShapeOptimizationPass } from "./Onnx/transformation/optimization/ShapeOptimizationPass.js";
+export {
+    Schedule,
+    LOOP_LOWERING_RECIPE_NAMES,
+    type ScheduleConfig,
+    type SchedulePresetName,
+    type StopPhase,
+} from "./Onnx/transformation/Schedule.js";
 export * from "./Onnx/transformation/recipes.js";
 
 /**

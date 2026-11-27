@@ -20,6 +20,70 @@ import { inferNodeShape } from "./InferShapes.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 import type BaseEdge from "@specs-feup/flow/graph/BaseEdge";
 
+export interface SubgraphMeta {
+    nodeCount: number;
+    hasNestedRegions: boolean;
+    hasRenamedArgs: boolean;
+}
+
+export const subgraphMetaCache = new WeakMap<OnnxGraph.Class, SubgraphMeta>();
+
+export function getSubgraphMeta(g: OnnxGraph.Class): SubgraphMeta {
+    const nodeCount = g.nodes.length;
+    const cached = subgraphMetaCache.get(g);
+    if (cached && cached.nodeCount === nodeCount) {
+        return cached;
+    }
+    let hasNestedRegions = false;
+    for (const op of g.getOperationNodes()) {
+        if (op.regions.length > 0) {
+            hasNestedRegions = true;
+            break;
+        }
+    }
+    let hasRenamedArgs = false;
+    for (const arg of g.getNodes().filterIs(RegionArgumentNode)) {
+        if (arg.id !== arg.originalName) {
+            hasRenamedArgs = true;
+            break;
+        }
+    }
+    const meta: SubgraphMeta = { nodeCount, hasNestedRegions, hasRenamedArgs };
+    subgraphMetaCache.set(g, meta);
+    return meta;
+}
+
+export function getDirectReplaceSources(
+    g: OnnxGraph.Class,
+    rootGraph: OnnxGraph.Class,
+    oldNode: ValueNode,
+): ValueNode[] {
+    if (g === rootGraph) return [oldNode];
+    const meta = getSubgraphMeta(g);
+    const matched: ValueNode[] = [];
+    const seenIds = new Set<string>();
+    if (g.hasNode(oldNode.id)) {
+        const n = g.getNodeById(oldNode.id)!;
+        if (
+            (n.is(RegionArgumentNode) && n.as(RegionArgumentNode).originalName === oldNode.id) ||
+            n.is(TensorNode) ||
+            n.is(ConstantNode)
+        ) {
+            seenIds.add(n.id);
+            matched.push(n as ValueNode);
+        }
+    }
+    if (meta.hasRenamedArgs) {
+        for (const arg of g.getNodes().filterIs(RegionArgumentNode)) {
+            if (!seenIds.has(arg.id) && arg.originalName === oldNode.id) {
+                seenIds.add(arg.id);
+                matched.push(arg);
+            }
+        }
+    }
+    return matched;
+}
+
 export class GraphBuilder {
     constructor(
         public graph: OnnxGraph.Class,
@@ -35,6 +99,7 @@ export class GraphBuilder {
         D extends BaseNode.Data,
         S extends BaseNode.ScratchData,
     >(nodeId: string, builder: Node.Builder<D, S>): T {
+        subgraphMetaCache.delete(this.graph);
         return this.graph.addNode(nodeId).init(builder) as unknown as T;
     }
 
@@ -59,6 +124,7 @@ export class GraphBuilder {
      * Overridden by TrackedGraphBuilder to snapshot the node before destruction.
      */
     public removeNode(node: BaseNode.Class): void {
+        subgraphMetaCache.delete(this.graph);
         node.remove();
     }
 
@@ -301,21 +367,31 @@ export class GraphBuilder {
         // 1. Recursive helper to update uses inside the current graph AND subgraphs
         const ensureReplacementInGraph = (g: OnnxGraph.Class): ValueNode => {
             if (g === this.graph) return newNode;
-            if (g.hasNode(newNode.id)) {
-                const existing = g.getNodeById(newNode.id)!;
-                if (existing.is(TensorNode)) return existing.as(TensorNode);
-                if (existing.is(ConstantNode)) return existing.as(ConstantNode);
-                if (existing.is(RegionArgumentNode)) return existing.as(RegionArgumentNode);
-            }
-            if (newNode.is(ConstantNode)) {
-                const c = newNode.as(ConstantNode);
-                return new GraphBuilder(g, this.scopeTag).createConstant(c.id, c.constantValue);
-            }
             const origName = newNode.is(RegionArgumentNode)
                 ? newNode.as(RegionArgumentNode).originalName
                 : newNode.id;
+            if (g.hasNode(newNode.id)) {
+                const existing = g.getNodeById(newNode.id)!;
+                if (
+                    existing.is(RegionArgumentNode) &&
+                    existing.as(RegionArgumentNode).originalName === origName
+                ) {
+                    return existing.as(RegionArgumentNode);
+                }
+                if (newNode.is(ConstantNode) && existing.is(ConstantNode)) {
+                    return existing.as(ConstantNode);
+                }
+            }
+            if (newNode.is(ConstantNode)) {
+                const c = newNode.as(ConstantNode);
+                return new GraphBuilder(g, this.scopeTag).createConstant(
+                    uniq(g, c.id),
+                    c.constantValue,
+                );
+            }
+            const argId = g.hasNode(newNode.id) ? uniq(g, `${newNode.id}_cap`) : newNode.id;
             return g
-                .addNode(newNode.id)
+                .addNode(argId)
                 .init(
                     new RegionArgumentNode.Builder(0, origName, newNode.literalType, newNode.shape),
                 )
@@ -330,13 +406,23 @@ export class GraphBuilder {
 
             let replacementInG: ValueNode | undefined = g === this.graph ? newNode : undefined;
 
-            for (const op of g.getOperationNodes().toArray()) {
+            const directSources = getDirectReplaceSources(g, this.graph, oldNode);
+
+            const candidateOps = new Set<OperationNode.Class>();
+            for (const src of directSources) {
+                for (const op of src.outgoers.targets.filterIs(OperationNode)) {
+                    candidateOps.add(op);
+                }
+            }
+
+            for (const op of candidateOps) {
                 const currentInputs = op.getInputs() ?? [];
                 const matchedOldNodes = currentInputs.filter(matchesOld);
 
                 if (matchedOldNodes.length > 0) {
                     if (!replacementInG) {
                         replacementInG = ensureReplacementInGraph(g);
+                        subgraphMetaCache.delete(g);
                     }
                     const targetRep = replacementInG;
                     const updatedInputs = currentInputs.map((input) =>
@@ -364,18 +450,31 @@ export class GraphBuilder {
                         }
                     }
                 }
+            }
 
-                // Recursively update control-flow subgraphs (Loop, If, Scan bodies)
+            // Recursively update control-flow subgraphs only when they can reference oldNode or contain deeper regions
+            for (const op of g.getOperationNodes()) {
                 for (const sub of op.regions) {
-                    updateUsesInGraph(sub as OnnxGraph.Class);
+                    const subGraph = sub as OnnxGraph.Class;
+                    const subMeta = getSubgraphMeta(subGraph);
+                    if (
+                        !subMeta.hasNestedRegions &&
+                        !subMeta.hasRenamedArgs &&
+                        !subGraph.hasNode(oldNode.id)
+                    ) {
+                        continue;
+                    }
+                    updateUsesInGraph(subGraph);
                 }
             }
 
             // Clean up orphaned RegionArgumentNode in subgraphs after re-capturing to newNode
             if (g !== this.graph && replacementInG !== undefined) {
-                const staleArg = g.getNodeById(oldNode.id);
-                if (staleArg && staleArg.is(RegionArgumentNode) && staleArg.outgoers.length === 0) {
-                    staleArg.remove();
+                for (const src of directSources) {
+                    if (src.is(RegionArgumentNode) && src.outgoers.length === 0) {
+                        src.remove();
+                        subgraphMetaCache.delete(g);
+                    }
                 }
             }
         };

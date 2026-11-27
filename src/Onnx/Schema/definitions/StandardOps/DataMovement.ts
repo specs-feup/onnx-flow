@@ -26,8 +26,9 @@ export const Reshape: OpSchema = {
 
         if (target.length > 0) {
             if (inputShape.length > 0) {
-                const inNums = inputShape.map((d) => (typeof d === "number" ? d : 1));
-                const prodIn = inNums.reduce((a, b) => a * b, 1);
+                const inNums = inputShape.map((d) => (typeof d === "number" ? d : -1));
+                const hasDynamicIn = inNums.some((d) => d < 0);
+                const prodIn = hasDynamicIn ? -1 : inNums.reduce((a, b) => a * b, 1);
 
                 let inferIndex = -1;
                 let knownProd = 1;
@@ -36,18 +37,22 @@ export const Reshape: OpSchema = {
                 resolved.forEach((d, i) => {
                     // If allowZero is 1, a 0 dimension actually means 0, not "copy".
                     if (d === 0 && allowZero === 0) {
-                        resolved[i] = inNums[i] ?? 1;
+                        resolved[i] = i < inNums.length ? inNums[i] : -1;
                     }
                 });
                 resolved.forEach((d, i) => {
                     if (d === -1) {
                         inferIndex = i;
-                    } else {
+                    } else if (d < 0) {
+                        knownProd = -1;
+                    } else if (knownProd >= 0) {
                         knownProd *= d || 1;
                     }
                 });
 
-                if (inferIndex !== -1) resolved[inferIndex] = prodIn / (knownProd || 1);
+                if (inferIndex !== -1) {
+                    resolved[inferIndex] = !hasDynamicIn && knownProd > 0 ? prodIn / knownProd : -1;
+                }
                 return [{ shape: resolved, dtype }];
             } else {
                 return [{ shape: target.map((d) => (d === 0 || d === -1 ? -1 : d)), dtype }];
@@ -574,7 +579,7 @@ export const Squeeze: OpSchema = {
         } else {
             const rank = inputShape.length;
             const norm = new Set(axes.map((a) => (a < 0 ? ((a % rank) + rank) % rank : a)));
-            return [{ shape: inputShape.filter((dim, idx) => !norm.has(idx) || dim !== 1), dtype }];
+            return [{ shape: inputShape.filter((_dim, idx) => !norm.has(idx)), dtype }];
         }
     },
 };
@@ -681,15 +686,16 @@ export const OneHot: OpSchema = {
         axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: -1 },
     },
 
-    inferShape: (inputs) => {
+    inferShape: (inputs, attrs) => {
         const indicesShape = inputs[0]?.shape ?? [];
-        const depth = inputs[1]?.constantValue?.[0] ?? 0;
+        const depth = inputs[1]?.constantValue?.[0] ?? -1;
         const dtype = inputs[2]?.dtype ?? DataType.FLOAT;
-
-        if (indicesShape.length > 0) {
-            return [{ shape: [...indicesShape, depth > 0 ? depth : 1], dtype }];
-        }
-        return [{ shape: depth > 0 ? [depth] : [], dtype }];
+        const outRank = indicesShape.length + 1;
+        const rawAxis = typeof attrs["axis"] === "number" ? attrs["axis"] : -1;
+        const axis = Math.max(0, Math.min(outRank - 1, rawAxis < 0 ? outRank + rawAxis : rawAxis));
+        const outShape = [...indicesShape];
+        outShape.splice(axis, 0, depth > 0 ? depth : -1);
+        return [{ shape: outShape, dtype }];
     },
 };
 

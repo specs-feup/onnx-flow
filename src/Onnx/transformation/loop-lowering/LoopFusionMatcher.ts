@@ -6,12 +6,19 @@ import type { ValueNode, KnownShape, StaticShape, ConcreteValueNode } from "../.
 import { DataType } from "../../OnnxTypes.js";
 import {
     asStaticDims,
+    toStaticShape,
     UNKNOWN_SHAPE,
     topologicalSortOperationNodes,
     int64Vec,
-    scalarInt64,
 } from "../../Utils.js";
-import { buildForLoopRegion } from "./LoopBuilder.js";
+import { buildForLoopRegion, createAccumulatorCarry, type LoopScanOutput } from "./LoopBuilder.js";
+import {
+    buildLinearIndex,
+    buildMixedStrides,
+    decodeMixedRadix,
+    extractMixedDims,
+} from "./RecipeUtils.js";
+import { lookupScheduleMap, matchesScheduleTarget, type ScheduleConfig } from "../Schedule.js";
 import { OpCategory } from "../../Schema/OpSchema.js";
 import { OpRegistry } from "../../Schema/OpRegistry.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
@@ -43,6 +50,13 @@ import { LowerDynamicReductionRecipe } from "./recipes/LowerDynamicReductionReci
 import { LowerOneHotLoopRecipe } from "./recipes/LowerOneHotLoopRecipe.js";
 import { LowerResizeCubicRecipe } from "./recipes/LowerResizeCubicRecipe.js";
 import { LowerDynamicBatchedMatMulRecipe } from "./recipes/LowerDynamicBatchedMatMulRecipe.js";
+import { LowerConcatLoopRecipe } from "./recipes/LowerConcatLoopRecipe.js";
+import { LowerSoftmaxLoopRecipe } from "./recipes/LowerSoftmaxLoopRecipe.js";
+import { LowerLayerNormLoopRecipe } from "./recipes/LowerLayerNormLoopRecipe.js";
+import { LowerLogSoftmaxLoopRecipe } from "./recipes/LowerLogSoftmaxLoopRecipe.js";
+import { LowerRMSNormLoopRecipe } from "./recipes/LowerRMSNormLoopRecipe.js";
+import { LowerDetLoopRecipe } from "./recipes/LowerDetLoopRecipe.js";
+import { LowerTopKScalarLoopRecipe } from "./recipes/LowerTopKScalarLoopRecipe.js";
 
 export class LoopFusionMatcher {
     private boundsCache = new Map<
@@ -52,7 +66,14 @@ export class LoopFusionMatcher {
     private recipes: LoopLoweringRecipe[];
 
     constructor(
-        private options: { coalesce: boolean; fuse: boolean; indexingMode: IndexingMode },
+        private options: {
+            coalesce: boolean;
+            fuse: boolean;
+            indexingMode: IndexingMode;
+            useScanOutputs?: boolean;
+            fuseMultiOutput?: boolean;
+            schedule?: ScheduleConfig;
+        },
         customRecipes?: LoopLoweringRecipe[],
     ) {
         this.recipes =
@@ -84,6 +105,13 @@ export class LoopFusionMatcher {
                       new LowerDynamicReductionRecipe(),
                       new LowerResizeCubicRecipe(),
                       new LowerDynamicBatchedMatMulRecipe(),
+                      new LowerConcatLoopRecipe(),
+                      new LowerSoftmaxLoopRecipe(),
+                      new LowerLayerNormLoopRecipe(),
+                      new LowerLogSoftmaxLoopRecipe(),
+                      new LowerRMSNormLoopRecipe(),
+                      new LowerDetLoopRecipe(),
+                      new LowerTopKScalarLoopRecipe(),
                   ];
 
         this.recipes.sort((a, b) => b.priority - a.priority);
@@ -124,25 +152,142 @@ export class LoopFusionMatcher {
         outerBuilder: GraphBuilder,
     ): void {
         const rootOp = chain[chain.length - 1];
+        const rootRecipe = this.getRecipeFor(rootOp)!;
+        const stampLoopMetadata = (loops: OperationNode.Class[]) => {
+            const srcOpsSet = new Set<string>();
+            const srcTypesSet = new Set<string>();
+            for (const o of chain) {
+                srcOpsSet.add(o.id);
+                srcTypesSet.add(o.type);
+                const prevOps = o.getMetadata("sourceOps");
+                if (Array.isArray(prevOps)) prevOps.forEach((s) => srcOpsSet.add(String(s)));
+                const prevTypes = o.getMetadata("sourceOpTypes");
+                if (Array.isArray(prevTypes)) prevTypes.forEach((s) => srcTypesSet.add(String(s)));
+            }
+            const srcOps = Array.from(srcOpsSet);
+            const srcTypes = Array.from(srcTypesSet);
+            for (const l of loops) {
+                l.setMetadata("sourceOps", srcOps);
+                l.setMetadata("sourceOpTypes", srcTypes);
+            }
+        };
+        if (chain.length === 1 && rootRecipe.lowerStandalone) {
+            const prevLoops = new Set(
+                graph
+                    .getOperationNodes()
+                    .toArray()
+                    .filter((o) => o.type === "Loop")
+                    .map((o) => o.id),
+            );
+            rootRecipe.lowerStandalone(rootOp, outerBuilder, this.options.indexingMode);
+            const newLoops = graph
+                .getOperationNodes()
+                .toArray()
+                .filter((o) => o.type === "Loop" && !prevLoops.has(o.id));
+            stampLoopMetadata(newLoops);
+            return;
+        }
+
         const rootOutNodeRaw = rootOp.getOutgoers.targets.filterIs(TensorNode).first()!;
+        const chainSet = new Set(chain.map((o) => o.id));
+        const chainOutputs: TensorNode.Class[] = [rootOutNodeRaw];
+        const seenOutIds = new Set<string>([rootOutNodeRaw.id]);
+        for (const op of chain) {
+            for (const t of op.getOutgoers.targets.filterIs(TensorNode).toArray()) {
+                if (seenOutIds.has(t.id)) continue;
+                const hasExternalConsumer = t.outgoers.targets
+                    .filterIs(OperationNode)
+                    .toArray()
+                    .some((c) => !chainSet.has(c.id));
+                if (t.type === "output" || hasExternalConsumer) {
+                    seenOutIds.add(t.id);
+                    chainOutputs.push(t);
+                }
+            }
+        }
+
         const originalOutShape: KnownShape = [...(rootOutNodeRaw.shape as KnownShape)];
         const elemTy = rootOutNodeRaw.literalType || DataType.FLOAT;
 
         const bounds = this.getBoundsFor(rootOp);
         const totalIters = bounds.totalIters;
         const carryShape = bounds.carryShape as StaticShape;
+        const isSelfCarry = rootRecipe.tags?.includes("self-carry") === true;
+        const useScan = this.options.useScanOutputs === true && !isSelfCarry;
+
+        const rawAxisPerm =
+            !isSelfCarry && originalOutShape.length > 1
+                ? (chain
+                      .map((o) => lookupScheduleMap(this.options.schedule?.axisPerms, o))
+                      .find((p) => p !== undefined) ?? undefined)
+                : undefined;
+        const axisPerm =
+            rawAxisPerm &&
+            rawAxisPerm.length === originalOutShape.length &&
+            rawAxisPerm.every(
+                (p, idx, arr) =>
+                    Number.isInteger(p) &&
+                    p >= 0 &&
+                    p < originalOutShape.length &&
+                    arr.indexOf(p) === idx,
+            )
+                ? rawAxisPerm
+                : undefined;
 
         // 1. Initialize Loop Region via GraphBuilder helper
-        const { innerBuilder, trip, vInitial, loopOutput, loopCtx, finalize } = buildForLoopRegion(
-            outerBuilder,
-            totalIters,
-            elemTy,
-            carryShape,
-            `Loop_${rootOp.id}`,
-            `lowering_${rootOp.id}`,
-            this.options.indexingMode,
-        );
+        const effectiveIndexingMode =
+            axisPerm !== undefined ? IndexingMode.Radix : this.options.indexingMode;
+        const { innerBuilder, trip, vInitial, loopOutput, loopOutputs, loopCtx, finalize } =
+            buildForLoopRegion(
+                outerBuilder,
+                totalIters,
+                elemTy,
+                carryShape,
+                `Loop_${rootOp.id}`,
+                `lowering_${rootOp.id}`,
+                effectiveIndexingMode,
+                !useScan,
+            );
         const body = innerBuilder.graph;
+
+        let effectiveIter: ConcreteValueNode = trip;
+        if (axisPerm !== undefined) {
+            const innerOutDims = bounds.targetShape
+                ? extractMixedDims(
+                      innerBuilder,
+                      bounds.targetShape as ConcreteValueNode,
+                      [originalOutShape.length],
+                      `perm_t_${rootOp.id}`,
+                  )
+                : (originalOutShape as (number | ConcreteValueNode)[]).map((d, di) =>
+                      typeof d === "number" && d > 0
+                          ? d
+                          : extractMixedDims(
+                                innerBuilder,
+                                bounds.targetShape as ConcreteValueNode,
+                                [originalOutShape.length],
+                                `perm_d_${rootOp.id}`,
+                            )[di],
+                  );
+            const permDims = axisPerm.map((p) => innerOutDims[p]);
+            const origStrides = buildMixedStrides(innerBuilder, innerOutDims);
+            const permCoords = decodeMixedRadix(
+                innerBuilder,
+                trip,
+                permDims,
+                `perm_dec_${rootOp.id}`,
+            );
+            const origCoords: ConcreteValueNode[] = new Array(axisPerm.length);
+            axisPerm.forEach((p, idx) => {
+                origCoords[p] = permCoords[idx];
+            });
+            effectiveIter = buildLinearIndex(
+                innerBuilder,
+                origCoords,
+                origStrides,
+                `perm_idx_${rootOp.id}`,
+            );
+        }
 
         const axes = innerBuilder.createConstant("axes", int64Vec([0]));
         const valueMap = new Map<string, ValueNode>();
@@ -155,7 +300,7 @@ export class LoopFusionMatcher {
                 op,
                 body,
                 valueMap,
-                trip,
+                effectiveIter,
                 axes,
                 originalOutShape,
                 vInitial,
@@ -177,98 +322,215 @@ export class LoopFusionMatcher {
             }
         }
 
-        // 3. Finalize Loop Body result
-        let carryOutNode: ValueNode;
-        if (finalNextCarry) {
-            carryOutNode = finalNextCarry;
+        // 3. Finalize Loop Body result (single or multi-output; ScatterElements carry mode vs native ONNX scan_outputs)
+        const rawLoopOutputs: ValueNode[] = new Array(chainOutputs.length);
+        let emittedLoopOp: OperationNode.Class;
+        if (useScan && finalNextCarry === null) {
+            const scanOutputs: LoopScanOutput[] = chainOutputs.map((outT, idx) => {
+                const scalar = valueMap.get(outT.id)!;
+                const scanVal =
+                    (scalar.shape as unknown[]).length === 0
+                        ? scalar
+                        : innerBuilder.createOp("Reshape", [
+                              scalar,
+                              innerBuilder.createConstant(`scan_0d_${idx}`, int64Vec([])),
+                          ])[0];
+                return {
+                    tag: idx === 0 ? "out" : `out_${idx}`,
+                    node: scanVal as ConcreteValueNode,
+                    elemTy: outT.literalType || elemTy,
+                    shape: [],
+                };
+            });
+            emittedLoopOp = finalize([], scanOutputs);
+            const scanBase = loopOutputs.length - chainOutputs.length;
+            for (let j = 0; j < chainOutputs.length; j++) {
+                rawLoopOutputs[j] = loopOutputs[scanBase + j];
+            }
         } else {
-            const finalScalar = valueMap.get(rootOutNodeRaw.id)!;
             const oneShape = innerBuilder.createConstant("one_shape", int64Vec([1]));
+            const sharedStoreIdx: ConcreteValueNode = effectiveIter;
+            const [iterUnsq] = !finalNextCarry
+                ? innerBuilder.createOp("Reshape", [sharedStoreIdx, oneShape])
+                : [sharedStoreIdx];
 
-            let storeIdx: ConcreteValueNode = trip;
-            if (this.options.indexingMode === IndexingMode.Pointer) {
-                const initOutPtr = outerBuilder.createConstant(
-                    `init_out_ptr_${rootOp.id}`,
-                    scalarInt64(0),
+            let primaryCarryOut: ValueNode;
+            if (finalNextCarry) {
+                primaryCarryOut = finalNextCarry;
+            } else {
+                const finalScalar0 = valueMap.get(chainOutputs[0].id)!;
+                const [finalUnsq0] = innerBuilder.createOp("Reshape", [finalScalar0, oneShape]);
+                [primaryCarryOut] = innerBuilder.createOp(
+                    "ScatterElements",
+                    [vInitial, iterUnsq, finalUnsq0],
+                    { axis: 0 },
                 );
-                const outPtrIn = loopCtx.addCarry(
-                    `out_ptr_${rootOp.id}`,
-                    initOutPtr,
-                    DataType.INT64,
-                    [],
-                );
-                const oneConst = innerBuilder.createConstant(`out_step_1`, scalarInt64(1));
-                const [nextOutPtr] = innerBuilder.createOp("Add", [outPtrIn, oneConst]);
-                loopCtx.setNextState(outPtrIn, nextOutPtr);
-                storeIdx = outPtrIn;
             }
 
-            const [iterUnsq] = innerBuilder.createOp("Reshape", [storeIdx, oneShape]);
-            const [finalUnsq] = innerBuilder.createOp("Reshape", [finalScalar, oneShape]);
+            const extraOutIndices: number[] = [];
+            if (!finalNextCarry && chainOutputs.length > 1) {
+                for (let j = 1; j < chainOutputs.length; j++) {
+                    const outT = chainOutputs[j];
+                    const outTy = outT.literalType || elemTy;
+                    const extraDef = createAccumulatorCarry(
+                        outerBuilder,
+                        outTy,
+                        carryShape,
+                        `out${j}_${rootOp.id}`,
+                    );
+                    const cIn = loopCtx.addCarry(
+                        `out_${j}_${rootOp.id}`,
+                        extraDef.initialVal,
+                        extraDef.elemTy,
+                        extraDef.shape,
+                    );
+                    extraOutIndices.push(loopOutputs.length - 1);
+                    const finalScalarJ = valueMap.get(outT.id)!;
+                    const [finalUnsqJ] = innerBuilder.createOp("Reshape", [finalScalarJ, oneShape]);
+                    const [nextCarryJ] = innerBuilder.createOp(
+                        "ScatterElements",
+                        [cIn, iterUnsq, finalUnsqJ],
+                        { axis: 0 },
+                    );
+                    loopCtx.setNextState(cIn, nextCarryJ);
+                }
+            }
 
-            [carryOutNode] = innerBuilder.createOp(
-                "ScatterElements",
-                [vInitial, iterUnsq, finalUnsq],
-                { axis: 0 },
-            );
+            emittedLoopOp = finalize([primaryCarryOut as ConcreteValueNode]);
+            rawLoopOutputs[0] = loopOutput;
+            extraOutIndices.forEach((outIdx, k) => {
+                rawLoopOutputs[k + 1] = loopOutputs[outIdx];
+            });
+        }
+        stampLoopMetadata([emittedLoopOp]);
+
+        // Rewire surviving external shape probes on absorbed intermediate tensors BEFORE final integration
+        const findExternalShapeSource = (
+            t: TensorNode.Class,
+            seen = new Set<string>(),
+        ): ValueNode | undefined => {
+            if (seen.has(t.id)) return undefined;
+            seen.add(t.id);
+            const prod = t.incomers.sources.filterIs(OperationNode).first();
+            if (!prod || !chainSet.has(prod.id)) return t;
+            const outRank = (t.shape as unknown[] | undefined)?.length ?? 0;
+            const tSig = toStaticShape(t.shape).join(",");
+            const nonScalar = (prod.getInputs() ?? []).filter((inp) => {
+                const sh = inp.shape as (number | string)[] | undefined;
+                if (!sh || sh.length === 0) return false;
+                if (sh.length <= outRank && sh.every((d) => d === 1)) return false;
+                return toStaticShape(sh).join(",") === tSig;
+            });
+            for (const inp of nonScalar) {
+                if (inp.is(TensorNode)) {
+                    const ext = findExternalShapeSource(inp.as(TensorNode), seen);
+                    if (ext) return ext;
+                } else {
+                    return inp;
+                }
+            }
+            return undefined;
+        };
+        for (const op of chain) {
+            if (op.id === rootOp.id) continue;
+            for (const t of op.getOutgoers.targets.filterIs(TensorNode).toArray()) {
+                if (seenOutIds.has(t.id)) continue;
+                const remaining = t.outgoers.targets.filterIs(OperationNode).toArray();
+                if (remaining.some((c) => !chainSet.has(c.id))) {
+                    const ext = findExternalShapeSource(t);
+                    if (ext) outerBuilder.replaceAllUsesWith(t, ext);
+                }
+            }
         }
 
-        finalize([carryOutNode as ConcreteValueNode]);
+        // 4-6. Post-process, reshape, and reconnect each output of the cluster
+        for (let j = 0; j < chainOutputs.length; j++) {
+            const outT = chainOutputs[j];
+            const outShapeJ: KnownShape = [...(outT.shape as KnownShape)];
+            const outTyJ = outT.literalType || elemTy;
+            let processedOut: ValueNode = rawLoopOutputs[j];
+            if (j === 0 && rootRecipe.postProcess) {
+                processedOut = rootRecipe.postProcess(rootOp, outerBuilder, processedOut);
+            }
 
-        // 4. Post-processing (Outer Graph)
-        let processedOut: ValueNode = loopOutput;
-        const rootRecipe = this.getRecipeFor(rootOp)!;
-        if (rootRecipe.postProcess) {
-            processedOut = rootRecipe.postProcess(rootOp, outerBuilder, loopOutput);
+            const staticCarryTotal = Array.isArray(carryShape)
+                ? (carryShape as number[]).reduce((a, b) => a * b, 1)
+                : -1;
+            const isScalarOutput = outShapeJ.length === 0 && staticCarryTotal === 1;
+            const outIsDynamic =
+                outShapeJ.includes(-1) || (outShapeJ.length === 0 && !isScalarOutput);
+            let targetShapeNode: ValueNode;
+
+            if (j === 0 && bounds.targetShape) {
+                targetShapeNode = bounds.targetShape as ValueNode;
+            } else if (Array.isArray(carryShape)) {
+                const staticCarryShape = carryShape as number[];
+                targetShapeNode = outerBuilder.createConstant(
+                    `final_shape_${j}`,
+                    int64Vec(outIsDynamic ? staticCarryShape : (outShapeJ as number[])),
+                );
+            } else {
+                targetShapeNode = carryShape as ValueNode;
+            }
+
+            let finalOutput: ValueNode;
+            if (isScalarOutput) {
+                const squeezeAxis = outerBuilder.createConstant(
+                    `squeeze_scalar_axis_${rootOp.id}_${j}`,
+                    int64Vec([0]),
+                );
+                [finalOutput] = outerBuilder.createOp("Squeeze", [processedOut, squeezeAxis], {}, [
+                    { type: outTyJ, shape: [] },
+                ]);
+            } else if (useScan && axisPerm !== undefined) {
+                // Scan output was stacked in permuted order; reshape to permShape and inverse-Transpose back
+                const permShapeKnown = axisPerm.map((p) => outShapeJ[p]) as KnownShape;
+                const invPerm: number[] = new Array(axisPerm.length);
+                axisPerm.forEach((p, idx) => {
+                    invPerm[p] = idx;
+                });
+                const permShapeConst = outerBuilder.createConstant(
+                    `perm_shape_${rootOp.id}_${j}`,
+                    int64Vec(permShapeKnown as number[]),
+                );
+                const [permReshaped] = outerBuilder.createOp(
+                    "Reshape",
+                    [processedOut, permShapeConst],
+                    {},
+                    [{ type: outTyJ, shape: permShapeKnown }],
+                );
+                [finalOutput] = outerBuilder.createOp(
+                    "Transpose",
+                    [permReshaped],
+                    { perm: invPerm },
+                    [{ type: outTyJ, shape: outShapeJ }],
+                );
+            } else {
+                const [reshaped] = outerBuilder.createOp(
+                    "Reshape",
+                    [processedOut, targetShapeNode],
+                    {},
+                    [{ type: outTyJ, shape: outShapeJ }],
+                );
+                finalOutput = reshaped;
+            }
+
+            outerBuilder.replaceAllUsesWith(outT, finalOutput);
         }
-
-        // 5. Final Reshape to target shape
-        const staticCarryTotal = Array.isArray(carryShape)
-            ? (carryShape as number[]).reduce((a, b) => a * b, 1)
-            : -1;
-        const isScalarOutput = originalOutShape.length === 0 && staticCarryTotal === 1;
-        const originalIsDynamic =
-            originalOutShape.includes(-1) || (originalOutShape.length === 0 && !isScalarOutput);
-        let targetShapeNode: ValueNode;
-
-        if (bounds.targetShape) {
-            targetShapeNode = bounds.targetShape as ValueNode;
-        } else if (Array.isArray(carryShape)) {
-            const staticCarryShape = carryShape as number[];
-            targetShapeNode = outerBuilder.createConstant(
-                `final_shape`,
-                int64Vec(originalIsDynamic ? staticCarryShape : (originalOutShape as number[])),
-            );
-        } else {
-            targetShapeNode = carryShape as ValueNode;
-        }
-
-        let finalOutput: ValueNode;
-        if (isScalarOutput) {
-            const squeezeAxis = outerBuilder.createConstant(
-                `squeeze_scalar_axis_${rootOp.id}`,
-                int64Vec([0]),
-            );
-            [finalOutput] = outerBuilder.createOp("Squeeze", [processedOut, squeezeAxis], {}, [
-                { type: elemTy, shape: [] },
-            ]);
-        } else {
-            const [reshaped] = outerBuilder.createOp(
-                "Reshape",
-                [processedOut, targetShapeNode],
-                {},
-                [{ type: elemTy, shape: originalOutShape }],
-            );
-            finalOutput = reshaped;
-        }
-
-        // 6. Integrate results back into the main graph
-        outerBuilder.replaceAllUsesWith(rootOutNodeRaw, finalOutput);
         chain.forEach((op) => outerBuilder.removeNode(op));
     }
 
     // --- Helper methods (copied exactly from your old Pass) ---
     private getRecipeFor(op: OperationNode.Class): LoopLoweringRecipe | undefined {
+        const stopPhase = lookupScheduleMap(this.options.schedule?.stopAt, op);
+        if (stopPhase === "none" || stopPhase === "canonicalization") {
+            return undefined;
+        }
+        const preferred = lookupScheduleMap(this.options.schedule?.recipeOverrides, op);
+        if (preferred !== undefined) {
+            const match = this.recipes.find((r) => r.name === preferred && r.match(op));
+            if (match) return match;
+        }
         return this.recipes.find((recipe) => recipe.match(op));
     }
 
@@ -329,96 +591,244 @@ export class LoopFusionMatcher {
             .map((op) => [op]);
     }
 
+    /**
+     * Traces a chain of ElementWise ops whose non-scalar input determines the exact runtime shape,
+     * enabling dynamic diamond DAG fusion without false broadcast merges.
+     */
+    private getUnaryShapeOrigin(
+        tensor: ValueNode,
+        opset: number,
+        registry: OpRegistry,
+        originCache: Map<string, string>,
+        visiting = new Set<string>(),
+    ): string {
+        const cached = originCache.get(tensor.id);
+        if (cached !== undefined) return cached;
+        if (visiting.has(tensor.id)) return tensor.id;
+        visiting.add(tensor.id);
+
+        let result = tensor.id;
+        const prod = tensor.is(TensorNode)
+            ? tensor.incomers.sources.filterIs(OperationNode).first()
+            : undefined;
+        if (prod) {
+            const schema = registry.get(prod.type, opset);
+            if (schema?.category === OpCategory.ElementWise) {
+                const outRank = (tensor.shape as unknown[] | undefined)?.length ?? 0;
+                const nonScalarInputs = (prod.getInputs() ?? []).filter((inp) => {
+                    const sh = inp.shape as (number | string)[] | undefined;
+                    if (!sh || sh.length === 0) return false;
+                    return !(sh.length <= outRank && sh.every((d) => d === 1));
+                });
+                if (nonScalarInputs.length >= 1) {
+                    const origins = nonScalarInputs.map((inp) =>
+                        this.getUnaryShapeOrigin(inp, opset, registry, originCache, visiting),
+                    );
+                    if (origins.every((o) => o === origins[0])) {
+                        result = origins[0];
+                    }
+                }
+            }
+        }
+
+        visiting.delete(tensor.id);
+        originCache.set(tensor.id, result);
+        return result;
+    }
+
     private findFuseableChains(graph: OnnxGraph.Class): OperationNode.Class[][] {
         const chains: OperationNode.Class[][] = [];
         const ops = topologicalSortOperationNodes(graph);
         const visited = new Set<string>();
         const registry = OpRegistry.getInstance();
+        const opset = graph.getTargetOpset();
+        const originCache = new Map<string, string>();
 
-        const roots = ops.filter((op) => {
-            const opRecipe = this.getRecipeFor(op);
-            if (opRecipe === undefined) return false;
+        const isBarrierRecipe = (recipe: LoopLoweringRecipe): boolean =>
+            recipe.tags?.includes("self-carry") === true ||
+            recipe.postProcess !== undefined ||
+            recipe.lowerStandalone !== undefined;
+
+        const isStaticTensorShape = (t: TensorNode.Class | undefined): boolean => {
+            if (!t || !Array.isArray(t.shape) || t.shape.length === 0) return false;
+            return !(t.shape as (number | string)[]).includes(-1);
+        };
+
+        const boundsCompatible = (
+            prod: OperationNode.Class,
+            root: OperationNode.Class,
+        ): boolean => {
+            const prodOut = prod.getOutgoers.targets.filterIs(TensorNode).first();
+            const rootOut = root.getOutgoers.targets.filterIs(TensorNode).first();
+            if (!prodOut || !rootOut) return false;
+
+            // Dynamic diamond check FIRST (pure read-only, zero graph mutations)
             if (
-                opRecipe.tags?.includes("self-carry") === true ||
-                opRecipe.postProcess !== undefined
+                (!isStaticTensorShape(prodOut) || !isStaticTensorShape(rootOut)) &&
+                this.getUnaryShapeOrigin(prodOut, opset, registry, originCache) ===
+                    this.getUnaryShapeOrigin(rootOut, opset, registry, originCache)
             ) {
                 return true;
             }
 
-            const outTensors = op.getOutgoers.targets.filterIs(TensorNode).toArray();
-            const goesToGraphOutput = outTensors.some((t) => t.type === "output");
-
-            const consumers = new Set<OperationNode.Class>();
-            for (const t of outTensors) {
-                t.outgoers.targets.filterIs(OperationNode).forEach((c) => consumers.add(c));
-            }
-
-            if (goesToGraphOutput || consumers.size !== 1) return true;
-
-            const consumer = Array.from(consumers)[0];
-            if (!this.isSupported(consumer)) return true;
-
-            const consumerSchema = registry.get(consumer.type, graph.getTargetOpset());
-            if (consumerSchema?.category !== OpCategory.ElementWise) return true;
-
-            const prodBounds = this.getBoundsFor(op);
-            const consBounds = this.getBoundsFor(consumer);
-            if (
-                !this.compareIters(prodBounds.totalIters, consBounds.totalIters) ||
-                !this.compareCarryShapes(prodBounds.carryShape, consBounds.carryShape)
-            ) {
-                return true;
+            if (isStaticTensorShape(prodOut) && isStaticTensorShape(rootOut)) {
+                const prodBounds = this.getBoundsFor(prod);
+                const rootBounds = this.getBoundsFor(root);
+                return (
+                    this.compareIters(prodBounds.totalIters, rootBounds.totalIters) &&
+                    this.compareCarryShapes(prodBounds.carryShape, rootBounds.carryShape)
+                );
             }
 
             return false;
-        });
+        };
 
-        for (const root of roots) {
+        const fuseMulti = this.options.fuseMultiOutput === true;
+        const computeAtPairs = this.options.schedule?.computeAtList ?? [];
+        const hasComputeAt = (
+            prod: OperationNode.Class,
+            clusterOps: OperationNode.Class[],
+        ): boolean =>
+            computeAtPairs.some(
+                (p) =>
+                    matchesScheduleTarget(p.producer, prod) &&
+                    clusterOps.some((c) => matchesScheduleTarget(p.consumer, c)),
+            );
+
+        // 0. Pre-form explicit Schedule.fuse(...) multi-op / multi-output clusters
+        for (const groupTargets of this.options.schedule?.fuseGroups ?? []) {
+            const members: OperationNode.Class[] = [];
+            for (const op of ops) {
+                if (visited.has(op.id)) continue;
+                if (!groupTargets.some((t) => matchesScheduleTarget(t, op))) continue;
+                const r = this.getRecipeFor(op);
+                if (!r || isBarrierRecipe(r)) continue;
+                if (registry.get(op.type, opset)?.category !== OpCategory.ElementWise) continue;
+                members.push(op);
+            }
+            if (members.length >= 2) {
+                const anchor = members[members.length - 1];
+                const compatible = members.filter(
+                    (m) => m.id === anchor.id || boundsCompatible(m, anchor),
+                );
+                if (compatible.length >= 2) {
+                    compatible.forEach((m) => visited.add(m.id));
+                    chains.push(this.localTopologicalSort(compatible));
+                }
+            }
+        }
+
+        // Grow convex single-output DAG clusters in reverse topological order (consumers before producers).
+        // Supports diamond DAGs (e.g. Swish, Gelu, Reciprocal) while stopping cleanly at multi-output forks
+        // unless fuseMultiOutput=true or explicitly scheduled via Schedule.fuse / Schedule.computeAt.
+        for (let i = ops.length - 1; i >= 0; i--) {
+            const root = ops[i];
             if (visited.has(root.id)) continue;
+            const rootRecipe = this.getRecipeFor(root);
+            if (rootRecipe === undefined) continue;
 
-            const rootBounds = this.getBoundsFor(root);
-            const cluster: OperationNode.Class[] = [];
-            const queue: OperationNode.Class[] = [root];
+            if (rootRecipe.lowerStandalone) {
+                visited.add(root.id);
+                chains.push([root]);
+                continue;
+            }
 
-            while (queue.length > 0) {
-                const current = queue.shift()!;
-                if (visited.has(current.id)) continue;
+            const clusterSet = new Set<string>([root.id]);
+            const cluster: OperationNode.Class[] = [root];
+            visited.add(root.id);
 
-                visited.add(current.id);
-                cluster.push(current);
+            const rootIsElementWise =
+                registry.get(root.type, opset)?.category === OpCategory.ElementWise &&
+                !isBarrierRecipe(rootRecipe);
 
-                const inTensors =
-                    current
-                        .getInputs()
-                        ?.filter(
-                            (n) => n.is(TensorNode) && n.as(TensorNode).type === "intermediate",
-                        ) || [];
+            // Only chains whose consumers are elementwise can absorb compatible producers
+            let grew = rootIsElementWise;
+            while (grew) {
+                grew = false;
+                for (const member of [...cluster]) {
+                    const inTensors =
+                        member
+                            .getInputs()
+                            ?.filter(
+                                (n) => n.is(TensorNode) && n.as(TensorNode).type === "intermediate",
+                            ) ?? [];
 
-                for (const t of inTensors) {
-                    const producers = t.incomers.sources.filterIs(OperationNode).toArray();
-                    for (const prod of producers) {
-                        if (this.isSupported(prod) && !visited.has(prod.id)) {
-                            if (!roots.includes(prod)) {
-                                const prodBounds = this.getBoundsFor(prod);
-                                if (
-                                    this.compareIters(
-                                        prodBounds.totalIters,
-                                        rootBounds.totalIters,
-                                    ) &&
-                                    this.compareCarryShapes(
-                                        prodBounds.carryShape,
-                                        rootBounds.carryShape,
-                                    )
-                                ) {
-                                    queue.push(prod);
-                                }
+                    for (const t of inTensors) {
+                        const producers = t.incomers.sources.filterIs(OperationNode).toArray();
+                        for (const prod of producers) {
+                            if (visited.has(prod.id)) continue;
+                            const prodRecipe = this.getRecipeFor(prod);
+                            if (prodRecipe === undefined || isBarrierRecipe(prodRecipe)) continue;
+
+                            const prodOuts = prod.getOutgoers.targets
+                                .filterIs(TensorNode)
+                                .toArray();
+                            if (prodOuts.length !== 1) continue;
+                            const isOutputAllowed = fuseMulti || hasComputeAt(prod, cluster);
+                            if (prodOuts[0].type === "output" && !isOutputAllowed) continue;
+
+                            const consumers = prodOuts[0].outgoers.targets
+                                .filterIs(OperationNode)
+                                .toArray();
+                            if (consumers.length === 0) continue;
+
+                            const outsideConsumers = consumers.filter((c) => !clusterSet.has(c.id));
+                            if (outsideConsumers.length > 0) {
+                                if (!fuseMulti) continue;
+                                const canAbsorbSiblings = outsideConsumers.every((c) => {
+                                    if (visited.has(c.id)) return false;
+                                    const cr = this.getRecipeFor(c);
+                                    const cSchema = registry.get(c.type, opset);
+                                    return (
+                                        cr !== undefined &&
+                                        !isBarrierRecipe(cr) &&
+                                        cSchema?.category === OpCategory.ElementWise &&
+                                        boundsCompatible(c, root)
+                                    );
+                                });
+                                if (!canAbsorbSiblings) continue;
                             }
+
+                            const allClusterConsumersEW = consumers
+                                .filter((c) => clusterSet.has(c.id))
+                                .every(
+                                    (c) =>
+                                        registry.get(c.type, opset)?.category ===
+                                        OpCategory.ElementWise,
+                                );
+                            if (!allClusterConsumersEW) continue;
+                            if (!isStaticTensorShape(prodOuts[0])) {
+                                const prodSig = toStaticShape(prodOuts[0].shape).join(",");
+                                const hasSameShapeInput = (prod.getInputs() ?? []).some(
+                                    (inp) => toStaticShape(inp.shape).join(",") === prodSig,
+                                );
+                                if (!hasSameShapeInput) continue;
+                            }
+                            if (!boundsCompatible(prod, root)) continue;
+
+                            visited.add(prod.id);
+                            clusterSet.add(prod.id);
+                            cluster.push(prod);
+                            for (const sib of outsideConsumers) {
+                                visited.add(sib.id);
+                                clusterSet.add(sib.id);
+                                cluster.push(sib);
+                            }
+                            grew = true;
                         }
                     }
                 }
             }
+
             chains.push(this.localTopologicalSort(cluster));
         }
+
+        // Preserve topological execution order across clusters
+        const pos = new Map<string, number>();
+        ops.forEach((o, idx) => pos.set(o.id, idx));
+        chains.sort(
+            (a, b) => (pos.get(a[a.length - 1].id) ?? 0) - (pos.get(b[b.length - 1].id) ?? 0),
+        );
         return chains;
     }
 

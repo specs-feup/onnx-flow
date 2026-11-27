@@ -226,8 +226,13 @@ export function topologicalSortOperationNodesSubset(
         for (const innerOp of innerOps) {
             const inputs = innerOp.getInputs() ?? [];
             for (const input of inputs) {
-                // Check if this input comes from the outer graph
-                const parentProd = tensorProducers.get(input.id);
+                // Local nodes defined inside sg are not outer captures; checking them against
+                // outer tensorProducers on name collisions creates phantom dependency cycles.
+                if (sg.hasNode(input.id) && !input.is(RegionArgumentNode)) continue;
+                const lookupId = input.is(RegionArgumentNode)
+                    ? input.as(RegionArgumentNode).originalName
+                    : input.id;
+                const parentProd = tensorProducers.get(lookupId);
 
                 if (parentProd && parentProd.id !== opId) {
                     let deps = extraDeps.get(opId);

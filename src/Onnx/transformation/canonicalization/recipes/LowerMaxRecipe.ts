@@ -35,9 +35,10 @@ export class LowerMaxRecipe implements DecompositionRecipe {
         const Yshape: KnownShape | undefined = Y.shape as KnownShape | undefined;
         const OutShape = (Yshape ?? A.shape) as KnownShape;
         const Output = [{ type: OutType, shape: OutShape }];
+        const BoolOutput = [{ type: DataType.BOOL, shape: OutShape }];
 
         //Greater(A,B)
-        const GreaterOut = builder.createOp("Greater", [A, B], {}, Output)[0];
+        const GreaterOut = builder.createOp("Greater", [A, B], {}, BoolOutput)[0];
 
         //Where(GreaterOut)
         const WhereOut = builder.createOp("Where", [GreaterOut, A, B], {}, Output)[0];

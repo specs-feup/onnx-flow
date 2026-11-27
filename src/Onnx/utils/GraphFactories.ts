@@ -7,10 +7,34 @@ import TensorNode from "../TensorNode.js";
 import { addEdge } from "./GraphQueries.js";
 import { makeTensorProto } from "./TensorData.js";
 
+const uniqNextIdxCache = new WeakMap<OnnxGraph.Class, Map<string, number>>();
+const regionScopeCache = new WeakMap<OnnxGraph.Class, string>();
+let regionScopeCounter = 0;
+
+export function assignRegionScopeTag(g: OnnxGraph.Class, prefix: string = "canon"): string {
+    let tag = regionScopeCache.get(g);
+    if (tag === undefined) {
+        tag = `${prefix}_r${++regionScopeCounter}`;
+        regionScopeCache.set(g, tag);
+    }
+    return tag;
+}
+
+export function getRegionScopeTag(g: OnnxGraph.Class, fallback: string): string {
+    return regionScopeCache.get(g) ?? fallback;
+}
+
 export function uniq(g: OnnxGraph.Class, base: string): string {
-    let i = 0,
-        id = base;
+    if (!g.hasNode(base)) return base;
+    let cache = uniqNextIdxCache.get(g);
+    if (!cache) {
+        cache = new Map<string, number>();
+        uniqNextIdxCache.set(g, cache);
+    }
+    let i = cache.get(base) ?? 0;
+    let id = i > 0 ? `${base}_${i}` : base;
     while (g.hasNode(id)) id = `${base}_${++i}`;
+    cache.set(base, i + 1);
     return id;
 }
 

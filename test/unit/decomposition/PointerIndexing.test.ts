@@ -1187,6 +1187,57 @@ describe("Pointer Indexing (AGU) & Loop Lowering Coverage", () => {
                     new HistoryManager(gRZ),
                 );
                 expect(() => validateGraph(gRZ)).not.toThrow();
+
+                // AveragePool dynamic spatial ([-1, 2, -1, -1] with SAME_UPPER)
+                const gAP = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bAP = new GraphBuilder(gAP);
+                const xAP = gAP
+                    .addNode("X")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, -1, -1], "input"))
+                    .as(TensorNode);
+                bAP.createOp(
+                    "AveragePool",
+                    [xAP],
+                    { kernel_shape: [3, 3], strides: [2, 2], auto_pad: "SAME_UPPER" },
+                    [{ type: DataType.FLOAT, shape: [-1, 2, -1, -1] }],
+                );
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gAP,
+                    new HistoryManager(gAP),
+                );
+                expect(() => validateGraph(gAP)).not.toThrow();
+                expect(
+                    gAP
+                        .getOperationNodes()
+                        .toArray()
+                        .map((o) => o.type),
+                ).toContain("Loop");
+
+                // ConcatLoop dynamic shape ([-1, 2] + [-1, 3] along axis=1)
+                const gCat = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                const bCat = new GraphBuilder(gCat);
+                const xCat0 = gCat
+                    .addNode("X0")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2], "input"))
+                    .as(TensorNode);
+                const xCat1 = gCat
+                    .addNode("X1")
+                    .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3], "input"))
+                    .as(TensorNode);
+                bCat.createOp("Concat", [xCat0, xCat1], { axis: 1 }, [
+                    { type: DataType.FLOAT, shape: [-1, 5] },
+                ]);
+                new LoopLoweringPass({ coalesce: true, fuse: false, indexingMode: mode }).run(
+                    gCat,
+                    new HistoryManager(gCat),
+                );
+                expect(() => validateGraph(gCat)).not.toThrow();
+                expect(
+                    gCat
+                        .getOperationNodes()
+                        .toArray()
+                        .map((o) => o.type),
+                ).toContain("Loop");
             }
         });
     });

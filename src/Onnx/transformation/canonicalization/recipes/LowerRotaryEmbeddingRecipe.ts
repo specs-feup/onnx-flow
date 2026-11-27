@@ -30,6 +30,7 @@ export class LowerRotaryEmbeddingRecipe implements DecompositionRecipe {
         "Sub",
         "Add",
         "Concat",
+        "Split",
     ];
 
     match(op: OperationNode.Class): boolean {

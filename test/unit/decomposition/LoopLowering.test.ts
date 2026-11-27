@@ -203,11 +203,16 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
             .getOperationNodes()
             .toArray()
             .find((o) => o.type === "Loop")!;
+        const outerOps = graph
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
         const bodyOps = loopOp.regions[0]
             .getOperationNodes()
             .toArray()
             .map((o) => o.type);
-        expect(bodyOps).toContain("Pad");
+        expect(outerOps).toContain("Pad");
+        expect(bodyOps).not.toContain("Pad");
     });
 
     it("lowers MaxPool with SAME_UPPER and ConvTranspose with SAME_LOWER into Loops", () => {
@@ -385,5 +390,96 @@ describe("Loop Lowering - Multi-Operation Passes", () => {
         }
         // Keep scalarInt64 import exercised for future cases
         expect(scalarInt64(1).int64Data).toEqual([1]);
+    });
+
+    it("computes dynamic bounds in O(rank) without ConstantOfShape dummy tensors and hoists Conv Pad", () => {
+        // 1. Dynamic ElementWise (broadcast [-1, 3] + [1, -1])
+        const gEw = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bEw = new GraphBuilder(gEw);
+        const aEw = gEw
+            .addNode("A")
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1, 3], "input"))
+            .as(TensorNode);
+        const cEw = gEw
+            .addNode("B")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, -1], "input"))
+            .as(TensorNode);
+        bEw.createOp("Add", [aEw, cEw], {}, [{ type: DataType.FLOAT, shape: [-1, 3] }]);
+        new LoopLoweringPass({
+            coalesce: true,
+            fuse: true,
+            indexingMode: IndexingMode.Pointer,
+        }).run(gEw, new HistoryManager(gEw));
+        expect(
+            gEw
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).not.toContain("ConstantOfShape");
+
+        // 2. Dynamic CoalescedMatMul ([-1, -1] x [-1, -1])
+        const gMm = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bMm = new GraphBuilder(gMm);
+        const aMm = gMm
+            .addNode("A")
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1], "input"))
+            .as(TensorNode);
+        const bInMm = gMm
+            .addNode("B")
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1, -1], "input"))
+            .as(TensorNode);
+        bMm.createOp("MatMul", [aMm, bInMm], {}, [{ type: DataType.FLOAT, shape: [-1, -1] }]);
+        new LoopLoweringPass({
+            coalesce: true,
+            fuse: true,
+            indexingMode: IndexingMode.Pointer,
+        }).run(gMm, new HistoryManager(gMm));
+        expect(
+            gMm
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).not.toContain("ConstantOfShape");
+
+        // 3. Conv with padding: Pad must be hoisted outside Conv Loop body (not inside Conv's Loop!)
+        const gCv = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const bCv = new GraphBuilder(gCv);
+        const xCv = gCv
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [-1, 2, 4, 4], "input"))
+            .as(TensorNode);
+        const wCv = gCv
+            .addNode("W")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 3, 3], "input"))
+            .as(TensorNode);
+        bCv.createOp("Conv", [xCv, wCv], { kernel_shape: [3, 3], pads: [1, 1, 1, 1] }, [
+            { type: DataType.FLOAT, shape: [-1, 2, 4, 4] },
+        ]);
+        new LoopLoweringPass({
+            coalesce: true,
+            fuse: false,
+            indexingMode: IndexingMode.Pointer,
+        }).run(gCv, new HistoryManager(gCv));
+        const topOpsCv = gCv.getOperationNodes().toArray();
+        const topOpTypes = topOpsCv.map((o) => o.type);
+        expect(topOpTypes).not.toContain("ConstantOfShape");
+        const loopsCv = topOpsCv.filter((o) => o.type === "Loop");
+        expect(loopsCv.length).toBeGreaterThanOrEqual(1);
+        const innerTypes = loopsCv[0].regions[0]
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(
+            topOpTypes,
+            `Top: [${topOpTypes.join(", ")}] | Inner: [${innerTypes.join(", ")}]`,
+        ).toContain("Pad");
+        for (const lp of loopsCv) {
+            expect(
+                lp.regions[0]
+                    .getOperationNodes()
+                    .toArray()
+                    .map((o) => o.type),
+            ).not.toContain("Pad");
+        }
     });
 });

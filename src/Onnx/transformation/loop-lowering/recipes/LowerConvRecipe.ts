@@ -7,10 +7,10 @@ import {
     getIntsAttr,
     getStringAttr,
     getIntAttr,
+    makeTensorProto,
     resolveAutoPads,
     scalarInt64,
     int64Vec,
-    UNKNOWN_SHAPE,
     toStaticShape,
 } from "../../../Utils.js";
 import type {
@@ -18,10 +18,23 @@ import type {
     LoopLoweringRecipe,
     RecipeApplyResult,
 } from "../LoopLoweringRecipe.js";
+import { buildForLoopRegion } from "../LoopBuilder.js";
 import {
+    addMixed,
     buildAguPointer,
+    buildLinearIndex,
+    buildMixedStrides,
+    captureMixedList,
+    decodeMixedRadix,
+    ensureFlatInput,
+    ensureInnerValueNode,
+    extractMixedDims,
     gatherScalar,
     getOrCreateIterationSpaceCounters,
+    mulMixed,
+    packShapeVector,
+    productMixed,
+    resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
 import { GraphBuilder } from "../../../GraphBuilder.js";
@@ -40,10 +53,10 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     public readonly producedOps = [
         "Loop",
         "Shape",
-        "Size",
-        "Slice",
-        "Concat",
+        "Pad",
+        "Reshape",
         "Gather",
+        "ScatterElements",
         "Unsqueeze",
         "Squeeze",
         "Mul",
@@ -52,9 +65,6 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
         "Add",
         "Sub",
         "Equal",
-        "And",
-        "Where",
-        "ReduceSum",
     ];
 
     match(op: OperationNode.Class): boolean {
@@ -88,32 +98,45 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             return { totalIters, carryShape: [totalIters] };
         }
 
-        // 2. Dynamic Case
+        // 2. Dynamic Case: O(rank) INT64 pooling/conv output shape math (no dummy tensors)
         const builder = new GraphBuilder(op.graph as OnnxGraph.Class, `conv_bounds_${op.id}`);
         const axes0 = builder.createConstant(`axes0_${op.id}`, int64Vec([0]));
 
-        const [shapeX] = builder.createOp("Shape", [inputs[0]]);
-        const [shapeW] = builder.createOp("Shape", [inputs[1]]);
+        const xShape = toStaticShape(inputs[0].shape);
+        const wShape = toStaticShape(inputs[1].shape);
+        const dimsX = extractMixedDims(builder, inputs[0], xShape, `cb_x_${op.id}`);
+        const dimsW = extractMixedDims(builder, inputs[1], wShape, `cb_w_${op.id}`);
 
-        const expectedCoS = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyX] = builder.createOp("ConstantOfShape", [shapeX], {}, expectedCoS);
-        const [dummyW] = builder.createOp("ConstantOfShape", [shapeW], {}, expectedCoS);
+        const strides = getIntsAttr(op, "strides", [1, 1]);
+        const dilations = getIntsAttr(op, "dilations", [1, 1]);
+        const kernelShape = getIntsAttr(op, "kernel_shape", [wShape[2], wShape[3]]);
+        const explicitPads = getIntsAttr(op, "pads", []);
+        const autoPad = getStringAttr(op, "auto_pad", "NOTSET");
 
-        const dummyInputs = [dummyX, dummyW];
-        if (inputs.length > 2) {
-            const [shapeB] = builder.createOp("Shape", [inputs[2]]);
-            const [dummyB] = builder.createOp("ConstantOfShape", [shapeB], {}, expectedCoS);
-            dummyInputs.push(dummyB);
-        }
-
-        const expectedConv = [{ type: DataType.FLOAT, shape: UNKNOWN_SHAPE }];
-        const [dummyOut] = builder.createOp("Conv", dummyInputs, op.attributes, expectedConv);
-
-        const [targetShapeNode] = builder.createOp("Shape", [dummyOut]);
-        const [totalIters] = builder.createOp("ReduceProd", [targetShapeNode, axes0], {
-            keepdims: 0,
-        });
-        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0]);
+        const { outSpatial } = resolvePoolShapeAndPadsMixed(
+            autoPad,
+            [dimsX[2], dimsX[3]],
+            kernelShape,
+            strides,
+            dilations,
+            explicitPads,
+            0,
+            builder,
+            `cb_sp_${op.id}`,
+        );
+        const targetShapeNode = packShapeVector(
+            builder,
+            [dimsX[0], dimsW[0], outSpatial[0], outSpatial[1]],
+            `cb_tsh_${op.id}`,
+        );
+        const totalIters = productMixed(
+            builder,
+            [dimsX[0], dimsW[0], outSpatial[0], outSpatial[1]],
+            `cb_tot_${op.id}`,
+        );
+        const [carryShape] = builder.createOp("Unsqueeze", [totalIters, axes0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
 
         return { totalIters, carryShape, targetShape: targetShapeNode };
     }
@@ -131,20 +154,26 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
     ): RecipeApplyResult {
         const builder = new GraphBuilder(body, `conv_${op.id}`);
         const inputs = op.getInputs()!;
+        const canHoistX =
+            loopCtx !== undefined &&
+            !valueMap.has(inputs[0].id) &&
+            loopCtx.outerBuilder.graph.hasNode(inputs[0].id);
 
         // 1. Resolve inputs (Captured Tensors inside body)
-        const X = resolveRecipeInput(
-            builder,
-            inputs[0],
-            valueMap,
-            iter,
-            axes,
-            outShape,
-            false,
-            false,
-            targetShapeNode,
-            loopCtx,
-        );
+        const X = canHoistX
+            ? inputs[0]
+            : resolveRecipeInput(
+                  builder,
+                  inputs[0],
+                  valueMap,
+                  iter,
+                  axes,
+                  outShape,
+                  false,
+                  false,
+                  targetShapeNode,
+                  loopCtx,
+              );
         const W = resolveRecipeInput(
             builder,
             inputs[1],
@@ -173,41 +202,15 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
                   )
                 : null;
 
-        const xShape = asStaticDims(inputs[0].shape);
-        const wShape = asStaticDims(inputs[1].shape);
+        const xShape = toStaticShape(inputs[0].shape);
+        const wShape = toStaticShape(inputs[1].shape);
 
         const C = xShape[1] !== -1 ? xShape[1] : 1;
         const M = wShape[0];
 
-        // 2. Extract N_batch, H, and Win (statically or dynamically from captured X)
-        let N_batch: number | ValueNode = xShape[0];
-        let H: number | ValueNode = xShape[2];
-        let Win: number | ValueNode = xShape[3];
-
-        if (inputs[0].shape.includes(-1) || inputs[0].shape.length === 0) {
-            const [shapeX] = builder.createOp("Shape", [X]);
-            const [rankX] = builder.createOp("Size", [shapeX]);
-
-            const getSpatialDim = (offsetFromEnd: number, tag: string) => {
-                const offsetNode = builder.createConstant(
-                    `${tag}_offset`,
-                    scalarInt64(offsetFromEnd),
-                );
-                const [targetAxis] = builder.createOp("Add", [rankX, offsetNode]);
-                return gatherScalar(builder, shapeX, targetAxis);
-            };
-
-            if (inputs[0].shape[0] === -1 || typeof inputs[0].shape[0] === "string") {
-                const zeroIdx = builder.createConstant(`batch_idx_0`, scalarInt64(0));
-                N_batch = gatherScalar(builder, shapeX, zeroIdx);
-            }
-            if (inputs[0].shape[2] === -1 || typeof inputs[0].shape[2] === "string") {
-                H = getSpatialDim(-2, "H");
-            }
-            if (inputs[0].shape[3] === -1 || typeof inputs[0].shape[3] === "string") {
-                Win = getSpatialDim(-1, "Win");
-            }
-        }
+        // 2. Extract N_batch, H_out, W_out and pad X outside the loop when loopCtx is available
+        const dimBuilder = canHoistX ? loopCtx!.outerBuilder : builder;
+        const outerXRef = inputs[0];
 
         const strides = getIntsAttr(op, "strides", [1, 1]);
         const dilations = getIntsAttr(op, "dilations", [1, 1]);
@@ -224,6 +227,11 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             dW = dilations[1] ?? 1;
         const kEffH = dH * (kH - 1) + 1;
         const kEffW = dW * (kW - 1) + 1;
+
+        const dimsX = extractMixedDims(dimBuilder, outerXRef, xShape, `conv_dx_${op.id}`);
+        const dimsW = extractMixedDims(dimBuilder, inputs[1], wShape, `conv_dw_${op.id}`);
+        const H = dimsX[2];
+        const Win = dimsX[3];
 
         // 3. Handle Padding logic
         if (
@@ -248,40 +256,74 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             pB = pads[2] ?? 0,
             pR = pads[3] ?? 0;
 
+        let paddedXSource = canHoistX ? outerXRef : X;
+        if (pads.some((p) => Number(p) !== 0)) {
+            const padBuilder = canHoistX ? loopCtx!.outerBuilder : builder;
+            const padsConst = padBuilder.createConstant(`pads_${op.id}`, {
+                dataType: DataType.INT64,
+                dims: [8],
+                int64Data: [0, 0, Number(pT), Number(pL), 0, 0, Number(pB), Number(pR)],
+            });
+            paddedXSource = padBuilder.createOp("Pad", [paddedXSource, padsConst])[0];
+        }
+        const paddedX = canHoistX ? ensureInnerValueNode(builder, paddedXSource) : paddedXSource;
+
+        const paddedDimsX = [
+            dimsX[0],
+            dimsX[1],
+            addMixed(dimBuilder, H, Number(pT) + Number(pB), `conv_ph_${op.id}`),
+            addMixed(dimBuilder, Win, Number(pL) + Number(pR), `conv_pw_${op.id}`),
+        ];
+        const xStridesRaw = buildMixedStrides(dimBuilder, paddedDimsX);
+        const wStridesRaw = buildMixedStrides(dimBuilder, dimsW);
+
         const buildOutDim = (
-            dimIn: number | ValueNode,
+            dimIn: number | ConcreteValueNode,
             pA: number,
             pB_pad: number,
             kEff: number,
             stride: number,
             tag: string,
-        ) => {
+        ): number | ConcreteValueNode => {
             if (typeof dimIn === "number") {
                 return Math.floor((dimIn + pA + pB_pad - kEff) / stride + 1);
             }
-            const numOffset = builder.createConstant(
+            const numOffset = dimBuilder.createConstant(
                 `${tag}_num_off`,
                 scalarInt64(pA + pB_pad - kEff),
             );
-            const [numAdd] = builder.createOp("Add", [dimIn, numOffset]);
-            const strideConst = builder.createConstant(`${tag}_stride`, scalarInt64(stride));
-            const [divOut] = builder.createOp("Div", [numAdd, strideConst]);
-            const oneConst = builder.createConstant(`${tag}_one`, scalarInt64(1));
-            return builder.createOp("Add", [divOut, oneConst])[0];
+            const [numAdd] = dimBuilder.createOp("Add", [dimIn, numOffset]);
+            const strideConst = dimBuilder.createConstant(`${tag}_stride`, scalarInt64(stride));
+            const [divOut] = dimBuilder.createOp("Div", [numAdd, strideConst]);
+            const oneConst = dimBuilder.createConstant(`${tag}_one`, scalarInt64(1));
+            return dimBuilder.createOp("Add", [divOut, oneConst])[0];
         };
 
-        const H_out = buildOutDim(H, pT, pB, kEffH, sH, "H_out");
-        const W_out = buildOutDim(Win, pL, pR, kEffW, sW, "W_out");
+        const rawH_out = buildOutDim(H, pT, pB, kEffH, sH, `H_out_${op.id}`);
+        const rawW_out = buildOutDim(Win, pL, pR, kEffW, sW, `W_out_${op.id}`);
+        const [N_batch, H_out, W_out, CperG_cap, xStrN, xStrC, xStrH, wStrM, wStrC] =
+            captureMixedList(builder, [
+                dimsX[0],
+                rawH_out,
+                rawW_out,
+                dimsW[1],
+                xStridesRaw[0],
+                xStridesRaw[1],
+                xStridesRaw[2],
+                wStridesRaw[0],
+                wStridesRaw[1],
+            ]);
 
-        let paddedX = X;
-        if (pads.some((p) => Number(p) !== 0)) {
-            const padsConst = builder.createConstant(`pads`, {
-                dataType: DataType.INT64,
-                dims: [8],
-                int64Data: [0, 0, Number(pT), Number(pL), 0, 0, Number(pB), Number(pR)],
-            });
-            [paddedX] = builder.createOp("Pad", [X, padsConst]);
-        }
+        const canHoistW =
+            loopCtx !== undefined &&
+            !valueMap.has(inputs[1].id) &&
+            loopCtx.outerBuilder.graph.hasNode(inputs[1].id);
+        const flatX = canHoistX
+            ? ensureInnerValueNode(builder, ensureFlatInput(loopCtx!.outerBuilder, paddedXSource))
+            : ensureFlatInput(builder, paddedX);
+        const flatW = canHoistW
+            ? ensureInnerValueNode(builder, ensureFlatInput(loopCtx!.outerBuilder, inputs[1]))
+            : ensureFlatInput(builder, W);
 
         // 4. Coordinate & Window Bounds Generation: Pointer Mode (AGU) vs Radix Mode (Div/Mod)
         let nIdx: ConcreteValueNode;
@@ -378,66 +420,135 @@ export class LowerConvRecipe implements LoopLoweringRecipe {
             }
         }
 
-        // 5. Compute Slice Ends
-        const [yEnd] = builder.createOp("Add", [
-            yStart,
-            builder.createConstant(`keH`, scalarInt64(kEffH)),
-        ]);
-        const [xEnd] = builder.createOp("Add", [
-            xStart,
-            builder.createConstant(`keW`, scalarInt64(kEffW)),
-        ]);
-        const [nEnd] = builder.createOp("Add", [
-            nIdx,
-            builder.createConstant(`one`, scalarInt64(1)),
-        ]);
+        // 5. Hoist per-output base offsets & execute scalar reduction inner Loop over [CperG, kH, kW]
+        const dtype = inputs[0].literalType || DataType.FLOAT;
+        const nOffset = mulMixed(builder, nIdx, xStrN, `conv_noff_${op.id}`);
+        const cOffset = cStart ? mulMixed(builder, cStart, xStrC, `conv_coff_${op.id}`) : 0;
+        const ncBaseOuter = addMixed(builder, nOffset, cOffset, `conv_ncb_${op.id}`);
+        const wMBaseOuter = mulMixed(builder, mIdx, wStrM, `conv_wmb_${op.id}`);
 
-        let starts: ValueNode, ends: ValueNode, sliceAxes: ValueNode, sliceSteps: ValueNode;
+        const kInnerTotal = mulMixed(builder, CperG_cap, kH * kW, `conv_ktot_${op.id}`);
+        const innerMode = loopCtx?.indexingMode ?? IndexingMode.Radix;
+        const kLoop = buildForLoopRegion(
+            builder,
+            kInnerTotal,
+            dtype,
+            [1],
+            `conv_k_${op.id}`,
+            `conv_k_${op.id}`,
+            innerMode,
+            false,
+        );
+        const kb = kLoop.innerBuilder;
+        const zeroOuterScalar = builder.createConstant(
+            `conv_zacc_${op.id}`,
+            makeTensorProto(dtype, [], [0]),
+        );
+        const accIn = kLoop.loopCtx.addCarry(`conv_acc_${op.id}`, zeroOuterScalar, dtype, []);
+        const kbFlatX = ensureInnerValueNode(kb, flatX);
+        const kbFlatW = ensureInnerValueNode(kb, flatW);
 
-        if (group > 1) {
-            const [cEnd] = builder.createOp("Add", [
-                cStart!,
-                builder.createConstant(`CperG_val`, scalarInt64(CperG)),
+        const [kbNCBase, kbWMBase, kbYWinStart, kbXWinStart, kbCperG, kbXStrC, kbXStrH, kbWStrC] =
+            captureMixedList(kb, [
+                ncBaseOuter,
+                wMBaseOuter,
+                yStart,
+                xStart,
+                CperG_cap,
+                xStrC,
+                xStrH,
+                wStrC,
             ]);
 
-            const coordsS = [nIdx, cStart!, yStart, xStart].map(
-                (c) => builder.createOp("Unsqueeze", [c, axes])[0],
-            );
-            [starts] = builder.createOp("Concat", coordsS, { axis: 0 });
+        const innerIterDims: (number | ConcreteValueNode)[] = [kbCperG, kH, kW];
+        const innerValMap = new Map<string, ValueNode>();
+        let xChanOff: number | ConcreteValueNode;
+        let wOff: number | ConcreteValueNode;
+        let yDilOff: number | ConcreteValueNode;
+        let xDilOff: number | ConcreteValueNode;
 
-            const coordsE = [nEnd, cEnd, yEnd, xEnd].map(
-                (c) => builder.createOp("Unsqueeze", [c, axes])[0],
+        if (innerMode === IndexingMode.Pointer) {
+            const { counters } = getOrCreateIterationSpaceCounters(
+                kb,
+                kLoop.loopCtx,
+                innerValMap,
+                innerIterDims,
+                `conv_kc_${op.id}`,
             );
-            [ends] = builder.createOp("Concat", coordsE, { axis: 0 });
-
-            sliceAxes = builder.createConstant(`sliceAxes`, int64Vec([0, 1, 2, 3]));
-            sliceSteps = builder.createConstant(`sliceSteps`, int64Vec([1, 1, dH, dW]));
+            xChanOff = buildAguPointer(
+                kb,
+                kLoop.loopCtx,
+                innerValMap,
+                innerIterDims,
+                [kbXStrC, 0, 0],
+                `conv_kxc_${op.id}`,
+            );
+            wOff = buildAguPointer(
+                kb,
+                kLoop.loopCtx,
+                innerValMap,
+                innerIterDims,
+                [kbWStrC, kW, 1],
+                `conv_kwo_${op.id}`,
+            );
+            yDilOff =
+                dH === 1
+                    ? counters[1]
+                    : buildAguPointer(
+                          kb,
+                          kLoop.loopCtx,
+                          innerValMap,
+                          innerIterDims,
+                          [0, dH, 0],
+                          `conv_kyd_${op.id}`,
+                      );
+            xDilOff =
+                dW === 1
+                    ? counters[2]
+                    : buildAguPointer(
+                          kb,
+                          kLoop.loopCtx,
+                          innerValMap,
+                          innerIterDims,
+                          [0, 0, dW],
+                          `conv_kxd_${op.id}`,
+                      );
         } else {
-            const coordsS = [nIdx, yStart, xStart].map(
-                (c) => builder.createOp("Unsqueeze", [c, axes])[0],
-            );
-            [starts] = builder.createOp("Concat", coordsS, { axis: 0 });
-
-            const coordsE = [nEnd, yEnd, xEnd].map(
-                (c) => builder.createOp("Unsqueeze", [c, axes])[0],
-            );
-            [ends] = builder.createOp("Concat", coordsE, { axis: 0 });
-
-            sliceAxes = builder.createConstant(`sliceAxes`, int64Vec([0, 2, 3]));
-            sliceSteps = builder.createConstant(`sliceSteps`, int64Vec([1, dH, dW]));
+            const kCoords = decodeMixedRadix(kb, kLoop.trip, innerIterDims, `conv_kdec_${op.id}`);
+            xChanOff = mulMixed(kb, kCoords[0], kbXStrC, `conv_kxc_${op.id}`);
+            wOff = buildLinearIndex(kb, kCoords, [kbWStrC, kW, 1], `conv_kwo_${op.id}`);
+            yDilOff = mulMixed(kb, kCoords[1], dH, `conv_kyd_${op.id}`);
+            xDilOff = mulMixed(kb, kCoords[2], dW, `conv_kxd_${op.id}`);
         }
 
-        // 6. Extract patch, gather kernel, and perform dot product
-        const [patch] = builder.createOp("Slice", [paddedX, starts, ends, sliceAxes, sliceSteps]);
+        const toI64Node = (v: number | ConcreteValueNode, t: string): ConcreteValueNode =>
+            typeof v === "number" ? kb.createConstant(t, scalarInt64(v)) : v;
 
-        const [mIdxUnsq] = builder.createOp("Unsqueeze", [mIdx, axes]);
-        const [kernel] = builder.createOp("Gather", [W, mIdxUnsq], { axis: 0 });
+        const yIn = addMixed(kb, kbYWinStart, yDilOff, `conv_yin_${op.id}`);
+        const xIn = addMixed(kb, kbXWinStart, xDilOff, `conv_xin_${op.id}`);
 
-        const [mulOut] = builder.createOp("Mul", [patch, kernel]);
-        const [sumOut] = builder.createOp("ReduceSum", [mulOut], { keepdims: 0 });
+        const yXOff = mulMixed(kb, yIn, kbXStrH, `conv_yxo_${op.id}`);
+        const basePlusC = addMixed(kb, kbNCBase, xChanOff, `conv_bpc_${op.id}`);
+        const basePlusCY = addMixed(kb, basePlusC, yXOff, `conv_bpcy_${op.id}`);
+        const xIdx = toI64Node(
+            addMixed(kb, basePlusCY, xIn, `conv_xidx_${op.id}`),
+            `conv_xidxn_${op.id}`,
+        );
+        const wIdx = toI64Node(
+            addMixed(kb, kbWMBase, wOff, `conv_widx_${op.id}`),
+            `conv_widxn_${op.id}`,
+        );
+
+        const xVal = gatherScalar(kb, kbFlatX, xIdx);
+        const wVal = gatherScalar(kb, kbFlatW, wIdx);
+        const [prod] = kb.createOp("Mul", [xVal, wVal]);
+        const [accNext] = kb.createOp("Add", [accIn, prod]);
+        kLoop.loopCtx.setNextState(accIn, accNext);
+        kLoop.finalize([]);
+        const sumOut = kLoop.loopOutputs[0];
 
         // 7. Final bias addition
-        let finalScalar = sumOut;
+        let finalScalar: ValueNode = sumOut;
         if (B_bias) {
             const biasSq = gatherScalar(builder, B_bias, mIdx);
             [finalScalar] = builder.createOp("Add", [sumOut, biasSq]);

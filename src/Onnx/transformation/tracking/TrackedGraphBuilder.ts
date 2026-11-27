@@ -1,4 +1,4 @@
-import { GraphBuilder } from "../../GraphBuilder.js";
+import { GraphBuilder, getDirectReplaceSources, getSubgraphMeta } from "../../GraphBuilder.js";
 import type Node from "@specs-feup/flow/graph/Node";
 import type OnnxGraph from "../../OnnxGraph.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
@@ -14,7 +14,8 @@ import {
     UpdateNodeInputsAction,
 } from "./GraphActions.js";
 import { isOnnxNode, asOnnxNode } from "../../Utils.js";
-import type OperationNode from "../../OperationNode.js";
+import OperationNode from "../../OperationNode.js";
+import RegionArgumentNode from "../../RegionArgumentNode.js";
 
 export class TrackedGraphBuilder extends GraphBuilder {
     private actions: GraphAction[] = [];
@@ -58,18 +59,41 @@ export class TrackedGraphBuilder extends GraphBuilder {
     override replaceAllUsesWith(oldNode: ValueNode, newNode: ValueNode): void {
         const affectedOps: { op: OperationNode.Class; oldInputs: string[] }[] = [];
 
-        // Find all operations that are about to be mutated
+        const matchesOld = (input: ValueNode): boolean =>
+            input.id === oldNode.id ||
+            (input.is(RegionArgumentNode) &&
+                input.as(RegionArgumentNode).originalName === oldNode.id);
+
         const findAffected = (g: OnnxGraph.Class) => {
-            for (const op of g.getOperationNodes().toArray()) {
+            const directSources = getDirectReplaceSources(g, this.graph, oldNode);
+
+            const candidateOps = new Set<OperationNode.Class>();
+            for (const src of directSources) {
+                for (const op of src.outgoers.targets.filterIs(OperationNode)) {
+                    candidateOps.add(op);
+                }
+            }
+            for (const op of candidateOps) {
                 const currentInputs = op.getInputs() ?? [];
-                if (currentInputs.some((input) => input.id === oldNode.id)) {
+                if (currentInputs.some(matchesOld)) {
                     affectedOps.push({
                         op,
                         oldInputs: currentInputs.map((n) => n.id),
                     });
                 }
+            }
+            for (const op of g.getOperationNodes()) {
                 for (const sub of op.regions) {
-                    findAffected(sub);
+                    const subGraph = sub as OnnxGraph.Class;
+                    const subMeta = getSubgraphMeta(subGraph);
+                    if (
+                        !subMeta.hasNestedRegions &&
+                        !subMeta.hasRenamedArgs &&
+                        !subGraph.hasNode(oldNode.id)
+                    ) {
+                        continue;
+                    }
+                    findAffected(subGraph);
                 }
             }
         };

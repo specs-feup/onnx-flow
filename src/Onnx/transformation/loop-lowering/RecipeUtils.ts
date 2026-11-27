@@ -158,6 +158,38 @@ export function mulMixed(
 }
 
 /**
+ * Multiplies a list of mixed static/dynamic INT64 scalar dimensions into a scalar INT64 node or number.
+ */
+export function productMixed(
+    builder: GraphBuilder,
+    dims: (number | ConcreteValueNode)[],
+    tag: string,
+): ConcreteValueNode {
+    let acc: number | ConcreteValueNode = 1;
+    for (let i = 0; i < dims.length; i++) {
+        acc = mulMixed(builder, acc, dims[i], `${tag}_${i}`);
+    }
+    return typeof acc === "number" ? builder.createConstant(`${tag}_const`, scalarInt64(acc)) : acc;
+}
+
+/**
+ * Adds two mixed static/dynamic INT64 scalar values without redundant Add(+0).
+ */
+export function addMixed(
+    builder: GraphBuilder,
+    a: number | ConcreteValueNode,
+    b: number | ConcreteValueNode,
+    tag: string,
+): number | ConcreteValueNode {
+    if (typeof a === "number" && typeof b === "number") return a + b;
+    if (a === 0) return b;
+    if (b === 0) return a;
+    const aNode = typeof a === "number" ? builder.createConstant(`${tag}_a`, scalarInt64(a)) : a;
+    const bNode = typeof b === "number" ? builder.createConstant(`${tag}_b`, scalarInt64(b)) : b;
+    return builder.createOp("Add", [aNode, bNode])[0];
+}
+
+/**
  * Packs a list of mixed static/dynamic scalar INT64 dimensions into a 1D INT64 shape vector.
  * Uses a static base vector + `ScatterElements` for dynamic dims so shape construction
  * stays lightweight without triggering `Concat` lowering in canonicalization.
@@ -184,6 +216,99 @@ export function packShapeVector(
         [vec] = builder.createOp("ScatterElements", [vec, idx1D, val1D], { axis: 0 }, outSpec);
     }
     return vec;
+}
+
+/**
+ * Right-aligned NumPy/ONNX broadcast over mixed static/dynamic INT64 dimension vectors
+ * in O(rank) ops without allocating data tensors.
+ */
+export function broadcastMixedShapes(
+    builder: GraphBuilder,
+    shapes: (number | ConcreteValueNode)[][],
+    _tag: string,
+): (number | ConcreteValueNode)[] {
+    if (shapes.length === 0) return [];
+    const maxRank = Math.max(...shapes.map((s) => s.length));
+    const result: (number | ConcreteValueNode)[] = [];
+
+    for (let k = 0; k < maxRank; k++) {
+        let staticVal = 1;
+        const dyns: ConcreteValueNode[] = [];
+
+        for (const sh of shapes) {
+            const offset = maxRank - sh.length;
+            const d = k >= offset ? sh[k - offset] : 1;
+            if (typeof d === "number") {
+                if (d === 0) {
+                    staticVal = 0;
+                } else if (d > 1 && staticVal !== 0) {
+                    staticVal = d;
+                }
+            } else {
+                dyns.push(d);
+            }
+        }
+
+        if (dyns.length === 0 || staticVal === 0) {
+            result.push(staticVal);
+        } else if (staticVal > 1) {
+            result.push(staticVal);
+        } else if (dyns.length === 1) {
+            result.push(dyns[0]);
+        } else {
+            let acc: ConcreteValueNode = dyns[0];
+            for (let i = 1; i < dyns.length; i++) {
+                const [gt] = builder.createOp("Greater", [acc, dyns[i]], {}, [
+                    { type: DataType.BOOL, shape: [] },
+                ]);
+                [acc] = builder.createOp("Where", [gt, acc, dyns[i]], {}, [
+                    { type: DataType.INT64, shape: [] },
+                ]);
+            }
+            result.push(acc);
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Computes ONNX MatMul output dimensions and contraction length K using O(rank) shape math.
+ */
+export function computeMatMulOutputDimsMixed(
+    builder: GraphBuilder,
+    a: ValueNode,
+    b: ValueNode,
+    tag: string,
+): { outDims: (number | ConcreteValueNode)[]; kDim: number | ConcreteValueNode } {
+    const sA = toStaticShape(a.shape);
+    const sB = toStaticShape(b.shape);
+    const dimsA = extractMixedDims(builder, a, sA, `${tag}_a`);
+    const dimsB = extractMixedDims(builder, b, sB, `${tag}_b`);
+
+    const isA1D = sA.length === 1;
+    const isB1D = sB.length === 1;
+    const batchA = isA1D ? [] : dimsA.slice(0, -2);
+    const batchB = isB1D ? [] : dimsB.slice(0, -2);
+    const batchOut = broadcastMixedShapes(builder, [batchA, batchB], `${tag}_batch`);
+
+    const outDims: (number | ConcreteValueNode)[] = [...batchOut];
+    if (!isA1D) outDims.push(dimsA[dimsA.length - 2]);
+    if (!isB1D) outDims.push(dimsB[dimsB.length - 1]);
+
+    return { outDims, kDim: dimsA[dimsA.length - 1] };
+}
+
+/**
+ * Captures any dynamic INT64 scalar nodes from an outer builder list into `innerBuilder`.
+ */
+export function captureMixedList(
+    innerBuilder: GraphBuilder,
+    vals: (number | ConcreteValueNode)[],
+): (number | ConcreteValueNode)[] {
+    return vals.map((v) =>
+        typeof v === "number" ? v : (ensureInnerValueNode(innerBuilder, v) as ConcreteValueNode),
+    );
 }
 
 /**

@@ -204,6 +204,14 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
             .addNode(uniq(loopBody, "idx_carry_in"))
             .init(new TensorNode.Builder(DataType.INT64, carryKnownShape, "input"))
             .as(TensorNode);
+        const valAccIn = loopBody
+            .addNode(uniq(loopBody, "val_acc_in"))
+            .init(new TensorNode.Builder(dtype, [], "input"))
+            .as(TensorNode);
+        const idxAccIn = loopBody
+            .addNode(uniq(loopBody, "idx_acc_in"))
+            .init(new TensorNode.Builder(DataType.INT64, [], "input"))
+            .as(TensorNode);
 
         const axes = innerBuilder.createConstant(`mpi_ax0_${op.id}`, int64Vec([0]));
         const zeroI64 = innerBuilder.createConstant(`mpi_z64_${op.id}`, scalarInt64(0));
@@ -350,30 +358,14 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         const [effVal] = innerBuilder.createOp("Where", [isValid!, xVal, negInf]);
 
         const [outUnsq] = innerBuilder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const [prevValRaw] = innerBuilder.createOp("Gather", [valCarryIn, outUnsq], { axis: 0 });
-        const prevVal = squeezeIfLen1(
-            innerBuilder,
-            prevValRaw,
-            axes,
-            `mpi_sqv_${op.id}`,
-        ) as ConcreteValueNode;
-
-        const [prevIdxRaw] = innerBuilder.createOp("Gather", [idxCarryIn, outUnsq], { axis: 0 });
-        const prevIdx = squeezeIfLen1(
-            innerBuilder,
-            prevIdxRaw,
-            axes,
-            `mpi_sqi_${op.id}`,
-        ) as ConcreteValueNode;
-
-        const [baseVal] = innerBuilder.createOp("Where", [isFirstTap!, negInf, prevVal]);
+        const [baseVal] = innerBuilder.createOp("Where", [isFirstTap!, negInf, valAccIn]);
         const [isBetter] = innerBuilder.createOp("Greater", [effVal, baseVal]);
         const [firstValid] = innerBuilder.createOp("And", [isFirstTap!, isValid!]);
         const [betterValid] = innerBuilder.createOp("And", [isValid!, isBetter]);
         const [takeNew] = innerBuilder.createOp("Or", [firstValid, betterValid]);
 
         const [newVal] = innerBuilder.createOp("Where", [takeNew, effVal, baseVal]);
-        const [newIdx] = innerBuilder.createOp("Where", [takeNew, reportedIdx, prevIdx]);
+        const [newIdx] = innerBuilder.createOp("Where", [takeNew, reportedIdx, idxAccIn]);
 
         const [newValUnsq] = innerBuilder.createOp("Unsqueeze", [newVal, axes]);
         const [nextValCarry] = innerBuilder.createOp(
@@ -392,9 +384,23 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
         emitBodyOutput(loopBody, condIn, "cond_out");
         emitBodyOutput(loopBody, nextValCarry, "val_carry_out");
         emitBodyOutput(loopBody, nextIdxCarry, "idx_carry_out");
+        emitBodyOutput(loopBody, newVal, "val_acc_out");
+        emitBodyOutput(loopBody, newIdx, "idx_acc_out");
 
         // 3. Emit outer Loop node
-        const loopInputs: ValueNode[] = [tripCount, condInit, valCarry0, idxCarry0];
+        const valAccInit = builder.createConstant(
+            `mpi_vac0_${op.id}`,
+            makeTensorProto(dtype, [], [negInfVal]),
+        );
+        const idxAccInit = builder.createConstant(`mpi_iac0_${op.id}`, scalarInt64(0));
+        const loopInputs: ValueNode[] = [
+            tripCount,
+            condInit,
+            valCarry0,
+            idxCarry0,
+            valAccInit,
+            idxAccInit,
+        ];
         const loopOp = builder
             .addNode(
                 uniq(outerGraph, `MaxPoolIdxLoop_${op.id}`),
@@ -423,6 +429,20 @@ export class LowerMaxPoolWithIndicesRecipe implements DecompositionRecipe {
 
         builder.addEdge(loopOp, flatValOut, dtype, carryKnownShape);
         builder.addEdge(loopOp, flatIdxOut, DataType.INT64, carryKnownShape);
+        const finalValAcc = builder
+            .addNode(
+                uniq(outerGraph, `mpi_vac_out_${op.id}`),
+                new TensorNode.Builder(dtype, [], "intermediate"),
+            )
+            .as(TensorNode);
+        const finalIdxAcc = builder
+            .addNode(
+                uniq(outerGraph, `mpi_iac_out_${op.id}`),
+                new TensorNode.Builder(DataType.INT64, [], "intermediate"),
+            )
+            .as(TensorNode);
+        builder.addEdge(loopOp, finalValAcc, dtype, []);
+        builder.addEdge(loopOp, finalIdxAcc, DataType.INT64, []);
 
         // 4. Reshape both outputs to outDims
         const [finalY] = builder.createOp("Reshape", [flatValOut, outShapeNode], {}, [

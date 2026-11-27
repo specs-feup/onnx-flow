@@ -10,6 +10,16 @@ export class ShapeOptimizationPass implements GraphPass {
 
     run(graph: OnnxGraph.Class): boolean {
         let globalChanged = false;
+
+        // Recurse into nested Loop / If / Scan subgraphs first so inner shape math is simplified
+        for (const op of graph.getOperationNodes()) {
+            for (const region of op.regions) {
+                if (this.run(region)) {
+                    globalChanged = true;
+                }
+            }
+        }
+
         let localChanged = true;
 
         // Run until we reach a fixed point (optimizing one shape might unlock another)

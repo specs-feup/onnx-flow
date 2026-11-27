@@ -10,7 +10,7 @@ import { GraphBuilder } from "../../GraphBuilder.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
-import { DataType, type ValueNode } from "../../OnnxTypes.js";
+import { DataType, type AttributeMap, type ValueNode } from "../../OnnxTypes.js";
 import {
     bool,
     readScalarFromTensorNode,
@@ -78,6 +78,14 @@ export class LoopTilingPass implements GraphPass {
         }
 
         return changed;
+    }
+
+    public canTileOp(op: OperationNode.Class): boolean {
+        return this.canTile(op);
+    }
+
+    public tileTargetLoop(loopOp: OperationNode.Class, rootBuilder: GraphBuilder): void {
+        this.tileLoop(loopOp, rootBuilder);
     }
 
     private canTile(op: OperationNode.Class): boolean {
@@ -274,12 +282,18 @@ export class LoopTilingPass implements GraphPass {
         const innerCondInit = outerBodyBuilder.createConstant(`inner_cond_init`, bool(true));
         const innerLoopInputs: ValueNode[] = [innerTripInput, innerCondInit, ...outerCarryInputs];
 
+        const srcOps = loopOp.getMetadata("sourceOps");
+        const srcTypes = loopOp.getMetadata("sourceOpTypes");
+        const inheritedMeta: AttributeMap = {
+            tiled: true,
+            ...(srcOps !== undefined ? { sourceOps: srcOps } : {}),
+            ...(srcTypes !== undefined ? { sourceOpTypes: srcTypes } : {}),
+        };
+
         const innerLoopOp = outerBodyBuilder
             .addNode(
                 uniq(outerBody, `Inner_${loopOp.id}`),
-                new OperationNode.Builder("Loop", innerLoopInputs, {}, [innerBody], {
-                    tiled: true,
-                }),
+                new OperationNode.Builder("Loop", innerLoopInputs, {}, [innerBody], inheritedMeta),
             )
             .as(OperationNode);
 
@@ -321,9 +335,7 @@ export class LoopTilingPass implements GraphPass {
         const tiledOuterLoop = rootBuilder
             .addNode(
                 uniq(rootBuilder.graph, `Tiled_${loopOp.id}`),
-                new OperationNode.Builder("Loop", outerLoopInputs, {}, [outerBody], {
-                    tiled: true,
-                }),
+                new OperationNode.Builder("Loop", outerLoopInputs, {}, [outerBody], inheritedMeta),
             )
             .as(OperationNode);
 

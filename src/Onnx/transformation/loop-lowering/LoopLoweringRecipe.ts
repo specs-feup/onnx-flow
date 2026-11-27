@@ -45,6 +45,16 @@ export interface LoopLoweringRecipe extends BaseRecipe {
     };
 
     /**
+     * Optional standalone lowering for hierarchical multi-loop ops (e.g., SoftmaxLoop, LayerNormLoop)
+     * that operate row-wise rather than element-wise.
+     */
+    lowerStandalone?(
+        op: OperationNode.Class,
+        outerBuilder: GraphBuilder,
+        indexingMode: IndexingMode,
+    ): void;
+
+    /**
      * Optional: Performs operations on the loop output before final reshaping.
      */
     postProcess?(op: OperationNode.Class, builder: GraphBuilder, loopOut: ValueNode): ValueNode;

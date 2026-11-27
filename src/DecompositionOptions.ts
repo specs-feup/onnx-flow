@@ -1,3 +1,5 @@
+import type { Schedule, ScheduleConfig } from "./Onnx/transformation/Schedule.js";
+
 export enum IndexingMode {
     Pointer = "pointer",
     Radix = "radix",
@@ -36,6 +38,25 @@ export interface DecompositionOptions {
 
     /** Explicit ONNX IR version override for export (up to 14) */
     irVersion?: number;
+
+    /**
+     * Optional codegen mode: when true, non-self-carry loops emit native ONNX Loop
+     * `scan_outputs` instead of `ScatterElements` into a pre-allocated output carry tensor.
+     * Defaults to false to preserve existing carry-tensor lowering behavior.
+     */
+    useScanOutputs?: boolean;
+
+    /**
+     * Optional multi-output loop fusion: when true, chains with multiple live outputs
+     * or shared forks may fuse into a single multi-output Loop. Defaults to false.
+     */
+    fuseMultiOutput?: boolean;
+
+    /**
+     * Optional composable transformation schedule overriding per-op recipe selection,
+     * loop splitting/tiling, unrolling, axis reordering, vectorization, or cache reads.
+     */
+    schedule?: Schedule | ScheduleConfig;
 }
 
 /**
@@ -45,9 +66,10 @@ export interface DecompositionOptions {
  *  - recurse: false
  *  - coalesce: true
  *  - loopLowering: true
- *  - optimize: false
+ *  - optimize: true
  *  - decomposeForCgra: false
  *  - indexingMode: "pointer"
+ *  - useScanOutputs: false
  */
 export const defaultDecompositionOptions: DecompositionOptions = {
     canonicalize: true,
@@ -55,8 +77,9 @@ export const defaultDecompositionOptions: DecompositionOptions = {
     recurse: false,
     coalesce: true,
     loopLowering: true,
-    optimize: false,
+    optimize: true,
     decomposeForCgra: false,
     indexingMode: IndexingMode.Pointer,
     tileSize: 0,
+    useScanOutputs: false,
 };

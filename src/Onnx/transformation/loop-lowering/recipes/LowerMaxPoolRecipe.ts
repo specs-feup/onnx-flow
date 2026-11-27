@@ -24,6 +24,7 @@ import {
     buildAguPointer,
     buildLinearIndex,
     buildMixedStrides,
+    captureMixedList,
     decodeMixedRadix,
     ensureFlatInput,
     extractMixedDims,
@@ -31,6 +32,7 @@ import {
     getOrCreateIterationSpaceCounters,
     mulMixed,
     packShapeVector,
+    productMixed,
     resolvePoolShapeAndPadsMixed,
     resolveRecipeInput,
 } from "../RecipeUtils.js";
@@ -144,8 +146,10 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         const outDims = [inDims[0], inDims[1], ...outSpatial];
         const targetShape = packShapeVector(builder, outDims, `mpb_tsh_${op.id}`);
         const ax0 = builder.createConstant(`mpb_ax0_${op.id}`, int64Vec([0]));
-        const [outTotal] = builder.createOp("ReduceProd", [targetShape, ax0], { keepdims: 0 });
-        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0]);
+        const outTotal = productMixed(builder, outDims, `mpb_tot_${op.id}`);
+        const [carryShape] = builder.createOp("Unsqueeze", [outTotal, ax0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
         const totalIters = mulMixed(
             builder,
             outTotal,
@@ -175,6 +179,10 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         const kernel = getIntsAttr(op, "kernel_shape", []);
         const strides = getIntsAttr(op, "strides", new Array<number>(spatialRank).fill(1));
         const dilations = getIntsAttr(op, "dilations", new Array<number>(spatialRank).fill(1));
+        const canHoist =
+            loopCtx !== undefined &&
+            !valueMap.has(X.id) &&
+            loopCtx.outerBuilder.graph.hasNode(X.id);
 
         const rawX = resolveRecipeInput(
             builder,
@@ -188,18 +196,27 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
             targetShapeNode,
             loopCtx,
         );
-        const inDims = extractMixedDims(builder, rawX, rawInDims, `mp_id_${op.id}`);
-        const { pHeads, outSpatial } = this.resolveMixedPadsAndOutSpatial(
+        const dimBuilder = canHoist ? loopCtx!.outerBuilder : builder;
+        const dimSource = canHoist ? X : rawX;
+        const rawInDimsList = extractMixedDims(dimBuilder, dimSource, rawInDims, `mp_id_${op.id}`);
+        const { pHeads: rawPHeads, outSpatial: rawOutSpatial } = this.resolveMixedPadsAndOutSpatial(
             op,
-            builder,
-            inDims,
+            dimBuilder,
+            rawInDimsList,
             `mp_sh_${op.id}`,
         );
 
+        const rawOutDims = [rawInDimsList[0], rawInDimsList[1], ...rawOutSpatial];
+        const rawInStrides = buildMixedStrides(dimBuilder, rawInDimsList);
+        const rawOutStrides = buildMixedStrides(dimBuilder, rawOutDims);
+
+        const inDims = canHoist ? captureMixedList(builder, rawInDimsList) : rawInDimsList;
+        const pHeads = canHoist ? captureMixedList(builder, rawPHeads) : rawPHeads;
+        const outSpatial = canHoist ? captureMixedList(builder, rawOutSpatial) : rawOutSpatial;
         const outDims = [inDims[0], inDims[1], ...outSpatial];
         const iterDims = [...outDims, ...kernel];
-        const inStrides = buildMixedStrides(builder, inDims);
-        const outStrides = buildMixedStrides(builder, outDims);
+        const inStrides = canHoist ? captureMixedList(builder, rawInStrides) : rawInStrides;
+        const outStrides = canHoist ? captureMixedList(builder, rawOutStrides) : rawOutStrides;
         const flatX = ensureFlatInput(builder, rawX);
 
         let coords: ConcreteValueNode[];
@@ -327,10 +344,23 @@ export class LowerMaxPoolRecipe implements LoopLoweringRecipe {
         const [effVal] = builder.createOp("Where", [isValid!, xVal, negInf]);
 
         const [outUnsq] = builder.createOp("Unsqueeze", [flatOutIdx, axes]);
-        const prevAcc = gatherScalar(builder, carryNode, flatOutIdx);
-
-        const [baseAcc] = builder.createOp("Where", [isFirstTap!, negInf, prevAcc]);
+        let baseAcc: ConcreteValueNode;
+        let accIn: ReturnType<LoopCarryContext["addCarry"]> | undefined;
+        if (loopCtx !== undefined) {
+            const initAcc = loopCtx.outerBuilder.createConstant(
+                `mp_init_acc_${op.id}`,
+                makeTensorProto(dtype, [], [negInfVal]),
+            );
+            accIn = loopCtx.addCarry(`mp_acc_${op.id}`, initAcc, dtype, []);
+            [baseAcc] = builder.createOp("Where", [isFirstTap!, negInf, accIn]);
+        } else {
+            const prevAcc = gatherScalar(builder, carryNode, flatOutIdx);
+            [baseAcc] = builder.createOp("Where", [isFirstTap!, negInf, prevAcc]);
+        }
         const [newMax] = builder.createOp("Max", [baseAcc, effVal]);
+        if (accIn !== undefined) {
+            loopCtx!.setNextState(accIn, newMax);
+        }
 
         const [newMaxUnsq] = builder.createOp("Unsqueeze", [newMax, axes]);
         const [nextCarry] = builder.createOp("ScatterElements", [carryNode, outUnsq, newMaxUnsq], {
