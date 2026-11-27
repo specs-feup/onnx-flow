@@ -1,7 +1,7 @@
 import type OnnxGraph from "../../ir/OnnxGraph.js";
 import OperationNode from "../../ir/OperationNode.js";
 import TensorNode from "../../ir/TensorNode.js";
-import type { ValueNode, KnownShape } from "../../ir/OnnxTypes.js";
+import { DataType, type ValueNode, type KnownShape } from "../../ir/OnnxTypes.js";
 import {
     asStaticDims,
     toStaticShape,
@@ -19,12 +19,28 @@ import type { IndexingMode } from "../../../DecompositionOptions.js";
 import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
 import { createDefaultLoopLoweringRecipes } from "../RecipeCatalog.js";
 
+const SHAPE_PLUMBING_CONSUMERS = new Set([
+    "Reshape",
+    "Expand",
+    "ConstantOfShape",
+    "Slice",
+    "Gather",
+    "ScatterElements",
+    "Loop",
+    "Concat",
+    "Unsqueeze",
+    "Squeeze",
+    "Range",
+]);
+
 export interface LoopFusionOptions {
     coalesce: boolean;
     fuse: boolean;
     indexingMode: IndexingMode;
     useScanOutputs?: boolean;
     fuseMultiOutput?: boolean;
+    /** When true, skips 0D scalar compute ops and 1D integer shape/index plumbing ops. */
+    inRegion?: boolean;
     schedule?: ScheduleConfig;
 }
 
@@ -65,8 +81,53 @@ export class LoopChainFinder {
         return this.options.fuse ? this.findFuseableChains(graph) : this.findSingleOpChains(graph);
     }
 
+    /**
+     * Prevents infinite re-lowering inside nested regions by skipping 0D scalar ops
+     * and 1D integer shape/index plumbing ops (e.g., `packShapeVector` `Concat`,
+     * `ReduceProd` carry-size calculations, or `INT64` index vectors).
+     */
+    private isScalarOrLoopPlumbing(op: OperationNode.Class): boolean {
+        if (op.getMetadata("loopPlumbing") === true) return true;
+
+        const ins = op.getInputs() ?? [];
+        const outs = op.getOutgoers.targets.filterIs(TensorNode).toArray();
+        if (outs.length === 0) return false;
+
+        // Already scalarized (0D inputs & 0D outputs)
+        const allInputs0D = ins.every((v) => Array.isArray(v.shape) && v.shape.length === 0);
+        const allOutputs0D = outs.every((v) => Array.isArray(v.shape) && v.shape.length === 0);
+        if (allInputs0D && allOutputs0D) return true;
+
+        // 1D integer shape/index plumbing vectors inside loop regions
+        const is1DIntOut = outs.every(
+            (v) =>
+                Array.isArray(v.shape) &&
+                v.shape.length === 1 &&
+                (v.literalType === DataType.INT64 || v.literalType === DataType.INT32),
+        );
+        if (is1DIntOut) {
+            if (op.type === "Concat" || op.type === "ReduceProd" || op.type === "Slice") {
+                return true;
+            }
+            const consumers = outs.flatMap((o) =>
+                o.outgoers.targets.filterIs(OperationNode).toArray(),
+            );
+            if (
+                consumers.length > 0 &&
+                consumers.every((c) => SHAPE_PLUMBING_CONSUMERS.has(c.type))
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Resolves the highest-priority `LoopLoweringRecipe` matching `op`, respecting schedule overrides. */
     public getRecipeFor(op: OperationNode.Class): LoopLoweringRecipe | undefined {
+        if (this.options.inRegion === true && this.isScalarOrLoopPlumbing(op)) {
+            return undefined;
+        }
         const stopPhase = lookupScheduleMap(this.options.schedule?.stopAt, op);
         if (stopPhase === "none" || stopPhase === "canonicalization") {
             return undefined;

@@ -111,6 +111,19 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                 pm.addPass(new DeadCodeEliminationPass());
             }
             pm.addPass(new InferShapesPass());
+            // When recurse=true, also canonicalize inside any control-flow regions newly
+            // synthesized during Phase 1 (e.g., RNN/GRU/LSTM time-step Loop bodies).
+            if (this.recurse) {
+                pm.addPass(
+                    new CanonicalizationPass(undefined, {
+                        loopLowering: this.loopLowering,
+                        recurse: true,
+                        regionOnly: true,
+                        ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
+                    }),
+                );
+                pm.addPass(new InferShapesPass());
+            }
         }
 
         // Phase 2: Loop Lowering, Post-Loop Lowering & Tiling
@@ -122,6 +135,7 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     indexingMode: this.indexingMode,
                     useScanOutputs: this.useScanOutputs,
                     fuseMultiOutput: this.fuseMultiOutput,
+                    recurse: this.recurse,
                     ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
                 }),
             );

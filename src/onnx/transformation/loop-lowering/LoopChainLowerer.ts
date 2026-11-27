@@ -4,7 +4,7 @@ import TensorNode from "../../ir/TensorNode.js";
 import type { GraphBuilder } from "../../ir/GraphBuilder.js";
 import type { ValueNode, KnownShape, StaticShape, ConcreteValueNode } from "../../ir/OnnxTypes.js";
 import { DataType } from "../../ir/OnnxTypes.js";
-import { toStaticShape, int64Vec } from "../../utils/index.js";
+import { getRegionScopeTag, toStaticShape, int64Vec } from "../../utils/index.js";
 import { buildForLoopRegion, createAccumulatorCarry, type LoopScanOutput } from "./LoopBuilder.js";
 import {
     buildLinearIndex,
@@ -75,7 +75,11 @@ export class LoopChainLowerer {
         const useScan = this.options.useScanOutputs === true && !isSelfCarry;
         const axisPerm = this.resolveAxisPermutation(chain, originalOutShape, isSelfCarry);
 
-        // 1. Initialize Loop region
+        // 1. Initialize Loop region (incorporating any nested-region scope tag to prevent ID collisions)
+        const regionScope = getRegionScopeTag(graph, "");
+        const scopePrefix = regionScope.length > 0 ? `${regionScope}_` : "";
+        const loopTag = `${scopePrefix}Loop_${rootOp.id}`;
+        const loopScopeTag = `${scopePrefix}lowering_${rootOp.id}`;
         const effectiveIndexingMode =
             axisPerm !== undefined ? IndexingMode.Radix : this.options.indexingMode;
         const { innerBuilder, trip, vInitial, loopOutput, loopOutputs, loopCtx, finalize } =
@@ -84,8 +88,8 @@ export class LoopChainLowerer {
                 totalIters,
                 elemTy,
                 carryShape,
-                `Loop_${rootOp.id}`,
-                `lowering_${rootOp.id}`,
+                loopTag,
+                loopScopeTag,
                 effectiveIndexingMode,
                 !useScan,
             );
@@ -219,6 +223,7 @@ export class LoopChainLowerer {
         }
 
         this.stampLoopMetadata(chain, [emittedLoopOp]);
+        emittedLoopOp.setMetadata("scalarizedLoop", true);
         this.rewireAbsorbedShapeProbes(chain, chainSet, rootOp, seenOutIds, outerBuilder);
 
         // 4. Post-process, reshape, and reconnect each output of the cluster

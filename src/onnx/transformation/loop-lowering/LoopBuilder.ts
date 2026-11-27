@@ -129,12 +129,14 @@ export function buildForLoopRegion(
     const innerGraph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
     const innerBuilder = new GraphBuilder(innerGraph, tag);
 
+    const iterBase = outerGraph.hasNode("iter") ? `${tag}_iter` : "iter";
+    const condInBase = outerGraph.hasNode("cond_in") ? `${tag}_cond_in` : "cond_in";
     const trip = innerGraph
-        .addNode(uniq(innerGraph, "iter"))
+        .addNode(uniq(innerGraph, iterBase))
         .init(new TensorNode.Builder(DataType.INT64, [], "input"))
         .as(TensorNode);
     const condIn = innerGraph
-        .addNode(uniq(innerGraph, "cond_in"))
+        .addNode(uniq(innerGraph, condInBase))
         .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
         .as(TensorNode);
 
@@ -168,7 +170,11 @@ export function buildForLoopRegion(
         const idx = carries.length;
         carries.push({ tag: cTag, initialVal, elemTy: cElemTy, shape: cShape });
 
-        const inName = isPrimary ? "carry" : `carry_${cTag}_${idx}`;
+        const inName = isPrimary
+            ? outerGraph.hasNode("carry")
+                ? `${tag}_carry`
+                : "carry"
+            : `carry_${cTag}_${idx}`;
         const cIn = innerGraph
             .addNode(uniq(innerGraph, inName))
             .init(new TensorNode.Builder(cElemTy, cShape, "input"))
