@@ -358,7 +358,7 @@ export class LoopFusionMatcher {
             const consumer = Array.from(consumers)[0];
             if (!this.isSupported(consumer)) return true;
 
-            const consumerSchema = registry.get(consumer.type, 19);
+            const consumerSchema = registry.get(consumer.type, graph.getTargetOpset());
             if (consumerSchema?.category !== OpCategory.ElementWise) return true;
 
             const prodBounds = this.getBoundsFor(op);

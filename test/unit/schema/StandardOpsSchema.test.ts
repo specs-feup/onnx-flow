@@ -6,6 +6,8 @@ import OperationNode from "../../../src/Onnx/OperationNode.js";
 import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
 import { DataType } from "../../../src/Onnx/OnnxTypes.js";
 import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import { OpRegistry } from "../../../src/Onnx/Schema/OpRegistry.js";
+import { resolveExportVersions } from "../../../src/Onnx/Schema/Versioning.js";
 import { int64Vec, floatVec } from "../../../src/Onnx/Utils.js";
 import { inferNodeShape } from "../../../src/Onnx/InferShapes.js";
 
@@ -440,5 +442,129 @@ describe("StandardOps Schema & Shape Inference", () => {
         builder.addEdge(loopOp, loopOut, DataType.FLOAT, []);
         inferNodeShape(loopOp, graph);
         expect(loopOut.shape).toEqual([2, 5]);
+    });
+
+    it("resolves versioned schemas and infers shapes for Opset 21-28 operators", () => {
+        const registry = OpRegistry.getInstance();
+
+        // Multi-version resolution check
+        expect(registry.get("QuantizeLinear", 20)?.sinceVersion).toBe(13);
+        expect(registry.get("QuantizeLinear", 21)?.sinceVersion).toBe(21);
+        expect(registry.get("QuantizeLinear", 28)?.sinceVersion).toBe(21);
+        expect(registry.get("GroupNormalization", 19)?.sinceVersion).toBe(18);
+        expect(registry.get("GroupNormalization", 21)?.sinceVersion).toBe(21);
+        expect(registry.get("Cast", 20)?.sinceVersion).toBe(9);
+        expect(registry.get("Cast", 28)?.sinceVersion).toBe(24);
+        expect(registry.get("RMSNormalization", 22)).toBeUndefined();
+        expect(registry.get("RMSNormalization", 23)?.sinceVersion).toBe(23);
+
+        const { graph, builder } = setup();
+        const x = graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 8, 16], "input"))
+            .as(TensorNode);
+        const rmsScale = graph
+            .addNode("rms_scale")
+            .init(new TensorNode.Builder(DataType.FLOAT, [16], "input"))
+            .as(TensorNode);
+        const [rmsOut] = builder.createOp("RMSNormalization", [x, rmsScale], {
+            axis: -1,
+            epsilon: 1e-6,
+        });
+        expect(rmsOut.shape).toEqual([2, 8, 16]);
+        expect(rmsOut.literalType).toBe(DataType.FLOAT);
+
+        // Swish (Opset 24)
+        const [swishOut] = builder.createOp("Swish", [x], { alpha: 1.0 });
+        expect(swishOut.shape).toEqual([2, 8, 16]);
+
+        // RotaryEmbedding (Opset 23)
+        const cosCache = graph
+            .addNode("cos")
+            .init(new TensorNode.Builder(DataType.FLOAT, [8, 8], "input"))
+            .as(TensorNode);
+        const sinCache = graph
+            .addNode("sin")
+            .init(new TensorNode.Builder(DataType.FLOAT, [8, 8], "input"))
+            .as(TensorNode);
+        const [ropeOut] = builder.createOp("RotaryEmbedding", [x, cosCache, sinCache]);
+        expect(ropeOut.shape).toEqual([2, 8, 16]);
+
+        // Attention (Opset 23/24) 4D GQA
+        const q4 = graph
+            .addNode("Q4")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 4, 8, 16], "input"))
+            .as(TensorNode);
+        const k4 = graph
+            .addNode("K4")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 12, 16], "input"))
+            .as(TensorNode);
+        const v4 = graph
+            .addNode("V4")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 12, 32], "input"))
+            .as(TensorNode);
+        const attnOuts = builder.createOp("Attention", [q4, k4, v4], {
+            q_num_heads: 4,
+            kv_num_heads: 2,
+            is_causal: 1,
+        });
+        expect(attnOuts[0].shape).toEqual([2, 4, 8, 32]);
+        expect(attnOuts[1].shape).toEqual([2, 2, 12, 16]);
+        expect(attnOuts[2].shape).toEqual([2, 2, 12, 32]);
+
+        // TensorScatter (Opset 24)
+        const cache = graph
+            .addNode("cache")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 16, 16], "input"))
+            .as(TensorNode);
+        const upd = graph
+            .addNode("upd")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2, 1, 16], "input"))
+            .as(TensorNode);
+        const [scatterOut] = builder.createOp("TensorScatter", [cache, upd], { axis: -2 });
+        expect(scatterOut.shape).toEqual([2, 2, 16, 16]);
+
+        // SpaceToDepth
+        const img = graph
+            .addNode("img")
+            .init(new TensorNode.Builder(DataType.FLOAT, [1, 3, 8, 8], "input"))
+            .as(TensorNode);
+        const [s2dOut] = builder.createOp("SpaceToDepth", [img], { blocksize: 2 });
+        expect(s2dOut.shape).toEqual([1, 12, 4, 4]);
+    });
+
+    it("computes minimal compatible export versions and honors explicit IR 14 / Opset 28 overrides", () => {
+        // Baseline graph stays at compat (IR 9, Opset 20)
+        const base = setup();
+        const xBase = base.graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        base.builder.createOp("Relu", [xBase]);
+        expect(resolveExportVersions(base.graph)).toEqual({ irVersion: 9, opsetVersion: 20 });
+
+        // Graph with RMSNormalization auto-bumps to Opset 23 / IR 11
+        const rmsG = setup();
+        const xRms = rmsG.graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+            .as(TensorNode);
+        const sRms = rmsG.graph
+            .addNode("S")
+            .init(new TensorNode.Builder(DataType.FLOAT, [4], "input"))
+            .as(TensorNode);
+        rmsG.builder.createOp("RMSNormalization", [xRms, sRms]);
+        expect(resolveExportVersions(rmsG.graph)).toEqual({ irVersion: 11, opsetVersion: 23 });
+
+        // Explicit targetOpset 28 / irVersion 14 override
+        expect(resolveExportVersions(base.graph, { targetOpset: 28, irVersion: 14 })).toEqual({
+            irVersion: 14,
+            opsetVersion: 28,
+        });
+
+        // IR 14 dtype triggers IR 14 automatically
+        const fp6 = setup();
+        fp6.graph.addNode("X6").init(new TensorNode.Builder(DataType.FLOAT6E2M3, [2, 4], "input"));
+        expect(resolveExportVersions(fp6.graph).irVersion).toBe(14);
     });
 });

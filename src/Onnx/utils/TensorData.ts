@@ -32,6 +32,51 @@ export function floatVec(arr: number[]): TensorProto {
     return { dataType: DataType.FLOAT, dims: [arr.length], floatData: arr.map(Number) };
 }
 
+export function packSubByteInts(values: number[], bits: 2 | 4, signed: boolean): number[] {
+    const perByte = bits === 4 ? 2 : 4;
+    const mask = bits === 4 ? 0x0f : 0x03;
+    const byteLen = Math.ceil(values.length / perByte);
+    const bytes = new Array<number>(byteLen).fill(0);
+    for (let i = 0; i < values.length; i++) {
+        let v = Math.trunc(values[i]);
+        if (signed) {
+            const min = -(1 << (bits - 1));
+            const max = (1 << (bits - 1)) - 1;
+            v = Math.max(min, Math.min(max, v));
+            if (v < 0) v = (1 << bits) + v;
+        } else {
+            const max = (1 << bits) - 1;
+            v = Math.max(0, Math.min(max, v));
+        }
+        const byteIdx = Math.floor(i / perByte);
+        const shift = (i % perByte) * bits;
+        bytes[byteIdx] |= (v & mask) << shift;
+    }
+    return bytes;
+}
+
+export function unpackSubByteInts(
+    u8: Uint8Array,
+    bits: 2 | 4,
+    signed: boolean,
+    count?: number,
+): number[] {
+    const perByte = bits === 4 ? 2 : 4;
+    const mask = bits === 4 ? 0x0f : 0x03;
+    const signBit = 1 << (bits - 1);
+    const mod = 1 << bits;
+    const n = count !== undefined && count > 0 ? count : u8.byteLength * perByte;
+    const out: number[] = [];
+    for (let i = 0; i < n; i++) {
+        const byteIdx = Math.floor(i / perByte);
+        if (byteIdx >= u8.byteLength) break;
+        const shift = (i % perByte) * bits;
+        const raw = (u8[byteIdx] >> shift) & mask;
+        out.push(signed && raw >= signBit ? raw - mod : raw);
+    }
+    return out;
+}
+
 export function makeTensorProto(dtype: DataType, dims: number[], values: number[]): TensorProto {
     const t: TensorProto = { dataType: dtype, dims };
 
@@ -72,6 +117,18 @@ export function makeTensorProto(dtype: DataType, dims: number[], values: number[
         case DataType.BOOL:
             t.int32Data = values.map((v) => (v ? 1 : 0));
             break;
+        case DataType.UINT4:
+            t.rawData = { type: "Buffer", data: packSubByteInts(values, 4, false) };
+            break;
+        case DataType.INT4:
+            t.rawData = { type: "Buffer", data: packSubByteInts(values, 4, true) };
+            break;
+        case DataType.UINT2:
+            t.rawData = { type: "Buffer", data: packSubByteInts(values, 2, false) };
+            break;
+        case DataType.INT2:
+            t.rawData = { type: "Buffer", data: packSubByteInts(values, 2, true) };
+            break;
         default: {
             // Fallback: encode as raw little-endian 32-bit floats or similar
             const buf = Buffer.alloc(values.length * 4);
@@ -98,6 +155,18 @@ export function zeroTensor(elemType: DataType, shape: number[]): TensorProto {
             return { ...base, int64Data: new Array<number>(n).fill(0) };
         case DataType.UINT64:
             return { ...base, uint64Data: new Array<number>(n).fill(0) };
+        case DataType.UINT4:
+        case DataType.INT4:
+            return {
+                ...base,
+                rawData: { type: "Buffer", data: new Array<number>(Math.ceil(n / 2)).fill(0) },
+            };
+        case DataType.UINT2:
+        case DataType.INT2:
+            return {
+                ...base,
+                rawData: { type: "Buffer", data: new Array<number>(Math.ceil(n / 4)).fill(0) },
+            };
         default:
             return { ...base, int32Data: new Array<number>(n).fill(0) };
     }
@@ -133,6 +202,25 @@ export function decodeIntegerVectorFromTensorProto(tv: TensorProto): number[] | 
 
     const u8 = toU8(tv.rawData ?? undefined);
     if (!u8) return undefined;
+
+    if (tv.dataType === DataType.UINT4 || tv.dataType === DataType.INT4) {
+        const count = totalSizeFromDims(0, tv.dims);
+        return unpackSubByteInts(
+            u8,
+            4,
+            tv.dataType === DataType.INT4,
+            count > 0 ? count : undefined,
+        );
+    }
+    if (tv.dataType === DataType.UINT2 || tv.dataType === DataType.INT2) {
+        const count = totalSizeFromDims(0, tv.dims);
+        return unpackSubByteInts(
+            u8,
+            2,
+            tv.dataType === DataType.INT2,
+            count > 0 ? count : undefined,
+        );
+    }
 
     const i64 = isInt64Type(tv.dataType);
     const elemBytes = i64 ? 8 : 4;
@@ -303,6 +391,25 @@ export function readTensorData(node?: BaseNode.Class): number[] | undefined {
     if (!u8) return undefined;
 
     const dt = tv.dataType;
+    if (dt === DataType.UINT4 || dt === DataType.INT4) {
+        const elemCount = totalSizeFromDims(0, tv.dims);
+        return unpackSubByteInts(
+            u8,
+            4,
+            dt === DataType.INT4,
+            elemCount > 0 ? elemCount : undefined,
+        );
+    }
+    if (dt === DataType.UINT2 || dt === DataType.INT2) {
+        const elemCount = totalSizeFromDims(0, tv.dims);
+        return unpackSubByteInts(
+            u8,
+            2,
+            dt === DataType.INT2,
+            elemCount > 0 ? elemCount : undefined,
+        );
+    }
+
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
     const out: number[] = [];
 

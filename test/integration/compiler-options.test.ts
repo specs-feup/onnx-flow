@@ -732,6 +732,200 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
             );
         }, 60000);
 
+        it("matches ORT for Modern LLM Block (RMSNormalization -> RotaryEmbedding -> GQA Attention -> Swish)", async () => {
+            await assertTransformMatchesOrt(
+                "combo_modern_llm_rmsnorm_rope_attn_swish",
+                {
+                    label: "llm_block",
+                    tol: 1e-3,
+                    feeds: [{ name: "X", dtype: "float32", shape: [1, 3, 8], gen: "negmix" }],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "llm");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [1, 3, 8], "input"))
+                            .as(TensorNode);
+                        const rmsScale = b.createConstant(
+                            "rms_s",
+                            makeTensorProto(DataType.FLOAT, [8], [1, 1.1, 0.9, 1, 1, 1.2, 0.8, 1]),
+                        );
+                        const wq = b.createConstant(
+                            "wq",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [8, 8],
+                                Array.from({ length: 64 }, (_, i) => ((i % 7) - 3) * 0.08),
+                            ),
+                        );
+                        const wk = b.createConstant(
+                            "wk",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [8, 4],
+                                Array.from({ length: 32 }, (_, i) => (((i + 2) % 5) - 2) * 0.1),
+                            ),
+                        );
+                        const wv = b.createConstant(
+                            "wv",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [8, 4],
+                                Array.from({ length: 32 }, (_, i) => (((i + 1) % 5) - 2) * 0.1),
+                            ),
+                        );
+                        const cosCache = b.createConstant(
+                            "cos_c",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [1, 3, 1],
+                                [1.0, Math.cos(0.3), Math.cos(0.6)],
+                            ),
+                        );
+                        const sinCache = b.createConstant(
+                            "sin_c",
+                            makeTensorProto(
+                                DataType.FLOAT,
+                                [1, 3, 1],
+                                [0.0, Math.sin(0.3), Math.sin(0.6)],
+                            ),
+                        );
+
+                        const [norm] = b.createOp(
+                            "RMSNormalization",
+                            [x, rmsScale],
+                            { axis: -1, epsilon: 1e-5 },
+                            [{ type: DataType.FLOAT, shape: [1, 3, 8] }],
+                        );
+                        const [qProj] = b.createOp("MatMul", [norm, wq], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 8] },
+                        ]);
+                        const [kProj] = b.createOp("MatMul", [norm, wk], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 4] },
+                        ]);
+                        const [vProj] = b.createOp("MatMul", [norm, wv], {}, [
+                            { type: DataType.FLOAT, shape: [1, 3, 4] },
+                        ]);
+                        const [qRope] = b.createOp(
+                            "RotaryEmbedding",
+                            [qProj, cosCache, sinCache],
+                            { interleaved: 0, num_heads: 4 },
+                            [{ type: DataType.FLOAT, shape: [1, 3, 8] }],
+                        );
+                        const [kRope] = b.createOp(
+                            "RotaryEmbedding",
+                            [kProj, cosCache, sinCache],
+                            { interleaved: 0, num_heads: 2 },
+                            [{ type: DataType.FLOAT, shape: [1, 3, 4] }],
+                        );
+                        const attnOuts = b.createOpWithExact(
+                            "llm_attn",
+                            "Attention",
+                            [qRope, kRope, vProj],
+                            ["llm_attn_y"],
+                            { q_num_heads: 4, kv_num_heads: 2, is_causal: 1, softcap: 5.0 },
+                            [{ type: DataType.FLOAT, shape: [1, 3, 8] }],
+                        );
+                        const [out] = b.createOp("Swish", [attnOuts[0]], { alpha: 1.0 }, [
+                            { type: DataType.FLOAT, shape: [1, 3, 8] },
+                        ]);
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                {
+                    canonicalize: true,
+                    loopLowering: false,
+                    optimize: true,
+                },
+            );
+        }, 60000);
+
+        it("matches ORT for RMSNormalization -> Swish -> TensorScatter (circular KV-cache) full pipeline", async () => {
+            await assertTransformMatchesOrt(
+                "combo_rmsnorm_swish_tensor_scatter",
+                {
+                    label: "kv_cache_pipe",
+                    tol: 1e-4,
+                    feeds: [
+                        { name: "cache", dtype: "float32", shape: [2, 1, 4, 4], gen: "zeros" },
+                        { name: "upd", dtype: "float32", shape: [2, 1, 2, 4], gen: "negmix" },
+                    ],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "kv");
+                        const cache = g
+                            .addNode("cache")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [2, 1, 4, 4], "input"))
+                            .as(TensorNode);
+                        const upd = g
+                            .addNode("upd")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [2, 1, 2, 4], "input"))
+                            .as(TensorNode);
+                        const wi = b.createConstant("wi", int64Vec([1, 3]));
+                        const rmsScale = b.createConstant(
+                            "rms_s",
+                            makeTensorProto(DataType.FLOAT, [4], [1.0, 1.2, 0.8, 1.1]),
+                        );
+                        const [norm] = b.createOp(
+                            "RMSNormalization",
+                            [upd, rmsScale],
+                            { axis: -1, epsilon: 1e-5 },
+                            [{ type: DataType.FLOAT, shape: [2, 1, 2, 4] }],
+                        );
+                        const [sw] = b.createOp("Swish", [norm], { alpha: 1.0 }, [
+                            { type: DataType.FLOAT, shape: [2, 1, 2, 4] },
+                        ]);
+                        const [out] = b.createOp(
+                            "TensorScatter",
+                            [cache, sw, wi],
+                            { axis: -2, mode: "circular" },
+                            [{ type: DataType.FLOAT, shape: [2, 1, 4, 4] }],
+                        );
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
+        it("matches ORT for GroupNorm -> Swish -> SpaceToDepth spatial pipeline", async () => {
+            await assertTransformMatchesOrt(
+                "combo_gn_swish_space_to_depth",
+                {
+                    label: "gn_swish_s2d",
+                    tol: 1e-4,
+                    feeds: [{ name: "X", dtype: "float32", shape: [1, 4, 4, 4], gen: "negmix" }],
+                    build: () => {
+                        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+                        const b = new GraphBuilder(g, "s2d_pipe");
+                        const x = g
+                            .addNode("X")
+                            .init(new TensorNode.Builder(DataType.FLOAT, [1, 4, 4, 4], "input"))
+                            .as(TensorNode);
+                        const s = b.createConstant("gn_s", floatVec([1, 1.2, 0.8, 1.1]));
+                        const bias = b.createConstant("gn_b", floatVec([0, 0.1, -0.1, 0.05]));
+                        const [gn] = b.createOp(
+                            "GroupNormalization",
+                            [x, s, bias],
+                            { num_groups: 2, epsilon: 1e-5 },
+                            [{ type: DataType.FLOAT, shape: [1, 4, 4, 4] }],
+                        );
+                        const [sw] = b.createOp("Swish", [gn], { alpha: 1.2 }, [
+                            { type: DataType.FLOAT, shape: [1, 4, 4, 4] },
+                        ]);
+                        const [out] = b.createOp("SpaceToDepth", [sw], { blocksize: 2 }, [
+                            { type: DataType.FLOAT, shape: [1, 16, 2, 2] },
+                        ]);
+                        if (out.is(TensorNode)) out.as(TensorNode).setType("output");
+                        return g;
+                    },
+                },
+                fullOpts,
+            );
+        }, 60000);
+
         it("matches ORT for Transformer Attention block (LayerNorm -> QKV -> Transpose -> Softmax -> MatMul)", async () => {
             await assertTransformMatchesOrt(
                 "combo_attention_ln_matmul_softmax",

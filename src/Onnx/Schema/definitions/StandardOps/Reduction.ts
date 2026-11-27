@@ -48,8 +48,14 @@ export const ReduceOps: OpSchema[] = [
         else if (typeof axesAttr === "number") axes = [axesAttr];
         else if (inputs[1]?.constantValue) axes = inputs[1].constantValue;
 
-        // ReduceLogSumExp defaults to reducing all axes if not provided
+        const noopWithEmptyAxes =
+            "noop_with_empty_axes" in attrs ? Number(attrs["noop_with_empty_axes"]) === 1 : false;
+
+        // Reduce* defaults to reducing all axes if not provided unless noop_with_empty_axes=1
         if (!axes || axes.length === 0) {
+            if (noopWithEmptyAxes) {
+                return [{ shape: inShape.slice(), dtype }];
+            }
             return [{ shape: keepdims ? inShape.map(() => 1) : [], dtype }];
         }
 

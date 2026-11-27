@@ -487,6 +487,152 @@ export const GlobalLpPool: OpSchema = {
     },
 };
 
+export const RotaryEmbedding: OpSchema = {
+    opType: "RotaryEmbedding",
+    sinceVersion: 23,
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "X", typeConstraint: T_ANY },
+        { name: "cos_cache", typeConstraint: T_ANY },
+        { name: "sin_cache", typeConstraint: T_ANY },
+        { name: "position_ids", typeConstraint: T_INT, optional: true },
+    ],
+    outputs: [{ name: "Y", typeConstraint: T_ANY }],
+    attributes: {
+        interleaved: {
+            name: "interleaved",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        rotary_embedding_dim: {
+            name: "rotary_embedding_dim",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        num_heads: {
+            name: "num_heads",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+    },
+    inferShape: (inputs) => [
+        { shape: inputs[0]?.shape?.slice() ?? [], dtype: inputs[0]?.dtype ?? DataType.UNDEFINED },
+    ],
+};
+
+export const Attention: OpSchema = {
+    opType: "Attention",
+    sinceVersion: 23,
+    category: OpCategory.Spatial,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "Q", typeConstraint: T_ANY },
+        { name: "K", typeConstraint: T_ANY },
+        { name: "V", typeConstraint: T_ANY },
+        { name: "attn_mask", typeConstraint: T_ANY, optional: true },
+        { name: "past_key", typeConstraint: T_ANY, optional: true },
+        { name: "past_value", typeConstraint: T_ANY, optional: true },
+        { name: "nonpad_kv_seqlen", typeConstraint: T_INT, optional: true },
+    ],
+    outputs: [
+        { name: "Y", typeConstraint: T_ANY },
+        { name: "present_key", typeConstraint: T_ANY, optional: true },
+        { name: "present_value", typeConstraint: T_ANY, optional: true },
+        { name: "qk_matmul_output", typeConstraint: T_ANY, optional: true },
+    ],
+    attributes: {
+        is_causal: { name: "is_causal", type: AttributeType.INT, required: false, defaultValue: 0 },
+        scale: { name: "scale", type: AttributeType.FLOAT, required: false },
+        softcap: { name: "softcap", type: AttributeType.FLOAT, required: false, defaultValue: 0.0 },
+        kv_num_heads: { name: "kv_num_heads", type: AttributeType.INT, required: false },
+        q_num_heads: { name: "q_num_heads", type: AttributeType.INT, required: false },
+        softmax_precision: { name: "softmax_precision", type: AttributeType.INT, required: false },
+        qk_matmul_output_mode: {
+            name: "qk_matmul_output_mode",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+    },
+    inferShape: (inputs, attrs) => {
+        const qShape = inputs[0]?.shape ?? [];
+        const kShape = inputs[1]?.shape ?? [];
+        const vShape = inputs[2]?.shape ?? [];
+        const pastKShape = inputs[4]?.shape ?? [];
+        const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
+
+        let yShape = qShape.slice();
+        if (qShape.length === 4 && vShape.length === 4) {
+            yShape = [qShape[0], qShape[1], qShape[2], vShape[3]];
+        } else if (qShape.length === 3 && vShape.length === 3) {
+            const qHeads = "q_num_heads" in attrs ? Number(attrs["q_num_heads"]) : 0;
+            const kvHeads = "kv_num_heads" in attrs ? Number(attrs["kv_num_heads"]) : 0;
+            const vHidden = typeof vShape[2] === "number" ? (vShape[2] as number) : -1;
+            const outHidden =
+                qHeads > 0 && kvHeads > 0 && vHidden > 0
+                    ? Math.floor((vHidden / kvHeads) * qHeads)
+                    : vShape[2];
+            yShape = [qShape[0], qShape[1], outHidden];
+        }
+
+        const qHeadsAttr = "q_num_heads" in attrs ? Number(attrs["q_num_heads"]) : 0;
+        const kvHeadsAttr = "kv_num_heads" in attrs ? Number(attrs["kv_num_heads"]) : 0;
+        const kvHeads =
+            kvHeadsAttr > 0 ? kvHeadsAttr : kShape.length === 4 ? (kShape[1] ?? -1) : -1;
+        const kBatch = kShape[0] ?? -1;
+        const curKvSeq =
+            kShape.length === 4 ? (kShape[2] ?? -1) : kShape.length === 3 ? (kShape[1] ?? -1) : -1;
+        const pastKvSeq = pastKShape.length === 4 ? (pastKShape[2] ?? 0) : 0;
+        const totalKvSeq =
+            typeof curKvSeq === "number" &&
+            curKvSeq >= 0 &&
+            typeof pastKvSeq === "number" &&
+            pastKvSeq >= 0
+                ? pastKvSeq + curKvSeq
+                : -1;
+
+        const kHeadDim =
+            kShape.length === 4
+                ? (kShape[3] ?? -1)
+                : kShape.length === 3 &&
+                    typeof kShape[2] === "number" &&
+                    kShape[2] > 0 &&
+                    kvHeadsAttr > 0
+                  ? Math.floor((kShape[2] as number) / kvHeadsAttr)
+                  : -1;
+        const vHeadDim =
+            vShape.length === 4
+                ? (vShape[3] ?? -1)
+                : vShape.length === 3 &&
+                    typeof vShape[2] === "number" &&
+                    vShape[2] > 0 &&
+                    kvHeadsAttr > 0
+                  ? Math.floor((vShape[2] as number) / kvHeadsAttr)
+                  : -1;
+
+        const presentKeyShape = [kBatch, kvHeads, totalKvSeq, kHeadDim];
+        const presentValShape = [vShape[0] ?? kBatch, kvHeads, totalKvSeq, vHeadDim];
+
+        const qkShape =
+            qShape.length === 4
+                ? [qShape[0], qShape[1], qShape[2], totalKvSeq]
+                : [qShape[0] ?? -1, qHeadsAttr > 0 ? qHeadsAttr : -1, qShape[1] ?? -1, totalKvSeq];
+
+        return [
+            { shape: yShape, dtype },
+            { shape: presentKeyShape, dtype: inputs[1]?.dtype ?? dtype },
+            { shape: presentValShape, dtype: inputs[2]?.dtype ?? dtype },
+            { shape: qkShape, dtype },
+        ];
+    },
+};
+
 export const PoolingOps: OpSchema[] = [AveragePool, MaxPool];
 
 export const NeuralNetOps: OpSchema[] = [
@@ -497,4 +643,6 @@ export const NeuralNetOps: OpSchema[] = [
     ConvTranspose,
     LpPool,
     GlobalLpPool,
+    RotaryEmbedding,
+    Attention,
 ];

@@ -30,7 +30,7 @@ export class OrchestratorPass implements GraphPass {
             for (const op of ops) {
                 if (!graph.hasNode(op.id)) continue;
 
-                const schema = registry.get(op.type, 19);
+                const schema = registry.get(op.type, graph.getTargetOpset());
                 const category = schema?.category;
 
                 // Find the first recipe that matches

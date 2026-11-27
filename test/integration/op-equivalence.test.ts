@@ -1681,6 +1681,227 @@ const CASES: OpEquivalenceCase[] = [
         origOpset: 10,
         tol: 1e-6,
     },
+    {
+        name: "Swish_opset24",
+        opType: "Swish",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], gen: "negmix" }],
+        attrs: { alpha: 1.25 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 4] }],
+        minOpset: 24,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "RMSNormalization_opset23",
+        opType: "RMSNormalization",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 4], gen: "negmix" }],
+        constInputs: [
+            {
+                index: 1,
+                proto: makeTensorProto(DataType.FLOAT, [4], [1.0, 1.5, 0.75, 1.25]),
+            },
+        ],
+        attrs: { axis: -1, epsilon: 1e-5 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 4] }],
+        minOpset: 23,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "SpaceToDepth_dcr",
+        opType: "SpaceToDepth",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "range" }],
+        attrs: { blocksize: 2 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 8, 2, 2] }],
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-6,
+    },
+    {
+        name: "RotaryEmbedding_4d_split",
+        opType: "RotaryEmbedding",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+        constInputs: [
+            {
+                index: 1,
+                proto: makeTensorProto(
+                    DataType.FLOAT,
+                    [8, 2],
+                    Array.from({ length: 16 }, (_, i) => Math.cos(i * 0.1)),
+                ),
+            },
+            {
+                index: 2,
+                proto: makeTensorProto(
+                    DataType.FLOAT,
+                    [8, 2],
+                    Array.from({ length: 16 }, (_, i) => Math.sin(i * 0.1)),
+                ),
+            },
+            {
+                index: 3,
+                proto: makeTensorProto(DataType.INT64, [1, 4], [0, 2, 1, 3]),
+            },
+        ],
+        attrs: { interleaved: 0 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 2, 4, 4] }],
+        minOpset: 23,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "RotaryEmbedding_3d_interleaved_partial",
+        opType: "RotaryEmbedding",
+        feeds: [{ name: "X", dtype: "float32", shape: [1, 3, 12], gen: "negmix" }],
+        constInputs: [
+            {
+                index: 1,
+                proto: makeTensorProto(
+                    DataType.FLOAT,
+                    [1, 3, 2],
+                    Array.from({ length: 6 }, (_, i) => Math.cos(i * 0.2)),
+                ),
+            },
+            {
+                index: 2,
+                proto: makeTensorProto(
+                    DataType.FLOAT,
+                    [1, 3, 2],
+                    Array.from({ length: 6 }, (_, i) => Math.sin(i * 0.2)),
+                ),
+            },
+        ],
+        attrs: { interleaved: 1, num_heads: 2, rotary_embedding_dim: 4 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 3, 12] }],
+        minOpset: 23,
+        tol: 1e-4,
+    },
+    {
+        name: "Attention_3d_gqa_causal_softcap",
+        opType: "Attention",
+        feeds: [
+            { name: "Q", dtype: "float32", shape: [1, 3, 8], gen: "negmix" },
+            { name: "K", dtype: "float32", shape: [1, 3, 4], gen: "negmix" },
+            { name: "V", dtype: "float32", shape: [1, 3, 4], gen: "negmix" },
+        ],
+        attrs: { q_num_heads: 4, kv_num_heads: 2, is_causal: 1, softcap: 5.0 },
+        outputNames: ["Y"],
+        outputSpecs: [{ type: DataType.FLOAT, shape: [1, 3, 8] }],
+        minOpset: 23,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-4,
+    },
+    {
+        name: "Attention_4d_kvcache_masked",
+        opType: "Attention",
+        feeds: [
+            { name: "Q", dtype: "float32", shape: [1, 2, 2, 4], gen: "negmix" },
+            { name: "K", dtype: "float32", shape: [1, 2, 2, 4], gen: "negmix" },
+            { name: "V", dtype: "float32", shape: [1, 2, 2, 4], gen: "negmix" },
+            { name: "past_k", dtype: "float32", shape: [1, 2, 3, 4], gen: "negmix" },
+            { name: "past_v", dtype: "float32", shape: [1, 2, 3, 4], gen: "negmix" },
+        ],
+        outputNames: ["Y", "present_k", "present_v"],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "attn_kv");
+            const q = g
+                .addNode("Q")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 2, 4], "input"))
+                .as(TensorNode);
+            const k = g
+                .addNode("K")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 2, 4], "input"))
+                .as(TensorNode);
+            const v = g
+                .addNode("V")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 2, 4], "input"))
+                .as(TensorNode);
+            const mask = b.createConstant(
+                "attn_mask",
+                makeTensorProto(DataType.FLOAT, [1, 1, 2, 5], new Array<number>(10).fill(0)),
+            );
+            const pk = g
+                .addNode("past_k")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 3, 4], "input"))
+                .as(TensorNode);
+            const pv = g
+                .addNode("past_v")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 3, 4], "input"))
+                .as(TensorNode);
+            const attnOuts = b.createOpWithExact(
+                "attn_op",
+                "Attention",
+                [q, k, v, mask, pk, pv],
+                ["Y", "present_k", "present_v"],
+                { q_num_heads: 2, kv_num_heads: 2, is_causal: 1 },
+            );
+            for (const o of attnOuts) {
+                if (o.is(TensorNode)) o.as(TensorNode).setType("output");
+            }
+            inferShapes(g);
+            return g;
+        },
+        minOpset: 23,
+        tol: 1e-4,
+    },
+    {
+        name: "TensorScatter_circular_cache",
+        opType: "TensorScatter",
+        feeds: [
+            { name: "cache", dtype: "float32", shape: [2, 1, 4, 2], gen: "zeros" },
+            { name: "upd", dtype: "float32", shape: [2, 1, 2, 2], gen: "range" },
+        ],
+        constInputs: [
+            {
+                index: 2,
+                proto: int64Vec([1, 3]),
+            },
+        ],
+        attrs: { axis: -2, mode: "circular" },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 1, 4, 2] }],
+        minOpset: 24,
+        indexingModes: [IndexingMode.Pointer, IndexingMode.Radix],
+        tol: 1e-5,
+    },
+    {
+        name: "ReduceSum_noop_empty_axes",
+        opType: "ReduceSum",
+        feeds: [{ name: "X", dtype: "float32", shape: [2, 3], gen: "negmix" }],
+        attrs: { noop_with_empty_axes: 1, keepdims: 1 },
+        outputSpecs: [{ type: DataType.FLOAT, shape: [2, 3] }],
+        tol: 1e-6,
+    },
+    {
+        name: "QDQ_int4_output_dtype",
+        opType: "QuantizeLinear",
+        feeds: [
+            {
+                name: "X",
+                dtype: "float32",
+                shape: [2, 4],
+                init: [-4.0, -1.5, -0.5, 0.0, 0.5, 1.5, 3.0, 5.0],
+            },
+        ],
+        customBuild: () => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "qdq4");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                .as(TensorNode);
+            const s = b.createConstant("q_s", makeTensorProto(DataType.FLOAT, [], [0.5]));
+            const [q] = b.createOp("QuantizeLinear", [x, s], { output_dtype: DataType.INT4 }, [
+                { type: DataType.INT4, shape: [2, 4] },
+            ]);
+            const [dq] = b.createOp("DequantizeLinear", [q, s], {}, [
+                { type: DataType.FLOAT, shape: [2, 4] },
+            ]);
+            if (dq.is(TensorNode)) dq.as(TensorNode).setType("output");
+            return g;
+        },
+        minOpset: 21,
+        tol: 1e-5,
+    },
 ];
 
 describe("Integration: Programmatic ORT Equivalence for Operation Recipes", () => {

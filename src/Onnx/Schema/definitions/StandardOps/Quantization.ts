@@ -21,11 +21,36 @@ export const QuantizeLinear: OpSchema = {
         saturate: { name: "saturate", type: AttributeType.INT, required: false, defaultValue: 1 },
     },
 
-    inferShape: (inputs) => {
+    inferShape: (inputs, attrs) => {
         const shape = inputs[0]?.shape?.slice() ?? [];
-        // If zero_point is provided, output type matches it. Otherwise, defaults to UINT8.
-        const dtype = inputs[2]?.dtype ?? DataType.UINT8;
+        const attrOutType =
+            "output_dtype" in attrs && Number(attrs["output_dtype"]) > 0
+                ? Number(attrs["output_dtype"])
+                : undefined;
+        // If output_dtype attr or zero_point is provided, use it; otherwise UINT8
+        const dtype = attrOutType ?? (inputs.length > 2 ? inputs[2].dtype : DataType.UINT8);
         return [{ shape, dtype }];
+    },
+};
+
+export const QuantizeLinear21: OpSchema = {
+    ...QuantizeLinear,
+    sinceVersion: 21,
+    attributes: {
+        ...QuantizeLinear.attributes,
+        block_size: {
+            name: "block_size",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        output_dtype: {
+            name: "output_dtype",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        precision: { name: "precision", type: AttributeType.INT, required: false, defaultValue: 0 },
     },
 };
 
@@ -45,11 +70,35 @@ export const DequantizeLinear: OpSchema = {
         axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: 1 },
     },
 
-    inferShape: (inputs) => {
+    inferShape: (inputs, attrs) => {
         const shape = inputs[0]?.shape?.slice() ?? [];
-        // Output type matches the scale type (FLOAT, FLOAT16, etc.)
-        const dtype = inputs[1]?.dtype ?? DataType.FLOAT;
+        const attrOutType =
+            "output_dtype" in attrs && Number(attrs["output_dtype"]) > 0
+                ? Number(attrs["output_dtype"])
+                : undefined;
+        // Output type matches output_dtype (if set) or scale type (FLOAT, FLOAT16, BFLOAT16)
+        const dtype = attrOutType ?? (inputs.length > 1 ? inputs[1].dtype : DataType.FLOAT);
         return [{ shape, dtype }];
+    },
+};
+
+export const DequantizeLinear21: OpSchema = {
+    ...DequantizeLinear,
+    sinceVersion: 21,
+    attributes: {
+        ...DequantizeLinear.attributes,
+        block_size: {
+            name: "block_size",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
+        output_dtype: {
+            name: "output_dtype",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 0,
+        },
     },
 };
 
@@ -259,7 +308,9 @@ export const Binarizer: OpSchema = {
 
 export const QuantizationOps: OpSchema[] = [
     QuantizeLinear,
+    QuantizeLinear21,
     DequantizeLinear,
+    DequantizeLinear21,
     QLinearConv,
     QLinearMatMul,
     DynamicQuantizeLinear,

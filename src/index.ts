@@ -33,8 +33,12 @@ export async function parseOnnxFile(inputFilePath: string): Promise<RawOnnxModel
     return await onnx2json(inputFilePath);
 }
 
-export async function jsonToOnnx(jsonFilePath: string, outputFilePath: string): Promise<void> {
-    return await json2onnx(jsonFilePath, outputFilePath);
+export async function jsonToOnnx(
+    jsonFilePath: string,
+    outputFilePath: string,
+    options?: { targetOpset?: number; irVersion?: number },
+): Promise<void> {
+    return await json2onnx(jsonFilePath, outputFilePath, options);
 }
 
 // Helper to derive base paths safely without extension loss
@@ -58,8 +62,16 @@ export function loadGraph(
     indexingMode: IndexingMode = defaultDecompositionOptions.indexingMode,
     validate: boolean = true,
     tileSize: number | undefined = defaultDecompositionOptions.tileSize,
+    targetOpset?: number,
+    irVersion?: number,
 ): string | OnnxGraph.Class {
-    let graph = createGraph(onnxObject);
+    let graph = createGraph(onnxObject, targetOpset);
+    if (targetOpset !== undefined) {
+        graph.setTargetOpset(targetOpset, true);
+    }
+    if (irVersion !== undefined) {
+        graph.setIrVersion(irVersion, true);
+    }
 
     // Initial Validation (Post-Adapter)
     if (validate) {
@@ -77,6 +89,8 @@ export function loadGraph(
             decomposeForCgra,
             indexingMode,
             ...(tileSize !== undefined ? { tileSize } : {}),
+            ...(targetOpset !== undefined ? { targetOpset } : {}),
+            ...(irVersion !== undefined ? { irVersion } : {}),
         };
         graph = graph.apply(new OnnxGraphTransformer(decompOptions));
 
@@ -155,6 +169,8 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 "decomposeForCgra",
                 "indexingMode",
                 "tileSize",
+                "targetOpset",
+                "irVersion",
                 "noLowLevel",
                 "noOptimize",
             ],
@@ -275,6 +291,14 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             type: "number",
             default: defaultDecompositionOptions.tileSize,
         })
+        .option("targetOpset", {
+            describe: "Target ONNX opset version for schema resolution & export (up to 28)",
+            type: "number",
+        })
+        .option("irVersion", {
+            describe: "Explicit ONNX IR version for export (up to 14)",
+            type: "number",
+        })
         .option("formatter", {
             alias: "fmtr",
             describe: "Specify the DOT formatter to use (0 = default, 1 = cgra)",
@@ -329,6 +353,8 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
     }
 
     const verbosity = argv.verbosity;
+    const targetOpset = argv.targetOpset;
+    const irVersion = argv.irVersion;
     const outputFilePath = argv.output;
     const outputFormat = argv.format;
     const visualizationOption = argv.visualization;
@@ -361,7 +387,13 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
             console.log("Input ONNX/JSON Graph:", JSON.stringify(onnxObject, null, 2));
 
         // Step 2: Process the graph
-        const graph = createGraph(onnxObject);
+        const graph = createGraph(onnxObject, targetOpset);
+        if (targetOpset !== undefined) {
+            graph.setTargetOpset(targetOpset, true);
+        }
+        if (irVersion !== undefined) {
+            graph.setIrVersion(irVersion, true);
+        }
         let partitions: { head: OnnxGraph.Class; tail: OnnxGraph.Class } | undefined;
 
         if (verbosity > 1) {
@@ -390,6 +422,8 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
                 ...(argv.tileSize !== undefined ? { tileSize: argv.tileSize } : {}),
+                ...(targetOpset !== undefined ? { targetOpset } : {}),
+                ...(irVersion !== undefined ? { irVersion } : {}),
             };
 
             console.log("\nStarting Interactive Mode. Automatic passes bypassed.");
@@ -410,6 +444,8 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
                 loopLowering: argv.loopLowering,
                 indexingMode: argv.indexingMode as IndexingMode,
                 ...(argv.tileSize !== undefined ? { tileSize: argv.tileSize } : {}),
+                ...(targetOpset !== undefined ? { targetOpset } : {}),
+                ...(irVersion !== undefined ? { irVersion } : {}),
             };
             graph.apply(new OnnxGraphTransformer(decompOptions));
 
@@ -532,13 +568,22 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
         if (!argv.noReconversion && (isPartitioning === undefined || isPartitioning === false)) {
             const { json: reconvertedJsonPath, onnx: reconvertedOnnxPath } =
                 getReconvertedPaths(inputFilePath);
-            const onnxCompatibleJson = convertFlowGraphToOnnxJson(graph);
+            const exportOptions = {
+                ...(targetOpset !== undefined ? { targetOpset } : {}),
+                ...(irVersion !== undefined ? { irVersion } : {}),
+            };
+            const onnxCompatibleJson = convertFlowGraphToOnnxJson(
+                graph,
+                undefined,
+                undefined,
+                exportOptions,
+            );
 
             // Use streaming writer to avoid RangeError for huge models
             safeWriteJson(reconvertedJsonPath, onnxCompatibleJson);
             console.log(`Reconverted JSON written to ${reconvertedJsonPath}`);
 
-            await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath);
+            await jsonToOnnx(reconvertedJsonPath, reconvertedOnnxPath, exportOptions);
             console.log(`Reconverted ONNX written to ${reconvertedOnnxPath}`);
         } else if (verbosity > 0 && (isPartitioning === undefined || isPartitioning === false)) {
             console.log("Skipping ONNX reconversion.");

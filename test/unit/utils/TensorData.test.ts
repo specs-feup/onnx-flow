@@ -175,4 +175,47 @@ describe("TensorData Utilities", () => {
         expect(attrs2["auto_pad"]).toBe("SAME_LOWER");
         expect(attrs2["pads"]).toBeUndefined();
     });
+
+    it("packs and unpacks INT4, UINT4, INT2, and UINT2 sub-byte tensors in makeTensorProto and readTensorData", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+
+        const i4Vals = [-8, -1, 0, 5, 7];
+        const i4Proto = makeTensorProto(DataType.INT4, [5], i4Vals);
+        expect(i4Proto.rawData?.data.length).toBe(3);
+        const i4Node = graph
+            .addNode("c_i4")
+            .init(new ConstantNode.Builder(i4Proto))
+            .as(ConstantNode);
+        expect(readTensorData(i4Node)).toEqual(i4Vals);
+        expect(decodeIntegerVectorFromTensorProto(i4Proto)).toEqual(i4Vals);
+
+        const u4Vals = [0, 3, 12, 15];
+        const u4Proto = makeTensorProto(DataType.UINT4, [4], u4Vals);
+        const u4Node = graph
+            .addNode("c_u4")
+            .init(new ConstantNode.Builder(u4Proto))
+            .as(ConstantNode);
+        expect(readTensorData(u4Node)).toEqual(u4Vals);
+
+        const i2Vals = [-2, -1, 0, 1, -2];
+        const i2Proto = makeTensorProto(DataType.INT2, [5], i2Vals);
+        expect(i2Proto.rawData?.data.length).toBe(2);
+        const i2Node = graph
+            .addNode("c_i2")
+            .init(new ConstantNode.Builder(i2Proto))
+            .as(ConstantNode);
+        expect(readTensorData(i2Node)).toEqual(i2Vals);
+
+        const u2Vals = [0, 1, 2, 3];
+        const u2Proto = makeTensorProto(DataType.UINT2, [4], u2Vals);
+        const u2Node = graph
+            .addNode("c_u2")
+            .init(new ConstantNode.Builder(u2Proto))
+            .as(ConstantNode);
+        expect(readTensorData(u2Node)).toEqual(u2Vals);
+
+        const z4 = zeroTensor(DataType.INT4, [2, 3]);
+        expect(z4.rawData?.data).toEqual([0, 0, 0]);
+        expect(decodeIntegerVectorFromTensorProto(z4)).toEqual([0, 0, 0, 0, 0, 0]);
+    });
 });

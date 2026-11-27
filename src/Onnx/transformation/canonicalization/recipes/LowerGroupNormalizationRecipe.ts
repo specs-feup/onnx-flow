@@ -44,6 +44,12 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
             (X.literalType as DataType | undefined) ??
             (Y.literalType as DataType | undefined) ??
             DataType.FLOAT;
+        const stashType = getIntAttr(op, "stash_type", DataType.FLOAT) as DataType;
+        const accumDtype =
+            (dtype === DataType.FLOAT16 || dtype === DataType.BFLOAT16) &&
+            stashType !== DataType.UNDEFINED
+                ? stashType
+                : dtype;
 
         const Yshape: KnownShape | undefined = Y.shape as KnownShape | undefined;
         const outShape = Yshape ? (Y.shape as KnownShape) : (X.shape as KnownShape);
@@ -105,9 +111,16 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
             ]);
         }
 
-        // 2. Reshape input to 3D: [N, G, group_elements]
-        const [x3D] = builder.createOp("Reshape", [X, shape3DNode], {}, [
-            { type: dtype, shape: shape3DExpected },
+        // 2. Optionally cast to stash_type and Reshape input to 3D: [N, G, group_elements]
+        const xForNorm: ConcreteValueNode =
+            accumDtype === dtype
+                ? X
+                : builder.createOp("Cast", [X], { to: accumDtype }, [
+                      { type: accumDtype, shape: outShape },
+                  ])[0];
+
+        const [x3D] = builder.createOp("Reshape", [xForNorm, shape3DNode], {}, [
+            { type: accumDtype, shape: shape3DExpected },
         ]);
 
         // 3. Compute Mean across group elements (axis 2)
@@ -118,7 +131,7 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
         const meanShape: KnownShape = isStatic
             ? [shape3DExpected[0], numGroups, 1]
             : [-1, numGroups, 1];
-        const meanExpected = [{ type: dtype, shape: meanShape }];
+        const meanExpected = [{ type: accumDtype, shape: meanShape }];
 
         const [mean] = builder.createOp(
             "ReduceMean",
@@ -128,7 +141,7 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
         );
 
         // 4. Compute Variance: Mean((X - Mean)^2)
-        const x3DExpected = [{ type: dtype, shape: shape3DExpected }];
+        const x3DExpected = [{ type: accumDtype, shape: shape3DExpected }];
         const [diff] = builder.createOp("Sub", [x3D, mean], {}, x3DExpected);
         const [diffSq] = builder.createOp("Mul", [diff, diff], {}, x3DExpected);
         const [variance] = builder.createOp(
@@ -141,7 +154,7 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
         // 5. Standard Deviation: Sqrt(Variance + epsilon)
         const epsConst = builder.createConstant(
             `gn_eps_${op.id}`,
-            makeTensorProto(dtype, [], [eps]),
+            makeTensorProto(accumDtype, [], [eps]),
         );
         const [varEps] = builder.createOp("Add", [variance, epsConst], {}, meanExpected);
         const [stdDev] = builder.createOp("Sqrt", [varEps], {}, meanExpected);
@@ -149,10 +162,16 @@ export class LowerGroupNormalizationRecipe implements DecompositionRecipe {
         // 6. Normalize in 3D: (X - Mean) / StdDev
         const [xNorm3D] = builder.createOp("Div", [diff, stdDev], {}, x3DExpected);
 
-        // 7. Reshape back to original N-D shape: [N, C, H, W, ...]
-        const [xNorm] = builder.createOp("Reshape", [xNorm3D, origShapeNode], {}, [
-            { type: dtype, shape: outShape },
+        // 7. Reshape back to original N-D shape and cast back if stash_type differed
+        const [xNormAccum] = builder.createOp("Reshape", [xNorm3D, origShapeNode], {}, [
+            { type: accumDtype, shape: outShape },
         ]);
+        const xNorm: ConcreteValueNode =
+            accumDtype === dtype
+                ? xNormAccum
+                : builder.createOp("Cast", [xNormAccum], { to: dtype }, [
+                      { type: dtype, shape: outShape },
+                  ])[0];
 
         let curOut = xNorm;
 

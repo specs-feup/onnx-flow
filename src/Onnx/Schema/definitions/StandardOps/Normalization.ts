@@ -160,6 +160,51 @@ export const GroupNormalization: OpSchema = {
     ],
 };
 
+export const GroupNormalization21: OpSchema = {
+    ...GroupNormalization,
+    sinceVersion: 21,
+    attributes: {
+        ...GroupNormalization.attributes,
+        stash_type: {
+            name: "stash_type",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 1,
+        },
+    },
+};
+
+export const RMSNormalization: OpSchema = {
+    opType: "RMSNormalization",
+    sinceVersion: 23,
+    category: OpCategory.Normalization,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "X", typeConstraint: T_ANY },
+        { name: "scale", typeConstraint: T_ANY },
+    ],
+    outputs: [{ name: "Y", typeConstraint: T_ANY }],
+    attributes: {
+        axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: -1 },
+        epsilon: {
+            name: "epsilon",
+            type: AttributeType.FLOAT,
+            required: false,
+            defaultValue: 1e-5,
+        },
+        stash_type: {
+            name: "stash_type",
+            type: AttributeType.INT,
+            required: false,
+            defaultValue: 1,
+        },
+    },
+    inferShape: (inputs) => [
+        { shape: inputs[0]?.shape?.slice() ?? [], dtype: inputs[0]?.dtype ?? DataType.UNDEFINED },
+    ],
+};
+
 export const LpNormalization: OpSchema = {
     opType: "LpNormalization",
     sinceVersion: 1,
@@ -183,5 +228,7 @@ export const NormalizationOps: OpSchema[] = [
     LayerNormalization,
     InstanceNormalization,
     GroupNormalization,
+    GroupNormalization21,
+    RMSNormalization,
     LpNormalization,
 ];

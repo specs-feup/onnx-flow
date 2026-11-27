@@ -75,6 +75,16 @@ export class LowerDynamicReductionRecipe implements LoopLoweringRecipe {
         if (ins.length > 1 && ins[1].id !== "" && !ins[1].is(ConstantNode)) {
             return false;
         }
+        if (getIntAttr(op, "noop_with_empty_axes", 0) === 1) {
+            const axesInput = ins.length > 1 && ins[1].id !== "" ? ins[1] : undefined;
+            const constAxes =
+                axesInput?.is(ConstantNode) === true
+                    ? (readConstIntegerVectorFromTensorNode(axesInput.as(ConstantNode)) ?? [])
+                    : getIntsAttr(op, "axes", []);
+            if (constAxes.length === 0) {
+                return false;
+            }
+        }
         return true;
     }
 

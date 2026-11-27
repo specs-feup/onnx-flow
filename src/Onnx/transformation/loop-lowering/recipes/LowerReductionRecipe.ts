@@ -4,6 +4,7 @@ import type { ValueNode, ConcreteValueNode, KnownShape } from "../../../OnnxType
 import { DataType } from "../../../OnnxTypes.js";
 import {
     asStaticDims,
+    getIntAttr,
     getIntsAttr,
     readConstIntegerVectorFromTensorNode,
     scalarInt64,
@@ -72,7 +73,18 @@ export class LowerReductionRecipe implements LoopLoweringRecipe {
         const inputs = op.getInputs();
         if (!inputs || inputs.length === 0) return false;
         const dims = toStaticShape(inputs[0].shape);
-        return dims.length > 0 && !dims.includes(-1);
+        if (dims.length === 0 || dims.includes(-1)) return false;
+        if (getIntAttr(op, "noop_with_empty_axes", 0) === 1) {
+            const axesInput = inputs.length > 1 && inputs[1].id !== "" ? inputs[1] : undefined;
+            const constAxes =
+                axesInput?.is(ConstantNode) === true
+                    ? (readConstIntegerVectorFromTensorNode(axesInput.as(ConstantNode)) ?? [])
+                    : getIntsAttr(op, "axes", []);
+            if (constAxes.length === 0 && (!axesInput || axesInput.is(ConstantNode))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     getLoopBounds(

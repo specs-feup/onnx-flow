@@ -6,6 +6,8 @@ import OperationNode from "./OperationNode.js";
 import OnnxEdge from "./OnnxEdge.js";
 import ConstantNode from "./ConstantNode.js";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
+import type { OpsetImport } from "./OnnxTypes.js";
+import { LATEST_ONNX_IR_VERSION, LATEST_ONNX_OPSET } from "./utils/Constants.js";
 
 namespace OnnxGraph {
     export const TAG = "__specs-onnx__onnx_graph";
@@ -80,6 +82,52 @@ namespace OnnxGraph {
                 .find((edge) => edge.id === edgeId);
         }
 
+        /** Original model IR version (or configured target IR version). */
+        getIrVersion(): number {
+            return this.data[TAG].irVersion ?? LATEST_ONNX_IR_VERSION;
+        }
+
+        hasExplicitIrVersion(): boolean {
+            return this.data[TAG].explicitIrVersion === true;
+        }
+
+        setIrVersion(irVersion: number, explicit: boolean = true): void {
+            this.data[TAG].irVersion = irVersion;
+            if (explicit) this.data[TAG].explicitIrVersion = true;
+        }
+
+        /** Imported opset table recorded from the source model (empty when built programmatically). */
+        getOpsetImport(): OpsetImport[] {
+            return this.data[TAG].opsetImport ?? [];
+        }
+
+        setOpsetImport(imports: OpsetImport[]): void {
+            this.data[TAG].opsetImport = imports;
+        }
+
+        /** Source model default-domain opset prior to frontend upgrades, if imported. */
+        getSourceOpset(): number | undefined {
+            return this.data[TAG].sourceOpset;
+        }
+
+        setSourceOpset(opset: number): void {
+            this.data[TAG].sourceOpset = opset;
+        }
+
+        /** Target ONNX opset version used by schema lookup, shape inference, and lowering. */
+        getTargetOpset(): number {
+            return this.data[TAG].targetOpset ?? LATEST_ONNX_OPSET;
+        }
+
+        hasExplicitTargetOpset(): boolean {
+            return this.data[TAG].explicitTargetOpset === true;
+        }
+
+        setTargetOpset(opset: number, explicit: boolean = true): void {
+            this.data[TAG].targetOpset = opset;
+            if (explicit) this.data[TAG].explicitTargetOpset = true;
+        }
+
         /**
          * Resolves a node by its type and instance number (e.g., "MatMul", 2).
          * Instance is 1-based (first occurrence is 1).
@@ -94,11 +142,25 @@ namespace OnnxGraph {
     }
 
     export class Builder implements Graph.Builder<Data, ScratchData> {
+        private targetOpset?: number | undefined;
+        private irVersion?: number | undefined;
+
+        constructor(options?: { targetOpset?: number; irVersion?: number }) {
+            this.targetOpset = options?.targetOpset;
+            this.irVersion = options?.irVersion;
+        }
+
         buildData(data: BaseGraph.Data): Data {
             return {
                 ...data,
                 [TAG]: {
                     version: VERSION,
+                    ...(this.targetOpset !== undefined
+                        ? { targetOpset: this.targetOpset, explicitTargetOpset: true }
+                        : {}),
+                    ...(this.irVersion !== undefined
+                        ? { irVersion: this.irVersion, explicitIrVersion: true }
+                        : {}),
                 },
             };
         }
@@ -114,6 +176,12 @@ namespace OnnxGraph {
     export interface Data extends BaseGraph.Data {
         [TAG]: {
             version: typeof VERSION;
+            irVersion?: number;
+            opsetImport?: OpsetImport[];
+            sourceOpset?: number;
+            targetOpset?: number;
+            explicitTargetOpset?: boolean;
+            explicitIrVersion?: boolean;
         };
     }
 

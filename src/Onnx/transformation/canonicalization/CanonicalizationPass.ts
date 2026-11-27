@@ -125,6 +125,16 @@ import { LowerHardmaxDynamicRecipe } from "./recipes/LowerHardmaxDynamicRecipe.j
 import { LowerTriluDynamicRecipe } from "./recipes/LowerTriluDynamicRecipe.js";
 import { LowerEyeLikeDynamicRecipe } from "./recipes/LowerEyeLikeDynamicRecipe.js";
 import { LowerDetDynamicRecipe } from "./recipes/LowerDetDynamicRecipe.js";
+import { LowerSwishRecipe } from "./recipes/LowerSwishRecipe.js";
+import { LowerRMSNormalizationRecipe } from "./recipes/LowerRMSNormalizationRecipe.js";
+import { LowerRotaryEmbeddingRecipe } from "./recipes/LowerRotaryEmbeddingRecipe.js";
+import { LowerAttentionRecipe } from "./recipes/LowerAttentionRecipe.js";
+import { LowerSpaceToDepthRecipe } from "./recipes/LowerSpaceToDepthRecipe.js";
+import { LowerTensorScatterRecipe } from "./recipes/LowerTensorScatterRecipe.js";
+import {
+    LowerReductionNoopRecipe,
+    REDUCTION_NOOP_OP_TYPES,
+} from "./recipes/LowerReductionNoopRecipe.js";
 
 export class CanonicalizationPass implements GraphPass {
     public readonly name = "Canonicalization";
@@ -254,6 +264,15 @@ export class CanonicalizationPass implements GraphPass {
             new LowerLayerNormalizationRecipe(),
             new LowerInstanceNormalizationRecipe(),
             new LowerGroupNormalizationRecipe(),
+            new LowerRMSNormalizationRecipe(),
+
+            // Modern Activation, Sequence, Spatial & KV-Cache Operations (Opset 21..28)
+            new LowerSwishRecipe(),
+            new LowerRotaryEmbeddingRecipe(),
+            new LowerAttentionRecipe(),
+            new LowerSpaceToDepthRecipe(),
+            new LowerTensorScatterRecipe(),
+            ...REDUCTION_NOOP_OP_TYPES.map((opType) => new LowerReductionNoopRecipe(opType)),
         ];
 
         for (const recipe of customRecipes ?? defaultRecipes) {

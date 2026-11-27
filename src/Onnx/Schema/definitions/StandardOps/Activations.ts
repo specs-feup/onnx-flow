@@ -90,6 +90,22 @@ export const Hardmax: OpSchema = {
     ],
 };
 
+export const Swish: OpSchema = {
+    opType: "Swish",
+    sinceVersion: 24,
+    category: OpCategory.ElementWise,
+    broadcastable: false,
+    hasState: false,
+    inputs: [{ name: "X", typeConstraint: T_ANY }],
+    outputs: [{ name: "Y", typeConstraint: T_ANY }],
+    attributes: {
+        alpha: { name: "alpha", type: AttributeType.FLOAT, required: false, defaultValue: 1.0 },
+    },
+    inferShape: (inputs) => [
+        { shape: inputs[0]?.shape?.slice() ?? [], dtype: inputs[0]?.dtype ?? DataType.UNDEFINED },
+    ],
+};
+
 // --- Loss Functions ---
 
 export const SoftmaxCrossEntropyLoss: OpSchema = {
@@ -172,6 +188,7 @@ export const ActivationNonLossOps: OpSchema[] = [
     Shrink,
     LogSoftmax,
     Hardmax,
+    Swish,
 ];
 
 export const ActivationOps: OpSchema[] = [...LossOps, ...ActivationNonLossOps];

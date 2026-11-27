@@ -298,6 +298,21 @@ export const Cast: OpSchema = {
     },
 };
 
+export const Cast24: OpSchema = {
+    ...Cast,
+    sinceVersion: 24,
+    attributes: {
+        ...Cast.attributes,
+        saturate: { name: "saturate", type: AttributeType.INT, required: false, defaultValue: 1 },
+        round_mode: {
+            name: "round_mode",
+            type: AttributeType.STRING,
+            required: false,
+            defaultValue: "nearest",
+        },
+    },
+};
+
 export const Gather: OpSchema = {
     opType: "Gather",
     sinceVersion: 11,
@@ -698,6 +713,53 @@ export const Identity: OpSchema = {
     },
 };
 
+export const SpaceToDepth: OpSchema = {
+    opType: "SpaceToDepth",
+    sinceVersion: 13,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [{ name: "input", typeConstraint: T_ANY }],
+    outputs: [{ name: "output", typeConstraint: T_ANY }],
+    attributes: {
+        blocksize: { name: "blocksize", type: AttributeType.INT, required: true },
+    },
+    inferShape: (inputs, attrs) => {
+        const xShape = inputs[0]?.shape ?? [];
+        const dtype = inputs[0]?.dtype ?? DataType.UNDEFINED;
+        const blocksize = "blocksize" in attrs ? Number(attrs["blocksize"]) : 1;
+        if (xShape.length === 4 && blocksize > 0) {
+            const [b, c, h, w] = xShape;
+            const outC = typeof c === "number" ? c * blocksize * blocksize : -1;
+            const outH = typeof h === "number" ? Math.floor(h / blocksize) : -1;
+            const outW = typeof w === "number" ? Math.floor(w / blocksize) : -1;
+            return [{ shape: [b, outC, outH, outW], dtype }];
+        }
+        return [{ shape: xShape.map(() => -1), dtype }];
+    },
+};
+
+export const TensorScatter: OpSchema = {
+    opType: "TensorScatter",
+    sinceVersion: 24,
+    category: OpCategory.DataMovement,
+    broadcastable: false,
+    hasState: false,
+    inputs: [
+        { name: "past_cache", typeConstraint: T_ANY },
+        { name: "update", typeConstraint: T_ANY },
+        { name: "write_indices", typeConstraint: T_INT, optional: true },
+    ],
+    outputs: [{ name: "present_cache", typeConstraint: T_ANY }],
+    attributes: {
+        axis: { name: "axis", type: AttributeType.INT, required: false, defaultValue: -2 },
+        mode: { name: "mode", type: AttributeType.STRING, required: false, defaultValue: "linear" },
+    },
+    inferShape: (inputs) => [
+        { shape: inputs[0]?.shape?.slice() ?? [], dtype: inputs[0]?.dtype ?? DataType.UNDEFINED },
+    ],
+};
+
 export const Size: OpSchema = {
     opType: "Size",
     sinceVersion: 1,
@@ -719,6 +781,7 @@ export const DataMovementOps: OpSchema[] = [
     Split,
     Pad,
     Cast,
+    Cast24,
     Gather,
     GatherElements,
     GatherND,
@@ -733,5 +796,7 @@ export const DataMovementOps: OpSchema[] = [
     Shape,
     OneHot,
     Identity,
+    SpaceToDepth,
+    TensorScatter,
     Size,
 ];
