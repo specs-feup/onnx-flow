@@ -99,12 +99,15 @@ export class LoopChainFinder {
         if (allInputs0D && allOutputs0D) return true;
 
         // 1D integer shape/index plumbing vectors inside loop regions
-        const is1DIntOut = outs.every(
-            (v) =>
-                Array.isArray(v.shape) &&
-                v.shape.length === 1 &&
-                (v.literalType === DataType.INT64 || v.literalType === DataType.INT32),
-        );
+        // (never skip `Range`: it is a non-native generator that must lower to a Loop if not constant-folded)
+        const is1DIntOut =
+            op.type !== "Range" &&
+            outs.every(
+                (v) =>
+                    Array.isArray(v.shape) &&
+                    v.shape.length === 1 &&
+                    (v.literalType === DataType.INT64 || v.literalType === DataType.INT32),
+            );
         if (is1DIntOut) {
             if (op.type === "Concat" || op.type === "ReduceProd" || op.type === "Slice") {
                 return true;

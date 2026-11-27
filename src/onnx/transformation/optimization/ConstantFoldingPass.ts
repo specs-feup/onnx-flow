@@ -221,6 +221,10 @@ export class ConstantFoldingPass extends BaseGraphPass {
                 return constInputs.length === 3
                     ? this.foldWhere(constInputs[0], constInputs[1], constInputs[2])
                     : undefined;
+            case "Range":
+                return constInputs.length === 3
+                    ? this.foldRange(constInputs[0], constInputs[1], constInputs[2])
+                    : undefined;
             default:
                 return undefined;
         }
@@ -666,5 +670,40 @@ export class ConstantFoldingPass extends BaseGraphPass {
                     : y.values[broadcastIndex(i, outShape, outStrides, y.shape, yStrides)];
         }
         return { dtype: x.dtype, shape: outShape, values };
+    }
+
+    private foldRange(
+        startT: FoldedTensor,
+        limitT: FoldedTensor,
+        deltaT: FoldedTensor,
+    ): FoldedTensor | undefined {
+        if (
+            startT.values.length !== 1 ||
+            limitT.values.length !== 1 ||
+            deltaT.values.length !== 1
+        ) {
+            return undefined;
+        }
+        const start = startT.values[0];
+        const limit = limitT.values[0];
+        const delta = deltaT.values[0];
+        if (
+            delta === 0 ||
+            !Number.isFinite(start) ||
+            !Number.isFinite(limit) ||
+            !Number.isFinite(delta)
+        ) {
+            return undefined;
+        }
+        const count = Math.max(0, Math.ceil((limit - start) / delta));
+        if (count > this.maxElements) return undefined;
+
+        const isInt = INT_DTYPES.has(startT.dtype);
+        const values = new Array<number>(count);
+        for (let i = 0; i < count; i++) {
+            const v = start + i * delta;
+            values[i] = isInt ? Math.trunc(v) : v;
+        }
+        return { dtype: startT.dtype, shape: [count], values };
     }
 }

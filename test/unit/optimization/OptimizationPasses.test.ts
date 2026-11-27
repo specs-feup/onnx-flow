@@ -176,6 +176,29 @@ describe("Optimization Passes", () => {
         const foldedShapeNode = reshapeOp.getInputs()![1];
         expect(foldedShapeNode.is(ConstantNode)).toBe(true);
         expect(readTensorData(foldedShapeNode)).toEqual([2, 12]);
+
+        // Also verify constant Range(0, 6, 2) folds to [0, 2, 4]
+        const rg = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const rb = new GraphBuilder(rg, "cf_range");
+        const startC = rb.createConstant("s", scalarInt64(0));
+        const limitC = rb.createConstant("l", scalarInt64(6));
+        const deltaC = rb.createConstant("d", scalarInt64(2));
+        const [rangeOut] = rb.createOp("Range", [startC, limitC, deltaC], {}, [
+            { type: DataType.INT64, shape: [3] },
+        ]);
+        const [idOut] = rb.createOp("Identity", [rangeOut], {}, [
+            { type: DataType.INT64, shape: [3] },
+        ]);
+        if (idOut.is(TensorNode)) idOut.as(TensorNode).setType("output");
+
+        expect(new ConstantFoldingPass().run(rg)).toBe(true);
+        expect(
+            rg
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).toEqual(["Identity"]);
+        expect(readTensorData(rg.getOperationNodes().first()!.getInputs()![0])).toEqual([0, 2, 4]);
     });
 
     it("AlgebraicSimplificationPass eliminates Add(x,0), Mul(x,1), no-op Cast, inverse Transpose, and chained Reshape", () => {
