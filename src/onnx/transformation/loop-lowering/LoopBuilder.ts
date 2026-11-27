@@ -1,0 +1,329 @@
+import Graph from "@specs-feup/flow/graph/Graph";
+import OnnxGraph from "../../ir/OnnxGraph.js";
+import { GraphBuilder } from "../../ir/GraphBuilder.js";
+import type { ValueNode, StaticShape, KnownShape, ConcreteValueNode } from "../../ir/OnnxTypes.js";
+import { DataType } from "../../ir/OnnxTypes.js";
+import OperationNode from "../../ir/OperationNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import OnnxEdge from "../../ir/OnnxEdge.js";
+import { bool, int64Vec, scalarInt64, uniq, UNKNOWN_SHAPE, zeroTensor } from "../../utils/index.js";
+import { IndexingMode } from "../../../DecompositionOptions.js";
+import type { LoopCarryContext } from "./LoopLoweringRecipe.js";
+
+export interface LoopCarriedVar {
+    tag?: string;
+    initialVal: ValueNode;
+    elemTy: DataType;
+    shape: KnownShape;
+}
+
+export interface LoopScanOutput {
+    tag?: string;
+    node: ConcreteValueNode;
+    elemTy: DataType;
+    shape: KnownShape;
+}
+
+export interface LoopRegionResult {
+    innerBuilder: GraphBuilder;
+    trip: TensorNode.Class;
+    condIn: TensorNode.Class;
+    carriedInputs: TensorNode.Class[];
+    loopOutputs: TensorNode.Class[];
+    vInitial: TensorNode.Class;
+    loopOutput: TensorNode.Class;
+    loopCtx: LoopCarryContext;
+    finalize: (
+        primaryNextStates: ConcreteValueNode[],
+        scanOutputs?: LoopScanOutput[],
+    ) => OperationNode.Class;
+}
+
+/**
+ * Allocates a zero-initialized 1D flat accumulator carry buffer (`ConstantNode`
+ * for static shapes, or `Expand(0, flatLen)` for dynamic shapes).
+ */
+export function createAccumulatorCarry(
+    outerBuilder: GraphBuilder,
+    elemTy: DataType,
+    carryLen: StaticShape | ValueNode,
+    tag: string = "acc",
+): LoopCarriedVar {
+    let initialVal: ValueNode;
+    let internalShape: KnownShape;
+
+    if (Array.isArray(carryLen)) {
+        const flatLen = carryLen.reduce((a, b) => a * b, 1);
+        initialVal = outerBuilder.createConstant(
+            `init_carry_${tag}`,
+            zeroTensor(elemTy, [flatLen]),
+        );
+        internalShape = [flatLen];
+    } else {
+        const zeroScalar = outerBuilder.createConstant(`zero_${tag}`, zeroTensor(elemTy, []));
+        const axes0 = outerBuilder.createConstant(`ax0_fl_${tag}`, int64Vec([0]));
+        const carryDims = carryLen.shape;
+        let flatTrip1D: ConcreteValueNode;
+        if (Array.isArray(carryDims) && carryDims.length === 1 && carryDims[0] === 1) {
+            flatTrip1D = carryLen as ConcreteValueNode;
+        } else if (
+            Array.isArray(carryDims) &&
+            carryDims.length === 1 &&
+            typeof carryDims[0] === "number" &&
+            carryDims[0] > 1 &&
+            carryDims[0] <= 8
+        ) {
+            let prod: ConcreteValueNode | undefined;
+            for (let d = 0; d < carryDims[0]; d++) {
+                const idx = outerBuilder.createConstant(`idx_fl_${tag}_${d}`, scalarInt64(d));
+                const [elem] = outerBuilder.createOp("Gather", [carryLen, idx], { axis: 0 }, [
+                    { type: DataType.INT64, shape: [] },
+                ]);
+                prod = prod ? outerBuilder.createOp("Mul", [prod, elem])[0] : elem;
+            }
+            [flatTrip1D] = outerBuilder.createOp("Unsqueeze", [prod!, axes0], {}, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
+        } else {
+            const flatTrip = outerBuilder.createOp("ReduceProd", [carryLen, axes0], {
+                keepdims: 0,
+            })[0];
+            [flatTrip1D] = outerBuilder.createOp("Unsqueeze", [flatTrip, axes0], {}, [
+                { type: DataType.INT64, shape: [1] },
+            ]);
+        }
+        [initialVal] = outerBuilder.createOp("Expand", [zeroScalar, flatTrip1D], {}, [
+            { type: elemTy, shape: UNKNOWN_SHAPE },
+        ]);
+        internalShape = UNKNOWN_SHAPE;
+    }
+
+    return { tag, initialVal, elemTy, shape: internalShape };
+}
+
+/**
+ * Scaffolds an ONNX `Loop` subgraph with `(iter, cond_in, ...carries)` boundary
+ * nodes, condition passthrough, AGU carry registration hooks (`loopCtx`), and a
+ * `finalize()` callback that wires carry/scan outputs and emits the outer `Loop` op.
+ */
+export function buildForLoopRegion(
+    outerBuilder: GraphBuilder,
+    totalIters: number | ValueNode,
+    elemTy: DataType,
+    carryLen: StaticShape | ValueNode,
+    tag: string = "loop",
+    scopeTag: string = "",
+    indexingMode: IndexingMode = IndexingMode.Pointer,
+    usePrimaryCarry: boolean = true,
+): LoopRegionResult {
+    const outerGraph = outerBuilder.graph;
+
+    // 1. Resolve Outer Trip Count & Condition Inputs
+    const tripInp =
+        typeof totalIters === "number"
+            ? outerBuilder.createConstant(`trip_count_${tag}`, scalarInt64(totalIters))
+            : totalIters;
+    const condInInp = outerBuilder.createConstant(`cond_${tag}`, bool(true));
+
+    // 2. Initialize Inner Graph
+    const innerGraph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+    const innerBuilder = new GraphBuilder(innerGraph, tag);
+
+    const iterBase = outerGraph.hasNode("iter") ? `${tag}_iter` : "iter";
+    const condInBase = outerGraph.hasNode("cond_in") ? `${tag}_cond_in` : "cond_in";
+    const trip = innerGraph
+        .addNode(uniq(innerGraph, iterBase))
+        .init(new TensorNode.Builder(DataType.INT64, [], "input"))
+        .as(TensorNode);
+    const condIn = innerGraph
+        .addNode(uniq(innerGraph, condInBase))
+        .init(new TensorNode.Builder(DataType.BOOL, [], "input"))
+        .as(TensorNode);
+
+    // Condition Passthrough
+    const idCond = innerGraph
+        .addNode(uniq(innerGraph, `id_cond_${tag}`))
+        .init(new OperationNode.Builder("Identity", [condIn]))
+        .as(OperationNode);
+    const condOut = innerGraph
+        .addNode(uniq(innerGraph, `cond_out_${tag}`))
+        .init(new TensorNode.Builder(DataType.BOOL, [], "output"))
+        .as(TensorNode);
+    innerGraph.addEdge(condIn, idCond).init(new OnnxEdge.Builder(condIn.literalType, condIn.shape));
+    innerGraph
+        .addEdge(idCond, condOut)
+        .init(new OnnxEdge.Builder(condOut.literalType, condOut.shape));
+
+    // 3. Carried State Tracking
+    const carries: LoopCarriedVar[] = [];
+    const carriedInputs: TensorNode.Class[] = [];
+    const loopOutputs: TensorNode.Class[] = [];
+    const auxNextStates = new Map<string, ConcreteValueNode>();
+
+    const registerCarryInternal = (
+        cTag: string,
+        initialVal: ValueNode,
+        cElemTy: DataType,
+        cShape: KnownShape,
+        isPrimary: boolean = false,
+    ): TensorNode.Class => {
+        const idx = carries.length;
+        carries.push({ tag: cTag, initialVal, elemTy: cElemTy, shape: cShape });
+
+        const inName = isPrimary
+            ? outerGraph.hasNode("carry")
+                ? `${tag}_carry`
+                : "carry"
+            : `carry_${cTag}_${idx}`;
+        const cIn = innerGraph
+            .addNode(uniq(innerGraph, inName))
+            .init(new TensorNode.Builder(cElemTy, cShape, "input"))
+            .as(TensorNode);
+        carriedInputs.push(cIn);
+
+        const outName = isPrimary
+            ? `${scopeTag}_carry_out`
+            : `${scopeTag}_carry_out_${cTag}_${idx}`;
+        const cOut = outerBuilder
+            .addNode(
+                uniq(outerGraph, outName),
+                new TensorNode.Builder(cElemTy, cShape, "intermediate"),
+            )
+            .as(TensorNode);
+        loopOutputs.push(cOut);
+
+        return cIn;
+    };
+
+    // Register Carry 0 (Primary Output Accumulator) when carry mode is active
+    let vInitial: TensorNode.Class = condIn;
+    if (usePrimaryCarry) {
+        const primaryCarryDef = createAccumulatorCarry(outerBuilder, elemTy, carryLen, tag);
+        vInitial = registerCarryInternal(
+            primaryCarryDef.tag ?? "acc",
+            primaryCarryDef.initialVal,
+            primaryCarryDef.elemTy,
+            primaryCarryDef.shape,
+            true,
+        );
+    }
+
+    const loopCtx: LoopCarryContext = {
+        indexingMode,
+        outerBuilder,
+        innerBuilder,
+        addCarry: (cTag, initialVal, cElemTy, cShape) =>
+            registerCarryInternal(cTag, initialVal, cElemTy, cShape, false),
+        setNextState: (carryInputNode, nextState) => {
+            auxNextStates.set(carryInputNode.id, nextState);
+        },
+    };
+
+    // 4. Finalizer: Wires inner outputs and creates the outer Loop node with all carries & scan_outputs
+    const finalize = (
+        primaryNextStates: ConcreteValueNode[],
+        scanOutputs: LoopScanOutput[] = [],
+    ): OperationNode.Class => {
+        const allNextStates: ConcreteValueNode[] = [...primaryNextStates];
+
+        // Append auxiliary AGU states in exact carry registration order
+        for (let i = primaryNextStates.length; i < carriedInputs.length; i++) {
+            const cIn = carriedInputs[i];
+            const nextState = auxNextStates.get(cIn.id);
+            if (!nextState) {
+                throw new Error(
+                    `[LoopBuilder] Missing nextState for registered carry '${cIn.id}' in ${tag}`,
+                );
+            }
+            allNextStates.push(nextState);
+        }
+
+        allNextStates.forEach((state, idx) => {
+            const def = carries[idx];
+            const stateOut = innerGraph
+                .addNode(uniq(innerGraph, `${scopeTag}_${idx}_state_out_${tag}`))
+                .init(new TensorNode.Builder(def.elemTy, def.shape, "output"))
+                .as(TensorNode);
+            const idOp = innerGraph
+                .addNode(uniq(innerGraph, `${scopeTag}_id_state_out_${tag}_${idx}`))
+                .init(new OperationNode.Builder("Identity", [state]))
+                .as(OperationNode);
+
+            innerGraph
+                .addEdge(state, idOp)
+                .init(new OnnxEdge.Builder(state.literalType, state.shape));
+            innerGraph.addEdge(idOp, stateOut).init(new OnnxEdge.Builder(def.elemTy, def.shape));
+        });
+
+        const tripDim = typeof totalIters === "number" ? totalIters : -1;
+        scanOutputs.forEach((so, idx) => {
+            const sTag = so.tag ?? `scan_${idx}`;
+            const scanInnerOut = innerGraph
+                .addNode(uniq(innerGraph, `${scopeTag}_${sTag}_inner_out_${tag}`))
+                .init(new TensorNode.Builder(so.elemTy, so.shape, "output"))
+                .as(TensorNode);
+            const idOp = innerGraph
+                .addNode(uniq(innerGraph, `${scopeTag}_id_${sTag}_${tag}`))
+                .init(new OperationNode.Builder("Identity", [so.node]))
+                .as(OperationNode);
+
+            innerGraph
+                .addEdge(so.node, idOp)
+                .init(new OnnxEdge.Builder(so.node.literalType, so.node.shape));
+            innerGraph.addEdge(idOp, scanInnerOut).init(new OnnxEdge.Builder(so.elemTy, so.shape));
+
+            const outerScanShape: KnownShape = [tripDim, ...so.shape];
+            const scanOuterOut = outerBuilder
+                .addNode(
+                    uniq(outerGraph, `${scopeTag}_${sTag}_out_${tag}`),
+                    new TensorNode.Builder(so.elemTy, outerScanShape, "intermediate"),
+                )
+                .as(TensorNode);
+            loopOutputs.push(scanOuterOut);
+            carries.push({
+                tag: sTag,
+                initialVal: condInInp,
+                elemTy: so.elemTy,
+                shape: outerScanShape,
+            });
+        });
+
+        const carryInputsCount = carriedInputs.length;
+        const loopInputs: ValueNode[] = [
+            tripInp,
+            condInInp,
+            ...carries.slice(0, carryInputsCount).map((c) => c.initialVal),
+        ];
+        const loopOp = outerBuilder
+            .addNode(
+                uniq(outerGraph, tag),
+                new OperationNode.Builder("Loop", loopInputs, {}, [innerGraph]),
+            )
+            .as(OperationNode);
+
+        loopInputs.forEach((input) => {
+            if (outerGraph.hasNode(input.id)) {
+                outerBuilder.addEdge(input, loopOp, input.literalType, input.shape);
+            }
+        });
+
+        loopOutputs.forEach((outNode, idx) => {
+            const def = carries[idx];
+            outerBuilder.addEdge(loopOp, outNode, def.elemTy, def.shape);
+        });
+
+        return loopOp;
+    };
+
+    return {
+        innerBuilder,
+        trip,
+        condIn,
+        carriedInputs,
+        loopOutputs,
+        vInitial,
+        loopOutput: usePrimaryCarry ? loopOutputs[0] : (undefined as unknown as TensorNode.Class),
+        loopCtx,
+        finalize,
+    };
+}

@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import {
     bool,
     int32Vec,
@@ -23,7 +23,7 @@ import {
     readTensorData,
     resolveAutoPads,
     buildResolvedConvAttrs,
-} from "../../../src/Onnx/utils/TensorData.js";
+} from "../../../src/onnx/utils/TensorData.js";
 
 describe("TensorData Utilities", () => {
     it("creates scalar and vector tensor protos with expected fields", () => {

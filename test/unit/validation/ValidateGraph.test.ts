@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import OnnxEdge from "../../../src/Onnx/OnnxEdge.js";
-import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
-import validateScope from "../../../src/Onnx/validation/ValidateScope.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { scalarInt64 } from "../../../src/Onnx/utils/TensorData.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import OnnxEdge from "../../../src/onnx/ir/OnnxEdge.js";
+import validateGraph from "../../../src/onnx/validation/ValidateGraph.js";
+import validateScope from "../../../src/onnx/validation/ValidateScope.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import { scalarInt64 } from "../../../src/onnx/utils/TensorData.js";
 import type { NodeCollection } from "@specs-feup/flow/graph/NodeCollection";
 import type BaseNode from "@specs-feup/flow/graph/BaseNode";
 

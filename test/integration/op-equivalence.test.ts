@@ -4,18 +4,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../src/Onnx/TensorNode.js";
-import OperationNode from "../../src/Onnx/OperationNode.js";
-import OnnxEdge from "../../src/Onnx/OnnxEdge.js";
-import { GraphBuilder } from "../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../src/Onnx/OnnxTypes.js";
-import { initializeSchemaRegistry } from "../../src/Onnx/Schema/index.js";
-import inferShapes from "../../src/Onnx/InferShapes.js";
-import { int64Vec, scalarInt64, floatVec, makeTensorProto } from "../../src/Onnx/Utils.js";
-import { CanonicalizationPass } from "../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
-import { LoopLoweringPass } from "../../src/Onnx/transformation/loop-lowering/LoopLoweringPass.js";
-import { HistoryManager } from "../../src/Onnx/transformation/tracking/HistoryManager.js";
+import OnnxGraph from "../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../src/onnx/ir/TensorNode.js";
+import OperationNode from "../../src/onnx/ir/OperationNode.js";
+import OnnxEdge from "../../src/onnx/ir/OnnxEdge.js";
+import { GraphBuilder } from "../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../src/onnx/ir/OnnxTypes.js";
+import { initializeSchemaRegistry } from "../../src/onnx/schema/index.js";
+import inferShapes from "../../src/onnx/schema/InferShapes.js";
+import { int64Vec, scalarInt64, floatVec, makeTensorProto } from "../../src/onnx/utils/index.js";
+import { CanonicalizationPass } from "../../src/onnx/transformation/canonicalization/CanonicalizationPass.js";
+import { LoopLoweringPass } from "../../src/onnx/transformation/loop-lowering/LoopLoweringPass.js";
+import { HistoryManager } from "../../src/onnx/transformation/tracking/HistoryManager.js";
 import { IndexingMode } from "../../src/DecompositionOptions.js";
 import {
     buildFeeds,
@@ -23,8 +23,8 @@ import {
     ensureProtoExists,
     exportGraphToOnnx,
     runOrtChecked,
-} from "../helpers/ortHarness.js";
-import { buildSyntheticGraph, type SyntheticCase } from "../helpers/modelFactory.js";
+} from "../helpers/OrtHarness.js";
+import { buildSyntheticGraph, type SyntheticCase } from "../helpers/ModelFactory.js";
 
 const TEST_TIMEOUT = 150000; //ms
 

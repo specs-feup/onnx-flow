@@ -1,22 +1,22 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { LoopLoweringPass } from "../../../src/Onnx/transformation/loop-lowering/LoopLoweringPass.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import { LoopLoweringPass } from "../../../src/onnx/transformation/loop-lowering/LoopLoweringPass.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
 import {
     scalarFloat,
     int64Vec,
     floatVec,
     scalarInt64,
-} from "../../../src/Onnx/utils/TensorData.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+} from "../../../src/onnx/utils/TensorData.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import validateGraph from "../../../src/Onnx/validation/ValidateGraph.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
+import validateGraph from "../../../src/onnx/validation/ValidateGraph.js";
 
 describe("Loop Lowering - Multi-Operation Passes", () => {
     function assertLoweredToLoop(graph: OnnxGraph.Class, originalOpType: string): void {

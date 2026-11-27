@@ -2,20 +2,20 @@ import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { coerceNumericFields, json2onnx } from "../../../src/json2onnx.js";
-import { onnx2json } from "../../../src/onnx2json.js";
+import { coerceNumericFields, json2onnx } from "../../../src/io/JsonToOnnx.js";
+import { onnx2json } from "../../../src/io/OnnxToJson.js";
 import { applyRecipes, transformModel } from "../../../src/api.js";
-import { createGraph } from "../../../src/initGraph.js";
-import { convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
+import { createGraph } from "../../../src/io/OnnxGraphLoader.js";
+import { convertFlowGraphToOnnxJson } from "../../../src/io/OnnxGraphExporter.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import * as ort from "onnxruntime-web";
 import { ensureProtoExists } from "../../setup.js";
-import { ensureModelExists } from "../../helpers/modelFactory.js";
+import { ensureModelExists } from "../../helpers/ModelFactory.js";
 
 describe("json2onnx, onnx2json & Public API", () => {
     beforeAll(() => {

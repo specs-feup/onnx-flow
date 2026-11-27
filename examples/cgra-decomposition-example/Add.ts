@@ -1,0 +1,70 @@
+import type OperationNode from "../../src/onnx/ir/OperationNode.js";
+import type { GraphBuilder } from "../../src/onnx/ir/GraphBuilder.js";
+import type { DecompositionRecipe } from "../../src/onnx/transformation/Recipe.js";
+import type { ConcreteValueNode } from "../../src/onnx/ir/OnnxTypes.js";
+import { DataType } from "../../src/onnx/ir/OnnxTypes.js";
+import { chunkTensor, makeTensorProto, shapesEqual, toStaticShape } from "../../src/onnx/utils/index.js";
+
+export class AddGridDecompositionRecipe implements DecompositionRecipe {
+    public readonly name = "AddGridDecomposition";
+    public readonly targetOp = "Add";
+
+    public readonly exposesControlFlow = false;
+    public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly tags = ["grid-decomposition-example"];
+    public readonly producedOps = ["Gather", "Add", "Unsqueeze", "Concat"];
+
+    match(op: OperationNode.Class): boolean {
+        const inputs = op.getInputs();
+        if (!inputs || inputs.length !== 2) return false;
+
+        const [in1, in2] = inputs as ConcreteValueNode[];
+        // Only apply if inputs are 2D and exactly match
+        if (shapesEqual(in1, in2) && in1.shape.length === 2) {
+            return true;
+        }
+        return false;
+    }
+
+    apply(op: OperationNode.Class, builder: GraphBuilder): void {
+        const [A, B] = op.getInputs() as ConcreteValueNode[];
+        const numRows = toStaticShape(A.shape)[0];
+
+        // 1. Chunk inputs into 1D vectors along axis 0
+        const rowsA = chunkTensor(builder, A, 0);
+        const rowsB = chunkTensor(builder, B, 0);
+
+        const zeroConst = builder.createConstant(
+            `zero_${op.id}`,
+            makeTensorProto(DataType.INT64, [1], [0]),
+        );
+        const finalRows: ConcreteValueNode[] = [];
+
+        // 2. Build the independent additions
+        for (let r = 0; r < numRows; r++) {
+            // Element-wise Add of the two 1D vectors
+            const addOut = builder.createOp("Add", [rowsA[r], rowsB[r]])[0];
+
+            // Unsqueeze the 1D row back to 2D [1, K] for stacking
+            const row2D = builder.createOp("Unsqueeze", [addOut, zeroConst])[0];
+            finalRows.push(row2D);
+        }
+
+        // 3. Concat all 2D rows back into the final matrix: [M, K]
+        let finalMatrix: ConcreteValueNode;
+        if (finalRows.length === 1) {
+            finalMatrix = finalRows[0];
+        } else {
+            finalMatrix = builder.createOp("Concat", finalRows, { axis: 0 })[0];
+        }
+
+        // 4. Safely replace the original output
+        const originalOutput = op.getOutputs()[0];
+        builder.replaceAllUsesWith(originalOutput, finalMatrix);
+        op.remove();
+    }
+}

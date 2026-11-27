@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import OnnxEdge from "../../../src/Onnx/OnnxEdge.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { int64Vec, makeTensorProto, scalarInt64 } from "../../../src/Onnx/Utils.js";
-import { applyRecipe } from "../../helpers/recipeHarness.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import OnnxEdge from "../../../src/onnx/ir/OnnxEdge.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import { int64Vec, makeTensorProto, scalarInt64 } from "../../../src/onnx/utils/index.js";
+import { applyRecipe } from "../../helpers/RecipeHarness.js";
 
 describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
     initializeSchemaRegistry();

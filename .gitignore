@@ -1,26 +1,11 @@
-# Compiled class file
-*.class
+# Build artifacts
+/out
+*.tsbuildinfo
+node_modules/
 
-# Log file
+# Logs
 *.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# Virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
+npm-debug.log*
 
 # Coverage reports from Vitest / c8 / v8
 coverage/
@@ -31,17 +16,14 @@ coverage/
 temp_*.json
 temp_*.onnx
 
-# Build artifacts
-/out
-node_modules/
-
-# Environment and editor files
+# Environment and OS/editor files
 .env
+.env.*
 .DS_Store
-.idea
-*.log
+Thumbs.db
+.idea/
 
-# Other
+# Local scratch & scripts
 agents/
 comparison_test/
 demo/

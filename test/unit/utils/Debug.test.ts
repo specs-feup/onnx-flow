@@ -2,12 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { scalarFloat } from "../../../src/Onnx/utils/TensorData.js";
-import { dbg, dbgTensor, safeWriteJson } from "../../../src/Onnx/utils/Debug.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import { scalarFloat } from "../../../src/onnx/utils/TensorData.js";
+import { dbg, dbgTensor, safeWriteJson } from "../../../src/onnx/utils/Debug.js";
 
 describe("Debug Utilities", () => {
     it("logs loop debug messages and inspects tensor nodes", () => {

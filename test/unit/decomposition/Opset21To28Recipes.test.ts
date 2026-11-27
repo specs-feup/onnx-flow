@@ -4,17 +4,17 @@ import os from "node:os";
 import path from "node:path";
 import Graph from "@specs-feup/flow/graph/Graph";
 import * as ort from "onnxruntime-web";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import { CanonicalizationPass } from "../../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { convertFlowGraphToOnnxJson } from "../../../src/flow2json.js";
-import { json2onnx } from "../../../src/json2onnx.js";
-import { DataType, type AttributeMap } from "../../../src/Onnx/OnnxTypes.js";
-import { makeTensorProto, topologicalSortOperationNodes } from "../../../src/Onnx/Utils.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
+import { CanonicalizationPass } from "../../../src/onnx/transformation/canonicalization/CanonicalizationPass.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import { convertFlowGraphToOnnxJson } from "../../../src/io/OnnxGraphExporter.js";
+import { json2onnx } from "../../../src/io/JsonToOnnx.js";
+import { DataType, type AttributeMap } from "../../../src/onnx/ir/OnnxTypes.js";
+import { makeTensorProto, topologicalSortOperationNodes } from "../../../src/onnx/utils/index.js";
 import { ensureProtoExists } from "../../setup.js";
 
 function getOps(graph: OnnxGraph.Class): string[] {

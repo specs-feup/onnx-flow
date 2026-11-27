@@ -1,0 +1,49 @@
+import type OperationNode from "../../../ir/OperationNode.js";
+import type { GraphBuilder } from "../../../ir/GraphBuilder.js";
+import type { DecompositionRecipe } from "../../Recipe.js";
+import type { ConcreteValueNode, KnownShape } from "../../../ir/OnnxTypes.js";
+import { DataType } from "../../../ir/OnnxTypes.js";
+
+export class LowerMinRecipe implements DecompositionRecipe {
+    public readonly name = "LowerMin";
+    public readonly targetOp = "Min";
+    public readonly exposesControlFlow = false;
+    public readonly exposesDataAccess = false;
+    public readonly phase = "canonicalization" as const;
+    public readonly precision = "exact" as const;
+    public readonly priority = 50;
+    public readonly shapeSupport = "dynamic" as const;
+    public readonly producedOps = ["Where", "Less"];
+
+    match(op: OperationNode.Class): boolean {
+        if (op.type !== "Min") return false;
+
+        const ins = op.getInputs();
+        if (!ins || ins.length !== 2) return false;
+
+        return true;
+    }
+
+    apply(node: OperationNode.Class, builder: GraphBuilder): void {
+        const ins = node.getInputs() as ConcreteValueNode[];
+        const A = ins[0];
+        const B = ins[1];
+        const Y = node.getOutputs()[0];
+
+        //Expected output type is float and shape is broadcasted shape of A and B
+        const OutType = (A.literalType as DataType | undefined) ?? DataType.FLOAT;
+        const Yshape: KnownShape | undefined = Y.shape as KnownShape | undefined;
+        const OutShape = (Yshape ?? A.shape) as KnownShape;
+        const Output = [{ type: OutType, shape: OutShape }];
+        const BoolOutput = [{ type: DataType.BOOL, shape: OutShape }];
+
+        //Less(A,B)
+        const LessOut = builder.createOp("Less", [A, B], {}, BoolOutput)[0];
+
+        //Where(LessOut)
+        const WhereOut = builder.createOp("Where", [LessOut, A, B], {}, Output)[0];
+
+        builder.replaceAllUsesWith(Y, WhereOut);
+        node.remove();
+    }
+}

@@ -1,19 +1,26 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { HistoryManager } from "../../../src/Onnx/transformation/tracking/HistoryManager.js";
-import { CanonicalizationPass } from "../../../src/Onnx/transformation/canonicalization/CanonicalizationPass.js";
-import { InferShapesPass } from "../../../src/Onnx/transformation/InferShapesPass.js";
-import { OrchestratorPass } from "../../../src/Onnx/transformation/OrchestratorPass.js";
-import { TransformationRegistry } from "../../../src/Onnx/transformation/TransformationRegistry.js";
-import OnnxGraphTransformer from "../../../src/Onnx/transformation/index.js";
-import { Recipes } from "../../../src/Onnx/transformation/recipes.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import type { DecompositionRecipe } from "../../../src/Onnx/transformation/Recipe.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
+import { CanonicalizationPass } from "../../../src/onnx/transformation/canonicalization/CanonicalizationPass.js";
+import { InferShapesPass } from "../../../src/onnx/transformation/InferShapesPass.js";
+import { OrchestratorPass } from "../../../src/onnx/transformation/OrchestratorPass.js";
+import { TransformationRegistry } from "../../../src/onnx/transformation/TransformationRegistry.js";
+import OnnxGraphTransformer from "../../../src/onnx/transformation/index.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import type { DecompositionRecipe } from "../../../src/onnx/transformation/Recipe.js";
+import validateGraph from "../../../src/onnx/validation/ValidateGraph.js";
+import { makeTensorProto } from "../../../src/onnx/utils/index.js";
+import * as ort from "onnxruntime-web";
+import { buildFeeds, compareOrtOutputs, exportGraphToOnnx } from "../../helpers/OrtHarness.js";
 
 describe("Transformation Pipeline & Passes", () => {
     initializeSchemaRegistry();
@@ -218,5 +225,132 @@ describe("Transformation Pipeline & Passes", () => {
         const allTypes = collectTypes(lowered);
         expect(allTypes).not.toContain("Div");
         expect(allTypes).not.toContain("Reciprocal");
+    });
+
+    it("recursively lowers tensor ops inside outer Loop regions into nested explicit Loops and matches ORT", async () => {
+        const buildRnnGraph = (): OnnxGraph.Class => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "rnn_rec");
+            // Dynamic seq_len forces LowerRNNLoopRecipe (outer time-step Loop containing MatMul/Add/Tanh)
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [-1, 1, 3], "input"))
+                .as(TensorNode);
+            const w = b.createConstant(
+                "W",
+                makeTensorProto(DataType.FLOAT, [1, 2, 3], [0.2, -0.1, 0.3, -0.2, 0.4, 0.1]),
+            );
+            const r = b.createConstant(
+                "R",
+                makeTensorProto(DataType.FLOAT, [1, 2, 2], [0.1, -0.2, 0.3, 0.15]),
+            );
+            const [y, yh] = b.createOp("RNN", [x, w, r], { hidden_size: 2 }, [
+                { type: DataType.FLOAT, shape: [-1, 1, 1, 2] },
+                { type: DataType.FLOAT, shape: [1, 1, 2] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            if (yh.is(TensorNode)) yh.as(TensorNode).setType("output");
+            return g;
+        };
+
+        const origGraph = buildRnnGraph();
+        const loweredGraph = buildRnnGraph();
+
+        new OnnxGraphTransformer({
+            canonicalize: true,
+            loopLowering: true,
+            fuse: true,
+            coalesce: true,
+            recurse: true,
+            optimize: true,
+            indexingMode: IndexingMode.Pointer,
+        }).apply(loweredGraph, false);
+
+        expect(() => validateGraph(loweredGraph)).not.toThrow();
+
+        // Confirm nested Loops (depth >= 2) were synthesized and no MatMul ops remain anywhere
+        const maxLoopDepth = (gr: OnnxGraph.Class, depth: number = 0): number => {
+            let maxD = depth;
+            for (const op of gr.getOperationNodes()) {
+                const nextD = op.type === "Loop" ? depth + 1 : depth;
+                if (nextD > maxD) maxD = nextD;
+                for (const reg of op.regions) {
+                    maxD = Math.max(maxD, maxLoopDepth(reg, nextD));
+                }
+            }
+            return maxD;
+        };
+        const collectTypes = (gr: OnnxGraph.Class, acc: string[] = []): string[] => {
+            for (const op of gr.getOperationNodes()) {
+                acc.push(op.type);
+                for (const reg of op.regions) collectTypes(reg, acc);
+            }
+            return acc;
+        };
+
+        expect(maxLoopDepth(loweredGraph)).toBeGreaterThanOrEqual(2);
+        expect(collectTypes(loweredGraph)).not.toContain("MatMul");
+        expect(collectTypes(loweredGraph)).not.toContain("RNN");
+
+        // Verify numerical equivalence against ONNX Runtime
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-rec-loop-"));
+        try {
+            const origPath = path.join(tmpDir, "orig_rnn.onnx");
+            const loweredPath = path.join(tmpDir, "lowered_rnn.onnx");
+            await exportGraphToOnnx(origGraph, origPath);
+            await exportGraphToOnnx(loweredGraph, loweredPath);
+
+            const feeds = buildFeeds(
+                [{ name: "X", dtype: "float32", shape: [2, 1, 3], gen: "negmix" }],
+                "rec_rnn_seed",
+            );
+            const origSession = await ort.InferenceSession.create(origPath);
+            const loweredSession = await ort.InferenceSession.create(loweredPath);
+            const origOut = await origSession.run(feeds);
+            const loweredOut = await loweredSession.run(feeds);
+
+            const cmp = compareOrtOutputs(origOut, loweredOut, { tol: 1e-3 });
+            expect(cmp.passed, cmp.message).toBe(true);
+        } finally {
+            if (fs.existsSync(tmpDir)) {
+                fs.rmSync(tmpDir, { recursive: true, force: true });
+            }
+        }
+    });
+
+    it("enforces convex fusion clusters under fuseMultiOutput=true without creating TopoSort cycles", () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "ln_convex");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                .as(TensorNode);
+            const s = b.createConstant("S", makeTensorProto(DataType.FLOAT, [4], [1, 1, 1, 1]));
+            const bi = b.createConstant("B", makeTensorProto(DataType.FLOAT, [4], [0, 0, 0, 0]));
+            const [y] = b.createOp("LayerNormalization", [x, s, bi], { axis: -1, epsilon: 1e-5 }, [
+                { type: DataType.FLOAT, shape: [2, 4] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+
+            new OnnxGraphTransformer({
+                canonicalize: true,
+                loopLowering: true,
+                fuse: true,
+                fuseMultiOutput: true,
+                coalesce: true,
+                recurse: true,
+                optimize: true,
+                indexingMode: IndexingMode.Pointer,
+            }).apply(g, false);
+
+            const cycleWarnings = warnSpy.mock.calls.filter((args) =>
+                args.join(" ").includes("Cycle detected"),
+            );
+            expect(cycleWarnings).toHaveLength(0);
+        } finally {
+            warnSpy.mockRestore();
+        }
     });
 });

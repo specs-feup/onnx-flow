@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import OperationNode from "../../../src/Onnx/OperationNode.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import OperationNode from "../../../src/onnx/ir/OperationNode.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { Schedule } from "../../../src/Onnx/transformation/Schedule.js";
+import { Schedule } from "../../../src/onnx/transformation/schedule/Schedule.js";
+import { CacheReadPass } from "../../../src/onnx/transformation/schedule/CacheReadPass.js";
+import { LoopUnrollingPass } from "../../../src/onnx/transformation/schedule/LoopUnrollingPass.js";
+import { ScheduleLoopTransformsPass } from "../../../src/onnx/transformation/schedule/ScheduleLoopTransformsPass.js";
+import { PassManager } from "../../../src/onnx/transformation/PassManager.js";
+import { LoopLoweringPass } from "../../../src/onnx/transformation/loop-lowering/LoopLoweringPass.js";
+import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
 
 describe("Schedule API & Multi-Output Loops", () => {
     initializeSchemaRegistry();
@@ -180,5 +186,62 @@ describe("Schedule API & Multi-Output Loops", () => {
         expect(ops.some((o) => o.type === "Identity" && o.getMetadata("cacheRead") === true)).toBe(
             true,
         );
+    });
+
+    it("executes CacheReadPass, ScheduleLoopTransformsPass, and LoopUnrollingPass standalone via PassManager", () => {
+        const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const b = new GraphBuilder(g, "standalone_sched");
+        const x = g
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 2], "input"))
+            .as(TensorNode);
+        const [reluT] = b.createOp("Relu", [x], {}, [{ type: DataType.FLOAT, shape: [2, 2] }]);
+        if (reluT.is(TensorNode)) reluT.as(TensorNode).setType("output");
+
+        const reluOp = reluT.incomers.sources.filterIs(OperationNode).first()!;
+        const hm = new HistoryManager(g);
+
+        // 1. Standalone CacheReadPass
+        const pmCache = new PassManager();
+        pmCache.addPass(new CacheReadPass({ cacheReads: [{ tensor: "X", consumer: reluOp.id }] }));
+        pmCache.run(g, hm, 1);
+        expect(
+            g
+                .getOperationNodes()
+                .toArray()
+                .some((o) => o.type === "Identity" && o.getMetadata("cacheRead") === true),
+        ).toBe(true);
+
+        // 2. Lower to Loop, then apply ScheduleLoopTransformsPass (vectorize) & standalone LoopUnrollingPass
+        new LoopLoweringPass({
+            coalesce: false,
+            fuse: false,
+            indexingMode: IndexingMode.Radix,
+            useScanOutputs: true,
+        }).run(g, hm);
+
+        const pmVec = new PassManager();
+        pmVec.addPass(
+            new ScheduleLoopTransformsPass({ vectorizes: [{ target: "Relu", width: 2 }] }),
+        );
+        pmVec.run(g, hm, 1);
+
+        const loopBeforeUnroll = g
+            .getOperationNodes()
+            .toArray()
+            .find((o) => o.type === "Loop");
+        expect(loopBeforeUnroll).toBeDefined();
+        expect(loopBeforeUnroll!.getMetadata("vectorWidth")).toBe(2);
+
+        const pmUnroll = new PassManager();
+        pmUnroll.addPass(new LoopUnrollingPass([{ target: "Relu", maxTripCount: 8 }]));
+        pmUnroll.run(g, hm, 1);
+
+        expect(
+            g
+                .getOperationNodes()
+                .toArray()
+                .some((o) => o.type === "Loop"),
+        ).toBe(false);
     });
 });

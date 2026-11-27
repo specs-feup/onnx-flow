@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { executeEquivalenceTest } from "../helpers/ortHarness.js";
-import { COMPATIBILITY_TESTS } from "../helpers/modelRegistry.js";
-import { ensureModelExists } from "../helpers/modelFactory.js";
+import { executeEquivalenceTest } from "../helpers/OrtHarness.js";
+import { COMPATIBILITY_TESTS } from "../helpers/ModelRegistry.js";
+import { ensureModelExists } from "../helpers/ModelFactory.js";
 
 const TEST_TIMEOUT = 150000; //ms
 

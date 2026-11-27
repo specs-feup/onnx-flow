@@ -1,14 +1,29 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import * as ort from "onnxruntime-web";
 import { describe, it, expect } from "vitest";
 import Graph from "@specs-feup/flow/graph/Graph";
-import OnnxGraph from "../../../src/Onnx/OnnxGraph.js";
-import TensorNode from "../../../src/Onnx/TensorNode.js";
-import ConstantNode from "../../../src/Onnx/ConstantNode.js";
-import RegionArgumentNode from "../../../src/Onnx/RegionArgumentNode.js";
-import { GraphBuilder } from "../../../src/Onnx/GraphBuilder.js";
-import { DataType } from "../../../src/Onnx/OnnxTypes.js";
-import { scalarInt64 } from "../../../src/Onnx/utils/TensorData.js";
-import { initializeSchemaRegistry } from "../../../src/Onnx/Schema/index.js";
-import { DeadCodeEliminationPass } from "../../../src/Onnx/transformation/optimization/DeadCodeEliminationPass.js";
+import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
+import TensorNode from "../../../src/onnx/ir/TensorNode.js";
+import ConstantNode from "../../../src/onnx/ir/ConstantNode.js";
+import RegionArgumentNode from "../../../src/onnx/ir/RegionArgumentNode.js";
+import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
+import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
+import {
+    int64Vec,
+    makeTensorProto,
+    readTensorData,
+    scalarFloat,
+    scalarInt64,
+} from "../../../src/onnx/utils/TensorData.js";
+import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
+import { DeadCodeEliminationPass } from "../../../src/onnx/transformation/optimization/DeadCodeEliminationPass.js";
+import { ConstantFoldingPass } from "../../../src/onnx/transformation/optimization/ConstantFoldingPass.js";
+import { AlgebraicSimplificationPass } from "../../../src/onnx/transformation/optimization/AlgebraicSimplificationPass.js";
+import { CommonSubexpressionEliminationPass } from "../../../src/onnx/transformation/optimization/CommonSubexpressionEliminationPass.js";
+import { ConvBnFoldingPass } from "../../../src/onnx/transformation/optimization/ConvBnFoldingPass.js";
+import { buildFeeds, compareOrtOutputs, exportGraphToOnnx } from "../../helpers/OrtHarness.js";
 
 describe("Optimization Passes", () => {
     initializeSchemaRegistry();
@@ -115,5 +130,235 @@ describe("Optimization Passes", () => {
 
         new DeadCodeEliminationPass().run(graph);
         expect(graph.hasNode(captured.id)).toBe(true);
+    });
+
+    it("ConstantFoldingPass folds Shape -> Gather -> Unsqueeze -> Concat -> ReduceProd chains", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph, "cf");
+
+        const x = graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3, 4], "input"))
+            .as(TensorNode);
+        const [sh] = builder.createOp("Shape", [x], {}, [{ type: DataType.INT64, shape: [3] }]);
+        const idx1 = builder.createConstant("idx1", scalarInt64(1));
+        const idx2 = builder.createConstant("idx2", scalarInt64(2));
+        const ax0 = builder.createConstant("ax0", int64Vec([0]));
+        const [d1] = builder.createOp("Gather", [sh, idx1], { axis: 0 }, [
+            { type: DataType.INT64, shape: [] },
+        ]);
+        const [d2] = builder.createOp("Gather", [sh, idx2], { axis: 0 }, [
+            { type: DataType.INT64, shape: [] },
+        ]);
+        const [prod] = builder.createOp("Mul", [d1, d2], {}, [{ type: DataType.INT64, shape: [] }]);
+        const [prod1D] = builder.createOp("Unsqueeze", [prod, ax0], {}, [
+            { type: DataType.INT64, shape: [1] },
+        ]);
+        const two1D = builder.createConstant("two1d", int64Vec([2]));
+        const [newShape] = builder.createOp("Concat", [two1D, prod1D], { axis: 0 }, [
+            { type: DataType.INT64, shape: [2] },
+        ]);
+        const [y] = builder.createOp("Reshape", [x, newShape], {}, [
+            { type: DataType.FLOAT, shape: [2, 12] },
+        ]);
+        if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+
+        const changed = new ConstantFoldingPass().run(graph);
+        expect(changed).toBe(true);
+
+        const remainingOps = graph
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(remainingOps).toEqual(["Reshape"]);
+
+        const reshapeOp = graph.getOperationNodes().first()!;
+        const foldedShapeNode = reshapeOp.getInputs()![1];
+        expect(foldedShapeNode.is(ConstantNode)).toBe(true);
+        expect(readTensorData(foldedShapeNode)).toEqual([2, 12]);
+
+        // Also verify constant Range(0, 6, 2) folds to [0, 2, 4]
+        const rg = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const rb = new GraphBuilder(rg, "cf_range");
+        const startC = rb.createConstant("s", scalarInt64(0));
+        const limitC = rb.createConstant("l", scalarInt64(6));
+        const deltaC = rb.createConstant("d", scalarInt64(2));
+        const [rangeOut] = rb.createOp("Range", [startC, limitC, deltaC], {}, [
+            { type: DataType.INT64, shape: [3] },
+        ]);
+        const [idOut] = rb.createOp("Identity", [rangeOut], {}, [
+            { type: DataType.INT64, shape: [3] },
+        ]);
+        if (idOut.is(TensorNode)) idOut.as(TensorNode).setType("output");
+
+        expect(new ConstantFoldingPass().run(rg)).toBe(true);
+        expect(
+            rg
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).toEqual(["Identity"]);
+        expect(readTensorData(rg.getOperationNodes().first()!.getInputs()![0])).toEqual([0, 2, 4]);
+    });
+
+    it("AlgebraicSimplificationPass eliminates Add(x,0), Mul(x,1), no-op Cast, inverse Transpose, and chained Reshape", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph, "alg");
+
+        const x = graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        const zero = builder.createConstant("z", scalarFloat(0));
+        const one = builder.createConstant("o", scalarFloat(1));
+        const [a] = builder.createOp("Add", [x, zero], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [m] = builder.createOp("Mul", [a, one], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [c] = builder.createOp("Cast", [m], { to: DataType.FLOAT }, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [t1] = builder.createOp("Transpose", [c], { perm: [1, 0] }, [
+            { type: DataType.FLOAT, shape: [3, 2] },
+        ]);
+        const [t2] = builder.createOp("Transpose", [t1], { perm: [1, 0] }, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const s1 = builder.createConstant("s1", int64Vec([6]));
+        const s2 = builder.createConstant("s2", int64Vec([3, 2]));
+        const [r1] = builder.createOp("Reshape", [t2, s1], {}, [
+            { type: DataType.FLOAT, shape: [6] },
+        ]);
+        const [r2] = builder.createOp("Reshape", [r1, s2], {}, [
+            { type: DataType.FLOAT, shape: [3, 2] },
+        ]);
+        const [y] = builder.createOp("Relu", [r2], {}, [{ type: DataType.FLOAT, shape: [3, 2] }]);
+        if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+
+        const changed = new AlgebraicSimplificationPass().run(graph);
+        expect(changed).toBe(true);
+        new DeadCodeEliminationPass().run(graph);
+
+        const remainingOps = graph
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(remainingOps.sort()).toEqual(["Relu", "Reshape"]);
+    });
+
+    it("CommonSubexpressionEliminationPass deduplicates identical pure ops (including commutative binary ops)", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph, "cse");
+
+        const a = graph
+            .addNode("A")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        const b = graph
+            .addNode("B")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        // Commutative duplicates: Add(A, B) and Add(B, A)
+        const [sum1] = builder.createOp("Add", [a, b], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [sum2] = builder.createOp("Add", [b, a], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [y] = builder.createOp("Mul", [sum1, sum2], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+
+        const changed = new CommonSubexpressionEliminationPass().run(graph);
+        expect(changed).toBe(true);
+
+        const addOps = graph
+            .getOperationNodes()
+            .toArray()
+            .filter((o) => o.type === "Add");
+        expect(addOps).toHaveLength(1);
+    });
+
+    it("ConvBnFoldingPass folds BatchNormalization into Conv weights/bias and matches ORT numerically", async () => {
+        const buildConvBn = (): OnnxGraph.Class => {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "cbn");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [1, 2, 4, 4], "input"))
+                .as(TensorNode);
+            // Conv: C_out=3, C_in=2, K=3x3 -> 54 weights
+            const wVals = Array.from({ length: 54 }, (_, i) => ((i % 7) - 3) * 0.15);
+            const w = b.createConstant("W", makeTensorProto(DataType.FLOAT, [3, 2, 3, 3], wVals));
+            const bias = b.createConstant(
+                "B",
+                makeTensorProto(DataType.FLOAT, [3], [0.1, -0.2, 0.3]),
+            );
+            const [convOut] = b.createOp("Conv", [x, w, bias], { pads: [1, 1, 1, 1] }, [
+                { type: DataType.FLOAT, shape: [1, 3, 4, 4] },
+            ]);
+
+            const scale = b.createConstant(
+                "sc",
+                makeTensorProto(DataType.FLOAT, [3], [1.2, 0.8, 1.5]),
+            );
+            const bnB = b.createConstant(
+                "bnb",
+                makeTensorProto(DataType.FLOAT, [3], [-0.1, 0.25, 0.05]),
+            );
+            const mean = b.createConstant(
+                "mn",
+                makeTensorProto(DataType.FLOAT, [3], [0.05, -0.1, 0.2]),
+            );
+            const variance = b.createConstant(
+                "vr",
+                makeTensorProto(DataType.FLOAT, [3], [0.5, 1.2, 0.8]),
+            );
+            const [y] = b.createOp(
+                "BatchNormalization",
+                [convOut, scale, bnB, mean, variance],
+                { epsilon: 1e-5 },
+                [{ type: DataType.FLOAT, shape: [1, 3, 4, 4] }],
+            );
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+            return g;
+        };
+
+        const origGraph = buildConvBn();
+        const foldedGraph = buildConvBn();
+
+        const changed = new ConvBnFoldingPass().run(foldedGraph);
+        expect(changed).toBe(true);
+        expect(
+            foldedGraph
+                .getOperationNodes()
+                .toArray()
+                .map((o) => o.type),
+        ).toEqual(["Conv"]);
+
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "onnx-flow-convbn-"));
+        try {
+            const origPath = path.join(tmpDir, "orig.onnx");
+            const foldedPath = path.join(tmpDir, "folded.onnx");
+            await exportGraphToOnnx(origGraph, origPath);
+            await exportGraphToOnnx(foldedGraph, foldedPath);
+
+            const feeds = buildFeeds(
+                [{ name: "X", dtype: "float32", shape: [1, 2, 4, 4], gen: "negmix" }],
+                "conv_bn_fold_seed",
+            );
+            const origOut = await (await ort.InferenceSession.create(origPath)).run(feeds);
+            const foldedOut = await (await ort.InferenceSession.create(foldedPath)).run(feeds);
+
+            const cmp = compareOrtOutputs(origOut, foldedOut, { tol: 1e-5 });
+            expect(cmp.passed, cmp.message).toBe(true);
+        } finally {
+            if (fs.existsSync(tmpDir)) {
+                fs.rmSync(tmpDir, { recursive: true, force: true });
+            }
+        }
     });
 });
