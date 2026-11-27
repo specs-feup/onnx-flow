@@ -1,6 +1,9 @@
 import type OnnxGraph from "../../ir/OnnxGraph.js";
 import { BaseGraphPass } from "../GraphPass.js";
 import type OperationNode from "../../ir/OperationNode.js";
+import ConstantNode from "../../ir/ConstantNode.js";
+import TensorNode from "../../ir/TensorNode.js";
+import RegionArgumentNode from "../../ir/RegionArgumentNode.js";
 import { GraphBuilder } from "../../ir/GraphBuilder.js";
 import {
     topologicalSortOperationNodes,
@@ -9,13 +12,38 @@ import {
 } from "../../utils/index.js";
 import { DataType } from "../../ir/OnnxTypes.js";
 
-/** Folds static `Shape` ops, eliminates single-input `Concat`s, and simplifies degenerate shape math. */
+/**
+ * Folds static `Shape` ops, eliminates single-input `Concat`s, redundant `Identity`
+ * and no-op `Reshape` ops, and simplifies degenerate shape math across all regions.
+ */
 export class ShapeOptimizationPass extends BaseGraphPass {
     public override readonly name = "ShapeOptimization";
+
+    private collectCapturedIds(graph: OnnxGraph.Class, out: Set<string>): void {
+        for (const op of graph.getOperationNodes()) {
+            for (const region of op.regions) {
+                for (const arg of region.getNodes().filterIs(RegionArgumentNode)) {
+                    out.add(arg.id);
+                    out.add(arg.originalName);
+                }
+                for (const innerOp of region.getOperationNodes()) {
+                    for (const inp of innerOp.getInputs() ?? []) {
+                        if (!region.hasNode(inp.id)) {
+                            out.add(inp.id);
+                        }
+                    }
+                }
+                this.collectCapturedIds(region, out);
+            }
+        }
+    }
 
     public override run(graph: OnnxGraph.Class): boolean {
         // Recurse into nested Loop / If / Scan subgraphs first so inner shape math is simplified
         let globalChanged = this.runOnRegions(graph);
+
+        const capturedIds = new Set<string>();
+        this.collectCapturedIds(graph, capturedIds);
 
         let localChanged = true;
 
@@ -39,7 +67,23 @@ export class ShapeOptimizationPass extends BaseGraphPass {
                     continue;
                 }
 
-                // 3. Scalarize 1x1 Math Operations (Legacy Port)
+                // 3. Eliminate Redundant Identity & No-op Reshape Ops
+                if (
+                    node.type === "Identity" &&
+                    this.eliminateRedundantIdentity(node, graph, capturedIds)
+                ) {
+                    localChanged = true;
+                    continue;
+                }
+                if (
+                    node.type === "Reshape" &&
+                    this.eliminateNoOpReshape(node, graph, capturedIds)
+                ) {
+                    localChanged = true;
+                    continue;
+                }
+
+                // 4. Scalarize 1x1 Math Operations (Legacy Port)
                 if (["Add", "Sub", "Mul", "Div"].includes(node.type)) {
                     if (this.optimizeScalarMath(node, graph)) {
                         localChanged = true;
@@ -47,7 +91,7 @@ export class ShapeOptimizationPass extends BaseGraphPass {
                     }
                 }
 
-                // 4. MatMul Outer Product Optimization
+                // 5. MatMul Outer Product Optimization
                 if (node.type === "MatMul") {
                     if (this.optimizeOuterProductMatMul(node, graph)) {
                         localChanged = true;
@@ -103,6 +147,87 @@ export class ShapeOptimizationPass extends BaseGraphPass {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Bypasses a non-staging `Identity` whose output is a locally consumed intermediate
+     * tensor (preserving `cacheRead` staging nodes, graph outputs, and region captures).
+     */
+    private eliminateRedundantIdentity(
+        node: OperationNode.Class,
+        graph: OnnxGraph.Class,
+        capturedIds: Set<string>,
+    ): boolean {
+        if (node.getMetadata("cacheRead") === true) return false;
+        const inputs = node.getInputs();
+        const outputs = node.getOutputs();
+        if (!inputs || inputs.length !== 1 || outputs.length !== 1) return false;
+
+        const src = inputs[0];
+        const out = outputs[0];
+        if (!graph.hasNode(src.id) || src.is(RegionArgumentNode)) return false;
+        if (!out.is(TensorNode)) return false;
+        const outTensor = out.as(TensorNode);
+        if (outTensor.type !== "intermediate" || outTensor.outgoers.length === 0) return false;
+        if (capturedIds.has(outTensor.id)) return false;
+
+        const builder = new GraphBuilder(graph, `opt_id_${node.id}`);
+        builder.replaceAllUsesWith(outTensor, src);
+        node.remove();
+        if (graph.hasNode(outTensor.id) && outTensor.outgoers.length === 0) {
+            outTensor.remove();
+        }
+        return true;
+    }
+
+    /**
+     * Removes a `Reshape` whose input and output have identical static shapes
+     * (preserving graph outputs and tensors captured by nested regions).
+     */
+    private eliminateNoOpReshape(
+        node: OperationNode.Class,
+        graph: OnnxGraph.Class,
+        capturedIds: Set<string>,
+    ): boolean {
+        const inputs = node.getInputs();
+        const outputs = node.getOutputs();
+        if (!inputs || inputs.length < 2 || outputs.length !== 1) return false;
+
+        const src = inputs[0];
+        const out = outputs[0];
+        if (!graph.hasNode(src.id) || src.is(RegionArgumentNode)) return false;
+        if (!out.is(TensorNode)) return false;
+        const outTensor = out.as(TensorNode);
+        if (outTensor.type !== "intermediate" || outTensor.outgoers.length === 0) return false;
+        if (capturedIds.has(outTensor.id)) return false;
+
+        const shapeIn = toStaticShape(src.shape);
+        const shapeOut = toStaticShape(outTensor.shape);
+        if (
+            shapeIn.length === 0 ||
+            shapeIn.includes(-1) ||
+            shapeIn.length !== shapeOut.length ||
+            shapeIn.some((d, i) => d !== shapeOut[i])
+        ) {
+            return false;
+        }
+
+        const shapeArg = inputs[1];
+        const builder = new GraphBuilder(graph, `opt_noop_reshape_${node.id}`);
+        builder.replaceAllUsesWith(outTensor, src);
+        node.remove();
+        if (graph.hasNode(outTensor.id) && outTensor.outgoers.length === 0) {
+            outTensor.remove();
+        }
+        if (
+            shapeArg.is(ConstantNode) &&
+            graph.hasNode(shapeArg.id) &&
+            shapeArg.outgoers.length === 0 &&
+            !capturedIds.has(shapeArg.id)
+        ) {
+            shapeArg.remove();
+        }
+        return true;
     }
 
     /**

@@ -1,9 +1,10 @@
 import type OnnxGraph from "../../ir/OnnxGraph.js";
-import type OperationNode from "../../ir/OperationNode.js";
+import OperationNode from "../../ir/OperationNode.js";
 import TensorNode from "../../ir/TensorNode.js";
 import type { GraphPass } from "../PassManager.js";
 import { DataType, type ValueNode } from "../../ir/OnnxTypes.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
+import { AddNodeAction } from "../tracking/GraphActions.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { TransformationOpportunity } from "../TransformationOpportunity.js";
 import type { DecompositionRecipe } from "../Recipe.js";
@@ -130,10 +131,10 @@ export class CanonicalizationPass implements GraphPass {
         let globalChanged = false;
 
         if (this.options.recurse === true) {
-            const innerLoopLowering =
-                this.options.regionOnly === true ? false : this.options.loopLowering;
             const innerPass = new CanonicalizationPass(this.customRecipes, {
-                ...(innerLoopLowering !== undefined ? { loopLowering: innerLoopLowering } : {}),
+                ...(this.options.loopLowering !== undefined
+                    ? { loopLowering: this.options.loopLowering }
+                    : {}),
                 recurse: true,
                 regionOnly: false,
                 ...(this.options.scalar0DOnly !== undefined
@@ -234,13 +235,6 @@ export class CanonicalizationPass implements GraphPass {
                 const inheritedSrcTypes = Array.from(
                     new Set([...(Array.isArray(prevTypes) ? prevTypes.map(String) : []), op.type]),
                 );
-                const beforeIds = new Set(
-                    graph
-                        .getOperationNodes()
-                        .toArray()
-                        .map((o) => o.id),
-                );
-
                 const builder = new TrackedGraphBuilder(
                     graph,
                     opportunity.id,
@@ -250,17 +244,23 @@ export class CanonicalizationPass implements GraphPass {
 
                 opportunity.apply(builder);
 
-                for (const newOp of graph.getOperationNodes().toArray()) {
-                    if (!beforeIds.has(newOp.id)) {
-                        newOp.setMetadata("sourceOps", inheritedSrcOps);
-                        newOp.setMetadata("sourceOpTypes", inheritedSrcTypes);
-                    }
-                }
-
                 localChanged = true;
                 globalChanged = true;
 
                 const patch = builder.commitPatch();
+                for (const action of patch.actions) {
+                    if (
+                        action instanceof AddNodeAction &&
+                        action.snapshot.kind === "OperationNode"
+                    ) {
+                        const addedNode = graph.getNodeById(action.snapshot.id);
+                        if (addedNode !== undefined && addedNode.is(OperationNode)) {
+                            const newOp = addedNode.as(OperationNode);
+                            newOp.setMetadata("sourceOps", inheritedSrcOps);
+                            newOp.setMetadata("sourceOpTypes", inheritedSrcTypes);
+                        }
+                    }
+                }
                 historyManager.pushPatch(patch);
             }
         }

@@ -112,7 +112,9 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             }
             pm.addPass(new InferShapesPass());
             // When recurse=true, also canonicalize inside any control-flow regions newly
-            // synthesized during Phase 1 (e.g., RNN/GRU/LSTM time-step Loop bodies).
+            // synthesized during Phase 1 (e.g., RNN/GRU/LSTM time-step Loop bodies), then
+            // prune any dead trailing ops (e.g., unused LowerExp remainder nodes) before
+            // LoopLoweringPass so dead consumers never inhibit loop fusion.
             if (this.recurse) {
                 pm.addPass(
                     new CanonicalizationPass(undefined, {
@@ -122,6 +124,9 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                         ...(scheduleCfg !== undefined ? { schedule: scheduleCfg } : {}),
                     }),
                 );
+                if (this.optimize) {
+                    pm.addPass(new DeadCodeEliminationPass());
+                }
                 pm.addPass(new InferShapesPass());
             }
         }

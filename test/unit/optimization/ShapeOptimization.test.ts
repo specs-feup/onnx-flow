@@ -177,4 +177,45 @@ describe("ShapeOptimizationPass", () => {
             .map((o) => o.type);
         expect(bodyOps).not.toContain("Shape");
     });
+
+    it("eliminates redundant Identity and no-op Reshape ops while preserving cacheRead", () => {
+        const graph = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+        const builder = new GraphBuilder(graph, "fold_noop");
+
+        const x = graph
+            .addNode("X")
+            .init(new TensorNode.Builder(DataType.FLOAT, [2, 3], "input"))
+            .as(TensorNode);
+        const shapeConst = builder.createConstant("same_shape", {
+            dataType: DataType.INT64,
+            dims: [2],
+            int64Data: [2, 3],
+        });
+        const [idOut] = builder.createOp("Identity", [x], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [reshaped] = builder.createOp("Reshape", [idOut, shapeConst], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        const [staged] = builder.createOp("Identity", [reshaped], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        staged.incomers.sources.filterIs(OperationNode).first()!.setMetadata("cacheRead", true);
+        const [y] = builder.createOp("Relu", [staged], {}, [
+            { type: DataType.FLOAT, shape: [2, 3] },
+        ]);
+        if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+
+        const changed = new ShapeOptimizationPass().run(graph);
+        expect(changed).toBe(true);
+
+        const opTypes = graph
+            .getOperationNodes()
+            .toArray()
+            .map((o) => o.type);
+        expect(opTypes).not.toContain("Reshape");
+        // Only the cacheRead Identity and Relu remain
+        expect(opTypes.filter((t) => t === "Identity")).toHaveLength(1);
+        expect(opTypes).toContain("Relu");
+    });
 });
