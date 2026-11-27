@@ -6,7 +6,7 @@ import { convertFlowGraphToOnnxJson } from "../io/OnnxGraphExporter.js";
 import type OnnxGraph from "../onnx/ir/OnnxGraph.js";
 import type { RawOnnxModel } from "../onnx/ir/OnnxTypes.js";
 import type { DecompositionRecipe } from "../onnx/transformation/Recipe.js";
-import { createDefaultCanonicalizationRecipes } from "../onnx/transformation/recipes.js";
+import { createDefaultCanonicalizationRecipes } from "../onnx/transformation/RecipeCatalog.js";
 import { LoopFusionMatcher } from "../onnx/transformation/loop-lowering/LoopFusionMatcher.js";
 import type { MutationPatch } from "../onnx/transformation/tracking/GraphActions.js";
 import { HistoryManager } from "../onnx/transformation/tracking/HistoryManager.js";

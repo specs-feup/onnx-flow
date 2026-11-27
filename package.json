@@ -2,7 +2,7 @@
     "name": "@specs-feup/onnx-flow",
     "version": "1.0.7",
     "engines": {
-        "node": ">=16"
+        "node": ">=20"
     },
     "publishConfig": {
         "access": "public"
@@ -39,7 +39,6 @@
         "test:integration": "vitest run test/integration",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "test:e2e": "vitest run --config vitest.e2e.config.ts",
         "test:all": "npm run test:unit && npm run test:integration",
         "test:unit:coverage": "vitest run test/unit --coverage",
         "test:integration:coverage": "vitest run test/integration --coverage",
@@ -98,11 +97,6 @@
         ],
         "package.json": [
             "prettier --write"
-        ]
-    },
-    "parserOptions": {
-        "project": [
-            "./tsconfig.*.json"
         ]
     },
     "exports": {

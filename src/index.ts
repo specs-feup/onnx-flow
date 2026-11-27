@@ -158,11 +158,6 @@ export function generateGraphvizOnlineLink(dotGraph: string): string {
     return GraphvizVisualizer.generateOnlineLink(dotGraph);
 }
 
-/** Placeholder hook for downstream code generation. */
-export function generateGraphCode(_graph: OnnxGraph.Class): string {
-    return "TODO";
-}
-
 /**
  * Main CLI execution routine for `onnx-flow`.
  */
@@ -374,7 +369,7 @@ async function runOptionalEquivalenceCheck(
 
     try {
         // Dev-only hook: relies on repository test helpers (not included in published npm tarballs).
-        const registryModulePath = "../test/helpers/modelRegistry.js";
+        const registryModulePath = "../test/helpers/ModelRegistry.js";
         const { runEquivalenceForOriginalPath } = (await import(registryModulePath)) as {
             runEquivalenceForOriginalPath: (
                 path: string,

@@ -7,14 +7,14 @@ import { CanonicalizationPass } from "./canonicalization/CanonicalizationPass.js
 import { InferShapesPass } from "./InferShapesPass.js";
 import { LoopLoweringPass } from "./loop-lowering/LoopLoweringPass.js";
 import { LoopTilingPass } from "./loop-lowering/LoopTilingPass.js";
-import { PostLoopLoweringPass } from "./PostLoopLoweringPass.js";
+import { PostLoopLoweringPass } from "./loop-lowering/PostLoopLoweringPass.js";
 import transformForCgra from "../../../examples/cgra-decomposition-example/TransformForCgra.js";
 import { HistoryManager } from "./tracking/HistoryManager.js";
 import type { DecompositionOptions, IndexingMode } from "../../DecompositionOptions.js";
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
 import { ShapeOptimizationPass } from "./optimization/ShapeOptimizationPass.js";
 import { DeadCodeEliminationPass } from "./optimization/DeadCodeEliminationPass.js";
-import { resolveScheduleConfig, type ScheduleConfig } from "./Schedule.js";
+import { resolveScheduleConfig, type ScheduleConfig } from "./schedule/Schedule.js";
 import { CacheReadPass } from "./schedule/CacheReadPass.js";
 import { ScheduleLoopTransformsPass } from "./schedule/ScheduleLoopTransformsPass.js";
 

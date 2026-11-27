@@ -7,7 +7,7 @@ import { toStaticShape } from "../../utils/index.js";
 import type { GraphPass } from "../GraphPass.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
-import { matchesScheduleTarget, type ScheduleConfig } from "../Schedule.js";
+import { matchesScheduleTarget, type ScheduleConfig } from "./Schedule.js";
 
 /**
  * Inserts explicit scratchpad staging `Identity` reads for tensors listed in

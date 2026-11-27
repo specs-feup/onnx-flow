@@ -1,1 +1,1 @@
-export * from "./onnx/transformation/recipes.js";
+export * from "./onnx/transformation/RecipeCatalog.js";

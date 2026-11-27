@@ -14,8 +14,12 @@ import {
     topologicalSortOperationNodes,
     toStaticShape,
 } from "../../utils/index.js";
-import { LOOP_LOWERING_RECIPE_NAMES, lookupScheduleMap, type ScheduleConfig } from "../Schedule.js";
-import { createDefaultCanonicalizationRecipes } from "../recipes.js";
+import {
+    LOOP_LOWERING_RECIPE_NAMES,
+    lookupScheduleMap,
+    type ScheduleConfig,
+} from "../schedule/Schedule.js";
+import { createDefaultCanonicalizationRecipes } from "../RecipeCatalog.js";
 
 /**
  * Normalization pass that rewrites high-level ONNX operations into simpler

@@ -8,12 +8,16 @@ import {
     UNKNOWN_SHAPE,
     topologicalSortOperationNodes,
 } from "../../utils/index.js";
-import { lookupScheduleMap, matchesScheduleTarget, type ScheduleConfig } from "../Schedule.js";
+import {
+    lookupScheduleMap,
+    matchesScheduleTarget,
+    type ScheduleConfig,
+} from "../schedule/Schedule.js";
 import { OpCategory } from "../../schema/OpSchema.js";
 import { OpRegistry } from "../../schema/OpRegistry.js";
 import type { IndexingMode } from "../../../DecompositionOptions.js";
 import type { LoopLoweringRecipe } from "./LoopLoweringRecipe.js";
-import { createDefaultLoopLoweringRecipes } from "../recipes.js";
+import { createDefaultLoopLoweringRecipes } from "../RecipeCatalog.js";
 
 export interface LoopFusionOptions {
     coalesce: boolean;

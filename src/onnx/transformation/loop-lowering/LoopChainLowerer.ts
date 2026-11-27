@@ -12,7 +12,7 @@ import {
     decodeMixedRadix,
     extractMixedDims,
 } from "./RecipeUtils.js";
-import { lookupScheduleMap } from "../Schedule.js";
+import { lookupScheduleMap } from "../schedule/Schedule.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
 import type { LoopChainFinder, LoopFusionOptions } from "./LoopChainFinder.js";
 

@@ -4,7 +4,7 @@ import { LoopFusionMatcher } from "./LoopFusionMatcher.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { IndexingMode } from "../../../DecompositionOptions.js";
-import type { ScheduleConfig } from "../Schedule.js";
+import type { ScheduleConfig } from "../schedule/Schedule.js";
 
 export class LoopLoweringPass implements GraphPass {
     public readonly name = "LoopLoweringV2";

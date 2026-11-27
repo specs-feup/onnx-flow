@@ -65,7 +65,7 @@ export * from "./onnx/transformation/tracking/GraphActions.js";
 export { default as OnnxGraphTransformer } from "./onnx/transformation/index.js";
 export { CanonicalizationPass } from "./onnx/transformation/canonicalization/CanonicalizationPass.js";
 export { InferShapesPass } from "./onnx/transformation/InferShapesPass.js";
-export { PostLoopLoweringPass } from "./onnx/transformation/PostLoopLoweringPass.js";
+export { PostLoopLoweringPass } from "./onnx/transformation/loop-lowering/PostLoopLoweringPass.js";
 export { LoopLoweringPass } from "./onnx/transformation/loop-lowering/LoopLoweringPass.js";
 export {
     LoopTilingPass,
@@ -89,11 +89,11 @@ export {
     type ScheduleConfig,
     type SchedulePresetName,
     type StopPhase,
-} from "./onnx/transformation/Schedule.js";
+} from "./onnx/transformation/schedule/Schedule.js";
 export { CacheReadPass } from "./onnx/transformation/schedule/CacheReadPass.js";
 export { LoopUnrollingPass } from "./onnx/transformation/schedule/LoopUnrollingPass.js";
 export { ScheduleLoopTransformsPass } from "./onnx/transformation/schedule/ScheduleLoopTransformsPass.js";
-export * from "./onnx/transformation/recipes.js";
+export * from "./onnx/transformation/RecipeCatalog.js";
 
 /**
  * Applies a list of decomposition recipes to an in-memory OnnxGraph.

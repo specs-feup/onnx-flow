@@ -4,7 +4,7 @@ import type { GraphPass } from "../GraphPass.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
 import { LoopTilingPass } from "../loop-lowering/LoopTilingPass.js";
-import { matchesScheduleTarget, type ScheduleConfig } from "../Schedule.js";
+import { matchesScheduleTarget, type ScheduleConfig } from "./Schedule.js";
 import { LoopUnrollingPass } from "./LoopUnrollingPass.js";
 
 /**

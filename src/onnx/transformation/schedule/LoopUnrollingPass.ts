@@ -14,7 +14,7 @@ import {
 import type { GraphPass } from "../GraphPass.js";
 import { TrackedGraphBuilder } from "../tracking/TrackedGraphBuilder.js";
 import type { HistoryManager } from "../tracking/HistoryManager.js";
-import { matchesScheduleTarget } from "../Schedule.js";
+import { matchesScheduleTarget } from "./Schedule.js";
 
 export interface LoopUnrollSpec {
     target: string;

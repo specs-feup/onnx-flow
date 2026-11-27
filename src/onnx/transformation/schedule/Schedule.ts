@@ -1,11 +1,11 @@
-import type OnnxGraph from "../ir/OnnxGraph.js";
-import type OperationNode from "../ir/OperationNode.js";
-import type { DecompositionOptions } from "../../DecompositionOptions.js";
-import type { HistoryManager } from "./tracking/HistoryManager.js";
-import OnnxGraphTransformer from "./index.js";
-import { Recipes } from "./recipes.js";
-import { CacheReadPass } from "./schedule/CacheReadPass.js";
-import { ScheduleLoopTransformsPass } from "./schedule/ScheduleLoopTransformsPass.js";
+import type OnnxGraph from "../../ir/OnnxGraph.js";
+import type OperationNode from "../../ir/OperationNode.js";
+import type { DecompositionOptions } from "../../../DecompositionOptions.js";
+import type { HistoryManager } from "../tracking/HistoryManager.js";
+import OnnxGraphTransformer from "../index.js";
+import { Recipes } from "../RecipeCatalog.js";
+import { CacheReadPass } from "./CacheReadPass.js";
+import { ScheduleLoopTransformsPass } from "./ScheduleLoopTransformsPass.js";
 
 export type StopPhase = "none" | "canonicalization" | "loop-lowering";
 export type SchedulePresetName = "sfu-loops" | "flat-loops" | "cgra-tiled";

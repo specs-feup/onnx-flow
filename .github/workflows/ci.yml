@@ -33,13 +33,13 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Lint
-        run: npm run lint --if-present
+        run: npm run lint:check
 
       - name: Build Project
         run: npm run build
 
       - name: Run Tests & Generate Coverage
-        run: npx vitest run --coverage
+        run: npm run test:ci
