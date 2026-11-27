@@ -240,6 +240,48 @@ export class LoopChainFinder {
                     clusterOps.some((c) => matchesScheduleTarget(p.consumer, c)),
             );
 
+        // Build forward op adjacency for convexity checks (prevents multi-output fusion
+        // from absorbing a sibling consumer that feeds back into the cluster through an
+        // external non-elementwise op like ReduceMean in LayerNorm/GroupNorm/InstanceNorm).
+        const forwardAdj = new Map<string, OperationNode.Class[]>();
+        for (const op of ops) {
+            const succs: OperationNode.Class[] = [];
+            const seenSucc = new Set<string>();
+            for (const outT of op.getOutgoers.targets.filterIs(TensorNode).toArray()) {
+                for (const c of outT.outgoers.targets.filterIs(OperationNode).toArray()) {
+                    if (!seenSucc.has(c.id)) {
+                        seenSucc.add(c.id);
+                        succs.push(c);
+                    }
+                }
+            }
+            forwardAdj.set(op.id, succs);
+        }
+
+        const isConvexCluster = (proposedSet: Set<string>): boolean => {
+            const queue: OperationNode.Class[] = [];
+            const seen = new Set<string>();
+            for (const opId of proposedSet) {
+                for (const succ of forwardAdj.get(opId) ?? []) {
+                    if (!proposedSet.has(succ.id) && !seen.has(succ.id)) {
+                        seen.add(succ.id);
+                        queue.push(succ);
+                    }
+                }
+            }
+            while (queue.length > 0) {
+                const curr = queue.shift()!;
+                for (const next of forwardAdj.get(curr.id) ?? []) {
+                    if (proposedSet.has(next.id)) return false;
+                    if (!seen.has(next.id)) {
+                        seen.add(next.id);
+                        queue.push(next);
+                    }
+                }
+            }
+            return true;
+        };
+
         // 0. Pre-form explicit Schedule.fuse(...) multi-op / multi-output clusters
         for (const groupTargets of this.options.schedule?.fuseGroups ?? []) {
             const members: OperationNode.Class[] = [];
@@ -256,7 +298,10 @@ export class LoopChainFinder {
                 const compatible = members.filter(
                     (m) => m.id === anchor.id || boundsCompatible(m, anchor),
                 );
-                if (compatible.length >= 2) {
+                if (
+                    compatible.length >= 2 &&
+                    isConvexCluster(new Set(compatible.map((m) => m.id)))
+                ) {
                     compatible.forEach((m) => visited.add(m.id));
                     chains.push(this.localTopologicalSort(compatible));
                 }
@@ -350,6 +395,11 @@ export class LoopChainFinder {
                                 if (!hasSameShapeInput) continue;
                             }
                             if (!boundsCompatible(prod, root)) continue;
+
+                            const proposedSet = new Set(clusterSet);
+                            proposedSet.add(prod.id);
+                            for (const sib of outsideConsumers) proposedSet.add(sib.id);
+                            if (!isConvexCluster(proposedSet)) continue;
 
                             visited.add(prod.id);
                             clusterSet.add(prod.id);

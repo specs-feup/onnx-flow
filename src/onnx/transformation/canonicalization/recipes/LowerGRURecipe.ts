@@ -21,7 +21,7 @@ export class LowerGRURecipe implements DecompositionRecipe {
     public readonly exposesDataAccess = false;
     public readonly phase = "canonicalization" as const;
     public readonly precision = "exact" as const;
-    public readonly priority = 100;
+    public readonly priority = 10;
     public readonly shapeSupport = "static" as const;
     public readonly tags = ["unrolled"];
     public readonly producedOps = [

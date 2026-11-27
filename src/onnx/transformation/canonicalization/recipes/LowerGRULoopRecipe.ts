@@ -23,7 +23,7 @@ export class LowerGRULoopRecipe implements DecompositionRecipe {
     public readonly targetOp = "GRU";
     public readonly phase = "canonicalization" as const;
     public readonly precision = "exact" as const;
-    public readonly priority = 10;
+    public readonly priority = 100;
     public readonly shapeSupport = "dynamic" as const;
     public readonly tags = ["loop", "variable-length"] as const;
     public readonly exposesControlFlow = true;

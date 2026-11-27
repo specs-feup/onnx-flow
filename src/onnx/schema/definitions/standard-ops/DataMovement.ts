@@ -60,7 +60,7 @@ export const Reshape: OpSchema = {
         }
         const targetShapeInput = inputs[1]?.shape ?? [];
         const rank = targetShapeInput[0];
-        if (typeof rank === "number" && rank > 0) {
+        if (typeof rank === "number" && rank >= 0) {
             return [{ shape: Array(rank).fill(-1), dtype }];
         }
         return [{ shape: [-1], dtype }];

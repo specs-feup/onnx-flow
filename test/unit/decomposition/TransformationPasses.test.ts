@@ -317,4 +317,40 @@ describe("Transformation Pipeline & Passes", () => {
             }
         }
     });
+
+    it("enforces convex fusion clusters under fuseMultiOutput=true without creating TopoSort cycles", () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const g = Graph.create().init(new OnnxGraph.Builder()).as(OnnxGraph);
+            const b = new GraphBuilder(g, "ln_convex");
+            const x = g
+                .addNode("X")
+                .init(new TensorNode.Builder(DataType.FLOAT, [2, 4], "input"))
+                .as(TensorNode);
+            const s = b.createConstant("S", makeTensorProto(DataType.FLOAT, [4], [1, 1, 1, 1]));
+            const bi = b.createConstant("B", makeTensorProto(DataType.FLOAT, [4], [0, 0, 0, 0]));
+            const [y] = b.createOp("LayerNormalization", [x, s, bi], { axis: -1, epsilon: 1e-5 }, [
+                { type: DataType.FLOAT, shape: [2, 4] },
+            ]);
+            if (y.is(TensorNode)) y.as(TensorNode).setType("output");
+
+            new OnnxGraphTransformer({
+                canonicalize: true,
+                loopLowering: true,
+                fuse: true,
+                fuseMultiOutput: true,
+                coalesce: true,
+                recurse: true,
+                optimize: true,
+                indexingMode: IndexingMode.Pointer,
+            }).apply(g, false);
+
+            const cycleWarnings = warnSpy.mock.calls.filter((args) =>
+                args.join(" ").includes("Cycle detected"),
+            );
+            expect(cycleWarnings).toHaveLength(0);
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
 });
