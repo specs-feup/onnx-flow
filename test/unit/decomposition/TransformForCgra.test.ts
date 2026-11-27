@@ -8,7 +8,7 @@ import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import transformForCgra from "../../../examples/cgra-decomposition-example/TransformForCgra.js";
 import { AddGridDecompositionRecipe } from "../../../examples/cgra-decomposition-example/Add.js";
 import { ReluGridDecompositionRecipe } from "../../../examples/cgra-decomposition-example/Relu.js";
-import { applyRecipe } from "../../helpers/recipeHarness.js";
+import { applyRecipe } from "../../helpers/RecipeHarness.js";
 
 describe("CGRA Example Grid Decomposition", () => {
     initializeSchemaRegistry();

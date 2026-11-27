@@ -4,11 +4,10 @@ import {
     loadGraph,
     renderDotToSVG,
     generateGraphvizOnlineLink,
-    generateGraphCode,
 } from "../../../src/index.js";
 import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
-import { ensureProtoExists } from "../../helpers/ortHarness.js";
-import { ensureModelExists } from "../../helpers/modelFactory.js";
+import { ensureProtoExists } from "../../helpers/OrtHarness.js";
+import { ensureModelExists } from "../../helpers/ModelFactory.js";
 
 describe("index.ts Library Functionality", () => {
     let modelPath = "";
@@ -43,11 +42,5 @@ describe("index.ts Library Functionality", () => {
         const link = generateGraphvizOnlineLink(dot);
         expect(link).toContain("https://dreampuf.github.io/GraphvizOnline/#");
         expect(link).toContain(encodeURIComponent(dot));
-    });
-
-    it("stubs code generation predictably", async () => {
-        const raw = await parseOnnxFile(modelPath);
-        const graph = loadGraph(raw, false, false, false) as OnnxGraph.Class;
-        expect(generateGraphCode(graph)).toBe("TODO");
     });
 });

@@ -4,8 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as ort from "onnxruntime-web";
-import { ensureProtoExists, PROJECT_ROOT } from "../helpers/ortHarness.js";
-import { ensureModelExists } from "../helpers/modelFactory.js";
+import { ensureProtoExists, PROJECT_ROOT } from "../helpers/OrtHarness.js";
+import { ensureModelExists } from "../helpers/ModelFactory.js";
 
 describe("CLI & Partitioning End-to-End Tests", () => {
     const cliEntry = path.resolve(PROJECT_ROOT, "out/src/index.js");

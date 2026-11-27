@@ -23,8 +23,8 @@ import {
     ensureProtoExists,
     exportGraphToOnnx,
     runOrtChecked,
-} from "../helpers/ortHarness.js";
-import { buildSyntheticGraph, type SyntheticCase } from "../helpers/modelFactory.js";
+} from "../helpers/OrtHarness.js";
+import { buildSyntheticGraph, type SyntheticCase } from "../helpers/ModelFactory.js";
 
 const TEST_TIMEOUT = 150000; //ms
 

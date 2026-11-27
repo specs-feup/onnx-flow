@@ -2,14 +2,14 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { exportGraphToOnnx } from "../helpers/ortHarness.js";
-import { runPartitionTest } from "../helpers/partitionHarness.js";
+import { exportGraphToOnnx } from "../helpers/OrtHarness.js";
+import { runPartitionTest } from "../helpers/PartitionHarness.js";
 import {
     buildResidualSkipForkGraph,
     buildSplitMultiBranchConcatGraph,
     ensureModelExists,
-} from "../helpers/modelFactory.js";
-import { PARTITION_TESTS } from "../helpers/modelRegistry.js";
+} from "../helpers/ModelFactory.js";
+import { PARTITION_TESTS } from "../helpers/ModelRegistry.js";
 
 const TEST_TIMEOUT = 150000; //ms
 

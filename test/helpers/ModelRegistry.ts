@@ -4,8 +4,8 @@ import {
     resolveModelPath,
     type EquivalenceTestConfig,
     type SingleEquivResult,
-} from "./ortHarness.js";
-import type { PartitionTestCase } from "./partitionHarness.js";
+} from "./OrtHarness.js";
+import type { PartitionTestCase } from "./PartitionHarness.js";
 
 export const jsonFullArgs = "--format json -vz 0 -v 0";
 export const jsonNoLowLevelArgs = "--format json --noLowLevel -vz 0 -v 0";

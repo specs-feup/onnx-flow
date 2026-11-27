@@ -11,7 +11,7 @@ import { InferShapesPass } from "../../../src/onnx/transformation/InferShapesPas
 import { OrchestratorPass } from "../../../src/onnx/transformation/OrchestratorPass.js";
 import { TransformationRegistry } from "../../../src/onnx/transformation/TransformationRegistry.js";
 import OnnxGraphTransformer from "../../../src/onnx/transformation/index.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import type { DecompositionRecipe } from "../../../src/onnx/transformation/Recipe.js";
 

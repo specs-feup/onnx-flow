@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
-import { applyRecipe } from "../../helpers/recipeHarness.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
+import { applyRecipe } from "../../helpers/RecipeHarness.js";
 import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";

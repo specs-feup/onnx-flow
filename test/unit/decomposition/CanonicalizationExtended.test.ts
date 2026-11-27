@@ -6,10 +6,10 @@ import TensorNode from "../../../src/onnx/ir/TensorNode.js";
 import OnnxEdge from "../../../src/onnx/ir/OnnxEdge.js";
 import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { int64Vec, makeTensorProto, scalarInt64 } from "../../../src/onnx/utils/index.js";
-import { applyRecipe } from "../../helpers/recipeHarness.js";
+import { applyRecipe } from "../../helpers/RecipeHarness.js";
 
 describe("Canonicalization - Tier 1 & Tier 2 Extended Recipes", () => {
     initializeSchemaRegistry();

@@ -8,7 +8,7 @@ import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
 import TensorNode from "../../../src/onnx/ir/TensorNode.js";
 import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import { CanonicalizationPass } from "../../../src/onnx/transformation/canonicalization/CanonicalizationPass.js";
 import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";
 import { convertFlowGraphToOnnxJson } from "../../../src/io/OnnxGraphExporter.js";

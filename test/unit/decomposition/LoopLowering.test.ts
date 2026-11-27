@@ -15,7 +15,7 @@ import {
 } from "../../../src/onnx/utils/TensorData.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
 import { IndexingMode } from "../../../src/DecompositionOptions.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import validateGraph from "../../../src/onnx/validation/ValidateGraph.js";
 
 describe("Loop Lowering - Multi-Operation Passes", () => {

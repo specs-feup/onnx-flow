@@ -18,7 +18,7 @@ import validateGraph from "../../src/onnx/validation/ValidateGraph.js";
 import {
     buildResidualSkipForkGraph,
     buildSplitMultiBranchConcatGraph,
-} from "../helpers/modelFactory.js";
+} from "../helpers/ModelFactory.js";
 import {
     buildFeeds,
     compareOrtOutputs,
@@ -26,7 +26,7 @@ import {
     exportGraphToOnnx,
     runOrtChecked,
     type FeedSpec,
-} from "../helpers/ortHarness.js";
+} from "../helpers/OrtHarness.js";
 
 interface PipelineCase {
     label: string;
@@ -1548,7 +1548,8 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
         it(
             "matches ORT for Schedule API (useRecipe + split SoftmaxLoop, reorder, unroll, cacheRead)",
             async () => {
-                const { Schedule } = await import("../../src/onnx/transformation/Schedule.js");
+                const { Schedule } =
+                    await import("../../src/onnx/transformation/schedule/Schedule.js");
 
                 await assertTransformMatchesOrt(
                     "schedule_softmax_split_unroll",
@@ -1636,7 +1637,8 @@ describe("Integration: Compiler Options & Pipeline Combinations (ORT Equivalence
         it(
             "matches ORT for LowerDetLoop, LowerTopKScalarLoop, LowerLogSoftmaxLoop, LowerRMSNormLoop, and deferred AveragePool",
             async () => {
-                const { Schedule } = await import("../../src/onnx/transformation/Schedule.js");
+                const { Schedule } =
+                    await import("../../src/onnx/transformation/schedule/Schedule.js");
 
                 // 1. Dynamic 4x4 & 5x5 Det via LowerDetLoop
                 await assertTransformMatchesOrt(

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
-import { applyRecipe } from "../../helpers/recipeHarness.js";
+import { applyRecipe } from "../../helpers/RecipeHarness.js";
 import { LowerExpRecipe } from "../../../src/onnx/transformation/canonicalization/recipes/LowerExpRecipe.js";
 import { LowerReciprocalRecipe } from "../../../src/onnx/transformation/canonicalization/recipes/LowerReciprocalRecipe.js";
 

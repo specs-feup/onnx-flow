@@ -9,7 +9,7 @@ import { json2onnx } from "../../src/io/JsonToOnnx.js";
 import { splitByAncestor } from "../../src/onnx/partitioning/Strategies.js";
 import { partitionGraph } from "../../src/onnx/partitioning/Partition.js";
 import type OnnxGraph from "../../src/onnx/ir/OnnxGraph.js";
-import { buildFeeds, compareOrtOutputs, ensureProtoExists, type FeedSpec } from "./ortHarness.js";
+import { buildFeeds, compareOrtOutputs, ensureProtoExists, type FeedSpec } from "./OrtHarness.js";
 
 export interface PartitionTestCase {
     label: string;

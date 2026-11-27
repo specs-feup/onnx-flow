@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { runCli } from "../../../src/index.js";
 import { onnx2json } from "../../../src/io/OnnxToJson.js";
-import { ensureProtoExists } from "../../helpers/ortHarness.js";
-import { ensureModelExists } from "../../helpers/modelFactory.js";
+import { ensureProtoExists } from "../../helpers/OrtHarness.js";
+import { ensureModelExists } from "../../helpers/ModelFactory.js";
 
 describe("CLI in-process execution & partition verification", () => {
     let testModel = "";

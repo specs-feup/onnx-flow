@@ -15,7 +15,7 @@ import { LowerRMSNormLoopRecipe } from "../../../src/onnx/transformation/loop-lo
 import { LowerDetLoopRecipe } from "../../../src/onnx/transformation/loop-lowering/recipes/LowerDetLoopRecipe.js";
 import { LowerTopKScalarLoopRecipe } from "../../../src/onnx/transformation/loop-lowering/recipes/LowerTopKScalarLoopRecipe.js";
 import OnnxGraphTransformer from "../../../src/onnx/transformation/index.js";
-import { Schedule } from "../../../src/onnx/transformation/Schedule.js";
+import { Schedule } from "../../../src/onnx/transformation/schedule/Schedule.js";
 import { LowerMinRecipe } from "../../../src/onnx/transformation/canonicalization/recipes/LowerMinRecipe.js";
 import { LowerMaxRecipe } from "../../../src/onnx/transformation/canonicalization/recipes/LowerMaxRecipe.js";
 import { HistoryManager } from "../../../src/onnx/transformation/tracking/HistoryManager.js";

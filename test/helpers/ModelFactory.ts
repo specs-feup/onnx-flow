@@ -26,7 +26,7 @@ import {
     resolveModelPath,
     type DType,
     type FeedSpec,
-} from "./ortHarness.js";
+} from "./OrtHarness.js";
 
 /* ============================== SYNTHETIC GRAPH BUILDER ================================== */
 export interface SyntheticCase {

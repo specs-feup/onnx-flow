@@ -7,7 +7,7 @@ import { onnx2json } from "../../../src/io/OnnxToJson.js";
 import { applyRecipes, transformModel } from "../../../src/api.js";
 import { createGraph } from "../../../src/io/OnnxGraphLoader.js";
 import { convertFlowGraphToOnnxJson } from "../../../src/io/OnnxGraphExporter.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
 import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
@@ -15,7 +15,7 @@ import TensorNode from "../../../src/onnx/ir/TensorNode.js";
 import Graph from "@specs-feup/flow/graph/Graph";
 import * as ort from "onnxruntime-web";
 import { ensureProtoExists } from "../../setup.js";
-import { ensureModelExists } from "../../helpers/modelFactory.js";
+import { ensureModelExists } from "../../helpers/ModelFactory.js";
 
 describe("json2onnx, onnx2json & Public API", () => {
     beforeAll(() => {

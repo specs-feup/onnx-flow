@@ -4,14 +4,14 @@ import OnnxGraph from "../../../src/onnx/ir/OnnxGraph.js";
 import TensorNode from "../../../src/onnx/ir/TensorNode.js";
 import { GraphBuilder } from "../../../src/onnx/ir/GraphBuilder.js";
 import { initializeSchemaRegistry } from "../../../src/onnx/schema/index.js";
-import { Recipes } from "../../../src/onnx/transformation/recipes.js";
+import { Recipes } from "../../../src/onnx/transformation/RecipeCatalog.js";
 import { DataType } from "../../../src/onnx/ir/OnnxTypes.js";
 import {
     scalarFloat,
     floatVec,
     topologicalSortOperationNodes,
 } from "../../../src/onnx/utils/index.js";
-import { applyRecipe } from "../../helpers/recipeHarness.js";
+import { applyRecipe } from "../../helpers/RecipeHarness.js";
 
 describe("Canonicalization - Binary & Comparison Recipes", () => {
     initializeSchemaRegistry();
