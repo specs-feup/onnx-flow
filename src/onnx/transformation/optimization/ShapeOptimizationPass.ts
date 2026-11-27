@@ -11,6 +11,7 @@ import {
     makeTensorProto,
 } from "../../utils/index.js";
 import { DataType } from "../../ir/OnnxTypes.js";
+import { collectCapturedIds } from "./OptimizationUtils.js";
 
 /**
  * Folds static `Shape` ops, eliminates single-input `Concat`s, redundant `Identity`
@@ -19,31 +20,11 @@ import { DataType } from "../../ir/OnnxTypes.js";
 export class ShapeOptimizationPass extends BaseGraphPass {
     public override readonly name = "ShapeOptimization";
 
-    private collectCapturedIds(graph: OnnxGraph.Class, out: Set<string>): void {
-        for (const op of graph.getOperationNodes()) {
-            for (const region of op.regions) {
-                for (const arg of region.getNodes().filterIs(RegionArgumentNode)) {
-                    out.add(arg.id);
-                    out.add(arg.originalName);
-                }
-                for (const innerOp of region.getOperationNodes()) {
-                    for (const inp of innerOp.getInputs() ?? []) {
-                        if (!region.hasNode(inp.id)) {
-                            out.add(inp.id);
-                        }
-                    }
-                }
-                this.collectCapturedIds(region, out);
-            }
-        }
-    }
-
     public override run(graph: OnnxGraph.Class): boolean {
         // Recurse into nested Loop / If / Scan subgraphs first so inner shape math is simplified
         let globalChanged = this.runOnRegions(graph);
 
-        const capturedIds = new Set<string>();
-        this.collectCapturedIds(graph, capturedIds);
+        const capturedIds = collectCapturedIds(graph);
 
         let localChanged = true;
 

@@ -86,6 +86,10 @@ export * from "./onnx/transformation/loop-lowering/LoopLoweringRecipe.js";
 export * from "./onnx/transformation/loop-lowering/RecipeUtils.js";
 export { DeadCodeEliminationPass } from "./onnx/transformation/optimization/DeadCodeEliminationPass.js";
 export { ShapeOptimizationPass } from "./onnx/transformation/optimization/ShapeOptimizationPass.js";
+export { ConstantFoldingPass } from "./onnx/transformation/optimization/ConstantFoldingPass.js";
+export { AlgebraicSimplificationPass } from "./onnx/transformation/optimization/AlgebraicSimplificationPass.js";
+export { CommonSubexpressionEliminationPass } from "./onnx/transformation/optimization/CommonSubexpressionEliminationPass.js";
+export { ConvBnFoldingPass } from "./onnx/transformation/optimization/ConvBnFoldingPass.js";
 export {
     Schedule,
     LOOP_LOWERING_RECIPE_NAMES,

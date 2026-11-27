@@ -14,6 +14,10 @@ import type { DecompositionOptions, IndexingMode } from "../../DecompositionOpti
 import { defaultDecompositionOptions } from "../../DecompositionOptions.js";
 import { ShapeOptimizationPass } from "./optimization/ShapeOptimizationPass.js";
 import { DeadCodeEliminationPass } from "./optimization/DeadCodeEliminationPass.js";
+import { ConstantFoldingPass } from "./optimization/ConstantFoldingPass.js";
+import { AlgebraicSimplificationPass } from "./optimization/AlgebraicSimplificationPass.js";
+import { CommonSubexpressionEliminationPass } from "./optimization/CommonSubexpressionEliminationPass.js";
+import { ConvBnFoldingPass } from "./optimization/ConvBnFoldingPass.js";
 import { resolveScheduleConfig, type ScheduleConfig } from "./schedule/Schedule.js";
 import { CacheReadPass } from "./schedule/CacheReadPass.js";
 import { ScheduleLoopTransformsPass } from "./schedule/ScheduleLoopTransformsPass.js";
@@ -98,6 +102,11 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
             pm.addPass(new CacheReadPass(scheduleCfg));
         }
 
+        // Pre-Phase 1: High-level weight folding (must run before BatchNormalization canonicalizes)
+        if (this.optimize) {
+            pm.addPass(new ConvBnFoldingPass());
+        }
+
         // Phase 1: Normalization (Canonicalization)
         if (this.canonicalize) {
             pm.addPass(
@@ -108,6 +117,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                 }),
             );
             if (this.optimize) {
+                pm.addPass(new DeadCodeEliminationPass());
+                pm.addPass(new ConstantFoldingPass());
+                pm.addPass(new AlgebraicSimplificationPass());
+                pm.addPass(new CommonSubexpressionEliminationPass());
                 pm.addPass(new DeadCodeEliminationPass());
             }
             pm.addPass(new InferShapesPass());
@@ -125,6 +138,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
                     }),
                 );
                 if (this.optimize) {
+                    pm.addPass(new DeadCodeEliminationPass());
+                    pm.addPass(new ConstantFoldingPass());
+                    pm.addPass(new AlgebraicSimplificationPass());
+                    pm.addPass(new CommonSubexpressionEliminationPass());
                     pm.addPass(new DeadCodeEliminationPass());
                 }
                 pm.addPass(new InferShapesPass());
@@ -184,6 +201,10 @@ export default class OnnxGraphTransformer implements Graph.Transformation<
         if (this.optimize) {
             pm.addPass(new DeadCodeEliminationPass());
             pm.addPass(new ShapeOptimizationPass());
+            pm.addPass(new ConstantFoldingPass());
+            pm.addPass(new AlgebraicSimplificationPass());
+            pm.addPass(new CommonSubexpressionEliminationPass());
+            pm.addPass(new DeadCodeEliminationPass());
         }
         pm.addPass(new InferShapesPass());
 
